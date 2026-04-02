@@ -71,3 +71,18 @@ export default defineConfig([
   },
 ])
 ```
+
+## Deployment notes
+
+This app requires these Vite environment variables at build time:
+
+```bash
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key-here
+```
+
+For Vercel deployments:
+
+- Add both variables in the Vercel project settings for Production, Preview, and Development as needed.
+- Redeploy after saving the variables, because Vite bakes them into the frontend bundle at build time.
+- `vercel.json` includes an SPA rewrite so routes like `/login` and `/portal/dashboard` resolve to `index.html` instead of returning a 404.

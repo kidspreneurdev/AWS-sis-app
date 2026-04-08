@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
+import { useCohorts } from '@/hooks/useCohorts'
 import {
   loadLMS, saveLMS, loadLMSFromDB, deleteLMSCourse, deleteLMSContent, deleteLMSEnrolment,
   lmsId, fmtTime, hasMasteryBool, hasAssignBool, isActiveBool,
@@ -132,7 +133,7 @@ export function LMSPage() {
 
   const [store, setStore] = useState<LMSStore>(loadLMS)
   const [students, setStudents] = useState<Student[]>([])
-  const [cohorts, setCohorts] = useState<string[]>([])
+  const cohorts = useCohorts()
 
   // Per-tab UI state
   const [manageSearch, setManageSearch] = useState('')
@@ -174,8 +175,6 @@ export function LMSPage() {
           }
         })
         setStudents(mapped)
-        const cs = [...new Set(mapped.map(s => s.cohort).filter(Boolean))]
-        setCohorts(cs)
       }
     })
   }, [])

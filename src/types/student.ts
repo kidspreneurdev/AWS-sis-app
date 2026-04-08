@@ -114,9 +114,9 @@ export function fullName(s: Student) {
 }
 
 export function generateStudentId(): string {
-  const year = new Date().getFullYear().toString().slice(-2)
-  const rand = Math.floor(1000 + Math.random() * 9000)
-  return `AWS${year}${rand}`
+  const year = new Date().getFullYear()
+  const rand = Math.floor(10000 + Math.random() * 90000)
+  return `AWS${year}-${rand}`
 }
 
 export const EMPTY_STUDENT: StudentInsert = {

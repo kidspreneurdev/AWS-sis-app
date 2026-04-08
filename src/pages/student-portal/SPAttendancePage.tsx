@@ -1,16 +1,50 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 
-const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 20 }
-const STATUS_META: Record<string, { bg: string; tc: string; label: string }> = {
-  Present: { bg: '#E8FBF0', tc: '#0E6B3B', label: 'P' },
-  Absent:  { bg: '#FEE2E2', tc: '#991B1B', label: 'A' },
-  Late:    { bg: '#FFF3E0', tc: '#B45309', label: 'L' },
-  Excused: { bg: '#E6F4FF', tc: '#0369A1', label: 'E' },
+const card: React.CSSProperties = {
+  background: '#fff',
+  borderRadius: 12,
+  border: '1px solid #E4EAF2',
+  boxShadow: '0 1px 4px rgba(26,54,94,0.06)',
+  padding: 20,
 }
 
-interface AttRecord { id: string; date: string; status: string }
+const SP_NAVY = '#1A365E'
+const SP_RED = '#D61F31'
+const SP_GREEN = '#1DBD6A'
+const SP_GOLD = '#FAC600'
+const SP_BLUE = '#0EA5E9'
+const SP_SLATE = '#7A92B0'
+
+const emptyState: React.CSSProperties = {
+  textAlign: 'center',
+  padding: 20,
+  color: SP_SLATE,
+  fontSize: 12,
+  background: '#F8FAFC',
+  border: '1px dashed #D7E0EA',
+  borderRadius: 10,
+}
+
+interface AttRecord {
+  id: string
+  date: string
+  status: string
+}
+
+function statusCode(status: string) {
+  if (status === 'Present') return 'P'
+  if (status === 'Remote') return 'R'
+  if (status === 'Absent') return 'A'
+  if (status === 'Late') return 'T'
+  if (status === 'Excused') return 'E'
+  return ''
+}
+
+function attendanceColor(rate: number) {
+  return rate >= 95 ? SP_GREEN : rate >= 85 ? SP_GOLD : SP_RED
+}
 
 export function SPAttendancePage() {
   const { session } = useStudentPortal()
@@ -18,86 +52,184 @@ export function SPAttendancePage() {
 
   useEffect(() => {
     if (!session) return
-    supabase.from('attendance').select('id,date,status').eq('student_id', session.dbId).order('date', { ascending: false }).then(({ data }) => {
-      if (data) setRecords(data.map((r: Record<string, unknown>) => ({ id: r.id as string, date: r.date as string, status: r.status as string })))
-    })
+    supabase
+      .from('attendance')
+      .select('id,date,status')
+      .eq('student_id', session.dbId)
+      .order('date', { ascending: false })
+      .then(({ data }) => {
+        if (data) {
+          setRecords(
+            data.map((row: Record<string, unknown>) => ({
+              id: row.id as string,
+              date: (row.date as string) ?? '',
+              status: (row.status as string) ?? '',
+            })),
+          )
+        }
+      })
   }, [session])
 
   const stats = useMemo(() => {
-    const total = records.length
-    const present = records.filter(r => r.status === 'Present').length
-    const absent = records.filter(r => r.status === 'Absent').length
-    const late = records.filter(r => r.status === 'Late').length
-    const excused = records.filter(r => r.status === 'Excused').length
-    const pct = total > 0 ? Math.round((present / total) * 100) : 0
-    return { total, present, absent, late, excused, pct }
+    const present = records.filter((row) => row.status === 'Present' || row.status === 'Remote').length
+    const absent = records.filter((row) => row.status === 'Absent').length
+    const tardy = records.filter((row) => row.status === 'Late').length
+    const excused = records.filter((row) => row.status === 'Excused').length
+    const rate = records.length ? Math.round((present / records.length) * 100) : 0
+    return { present, absent, tardy, excused, rate, total: records.length }
   }, [records])
 
+  const byMonth = useMemo(() => {
+    const grouped: Record<string, Record<string, string>> = {}
+    records.forEach((row) => {
+      if (!row.date) return
+      const monthKey = row.date.slice(0, 7)
+      if (!grouped[monthKey]) grouped[monthKey] = {}
+      grouped[monthKey][row.date] = statusCode(row.status)
+    })
+    return grouped
+  }, [records])
+
+  const months = useMemo(() => Object.keys(byMonth).sort().slice(-3), [byMonth])
+
+  const statCols: Record<string, string> = {
+    P: SP_GREEN,
+    R: SP_BLUE,
+    A: SP_RED,
+    T: SP_GOLD,
+    E: SP_SLATE,
+    '': '#F0F4FA',
+  }
+
+  const statLabels: Record<string, string> = {
+    P: 'Present',
+    R: 'Remote',
+    A: 'Absent',
+    T: 'Tardy',
+    E: 'Excused',
+    '': 'Not Recorded',
+  }
+
+  const rateColor = attendanceColor(stats.rate)
+  const radius = 70
+  const circumference = 2 * Math.PI * radius
+  const fill = (circumference * stats.rate) / 100
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <div>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1A365E', margin: 0 }}>Attendance</h1>
-        <p style={{ fontSize: 13, color: '#7A92B0', margin: '4px 0 0' }}>Your attendance record for this academic year</p>
-      </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ fontSize: 18, fontWeight: 800, color: SP_NAVY }}>📅 My Attendance</div>
 
-      {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
-        {[
-          { label: 'Attendance Rate', value: `${stats.pct}%`, color: stats.pct >= 90 ? '#10B981' : stats.pct >= 75 ? '#F59E0B' : '#D61F31' },
-          { label: 'Present', value: stats.present, color: '#10B981' },
-          { label: 'Absent', value: stats.absent, color: '#D61F31' },
-          { label: 'Late', value: stats.late, color: '#F59E0B' },
-        ].map(c => (
-          <div key={c.label} style={card}>
-            <div style={{ fontSize: 11, color: '#7A92B0', fontWeight: 700, textTransform: 'uppercase' }}>{c.label}</div>
-            <div style={{ fontSize: 28, fontWeight: 800, color: c.color, marginTop: 6 }}>{c.value}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: 14 }}>
+        <div style={{ ...card, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: SP_SLATE, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+            Attendance Rate
           </div>
-        ))}
+          <svg width="160" height="160" viewBox="0 0 160 160">
+            <circle cx="80" cy="80" r={radius} fill="none" stroke="#E4EAF2" strokeWidth="12" />
+            <circle
+              cx="80"
+              cy="80"
+              r={radius}
+              fill="none"
+              stroke={rateColor}
+              strokeWidth="12"
+              strokeLinecap="round"
+              strokeDasharray={`${fill.toFixed(1)} ${circumference.toFixed(1)}`}
+              transform="rotate(-90 80 80)"
+            />
+            <text x="80" y="74" textAnchor="middle" fontSize="28" fontWeight="900" fill={rateColor} fontFamily="Arial">
+              {stats.rate}%
+            </text>
+            <text x="80" y="92" textAnchor="middle" fontSize="11" fill={SP_SLATE} fontFamily="Arial">
+              {stats.total} days recorded
+            </text>
+          </svg>
+          {stats.rate < 90 && (
+            <div style={{ fontSize: 10, color: SP_RED, fontWeight: 700, textAlign: 'center', marginTop: 4 }}>
+              ⚠️ Below 90% threshold
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, alignContent: 'start' }}>
+          {[
+            { label: 'Present', value: stats.present, color: SP_GREEN, icon: '✅' },
+            { label: 'Absent', value: stats.absent, color: SP_RED, icon: '❌' },
+            { label: 'Tardy', value: stats.tardy, color: SP_GOLD, icon: '⏰' },
+            { label: 'Excused', value: stats.excused, color: SP_SLATE, icon: '📋' },
+          ].map((item) => (
+            <div key={item.label} style={{ ...card, padding: 14, textAlign: 'center' }}>
+              <div style={{ fontSize: 24, marginBottom: 4 }}>{item.icon}</div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: item.color }}>{item.value}</div>
+              <div style={{ fontSize: 10, color: SP_SLATE, fontWeight: 600 }}>{item.label}</div>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* Progress bar */}
-      <div style={card}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#1A365E' }}>Overall Attendance</span>
-          <span style={{ fontSize: 13, fontWeight: 700, color: stats.pct >= 90 ? '#10B981' : '#F59E0B' }}>{stats.pct}%</span>
+      {months.length === 0 ? (
+        <div style={card}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, marginBottom: 12 }}>📅 Attendance Calendar</div>
+          <div style={emptyState}>No attendance records are available from Supabase for this section yet.</div>
         </div>
-        <div style={{ height: 10, background: '#E4EAF2', borderRadius: 5 }}>
-          <div style={{ height: '100%', width: `${stats.pct}%`, background: stats.pct >= 90 ? '#10B981' : stats.pct >= 75 ? '#F59E0B' : '#D61F31', borderRadius: 5, transition: 'width 0.5s' }} />
-        </div>
-        <div style={{ fontSize: 12, color: '#7A92B0', marginTop: 6 }}>
-          {stats.total} school days recorded · Goal: 90%+
-        </div>
-      </div>
+      ) : (
+        months.map((monthKey) => {
+          const monthData = byMonth[monthKey]
+          const label = new Date(`${monthKey}-02`).toLocaleString('en-US', { month: 'long', year: 'numeric' })
+          const firstDay = new Date(`${monthKey}-01`).getDay()
+          const daysInMonth = new Date(Number.parseInt(monthKey.slice(0, 4), 10), Number.parseInt(monthKey.slice(5, 7), 10), 0).getDate()
 
-      {/* Log */}
-      <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
-        <div style={{ padding: '14px 18px', borderBottom: '1px solid #E4EAF2', fontSize: 14, fontWeight: 700, color: '#1A365E' }}>Attendance Log</div>
-        <div style={{ maxHeight: 400, overflowY: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead><tr style={{ background: '#F7F9FC' }}>
-              <th style={{ padding: '8px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase', borderBottom: '1px solid #E4EAF2' }}>Date</th>
-              <th style={{ padding: '8px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase', borderBottom: '1px solid #E4EAF2' }}>Day</th>
-              <th style={{ padding: '8px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase', borderBottom: '1px solid #E4EAF2' }}>Status</th>
-            </tr></thead>
-            <tbody>
-              {records.map(r => {
-                const m = STATUS_META[r.status] ?? { bg: '#F3F4F6', tc: '#6B7280', label: r.status }
-                const d = new Date(r.date)
-                return (
-                  <tr key={r.id}>
-                    <td style={{ padding: '8px 16px', fontSize: 13, color: '#1A365E', borderBottom: '1px solid #F0F4F8' }}>{d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
-                    <td style={{ padding: '8px 16px', fontSize: 13, color: '#7A92B0', borderBottom: '1px solid #F0F4F8' }}>{d.toLocaleDateString('en-US', { weekday: 'short' })}</td>
-                    <td style={{ padding: '8px 16px', borderBottom: '1px solid #F0F4F8' }}>
-                      <span style={{ padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: m.bg, color: m.tc }}>{r.status}</span>
-                    </td>
-                  </tr>
-                )
-              })}
-              {records.length === 0 && <tr><td colSpan={3} style={{ padding: 24, textAlign: 'center', color: '#7A92B0', fontSize: 13 }}>No records yet.</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </div>
+          return (
+            <div key={monthKey} style={{ ...card, padding: 18 }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, marginBottom: 12 }}>📅 {label}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 4 }}>
+                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                  <div key={day} style={{ textAlign: 'center', fontSize: 9, fontWeight: 700, color: SP_SLATE, padding: '4px 0' }}>
+                    {day}
+                  </div>
+                ))}
+
+                {Array.from({ length: firstDay }).map((_, index) => <div key={`pad-${monthKey}-${index}`} />)}
+
+                {Array.from({ length: daysInMonth }).map((_, index) => {
+                  const dayNumber = index + 1
+                  const dateStr = `${monthKey}-${String(dayNumber).padStart(2, '0')}`
+                  const status = monthData[dateStr] || ''
+                  const color = statCols[status] || '#F0F4FA'
+                  const isWeekend = [0, 6].includes(new Date(dateStr).getDay())
+
+                  if (isWeekend) {
+                    return (
+                      <div key={dateStr} style={{ textAlign: 'center', padding: '6px 0' }}>
+                        <div style={{ width: 28, height: 28, borderRadius: 6, background: '#F7F9FC', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#C0C0C0' }}>
+                          {dayNumber}
+                        </div>
+                      </div>
+                    )
+                  }
+
+                  return (
+                    <div key={dateStr} title={`${dateStr}${status ? ` — ${statLabels[status]}` : ''}`} style={{ textAlign: 'center', padding: '6px 0' }}>
+                      <div style={{ width: 28, height: 28, borderRadius: 6, background: color, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: status ? '#fff' : '#9EB3C8' }}>
+                        {dayNumber}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10 }}>
+                {Object.keys(statLabels).filter((key) => key).map((key) => (
+                  <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <div style={{ width: 12, height: 12, borderRadius: 3, background: statCols[key] }} />
+                    <span style={{ fontSize: 9, color: SP_SLATE }}>{statLabels[key]}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })
+      )}
     </div>
   )
 }

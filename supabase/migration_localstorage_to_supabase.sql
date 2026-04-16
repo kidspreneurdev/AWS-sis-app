@@ -147,10 +147,27 @@ create table if not exists lms_progress (
   unique(student_id, content_id)
 );
 
+create table if not exists lms_submissions (
+  id            uuid primary key default uuid_generate_v4(),
+  student_id    uuid not null references students(id) on delete cascade,
+  course_id     text not null references lms_courses(id) on delete cascade,
+  content_id    text not null references lms_content(id) on delete cascade,
+  note          text,
+  link_url      text,
+  submitted_at  timestamptz default now(),
+  created_at    timestamptz default now()
+);
+
+create index if not exists lms_submissions_student_idx on lms_submissions(student_id);
+create index if not exists lms_submissions_course_idx on lms_submissions(course_id);
+create index if not exists lms_submissions_content_idx on lms_submissions(content_id);
+create index if not exists lms_submissions_submitted_at_idx on lms_submissions(submitted_at desc);
+
 alter table lms_courses    enable row level security;
 alter table lms_content    enable row level security;
 alter table lms_enrolments enable row level security;
 alter table lms_progress   enable row level security;
+alter table lms_submissions enable row level security;
 
 create policy "lms_courses_read"      on lms_courses    for select to authenticated using (true);
 create policy "lms_courses_write"     on lms_courses    for all    to authenticated using (get_my_role() in ('admin','teacher','counselor'));
@@ -160,6 +177,8 @@ create policy "lms_enrolments_read"   on lms_enrolments for select to authentica
 create policy "lms_enrolments_write"  on lms_enrolments for all    to authenticated using (get_my_role() in ('admin','teacher','counselor'));
 create policy "lms_progress_read"     on lms_progress   for select to authenticated using (true);
 create policy "lms_progress_write"    on lms_progress   for all    to authenticated using (get_my_role() in ('admin','teacher','counselor'));
+create policy "lms_submissions_read"  on lms_submissions for select to authenticated using (true);
+create policy "lms_submissions_write" on lms_submissions for all    to authenticated using (get_my_role() in ('admin','teacher','counselor'));
 
 -- ─── 7. TPMS IPDP Goals ─────────────────────────────────────
 create table if not exists tpms_ipdp (

@@ -28,6 +28,14 @@ interface AttendanceRecord {
   note: string | null
 }
 
+// ─── DB status mapping ────────────────────────────────────────────────────────
+const STATUS_TO_DB: Record<AStatus, string> = {
+  P: 'Present', A: 'Absent', T: 'Late', E: 'Excused', R: 'Remote',
+}
+const DB_TO_STATUS: Record<string, AStatus> = {
+  Present: 'P', Absent: 'A', Late: 'T', Excused: 'E', Remote: 'R',
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function toISODate(d: Date) {
   return d.toISOString().slice(0, 10)
@@ -80,9 +88,11 @@ const td: React.CSSProperties = {
 function StatusButtons({
   current,
   onChange,
+  onClear,
 }: {
   current: AStatus | null
   onChange: (s: AStatus) => void
+  onClear: () => void
 }) {
   return (
     <div style={{ display: 'flex', gap: 4 }}>
@@ -92,7 +102,8 @@ function StatusButtons({
         return (
           <button
             key={s}
-            onClick={() => onChange(s)}
+            onClick={() => active ? onClear() : onChange(s)}
+            title={active ? `Clear ${m.label}` : m.label}
             style={{
               padding: '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer',
               fontSize: 12, fontWeight: 600,
@@ -137,7 +148,13 @@ export function AttendancePage() {
         supabase.from('attendance').select('*'),
       ])
       if (stuRes.data) setStudents(stuRes.data)
-      if (attRes.data) setRecords(attRes.data)
+      if (attRes.data) setRecords(attRes.data.map((r: Record<string, unknown>) => ({
+        id: r.id as string,
+        student_id: r.student_id as string,
+        date: r.date as string,
+        status: (DB_TO_STATUS[r.status as string] ?? r.status) as AStatus,
+        note: r.note as string | null,
+      })))
     }
     load()
   }, [])
@@ -169,25 +186,37 @@ export function AttendancePage() {
   async function setStatus(studentId: string, d: string, status: AStatus) {
     const existing = records.find(r => r.student_id === studentId && r.date === d)
     const key = `${studentId}__${d}`
-    let updated: AttendanceRecord | null = null
+
+    // Optimistic update so button responds immediately
+    const optimistic: AttendanceRecord = existing
+      ? { ...existing, status }
+      : { id: `temp_${studentId}_${d}`, student_id: studentId, date: d, status, note: notes[key] ?? null }
+    setRecords(prev => {
+      const filtered = prev.filter(r => !(r.student_id === studentId && r.date === d))
+      return [...filtered, optimistic]
+    })
+
+    const dbStatus = STATUS_TO_DB[status]
     if (existing) {
-      const { data } = await supabase.from('attendance')
-        .update({ status, note: notes[key] ?? null })
+      const { data, error } = await supabase.from('attendance')
+        .update({ status: dbStatus, note: notes[key] ?? null })
         .eq('id', existing.id)
         .select()
         .single()
-      updated = data
+      if (error) { console.error('attendance update error:', error); return }
+      if (data) setRecords(prev => {
+        if (!prev.some(r => r.student_id === studentId && r.date === d)) return prev
+        return [...prev.filter(r => !(r.student_id === studentId && r.date === d)), { ...data, status }]
+      })
     } else {
-      const { data } = await supabase.from('attendance')
-        .insert({ student_id: studentId, date: d, status, note: notes[key] ?? null })
+      const { data, error } = await supabase.from('attendance')
+        .insert({ student_id: studentId, date: d, status: dbStatus, note: notes[key] ?? null })
         .select()
         .single()
-      updated = data
-    }
-    if (updated) {
-      setRecords(prev => {
-        const filtered = prev.filter(r => !(r.student_id === studentId && r.date === d))
-        return [...filtered, updated!]
+      if (error) { console.error('attendance insert error:', error); return }
+      if (data) setRecords(prev => {
+        if (!prev.some(r => r.student_id === studentId && r.date === d)) return prev
+        return [...prev.filter(r => !(r.student_id === studentId && r.date === d)), { ...data, status }]
       })
     }
   }
@@ -199,6 +228,19 @@ export function AttendancePage() {
     await supabase.from('attendance').update({ note: notes[key] ?? null }).eq('id', existing.id)
   }
 
+  async function clearStatus(studentId: string, d: string) {
+    const existing = records.find(r => r.student_id === studentId && r.date === d)
+    if (!existing) return
+    setRecords(prev => prev.filter(r => !(r.student_id === studentId && r.date === d)))
+    // If INSERT hasn't resolved yet, the id is a temp placeholder — nothing in DB to delete
+    if (existing.id.startsWith('temp_')) return
+    const { error } = await supabase.from('attendance').delete().eq('id', existing.id)
+    if (error) {
+      console.error('attendance delete error:', error)
+      setRecords(prev => [...prev, existing])
+    }
+  }
+
   async function markAllPresent(sIds: string[], d: string) {
     for (const id of sIds) {
       await setStatus(id, d, 'P')
@@ -206,13 +248,16 @@ export function AttendancePage() {
   }
 
   const today = todayStr()
+  const selectedDate = tab === 'cohort' ? cohortDate : date
   const enrolled = students.length
-  const presentToday = records.filter(r => r.date === today && (r.status === 'P' || r.status === 'R' || r.status === 'E')).length
-  const absentToday = records.filter(r => r.date === today && r.status === 'A').length
+  const presentToday = records.filter(r => r.date === selectedDate && (r.status === 'P' || r.status === 'R' || r.status === 'E')).length
+  const absentToday = records.filter(r => r.date === selectedDate && r.status === 'A').length
   const chronicAbsent = students.filter(s => {
     const r = rate30(records, s.id, today)
     return r !== null && r < 90
   }).length
+  const isToday = selectedDate === today
+  const dateLabel = isToday ? 'Today' : new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
   const tabStyle = (active: boolean): React.CSSProperties => ({
     padding: '8px 20px', border: 'none', cursor: 'pointer', fontSize: 13,
@@ -232,8 +277,8 @@ export function AttendancePage() {
 
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
         <StatCard label="Enrolled" value={enrolled} />
-        <StatCard label="Present Today" value={presentToday} color="#1DBD6A" />
-        <StatCard label="Absent Today" value={absentToday} color={absentToday > 0 ? '#D61F31' : '#1A365E'} />
+        <StatCard label={`Present (${dateLabel})`} value={presentToday} color="#1DBD6A" />
+        <StatCard label={`Absent (${dateLabel})`} value={absentToday} color={absentToday > 0 ? '#D61F31' : '#1A365E'} />
         <StatCard
           label="Chronic Absent"
           value={chronicAbsent}
@@ -259,6 +304,7 @@ export function AttendancePage() {
               setNotes={setNotes}
               getStatus={getStatus}
               setStatus={setStatus}
+              clearStatus={clearStatus}
               saveNote={saveNote}
               markAllPresent={markAllPresent}
             />
@@ -276,6 +322,7 @@ export function AttendancePage() {
               setNotes={setNotes}
               getStatus={getStatus}
               setStatus={setStatus}
+              clearStatus={clearStatus}
               saveNote={saveNote}
               markAllPresent={markAllPresent}
             />
@@ -292,7 +339,7 @@ export function AttendancePage() {
 // ─── Daily Tab ────────────────────────────────────────────────────────────────
 function DailyTab({
   students, records, date, setDate, notes, setNotes,
-  getStatus, setStatus, saveNote, markAllPresent,
+  getStatus, setStatus, clearStatus, saveNote, markAllPresent,
 }: {
   students: Stu[]
   records: AttendanceRecord[]
@@ -302,6 +349,7 @@ function DailyTab({
   setNotes: React.Dispatch<React.SetStateAction<Record<string, string>>>
   getStatus: (id: string, d: string) => AStatus | null
   setStatus: (id: string, d: string, s: AStatus) => Promise<void>
+  clearStatus: (id: string, d: string) => Promise<void>
   saveNote: (id: string, d: string) => Promise<void>
   markAllPresent: (ids: string[], d: string) => Promise<void>
 }) {
@@ -360,7 +408,7 @@ function DailyTab({
                   </td>
                   <td style={td}>{s.grade}</td>
                   <td style={td}>
-                    <StatusButtons current={status} onChange={st => setStatus(s.id, date, st)} />
+                    <StatusButtons current={status} onChange={st => setStatus(s.id, date, st)} onClear={() => clearStatus(s.id, date)} />
                   </td>
                   <td style={{ ...td, fontWeight: 600, color: rateColor(r) }}>
                     {r !== null ? `${r}%` : '—'}
@@ -394,7 +442,7 @@ function DailyTab({
 function CohortTab({
   students, records, cohorts, selectedCohort, setSelectedCohort,
   cohortDate, setCohortDate, notes, setNotes,
-  getStatus, setStatus, saveNote, markAllPresent,
+  getStatus, setStatus, clearStatus, saveNote, markAllPresent,
 }: {
   students: Stu[]
   records: AttendanceRecord[]
@@ -407,6 +455,7 @@ function CohortTab({
   setNotes: React.Dispatch<React.SetStateAction<Record<string, string>>>
   getStatus: (id: string, d: string) => AStatus | null
   setStatus: (id: string, d: string, s: AStatus) => Promise<void>
+  clearStatus: (id: string, d: string) => Promise<void>
   saveNote: (id: string, d: string) => Promise<void>
   markAllPresent: (ids: string[], d: string) => Promise<void>
 }) {
@@ -470,7 +519,7 @@ function CohortTab({
                   </div>
                 </div>
               </div>
-              <StatusButtons current={status} onChange={st => setStatus(s.id, cohortDate, st)} />
+              <StatusButtons current={status} onChange={st => setStatus(s.id, cohortDate, st)} onClear={() => clearStatus(s.id, cohortDate)} />
               <input
                 value={notes[key] ?? ''}
                 onChange={e => setNotes(prev => ({ ...prev, [key]: e.target.value }))}

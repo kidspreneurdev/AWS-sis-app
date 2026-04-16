@@ -5,6 +5,7 @@ import { StudentDetailPanel } from '@/components/students/StudentDetailPanel'
 import { toast } from '@/lib/toast'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
 import { type Student, type StudentInsert, type StudentStatus, fullName } from '@/types/student'
+import { useCohorts } from '@/hooks/useCohorts'
 
 // Reuse the same row conversion from ApplicationsPage
 function fromRow(row: Record<string, unknown>): Student {
@@ -183,7 +184,7 @@ export function StudentsPage() {
   }
 
   const campuses = [...new Set(students.map(s => s.campus).filter(Boolean) as string[])]
-  const cohorts = [...new Set(students.map(s => s.cohort).filter(Boolean) as string[])]
+  const cohorts = useCohorts()
   const grades = [...new Set(students.map(s => s.grade).filter(v => v !== null) as number[])].sort((a, b) => a - b)
 
   const headerPortal = useHeaderActions(

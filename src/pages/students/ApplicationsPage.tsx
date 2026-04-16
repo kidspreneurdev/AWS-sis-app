@@ -10,9 +10,9 @@ import {
   type Student, type StudentInsert, type StudentStatus,
   STATUSES, GRADES, fullName,
 } from '@/types/student'
+import { useCohorts } from '@/hooks/useCohorts'
 
 const CAMPUSES_DEFAULT = ['Main Campus', 'North Campus']
-const COHORTS_DEFAULT: string[] = []
 
 // ─── DB helpers ──────────────────────────────────────────────────────────────
 function toRow(s: StudentInsert) {
@@ -250,7 +250,7 @@ export function ApplicationsPage() {
   }
 
   const campuses = [...new Set(students.map(s => s.campus).filter(Boolean) as string[])].concat(CAMPUSES_DEFAULT).filter((v, i, a) => a.indexOf(v) === i)
-  const cohorts = [...new Set(students.map(s => s.cohort).filter(Boolean) as string[])].concat(COHORTS_DEFAULT).filter((v, i, a) => a.indexOf(v) === i)
+  const cohorts = useCohorts()
   const BULK_STATUSES: StudentStatus[] = ['Under Review', 'Accepted', 'Waitlisted', 'Enrolled', 'Denied']
 
   function SortTh({ label, sortK, style }: { label: string; sortK: SortKey; style?: React.CSSProperties }) {

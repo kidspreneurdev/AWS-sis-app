@@ -104,7 +104,7 @@ export function LoginPage({ initialTab = 'staff' }: { initialTab?: LoginTab }) {
       const normalizedStudentId = studentId.trim().toUpperCase()
       const { data, error: dbError } = await supabase
         .from('students')
-        .select('email,student_id')
+        .select('id,first_name,last_name,student_id,grade,cohort,campus,email,portal_password')
         .eq('student_id', normalizedStudentId)
         .single()
 
@@ -113,23 +113,31 @@ export function LoginPage({ initialTab = 'staff' }: { initialTab?: LoginTab }) {
         return
       }
 
-      if (!data.email) {
-        setStudentError('Student login is not enabled for this account. Add an email in the student record first.')
+      const row = data as Record<string, unknown>
+
+      if (!row.portal_password) {
+        setStudentError('Portal access has not been set up for this account. Contact your administrator.')
         return
       }
 
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: data.email,
-        password: studentPassword,
-      })
-
-      if (signInError) {
+      if (row.portal_password !== studentPassword) {
         setStudentError('Incorrect student ID or password.')
         return
       }
 
-      void refreshSession()
+      // Store session in sessionStorage — no Supabase auth needed for students
+      const sess = {
+        studentId: row.student_id as string,
+        fullName: `${row.first_name ?? ''} ${row.last_name ?? ''}`.trim(),
+        grade: row.grade != null ? String(row.grade) : '',
+        campus: (row.campus as string) ?? '',
+        cohort: (row.cohort as string) ?? '',
+        dbId: row.id as string,
+        email: (row.email as string) ?? '',
+      }
+      try { sessionStorage.setItem('sp_session', JSON.stringify(sess)) } catch { /* ignore */ }
 
+      void refreshSession()
       navigate('/portal/dashboard')
     } finally {
       setStudentLoading(false)

@@ -156,7 +156,13 @@ export function CohortsPage() {
       supabase.from('settings').select('id,cohorts').single(),
     ])
     setStudents((sRes.data ?? []).map(fromRow))
-    setCohortNames((setRes.data?.cohorts as string[]) ?? [])
+    const raw = (setRes.data?.cohorts as string[]) ?? []
+    const cleaned = raw.map(v => String(v).replace(/^[\["\s]+|[\]"\s]+$/g, '').trim()).filter(Boolean)
+    // If data was dirty, write the clean version back immediately
+    if (raw.some((v, i) => v !== cleaned[i])) {
+      await supabase.from('settings').update({ cohorts: cleaned }).eq('id', setRes.data?.id)
+    }
+    setCohortNames(cleaned)
     setSettingsId(setRes.data?.id ?? null)
     setLoading(false)
   }

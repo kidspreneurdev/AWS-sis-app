@@ -139,6 +139,7 @@ export function StudentModal({ open, student, campuses, cohorts, onSave, onClose
 
   async function handleSave() {
     if (!form.firstName.trim() || !form.lastName.trim()) return
+    if (form.status === 'Enrolled' && !form.studentId.trim()) return
     setSaving(true)
     try {
       await onSave(form)
@@ -337,7 +338,7 @@ export function StudentModal({ open, student, campuses, cohorts, onSave, onClose
                     {IEP_OPTIONS.map(i => <option key={i} value={i}>{i || '— None —'}</option>)}
                   </FSelect>
                 </Field>
-                <Field label="Student ID">
+                <Field label="Student ID" required={form.status === 'Enrolled'}>
                   <div style={{ display: 'flex', gap: 6 }}>
                     <FInput value={form.studentId} onChange={e => set('studentId', e.target.value)} placeholder="Auto-generate or enter" style={{ ...S, flex: 1 }} />
                     <button
@@ -352,6 +353,9 @@ export function StudentModal({ open, student, campuses, cohorts, onSave, onClose
                       Generate
                     </button>
                   </div>
+                  {form.status === 'Enrolled' && !form.studentId.trim() && (
+                    <div style={{ fontSize: 11, color: '#D61F31', marginTop: 4 }}>Required when status is Enrolled</div>
+                  )}
                 </Field>
               </Grid2>
 

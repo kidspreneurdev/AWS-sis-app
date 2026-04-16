@@ -132,6 +132,8 @@ const NAV: NavGroup[] = [
     items: [
       { title: 'Alerts & Notifications', icon: Bell, to: '/admin/alerts' },
       { title: 'Settings', icon: Settings, to: '/admin/settings' },
+      { title: 'Analytics', icon: BarChart2, to: '/admin/analytics' },
+      { title: 'Audit Log', icon: FileText, to: '/admin/audit' },
       { title: 'User Management', icon: Shield, to: '/admin/users' },
       { title: 'Staff Directory', icon: Briefcase, to: '/admin/staff' },
     ],

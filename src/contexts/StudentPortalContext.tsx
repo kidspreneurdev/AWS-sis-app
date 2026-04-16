@@ -58,6 +58,20 @@ export function StudentPortalProvider({ children }: { children: ReactNode }) {
     // Check sessionStorage first (portal_password-based auth)
     const stored = getStoredSession()
     if (stored) {
+      // Rehydrate from DB so grade/cohort/campus changes are reflected immediately.
+      const { data, error } = await supabase
+        .from('students')
+        .select('id,first_name,last_name,student_id,grade,cohort,campus,email')
+        .eq('id', stored.dbId)
+        .single()
+      if (!error && data) {
+        const fresh = mapStudentSession(data as Record<string, unknown>)
+        setSessionState(fresh)
+        try { sessionStorage.setItem('sp_session', JSON.stringify(fresh)) } catch { /* ignore */ }
+        setLoading(false)
+        return fresh
+      }
+      // Fallback to cached session if row fetch fails.
       setSessionState(stored)
       setLoading(false)
       return stored

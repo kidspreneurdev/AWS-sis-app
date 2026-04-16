@@ -101,11 +101,6 @@ const card: React.CSSProperties = {
   background: '#fff', borderRadius: 10,
   border: '1px solid #E4EAF2', boxShadow: '0 2px 8px rgba(26,54,94,.08)',
 }
-const btnPrimary: React.CSSProperties = {
-  background: '#D61F31', color: '#fff', border: 'none', borderRadius: 8,
-  padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
-  display: 'inline-flex', alignItems: 'center', gap: 6,
-}
 const btnSecondary: React.CSSProperties = {
   background: '#fff', color: '#1A365E', border: '1px solid #E4EAF2', borderRadius: 8,
   padding: '7px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
@@ -132,6 +127,7 @@ export function ApplicationsPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState<string | null>(null)
   const [panelStudent, setPanelStudent] = useState<Student | null>(null)
+  const [modalType, setModalType] = useState<Student['studentType']>('New')
 
   // Filters
   const [search, setSearch] = useState('')
@@ -270,8 +266,53 @@ export function ApplicationsPage() {
     )
   }
 
+  const segmentedWrap: React.CSSProperties = {
+    display: 'inline-flex',
+    borderRadius: 12,
+    overflow: 'hidden',
+    boxShadow: '0 3px 10px rgba(26,54,94,0.12)',
+    border: '1px solid rgba(26,54,94,0.14)',
+    maxWidth: '100%',
+  }
+  const segmentedBtn: React.CSSProperties = {
+    border: 'none',
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: 700,
+    lineHeight: 1.1,
+    padding: '10px 16px',
+    minHeight: 40,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    letterSpacing: '0.01em',
+  }
+
   const headerPortal = useHeaderActions(
-    <button style={btnPrimary} onClick={() => { setEditing(null); setModalOpen(true) }}>+ New Application</button>
+    <div style={{ maxWidth: '100%', overflowX: 'auto' }}>
+      <div style={segmentedWrap}>
+        <button
+          style={{ ...segmentedBtn, background: '#D61F31', borderRight: '1px solid rgba(255,255,255,0.25)' }}
+          onClick={() => { setEditing(null); setModalType('New'); setModalOpen(true) }}
+        >
+          + New Application
+        </button>
+        <button
+          style={{ ...segmentedBtn, background: '#1A6B4A', borderRight: '1px solid rgba(255,255,255,0.25)' }}
+          onClick={() => { setEditing(null); setModalType('Existing'); setModalOpen(true) }}
+        >
+          ✅ Existing Student
+        </button>
+        <button
+          style={{ ...segmentedBtn, background: '#7040CC' }}
+          onClick={() => { setEditing(null); setModalType('Alumni'); setModalOpen(true) }}
+        >
+          🏅 Add Alumni
+        </button>
+      </div>
+    </div>
   )
 
   return (
@@ -403,7 +444,7 @@ export function ApplicationsPage() {
                     <td style={{ ...td, textAlign: 'center' }} onClick={e => e.stopPropagation()}>
                       <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
                         <button
-                          onClick={() => { setEditing(s); setModalOpen(true) }}
+                          onClick={() => { setEditing(s); setModalType(s.studentType); setModalOpen(true) }}
                           title="Edit"
                           style={{ background: '#EEF5FF', border: 'none', borderRadius: 6, width: 28, height: 28, cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                         >✏️</button>
@@ -426,17 +467,18 @@ export function ApplicationsPage() {
       <StudentModal
         open={modalOpen}
         student={editing}
+        initialStudentType={modalType}
         campuses={campuses}
         cohorts={cohorts}
         onSave={handleSave}
-        onClose={() => { setModalOpen(false); setEditing(null) }}
+        onClose={() => { setModalOpen(false); setEditing(null); setModalType('New') }}
       />
 
       <StudentDetailPanel
         student={panelStudent}
         onClose={() => setPanelStudent(null)}
         onStatusChange={handleStatusChange}
-        onEdit={(s) => { setPanelStudent(null); setEditing(s); setModalOpen(true) }}
+        onEdit={(s) => { setPanelStudent(null); setEditing(s); setModalType(s.studentType); setModalOpen(true) }}
         onDocumentsUpdated={handleDocumentsUpdated}
       />
     </div>

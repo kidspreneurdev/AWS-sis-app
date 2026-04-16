@@ -31,6 +31,7 @@ function fmtUSD(n: number) {
 interface Props {
   open: boolean
   student?: Student | null
+  initialStudentType?: Student['studentType']
   campuses: string[]
   cohorts: string[]
   onSave: (data: StudentInsert) => Promise<void>
@@ -84,12 +85,20 @@ function Grid2({ children }: { children: React.ReactNode }) {
   )
 }
 
-export function StudentModal({ open, student, campuses, cohorts, onSave, onClose }: Props) {
+export function StudentModal({ open, student, initialStudentType = 'New', campuses, cohorts, onSave, onClose }: Props) {
   const [tab, setTab] = useState<Tab>('Personal')
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState<StudentInsert>(EMPTY_STUDENT)
   const [feeRecords, setFeeRecords] = useState<FeeRec[]>([])
   const [feesLoading, setFeesLoading] = useState(false)
+
+  function createDefaultsByType(type: Student['studentType']): StudentInsert {
+    return {
+      ...EMPTY_STUDENT,
+      studentType: type,
+      status: type === 'Existing' ? 'Enrolled' : type === 'Alumni' ? 'Alumni' : 'Inquiry',
+    }
+  }
 
   useEffect(() => {
     if (open) {
@@ -99,10 +108,10 @@ export function StudentModal({ open, student, campuses, cohorts, onSave, onClose
         const { id: _id, createdAt: _c, updatedAt: _u, ...rest } = student
         setForm(rest)
       } else {
-        setForm(EMPTY_STUDENT)
+        setForm(createDefaultsByType(initialStudentType))
       }
     }
-  }, [open, student])
+  }, [open, student, initialStudentType])
 
   useEffect(() => {
     if (tab === 'Fees' && student?.id) {
@@ -139,7 +148,8 @@ export function StudentModal({ open, student, campuses, cohorts, onSave, onClose
 
   async function handleSave() {
     if (!form.firstName.trim() || !form.lastName.trim()) return
-    if (form.status === 'Enrolled' && !form.studentId.trim()) return
+    const requiresStudentId = form.status === 'Enrolled' || form.studentType === 'Existing' || form.studentType === 'Alumni'
+    if (requiresStudentId && !form.studentId.trim()) return
     setSaving(true)
     try {
       await onSave(form)
@@ -152,6 +162,19 @@ export function StudentModal({ open, student, campuses, cohorts, onSave, onClose
   if (!open) return null
 
   const docPct = DOCUMENT_TYPES.length ? Math.round((form.documents.length / DOCUMENT_TYPES.length) * 100) : 0
+  const isEdit = Boolean(student)
+  const type = form.studentType
+  const titleMap = {
+    New: isEdit ? 'Edit Application' : 'New Application',
+    Existing: isEdit ? 'Edit Student Record' : 'Add Existing Student',
+    Alumni: isEdit ? 'Edit Alumni Record' : 'Add Alumni Record',
+  } as const
+  const saveMap = {
+    New: isEdit ? 'Save Changes' : 'Submit Application',
+    Existing: isEdit ? 'Save Changes' : 'Save Existing Student',
+    Alumni: isEdit ? 'Save Changes' : 'Save Alumni Record',
+  } as const
+  const requiresStudentId = form.status === 'Enrolled' || form.studentType === 'Existing' || form.studentType === 'Alumni'
 
   return (
     <div
@@ -188,7 +211,7 @@ export function StudentModal({ open, student, campuses, cohorts, onSave, onClose
         >
           <div>
             <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>
-              {student ? 'Edit Student' : 'Add New Student'}
+              {titleMap[type]}
             </div>
             <div style={{ fontSize: 12, color: '#9EB3C8', marginTop: 2 }}>
               {student ? `${student.firstName} ${student.lastName}` : 'Fill in the student details below'}
@@ -248,6 +271,16 @@ export function StudentModal({ open, student, campuses, cohorts, onSave, onClose
           {/* ── PERSONAL ── */}
           {tab === 'Personal' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {form.studentType === 'Existing' && (
+                <div style={{ padding: '10px 12px', borderRadius: 8, background: '#F0FFF6', color: '#276749', border: '1px solid #9AE6B4', fontSize: 12, fontWeight: 600 }}>
+                  ✅ Existing Student Mode: use the student&apos;s original ID.
+                </div>
+              )}
+              {form.studentType === 'Alumni' && (
+                <div style={{ padding: '10px 12px', borderRadius: 8, background: '#FAF5FF', color: '#553C9A', border: '1px solid #D6BCFA', fontSize: 12, fontWeight: 600 }}>
+                  🏅 Alumni Mode: record graduated student details with original ID.
+                </div>
+              )}
               <Grid2>
                 <Field label="First Name" required>
                   <FInput value={form.firstName} onChange={e => set('firstName', e.target.value)} placeholder="First name" />
@@ -306,7 +339,15 @@ export function StudentModal({ open, student, campuses, cohorts, onSave, onClose
               </Grid2>
               <Grid2>
                 <Field label="Student Type">
-                  <FSelect value={form.studentType} onChange={e => set('studentType', e.target.value as Student['studentType'])}>
+                  <FSelect
+                    value={form.studentType}
+                    onChange={e => {
+                      const nextType = e.target.value as Student['studentType']
+                      set('studentType', nextType)
+                      if (nextType === 'Existing') set('status', 'Enrolled')
+                      if (nextType === 'Alumni') set('status', 'Alumni')
+                    }}
+                  >
                     {STUDENT_TYPES.map(t => <option key={t}>{t}</option>)}
                   </FSelect>
                 </Field>
@@ -338,7 +379,7 @@ export function StudentModal({ open, student, campuses, cohorts, onSave, onClose
                     {IEP_OPTIONS.map(i => <option key={i} value={i}>{i || '— None —'}</option>)}
                   </FSelect>
                 </Field>
-                <Field label="Student ID" required={form.status === 'Enrolled'}>
+                <Field label="Student ID" required={requiresStudentId}>
                   <div style={{ display: 'flex', gap: 6 }}>
                     <FInput value={form.studentId} onChange={e => set('studentId', e.target.value)} placeholder="Auto-generate or enter" style={{ ...S, flex: 1 }} />
                     <button
@@ -353,8 +394,14 @@ export function StudentModal({ open, student, campuses, cohorts, onSave, onClose
                       Generate
                     </button>
                   </div>
-                  {form.status === 'Enrolled' && !form.studentId.trim() && (
-                    <div style={{ fontSize: 11, color: '#D61F31', marginTop: 4 }}>Required when status is Enrolled</div>
+                  {requiresStudentId && !form.studentId.trim() && (
+                    <div style={{ fontSize: 11, color: '#D61F31', marginTop: 4 }}>
+                      {form.studentType === 'Existing'
+                        ? 'Required for Existing students'
+                        : form.studentType === 'Alumni'
+                          ? 'Required for Alumni records'
+                          : 'Required when status is Enrolled'}
+                    </div>
                   )}
                 </Field>
               </Grid2>
@@ -708,7 +755,7 @@ export function StudentModal({ open, student, campuses, cohorts, onSave, onClose
               fontSize: 13, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer',
             }}
           >
-            {saving ? 'Saving…' : student ? 'Save Changes' : 'Add Student'}
+            {saving ? 'Saving…' : saveMap[type]}
           </button>
         </div>
       </div>

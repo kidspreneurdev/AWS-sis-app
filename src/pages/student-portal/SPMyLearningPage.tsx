@@ -612,6 +612,11 @@ export function SPMyLearningPage() {
     if (!session) return
     setLoading(true)
 
+    const norm = (v: unknown) => String(v ?? '').trim().toLowerCase()
+    const sessionGrade = String(session.grade ?? '').trim()
+    const sessionGradeNorm = norm(sessionGrade)
+    const sessionCohortNorm = norm(session.cohort)
+
     const { data: enrolData } = await supabase.from('lms_enrolments').select('*')
     const allEnrolments: LMSEnrolment[] = (enrolData ?? []).map((r: Record<string, unknown>) => ({
       id: r.id as string,
@@ -626,9 +631,11 @@ export function SPMyLearningPage() {
 
     const matched = allEnrolments.filter((entry) => {
       if (!isActiveBool(entry.active)) return false
-      if (entry.targetType === 'student') return entry.targetValue === session.dbId
-      if (entry.targetType === 'cohort') return entry.targetValue === session.cohort
-      if (entry.targetType === 'grade') return entry.targetValue === session.grade || entry.targetValue === `Grade ${session.grade}`
+      const targetType = norm(entry.targetType)
+      const targetValueNorm = norm(entry.targetValue)
+      if (targetType === 'student') return targetValueNorm === norm(session.dbId)
+      if (targetType === 'cohort') return targetValueNorm === sessionCohortNorm
+      if (targetType === 'grade') return targetValueNorm === sessionGradeNorm || targetValueNorm === norm(`Grade ${sessionGrade}`)
       return false
     })
 

@@ -1,7 +1,35 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
-import { type Student, fullName } from '@/types/student'
+import { StudentModal } from '@/components/students/StudentModal'
+import { type Student, type StudentInsert, fullName } from '@/types/student'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
+import { useCohorts } from '@/hooks/useCohorts'
+import { toast } from '@/lib/toast'
+
+const CAMPUSES_DEFAULT = ['Main Campus', 'North Campus']
+
+function toRow(s: StudentInsert) {
+  return {
+    student_id: s.studentId,
+    first_name: s.firstName,
+    last_name: s.lastName,
+    nationality: s.nationality,
+    grade: s.grade,
+    status: s.status,
+    campus: s.campus,
+    cohort: s.cohort,
+    email: s.email,
+    phone: s.phone,
+    application_date: s.appDate,
+    enroll_date: s.enrollDate,
+    parent: s.parent,
+    support_needs: s.iep,
+    priority: s.priority,
+    year_joined: s.yearJoined,
+    year_graduated: s.yearGraduated,
+    grade_when_joined: s.gradeWhenJoined,
+  }
+}
 
 function fromRow(row: Record<string, unknown>): Student {
   let ext: Record<string, unknown> = {}
@@ -56,17 +84,38 @@ const DISTINCTION_COLORS: Record<string, string> = {
 export function AlumniPage() {
   const [students, setStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(true)
+  const [modalOpen, setModalOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [filterYear, setFilterYear] = useState('All')
   const [filterCampus, setFilterCampus] = useState('All')
+  const cohorts = useCohorts()
 
-  useEffect(() => {
+  async function fetchAlumni() {
+    setLoading(true)
     supabase.from('students').select('*').eq('status', 'Alumni').order('year_graduated', { ascending: false })
       .then(({ data }) => {
         setStudents((data ?? []).map(fromRow))
         setLoading(false)
       })
-  }, [])
+  }
+
+  useEffect(() => { void fetchAlumni() }, [])
+
+  async function handleSave(data: StudentInsert) {
+    const payload: StudentInsert = {
+      ...data,
+      status: 'Alumni',
+      studentType: 'Alumni',
+    }
+    const { error } = await supabase.from('students').insert(toRow(payload))
+    if (error) {
+      toast(error.message, 'err')
+      return
+    }
+    toast('Alumni record added', 'ok')
+    setModalOpen(false)
+    await fetchAlumni()
+  }
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
@@ -80,6 +129,7 @@ export function AlumniPage() {
 
   const years = [...new Set(students.map(s => s.yearGraduated).filter(Boolean) as string[])].sort((a, b) => Number(b) - Number(a))
   const campuses = [...new Set(students.map(s => s.campus).filter(Boolean) as string[])]
+  const modalCampuses = campuses.concat(CAMPUSES_DEFAULT).filter((v, i, a) => a.indexOf(v) === i)
 
   // Stats
   const graduatingClasses = years.length
@@ -113,7 +163,10 @@ export function AlumniPage() {
   }
 
   const headerPortal = useHeaderActions(
-    <button onClick={exportCSV} style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #E4EAF2', background: '#fff', color: '#1A365E', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>⬇ Export CSV</button>
+    <div style={{ display: 'flex', gap: 8 }}>
+      <button onClick={exportCSV} style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #E4EAF2', background: '#fff', color: '#1A365E', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>⬇ Export CSV</button>
+      <button onClick={() => setModalOpen(true)} style={{ padding: '7px 16px', borderRadius: 8, border: 'none', background: '#7040CC', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>🏅 Add Alumni</button>
+    </div>
   )
 
   return (
@@ -230,6 +283,16 @@ export function AlumniPage() {
           </div>
         </div>
       ))}
+
+      <StudentModal
+        open={modalOpen}
+        student={null}
+        initialStudentType="Alumni"
+        campuses={modalCampuses}
+        cohorts={cohorts}
+        onSave={handleSave}
+        onClose={() => setModalOpen(false)}
+      />
     </div>
     </>
   )

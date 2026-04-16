@@ -212,6 +212,8 @@ export function ATAssignmentsPage() {
   const [modal, setModal] = useState<{ open: boolean; item: Assignment | null }>({ open: false, item: null })
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [localSubs, setLocalSubs] = useState<Record<string, { status: string; score: string; note: string }>>({})
+  const [savingRows, setSavingRows] = useState<Record<string, boolean>>({})
+  const [savedRows, setSavedRows] = useState<Record<string, boolean>>({})
   const [rubricModal, setRubricModal] = useState<{ assignId: string; studentId: string; studentName: string; rubric: Rubric; assignMax: number; existingScores: Record<string, number> } | null>(null)
 
   const load = useCallback(async () => {
@@ -334,6 +336,33 @@ export function ATAssignmentsPage() {
     alert('Grades saved ✓')
   }
 
+  async function saveSingleGrade(assign: Assignment, studentId: string) {
+    const ls = localSubs[studentId]
+    if (!ls) return
+    const key = `${assign.id}_${studentId}`
+    setSavingRows(p => ({ ...p, [key]: true }))
+    setSavedRows(p => ({ ...p, [key]: false }))
+    try {
+      const today = new Date().toISOString().slice(0, 10)
+      const isOverdue = assign.dueDate && today > assign.dueDate
+      let finalStatus = ls.status
+      if (isOverdue && ls.status === 'Assigned') finalStatus = 'Late'
+
+      await supabase.from('at_submissions').upsert({
+        assignment_id: assign.id,
+        student_id: studentId,
+        status: finalStatus,
+        score: ls.score ? parseFloat(ls.score) : null,
+        teacher_note: ls.note,
+      }, { onConflict: 'assignment_id,student_id' })
+      await load()
+      setSavedRows(p => ({ ...p, [key]: true }))
+      setTimeout(() => setSavedRows(p => ({ ...p, [key]: false })), 1800)
+    } finally {
+      setSavingRows(p => ({ ...p, [key]: false }))
+    }
+  }
+
   const totalSubmissions = submissions.length
 
   const iStyle: React.CSSProperties = { padding: '7px 12px', borderRadius: 8, border: '1px solid #E4EAF2', fontSize: 12, color: '#1A365E', background: '#fff' }
@@ -423,10 +452,16 @@ export function ATAssignmentsPage() {
                       ⚠️ Assignment is overdue — students still on "Assigned" will be auto-marked <strong>Late</strong> on save.
                     </div>
                   )}
-                  <div style={{ fontSize: 10, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Student Submissions & Grades</div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: 1 }}>Student Submissions & Grades</div>
+                    <button onClick={() => saveGrades(a)} style={{ padding: '7px 14px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>💾 Save All Grades</button>
+                  </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 8 }}>
                     {students.map(s => {
                       const ls = localSubs[s.id] ?? { status: 'Assigned', score: '', note: '' }
+                      const rowKey = `${a.id}_${s.id}`
+                      const rowSaving = !!savingRows[rowKey]
+                      const rowSaved = !!savedRows[rowKey]
                       const sc = STATUS_COLORS[ls.status] ?? '#94A3B8'
                       const initials = s.fullName.split(' ').map(n => n[0] ?? '').join('').slice(0, 2).toUpperCase()
                       const gpa = a.maxScore && ls.score ? (parseFloat(ls.score) / a.maxScore) * 4.0 : null
@@ -474,6 +509,16 @@ export function ATAssignmentsPage() {
                               onChange={e => setLocalSubs(p => ({ ...p, [s.id]: { ...p[s.id], note: e.target.value } }))}
                               style={{ padding: '4px 5px', border: '1.5px solid #E4EAF2', borderRadius: 6, fontSize: 10, width: '100%', boxSizing: 'border-box' }}
                             />
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginTop: 6, marginBottom: a.rubric ? 4 : 0 }}>
+                            <span style={{ fontSize: 9, color: rowSaved ? '#059669' : '#94A3B8', fontWeight: 700 }}>{rowSaved ? 'Saved' : 'Unsaved changes'}</span>
+                            <button
+                              onClick={() => saveSingleGrade(a, s.id)}
+                              disabled={rowSaving}
+                              style={{ padding: '4px 10px', background: '#EEF3FF', color: '#1A365E', border: '1px solid #DDE6F0', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: rowSaving ? 'default' : 'pointer', opacity: rowSaving ? 0.7 : 1 }}
+                            >
+                              {rowSaving ? 'Saving…' : 'Save'}
+                            </button>
                           </div>
                           {a.rubric && rubricParse(a.rubric) && (
                             <button onClick={() => {

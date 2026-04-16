@@ -28,6 +28,8 @@ interface CommRecord {
   sentAt: string
 }
 
+type CommSchema = 'legacy' | 'modern'
+
 const EMPTY_FORM = {
   studentId: '', type: 'Email' as CommType,
   subject: '', body: '', sentBy: '',
@@ -49,7 +51,7 @@ function timeAgo(iso: string): string {
 function AddCommModal({ students, onClose, onSave, defaultSentBy }: {
   students: { id: string; name: string }[]
   onClose: () => void
-  onSave: (data: typeof EMPTY_FORM) => Promise<void>
+  onSave: (data: typeof EMPTY_FORM) => Promise<boolean>
   defaultSentBy: string
 }) {
   const [form, setForm] = useState({ ...EMPTY_FORM, sentBy: defaultSentBy })
@@ -58,7 +60,10 @@ function AddCommModal({ students, onClose, onSave, defaultSentBy }: {
 
   async function handleSave() {
     if (!form.studentId || !form.subject) return
-    setSaving(true); await onSave(form); setSaving(false); onClose()
+    setSaving(true)
+    const ok = await onSave(form)
+    setSaving(false)
+    if (ok) onClose()
   }
 
   const inp: React.CSSProperties = { width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #E4EAF2', fontSize: 13, color: '#1A365E', background: '#fff', boxSizing: 'border-box' }
@@ -104,35 +109,79 @@ function AddCommModal({ students, onClose, onSave, defaultSentBy }: {
 export function CommunicationsPage() {
   const { profile } = useAuthStore()
   const [comms, setComms] = useState<CommRecord[]>([])
+  const [commSchema, setCommSchema] = useState<CommSchema>('modern')
   const [stuList, setStuList] = useState<{ id: string; name: string }[]>([])
   const [search, setSearch] = useState('')
   const [filterType, setFilterType] = useState('All')
   const [modalOpen, setModalOpen] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
 
+  function normalizeCommType(value: unknown): CommType {
+    const v = typeof value === 'string' ? value.trim().toLowerCase() : ''
+    if (v === 'email') return 'Email'
+    if (v === 'call' || v === 'phone') return 'Call'
+    if (v === 'sms' || v === 'text') return 'SMS'
+    if (v === 'meeting') return 'Meeting'
+    if (v === 'letter' || v === 'mail') return 'Letter'
+    return 'Letter'
+  }
+
+  async function detectCommSchema(): Promise<CommSchema> {
+    const { error } = await supabase.from('communications').select('id,sent_at').limit(1)
+    if (!error) return 'modern'
+    return (error.message ?? '').toLowerCase().includes('sent_at') ? 'legacy' : 'modern'
+  }
+
   async function load() {
+    const schema = await detectCommSchema()
+    setCommSchema(schema)
+
     const [stuRes, commRes] = await Promise.all([
       supabase.from('students').select('id,first_name,last_name'),
-      supabase.from('communications').select('*').order('sent_at', { ascending: false }),
+      supabase.from('communications').select('*'),
     ])
+    if (stuRes.error) {
+      toast(stuRes.error.message || 'Failed to load students', 'err')
+      return
+    }
+    if (commRes.error) {
+      toast(commRes.error.message || 'Failed to load communications', 'err')
+      return
+    }
     const stus = (stuRes.data ?? []).map((r: Record<string, unknown>) => ({
       id: r.id as string, name: `${r.first_name} ${r.last_name}`,
     }))
     setStuList(stus)
     const stuMap = Object.fromEntries(stus.map(s => [s.id, s.name]))
-    setComms((commRes.data ?? []).map((r: Record<string, unknown>) => ({
-      id:          r.id as string,
-      studentId:   r.student_id as string,
-      studentName: stuMap[r.student_id as string] ?? 'Unknown',
-      type:        r.type as CommType,
-      subject:     r.subject as string,
-      body:        r.body as string | null,
-      sentBy:      r.sent_by as string | null,
-      sentAt:      r.sent_at as string,
-    })))
+    const mapped = (commRes.data ?? []).map((r: Record<string, unknown>) => {
+      const subject = schema === 'modern'
+        ? (r.subject as string | undefined)
+        : (r.outcome as string | undefined)
+      const body = schema === 'modern'
+        ? (r.body as string | null | undefined)
+        : (r.notes as string | null | undefined)
+      const sentBy = schema === 'modern'
+        ? (r.sent_by as string | null | undefined)
+        : (r.staff_member as string | null | undefined)
+      const sentAtRaw = schema === 'modern'
+        ? (r.sent_at as string | undefined)
+        : (r.date as string | undefined)
+      return {
+        id: r.id as string,
+        studentId: r.student_id as string,
+        studentName: stuMap[r.student_id as string] ?? 'Unknown',
+        type: normalizeCommType(r.type),
+        subject: (subject && subject.trim()) || 'Untitled communication',
+        body: body ?? null,
+        sentBy: sentBy ?? null,
+        sentAt: sentAtRaw || (r.created_at as string) || new Date().toISOString(),
+      }
+    })
+    mapped.sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime())
+    setComms(mapped)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { void load() }, [])
 
   const filtered = useMemo(() => comms.filter(c => {
     if (search && !c.studentName.toLowerCase().includes(search.toLowerCase()) && !c.subject.toLowerCase().includes(search.toLowerCase())) return false
@@ -140,20 +189,42 @@ export function CommunicationsPage() {
     return true
   }), [comms, search, filterType])
 
-  async function saveComm(data: typeof EMPTY_FORM) {
-    await supabase.from('communications').insert({
-      student_id: data.studentId, type: data.type,
-      subject: data.subject, body: data.body || null,
-      sent_by: data.sentBy || null,
-      sent_at: new Date().toISOString(),
-    })
+  async function saveComm(data: typeof EMPTY_FORM): Promise<boolean> {
+    const payload = commSchema === 'modern'
+      ? {
+        student_id: data.studentId,
+        type: data.type,
+        subject: data.subject,
+        body: data.body || null,
+        sent_by: data.sentBy || null,
+        sent_at: new Date().toISOString(),
+      }
+      : {
+        student_id: data.studentId,
+        type: data.type,
+        outcome: data.subject,
+        notes: data.body || data.subject,
+        staff_member: data.sentBy || null,
+        date: new Date().toISOString().slice(0, 10),
+      }
+
+    const { error } = await supabase.from('communications').insert(payload)
+    if (error) {
+      toast(error.message || 'Failed to log communication', 'err')
+      return false
+    }
     await load()
     toast('Communication logged', 'ok')
+    return true
   }
 
   async function deleteComm(id: string) {
     if (!confirm('Delete this communication log?')) return
-    await supabase.from('communications').delete().eq('id', id)
+    const { error } = await supabase.from('communications').delete().eq('id', id)
+    if (error) {
+      toast(error.message || 'Failed to delete communication', 'err')
+      return
+    }
     setComms(prev => prev.filter(c => c.id !== id))
     toast('Communication deleted', 'ok')
   }

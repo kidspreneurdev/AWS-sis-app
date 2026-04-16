@@ -12,6 +12,7 @@ import {
 } from './lmsStore'
 
 interface Student { id: string; lastName: string; firstName: string; fullName: string; cohort: string; grade: string }
+type LMSSubmissionRow = Record<string, unknown>
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 13, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)' }
 const iStyle: React.CSSProperties = { padding: '7px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 12, color: '#1A365E', fontFamily: 'inherit', outline: 'none', background: '#fff' }
@@ -28,6 +29,7 @@ const TAB_PATHS: Record<string, string> = {
   '/lms/gradebook': 'gradebook',
   '/lms/section': 'section',
   '/lms/progress': 'progress',
+  '/lms/student': 'student',
 }
 
 const TABS = [
@@ -131,6 +133,9 @@ export function LMSPage() {
   const location = useLocation()
   const navigate = useNavigate()
   const activeTab = TAB_PATHS[location.pathname] || 'manage'
+  const query = new URLSearchParams(location.search)
+  const studentDetailSid = query.get('sid') ?? ''
+  const studentDetailCid = query.get('cid') ?? ''
 
   const [store, setStore] = useState<LMSStore>(loadLMS)
   const [students, setStudents] = useState<Student[]>([])
@@ -156,6 +161,9 @@ export function LMSPage() {
   const [showEnrolModal, setShowEnrolModal] = useState(false)
   const [previewItem, setPreviewItem] = useState<LMSContent | null>(null)
   const [scoreModal, setScoreModal] = useState<{ studentId: string; contentId: string; courseId: string; currentScore: string; lessonTitle: string; maxScore: number; instructions: string; submNote: string; submLink: string } | null>(null)
+  const [studentSubmissions, setStudentSubmissions] = useState<LMSSubmissionRow[]>([])
+  const [studentSubmissionsLoading, setStudentSubmissionsLoading] = useState(false)
+  const [allSubmissions, setAllSubmissions] = useState<LMSSubmissionRow[]>([])
 
   useEffect(() => { loadLMSFromDB().then(setStore) }, [])
 
@@ -179,6 +187,39 @@ export function LMSPage() {
       }
     })
   }, [])
+
+  useEffect(() => {
+    if (activeTab !== 'student') return
+    if (!studentDetailSid) { setStudentSubmissions([]); return }
+    let alive = true
+    setStudentSubmissionsLoading(true)
+    supabase.from('lms_submissions').select('*').eq('student_id', studentDetailSid).then(({ data, error }) => {
+      if (!alive) return
+      if (error) {
+        console.error('LMS student submissions load error:', error)
+        setStudentSubmissions([])
+      } else {
+        setStudentSubmissions((data ?? []) as LMSSubmissionRow[])
+      }
+      setStudentSubmissionsLoading(false)
+    })
+    return () => { alive = false }
+  }, [activeTab, studentDetailSid])
+
+  useEffect(() => {
+    if (activeTab !== 'gradebook' && activeTab !== 'student') return
+    let alive = true
+    supabase.from('lms_submissions').select('*').then(({ data, error }) => {
+      if (!alive) return
+      if (error) {
+        console.error('LMS submissions load error:', error)
+        setAllSubmissions([])
+      } else {
+        setAllSubmissions((data ?? []) as LMSSubmissionRow[])
+      }
+    })
+    return () => { alive = false }
+  }, [activeTab])
 
   const persist = useCallback(async (updated: LMSStore) => {
     setStore(updated)
@@ -662,6 +703,30 @@ export function LMSPage() {
     const passMark = course.passMark || 80
     const creditHours = course.creditHours || 1
     const enrol0 = enrolments[0] || {}
+    const parseSubmissionMeta = (noteVal: unknown): Record<string, unknown> | null => {
+      if (typeof noteVal !== 'string') return null
+      const t = noteVal.trim()
+      if (!t.startsWith('{') && !t.startsWith('[')) return null
+      try {
+        const parsed = JSON.parse(t)
+        return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null
+      } catch {
+        return null
+      }
+    }
+    const getLessonSubmissions = (studentId: string, contentId: string) =>
+      allSubmissions
+        .filter(r => String(r.student_id ?? '') === studentId && String(r.content_id ?? '') === contentId)
+        .sort((a, b) => {
+          const ad = new Date(String(a.submitted_at ?? a.created_at ?? 0)).getTime()
+          const bd = new Date(String(b.submitted_at ?? b.created_at ?? 0)).getTime()
+          return bd - ad
+        })
+    const getAssignmentSubmission = (studentId: string, contentId: string) =>
+      getLessonSubmissions(studentId, contentId).find((row) => {
+        const meta = parseSubmissionMeta(row.note)
+        return !meta || meta.kind !== 'mastery_quiz'
+      })
 
     // Stats
     let ahead = 0, onP = 0, off = 0, done = 0, needsScoring = 0, atRisk = 0
@@ -730,12 +795,13 @@ export function LMSPage() {
     const openScoreModal = (studentId: string, contentId: string, currentScore: string, lessonTitle: string) => {
       const lessonItem = store.content.find(x => x.id === contentId)
       const progRec = store.progress.find(p => p.studentId === studentId && p.contentId === contentId)
+      const assignSub = getAssignmentSubmission(studentId, contentId)
       setScoreModal({
         studentId, contentId, courseId: course.id, currentScore, lessonTitle,
         maxScore: lessonItem?.assignMaxScore || 100,
         instructions: lessonItem?.assignInstructions || '',
-        submNote: ((progRec as unknown) as Record<string, unknown>)?.assignNote as string || '',
-        submLink: ((progRec as unknown) as Record<string, unknown>)?.assignLink as string || '',
+        submNote: (assignSub?.note as string) || (((progRec as unknown) as Record<string, unknown>)?.assignNote as string) || '',
+        submLink: (assignSub?.link_url as string) || (((progRec as unknown) as Record<string, unknown>)?.assignLink as string) || '',
       })
     }
 
@@ -855,6 +921,9 @@ export function LMSPage() {
                       {content.map((item, ci) => {
                         const prog = myProg.find(p => p.contentId === item.id)
                         const status = prog?.status || 'not_started'
+                        const lessonSubs = getLessonSubmissions(sid, item.id)
+                        const hasSubmission = lessonSubs.length > 0
+                        const effectiveStatus = status !== 'not_started' ? status : (hasSubmission ? 'completed' : 'not_started')
                         const hm = hasMasteryBool(item.hasMastery)
                         const ha = hasAssignBool(item.hasAssignment)
                         const ms = prog && prog.masteryScore != null && !isNaN(Number(prog.masteryScore)) ? Number(prog.masteryScore) : null
@@ -862,10 +931,11 @@ export function LMSPage() {
                         const cs = lmsCompositeScore(prog, item, passMark)
                         const assignSt = prog?.assignStatus || ''
                         const borderL = ci > 0 && content[ci - 1]?.unitTitle !== item.unitTitle ? '2px solid #D0D7E4' : '1px solid #F0F4FA'
+                        const canOpenScore = ha && (effectiveStatus !== 'not_started' || hasSubmission)
                         return (
-                          <td key={item.id} onClick={ha && status !== 'not_started' ? (e) => { e.stopPropagation(); openScoreModal(sid, item.id, String(as_ ?? ''), item.title) } : undefined} style={{ padding: '5px 3px', textAlign: 'center', borderBottom: '1px solid #F0F4FA', borderLeft: borderL, width: 56, cursor: ha && status !== 'not_started' ? 'pointer' : 'default' }} title={ha ? 'Click to score assignment' : ''}>
-                            {status === 'not_started' ? <span style={{ color: '#D0D7E4', fontSize: 13 }}>—</span>
-                              : status === 'in_progress' ? <div style={{ background: '#FEF3C7', borderRadius: 5, padding: '3px 4px', display: 'inline-block' }}><div style={{ fontSize: 10, fontWeight: 700, color: '#D97706' }}>⏳</div></div>
+                          <td key={item.id} onClick={canOpenScore ? (e) => { e.stopPropagation(); openScoreModal(sid, item.id, String(as_ ?? ''), item.title) } : undefined} style={{ padding: '5px 3px', textAlign: 'center', borderBottom: '1px solid #F0F4FA', borderLeft: borderL, width: 56, cursor: canOpenScore ? 'pointer' : 'default' }} title={ha ? 'Click to score assignment' : ''}>
+                            {effectiveStatus === 'not_started' ? <span style={{ color: '#D0D7E4', fontSize: 13 }}>—</span>
+                              : effectiveStatus === 'in_progress' ? <div style={{ background: '#FEF3C7', borderRadius: 5, padding: '3px 4px', display: 'inline-block' }}><div style={{ fontSize: 10, fontWeight: 700, color: '#D97706' }}>⏳</div></div>
                               : ha && cs !== null ? (
                                 <div style={{ background: cs >= passMark ? '#DCFCE7' : '#FEE2E2', borderRadius: 5, padding: '3px 4px', display: 'inline-block' }}>
                                   <div style={{ fontSize: 11, fontWeight: 900, color: cs >= passMark ? '#059669' : '#D61F31' }}>{cs}</div>
@@ -879,7 +949,9 @@ export function LMSPage() {
                                   <div style={{ fontSize: 12, fontWeight: 900, color: prog?.masteryPassed === true || prog?.masteryPassed === 'TRUE' ? '#059669' : '#D61F31' }}>{ms}</div>
                                   {ha && <div style={{ fontSize: 8, fontWeight: 700, color: assignSt === 'submitted' ? '#7C3AED' : '#94A3B8' }}>{assignSt === 'submitted' ? '📋⏳' : '📋+'}</div>}
                                 </div>
-                              ) : <div style={{ background: '#DCFCE7', borderRadius: 5, padding: '4px 5px', display: 'inline-block' }}><div style={{ fontSize: 13, color: '#059669' }}>✓</div></div>
+                              ) : hasSubmission
+                                  ? <div style={{ background: '#EDE9FE', borderRadius: 5, padding: '3px 4px', display: 'inline-block' }}><div style={{ fontSize: 8, fontWeight: 700, color: '#7C3AED' }}>📋⏳</div></div>
+                                  : <div style={{ background: '#DCFCE7', borderRadius: 5, padding: '4px 5px', display: 'inline-block' }}><div style={{ fontSize: 13, color: '#059669' }}>✓</div></div>
                             }
                           </td>
                         )
@@ -908,7 +980,7 @@ export function LMSPage() {
                       <td style={{ position: 'sticky', left: 0, zIndex: 3, background: '#F0F4FA', padding: '7px 8px', textAlign: 'center', borderTop: '2px solid #E4EAF2', fontSize: 12, fontWeight: 900, color: '#1A365E' }}>{cntM ? Math.round(totM / cntM) + '%' : '—'}</td>
                       <td style={{ position: 'sticky', left: 0, zIndex: 3, background: '#F0F4FA', padding: '7px 8px', textAlign: 'center', borderTop: '2px solid #E4EAF2', fontSize: 12, fontWeight: 900, color: '#1A365E' }}>{cntA ? Math.round(totA / cntA) + '%' : '—'}</td>
                       <td style={{ position: 'sticky', left: 0, zIndex: 3, background: '#F0F4FA', padding: '7px 8px', textAlign: 'center', borderTop: '2px solid #E4EAF2', fontSize: 13, fontWeight: 900, color: avgComp !== null && avgComp >= passMark ? '#059669' : '#94A3B8' }}>{avgComp !== null ? avgComp + '%' : '—'}</td>
-                      <td colSpan={4} style={{ position: 'sticky', left: 0, zIndex: 3, background: '#F0F4FA', borderTop: '2px solid #E4EAF2' }} />
+                      <td colSpan={3} style={{ position: 'sticky', left: 0, zIndex: 3, background: '#F0F4FA', borderTop: '2px solid #E4EAF2' }} />
                     </>
                   })()}
                   {content.map((item, ci) => {
@@ -954,6 +1026,203 @@ export function LMSPage() {
           </div>
           <div style={{ textAlign: 'center', padding: 10, color: '#94A3B8', fontSize: 12 }}>No posts yet. Start the discussion! 🎯</div>
         </div>
+      </div>
+    )
+  }
+
+  // ─── STUDENT DETAIL TAB ────────────────────────────────────────────────────
+  function renderStudentDetail() {
+    const sid = studentDetailSid
+    if (!sid) {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ fontSize: 16, fontWeight: 900, color: '#1A365E' }}>👤 Student Detail</div>
+          {renderNav()}
+          <div style={{ textAlign: 'center', padding: 30, background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', color: '#94A3B8' }}>
+            No student selected.
+          </div>
+        </div>
+      )
+    }
+
+    const student = students.find(s => s.id === sid)
+    const studentProgress = store.progress.filter(p => p.studentId === sid)
+    const pickedCourse = store.courses.find(c => c.id === studentDetailCid)
+    const fallbackCourse = store.courses.find(c => studentProgress.some(p => p.courseId === c.id))
+    const course = pickedCourse || fallbackCourse || store.courses[0]
+    const passMark = course?.passMark || 80
+    const courseContent = course
+      ? store.content
+        .filter(x => x.courseId === course.id)
+        .sort((a, b) => ((a.unitOrder ?? 0) - (b.unitOrder ?? 0)) || ((a.order ?? 0) - (b.order ?? 0)))
+      : []
+    const myProg = course ? studentProgress.filter(p => p.courseId === course.id) : studentProgress
+    const hasSubmissionForContent = (contentId: string) =>
+      studentSubmissions.some(r => String(r.content_id ?? '') === contentId)
+    const completed = courseContent.length
+      ? courseContent.filter((item) => {
+        const p = myProg.find(x => x.contentId === item.id)
+        if (p?.status === 'completed') return true
+        // Fallback: if a lesson submission exists but progress wasn't updated, treat as completed for detail view.
+        return !p && hasSubmissionForContent(item.id)
+      }).length
+      : 0
+    const pct = courseContent.length ? Math.round((completed / courseContent.length) * 100) : 0
+    const masteryRows = myProg.filter(p => p.masteryScore != null && !isNaN(Number(p.masteryScore)))
+    const assignmentRows = myProg.filter(p => p.assignScore != null && !isNaN(Number(p.assignScore)))
+    const avgMastery = masteryRows.length ? Math.round(masteryRows.reduce((sum, p) => sum + Number(p.masteryScore), 0) / masteryRows.length) : null
+    const avgAssign = assignmentRows.length ? Math.round(assignmentRows.reduce((sum, p) => sum + Number(p.assignScore), 0) / assignmentRows.length) : null
+    const composite = course ? lmsCourseComposite(myProg, courseContent, passMark) : null
+    const timeMins = Math.round(myProg.reduce((sum, p) => sum + (p.timeSpentMins || 0), 0))
+
+    const subsSorted = [...studentSubmissions].sort((a, b) => {
+      const ad = new Date(String(a.submitted_at ?? a.created_at ?? 0)).getTime()
+      const bd = new Date(String(b.submitted_at ?? b.created_at ?? 0)).getTime()
+      return bd - ad
+    })
+
+    const parseNoteMeta = (noteVal: unknown): Record<string, unknown> | null => {
+      if (typeof noteVal !== 'string') return null
+      const t = noteVal.trim()
+      if (!t.startsWith('{') && !t.startsWith('[')) return null
+      try {
+        const parsed = JSON.parse(t)
+        return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null
+      } catch {
+        return null
+      }
+    }
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 900, color: '#1A365E' }}>👤 Student Detail</div>
+            <div style={{ fontSize: 11, color: '#7A92B0', marginTop: 2 }}>
+              {(student?.fullName || sid)}{student?.grade ? ` · ${student.grade}` : ''}{student?.cohort ? ` · ${student.cohort}` : ''}{course ? ` · ${course.title}` : ''}
+            </div>
+          </div>
+          <button
+            onClick={() => navigate('/lms/gradebook')}
+            style={{ padding: '7px 14px', background: '#F0F4FA', color: '#1A365E', border: '1px solid #E4EAF2', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+          >
+            ← Back to Gradebook
+          </button>
+        </div>
+        {renderNav()}
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {[{ l: 'Completion', v: `${pct}%`, c: pct >= passMark ? '#059669' : '#D97706', bg: '#F7F9FC' }, { l: 'Mastery Avg', v: avgMastery !== null ? `${avgMastery}%` : '—', c: avgMastery !== null && avgMastery >= passMark ? '#059669' : '#1A365E', bg: '#F7F9FC' }, { l: 'Assign Avg', v: avgAssign !== null ? `${avgAssign}%` : '—', c: avgAssign !== null && avgAssign >= passMark ? '#059669' : '#1A365E', bg: '#F7F9FC' }, { l: 'Composite', v: composite !== null ? `${composite}%` : '—', c: composite !== null && composite >= passMark ? '#059669' : '#1A365E', bg: '#F7F9FC' }, { l: 'Time on Task', v: fmtTime(timeMins), c: '#1A365E', bg: '#F7F9FC' }].map(k => (
+            <div key={k.l} style={{ padding: '10px 14px', background: k.bg, borderRadius: 10, minWidth: 110, border: '1px solid #E4EAF2' }}>
+              <div style={{ fontSize: 9, color: '#7A92B0', fontWeight: 700, textTransform: 'uppercase' }}>{k.l}</div>
+              <div style={{ fontSize: 20, fontWeight: 900, color: k.c }}>{k.v}</div>
+            </div>
+          ))}
+        </div>
+
+        {!courseContent.length ? (
+          <div style={{ textAlign: 'center', padding: 30, background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', color: '#94A3B8' }}>
+            No lessons found for this student/course.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {studentSubmissionsLoading && (
+              <div style={{ fontSize: 11, color: '#7A92B0' }}>Loading lesson submissions…</div>
+            )}
+            {courseContent.map((item, idx) => {
+              const prog = myProg.find(p => p.contentId === item.id)
+              const lessonSubs = subsSorted.filter(r => String(r.content_id ?? '') === item.id)
+              const lessonSubsWithMeta = lessonSubs.map(row => ({ row, meta: parseNoteMeta(row.note) }))
+              const masterySub = lessonSubsWithMeta.find(x => x.meta && x.meta.kind === 'mastery_quiz')
+              const assignmentSub = lessonSubsWithMeta.find(x => !x.meta || x.meta.kind !== 'mastery_quiz')
+              const masteryMeta = masterySub?.meta
+              const masteryQuestions = Array.isArray(masteryMeta?.questions) ? (masteryMeta?.questions as Array<Record<string, unknown>>) : []
+              const hasAnySubmission = lessonSubs.length > 0
+              const status = prog?.status ?? (hasAnySubmission ? 'completed' : 'not_started')
+              const mScore = prog?.masteryScore != null && !isNaN(Number(prog.masteryScore)) ? Number(prog.masteryScore) : null
+              const aScore = prog?.assignScore != null && !isNaN(Number(prog.assignScore)) ? Number(prog.assignScore) : null
+              const compositeScore = lmsCompositeScore(prog, item, passMark)
+              return (
+                <div key={item.id} style={{ ...card, padding: '12px 14px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: '#1A365E' }}>{idx + 1}. {item.title}</div>
+                      <div style={{ fontSize: 10, color: '#7A92B0' }}>{item.unitTitle || 'Lesson'} · {TYPE_ICONS[item.type] || '📄'} {item.type}</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: '#3D5475', background: '#F0F4FA', borderRadius: 6, padding: '4px 8px' }}>Status: {status}</span>
+                      {mScore !== null && <span style={{ fontSize: 10, fontWeight: 700, color: '#059669', background: '#DCFCE7', borderRadius: 6, padding: '4px 8px' }}>Mastery: {mScore}%</span>}
+                      {aScore !== null && <span style={{ fontSize: 10, fontWeight: 700, color: '#1A365E', background: '#EEF3FF', borderRadius: 6, padding: '4px 8px' }}>Assignment: {aScore}%</span>}
+                      {compositeScore !== null && <span style={{ fontSize: 10, fontWeight: 700, color: compositeScore >= passMark ? '#059669' : '#D61F31', background: compositeScore >= passMark ? '#DCFCE7' : '#FEE2E2', borderRadius: 6, padding: '4px 8px' }}>Composite: {compositeScore}%</span>}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    <div style={{ background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 8, padding: '9px 11px' }}>
+                      <div style={{ fontSize: 10, fontWeight: 800, color: '#1A365E', marginBottom: 5 }}>📋 Lesson Submission</div>
+                      {assignmentSub ? (
+                        <>
+                          {typeof assignmentSub.row.note === 'string' && assignmentSub.row.note.trim() && (
+                            <div style={{ fontSize: 11, color: '#3D5475', whiteSpace: 'pre-wrap', marginBottom: 4 }}>{String(assignmentSub.row.note)}</div>
+                          )}
+                          {assignmentSub.row.link_url && (
+                            <a href={String(assignmentSub.row.link_url)} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#1A365E', fontWeight: 700, wordBreak: 'break-all' }}>
+                              🔗 {String(assignmentSub.row.link_url)}
+                            </a>
+                          )}
+                          {!assignmentSub.row.note && !assignmentSub.row.link_url && (
+                            <div style={{ fontSize: 11, color: '#94A3B8' }}>Submission record exists, but no note/link was provided.</div>
+                          )}
+                        </>
+                      ) : (
+                        <div style={{ fontSize: 11, color: '#94A3B8' }}>No assignment submission yet for this lesson.</div>
+                      )}
+                    </div>
+
+                    <div style={{ background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 8, padding: '9px 11px' }}>
+                      <div style={{ fontSize: 10, fontWeight: 800, color: '#1A365E', marginBottom: 5 }}>📝 Student Actual Answers</div>
+                      {masteryMeta ? (
+                        <>
+                          <div style={{ fontSize: 10, color: '#7A92B0', marginBottom: 6 }}>
+                            Attempt {Number(masteryMeta.attempt ?? 0) || 1} · Score {Number(masteryMeta.score ?? 0)}% · {masteryMeta.passed ? 'Passed' : 'Not Passed'}
+                          </div>
+                          {masteryQuestions.length ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              {masteryQuestions.map((q, qi) => {
+                                const opts = Array.isArray(q.opts) ? (q.opts as string[]) : []
+                                const studentAnswer = q.studentAnswer
+                                const correctIdx = typeof q.ans === 'number' ? Number(q.ans) : null
+                                const isShort = String(q.type ?? '').toLowerCase() === 'short' || !opts.length
+                                const selectedIdx = typeof studentAnswer === 'number' ? studentAnswer : (typeof studentAnswer === 'string' && studentAnswer !== '' && !isNaN(Number(studentAnswer)) ? Number(studentAnswer) : null)
+                                const answerText = isShort
+                                  ? (studentAnswer != null && String(studentAnswer).trim() ? String(studentAnswer) : 'No answer')
+                                  : (selectedIdx != null && opts[selectedIdx] ? `${String.fromCharCode(65 + selectedIdx)}. ${opts[selectedIdx]}` : 'No answer')
+                                const correctText = !isShort && correctIdx != null && opts[correctIdx]
+                                  ? `${String.fromCharCode(65 + correctIdx)}. ${opts[correctIdx]}`
+                                  : null
+                                return (
+                                  <div key={`${item.id}_ans_${qi}`} style={{ background: '#fff', border: '1px solid #E4EAF2', borderRadius: 7, padding: '8px 10px' }}>
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: '#1A365E', marginBottom: 4 }}>Q{qi + 1}. {String(q.q ?? '')}</div>
+                                    <div style={{ fontSize: 11, color: '#3D5475' }}><strong>Your answer:</strong> {answerText}</div>
+                                    {!isShort && correctText && <div style={{ fontSize: 10, color: '#059669', marginTop: 2 }}><strong>Correct answer:</strong> {correctText}</div>}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          ) : (
+                            <div style={{ fontSize: 11, color: '#94A3B8' }}>Mastery submission found, but no answer payload was stored.</div>
+                          )}
+                        </>
+                      ) : (
+                        <div style={{ fontSize: 11, color: '#94A3B8' }}>No mastery answer submission yet for this lesson.</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     )
   }
@@ -1536,6 +1805,7 @@ export function LMSPage() {
       {activeTab === 'content' && renderContent()}
       {activeTab === 'assign' && renderAssign()}
       {activeTab === 'gradebook' && renderGradebook()}
+      {activeTab === 'student' && renderStudentDetail()}
       {activeTab === 'section' && renderSection()}
       {activeTab === 'progress' && renderProgress()}
       {showCourseModal && <CourseModal />}

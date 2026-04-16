@@ -150,6 +150,34 @@ function MasteryQuiz({ item, prog, studentId, coursePassMark, onUpdate }: {
     }
     if (prog?.id) masteryPayload.id = prog.id
     await supabase.from('lms_progress').upsert(masteryPayload, { onConflict: 'student_id,content_id' })
+    try {
+      const questionSnapshot = questions.map((q, qi) => ({
+        q: q.q,
+        type: q.type ?? (q.opts?.length ? 'mcq' : 'short'),
+        opts: q.opts ?? [],
+        ans: q.ans,
+        studentAnswer: ans[qi] ?? null,
+      }))
+      await supabase.from('lms_submissions').insert({
+        student_id: studentId,
+        content_id: item.id,
+        course_id: item.courseId,
+        // Stored as JSON in note so existing schemas can persist quiz attempts without migration.
+        note: JSON.stringify({
+          kind: 'mastery_quiz',
+          submittedAt: new Date().toISOString(),
+          score,
+          passed,
+          attempt: attempts + 1,
+          answers: ans,
+          questions: questionSnapshot,
+        }),
+        link_url: null,
+        submitted_at: new Date().toISOString(),
+      })
+    } catch {
+      /* lms_submissions may not exist in all deployments */
+    }
     setSaving(false)
     const newAttempts = attempts + 1
     setResult({ score, passed })

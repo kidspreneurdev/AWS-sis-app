@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
-import { TYPE_ICONS, TYPE_COLORS, SUBJECT_COLORS, isActiveBool, type LMSCourse, type LMSContent, type LMSEnrolment, type LMSProgress } from '@/pages/lms/lmsStore'
+import { TYPE_ICONS, TYPE_COLORS, SUBJECT_COLORS, isActiveBool, type LMSCourse, type LMSContent, type LMSEnrolment, type LMSProgress, type LMSQuestion } from '@/pages/lms/lmsStore'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 14, border: '1px solid #E4EAF2', boxShadow: '0 1px 6px rgba(26,54,94,.06)' }
 const emptyState: React.CSSProperties = { padding: '16px 18px', borderRadius: 10, background: '#F8FAFC', border: '1px dashed #D7E0EA', fontSize: 12, color: '#7A92B0' }
@@ -85,6 +85,341 @@ function contentStatus(item: LMSContent, progress: LMSProgress | undefined, pass
     return { text: '✅ Completed', color: SP_GREEN }
   }
   return null
+}
+
+// ─── Mastery Quiz ─────────────────────────────────────────────────────────────
+function MasteryQuiz({ item, prog, studentId, coursePassMark, onUpdate }: {
+  item: LMSContent
+  prog: LMSProgress | undefined
+  studentId: string
+  coursePassMark: number
+  onUpdate: (updates: Partial<LMSProgress>) => void
+}) {
+  const passMark = item.masteryPassMark ?? coursePassMark
+  const maxRetakes = item.masteryRetakes ?? 999
+  const timeLimitSecs = (item.masteryTimeLimit ?? 0) * 60
+
+  let questions: LMSQuestion[] = []
+  try { questions = JSON.parse(item.masteryQuizJson ?? item.quizJson ?? '[]') } catch { /* empty */ }
+
+  const alreadyPassed = prog?.masteryPassed === true || prog?.masteryPassed === 'TRUE'
+  const attempts = prog?.masteryAttempts ?? 0
+
+  const [phase, setPhase] = useState<'quiz' | 'result'>(alreadyPassed ? 'result' : 'quiz')
+  const [qIdx, setQIdx] = useState(0)
+  const [answers, setAnswers] = useState<Record<number, number | string>>({})
+  const [result, setResult] = useState<{ score: number; passed: boolean } | null>(
+    alreadyPassed && prog?.masteryScore != null ? { score: Number(prog.masteryScore), passed: true } : null,
+  )
+  const [timeLeft, setTimeLeft] = useState(timeLimitSecs)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (!timeLimitSecs || phase !== 'quiz') return
+    if (timeLeft <= 0) return
+    const id = window.setInterval(() => setTimeLeft((p) => Math.max(0, p - 1)), 1000)
+    return () => window.clearInterval(id)
+  }, [timeLimitSecs, phase, timeLeft])
+
+  if (!questions.length) {
+    return (
+      <div style={{ padding: '14px 16px', background: '#F7F9FC', borderRadius: 10, border: '1px solid #E4EAF2', fontSize: 11, color: '#94A3B8' }}>
+        🎯 No mastery questions have been configured for this lesson yet.
+      </div>
+    )
+  }
+
+  async function submitQuiz(ans: Record<number, number | string>) {
+    const mcqQs = questions.filter((q) => q.type !== 'short' && q.opts?.length)
+    let correct = 0
+    mcqQs.forEach((q) => {
+      const origIdx = questions.indexOf(q)
+      if (ans[origIdx] === q.ans) correct++
+    })
+    const score = mcqQs.length > 0 ? Math.round((correct / mcqQs.length) * 100) : 100
+    const passed = score >= passMark
+    setSaving(true)
+    const masteryPayload: Record<string, unknown> = {
+      student_id: studentId,
+      course_id: item.courseId,
+      content_id: item.id,
+      status: passed ? 'completed' : (prog?.status ?? 'in_progress'),
+      mastery_score: score,
+      mastery_passed: passed,
+      mastery_attempts: attempts + 1,
+    }
+    if (prog?.id) masteryPayload.id = prog.id
+    await supabase.from('lms_progress').upsert(masteryPayload, { onConflict: 'student_id,content_id' })
+    setSaving(false)
+    const newAttempts = attempts + 1
+    setResult({ score, passed })
+    setPhase('result')
+    onUpdate({ masteryScore: score, masteryPassed: passed, masteryAttempts: newAttempts, status: passed ? 'completed' : prog?.status })
+  }
+
+  function retry() {
+    setPhase('quiz')
+    setQIdx(0)
+    setAnswers({})
+    setResult(null)
+    setTimeLeft(timeLimitSecs)
+  }
+
+  const remainingRetakes = maxRetakes - attempts
+
+  if (phase === 'result' && result) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ background: result.passed ? 'linear-gradient(135deg,#059669,#047857)' : 'linear-gradient(135deg,#DC2626,#B91C1C)', borderRadius: 14, padding: '20px 22px', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', top: -20, right: -20, width: 100, height: 100, borderRadius: '50%', background: 'rgba(255,255,255,.07)' }} />
+          <div style={{ fontSize: 36, marginBottom: 8 }}>{result.passed ? '🎉' : '😔'}</div>
+          <div style={{ fontSize: 16, fontWeight: 900, color: '#fff', marginBottom: 4 }}>{result.passed ? 'Congratulations!' : 'Not quite there yet'}</div>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,.85)', marginBottom: 14 }}>
+            {result.passed ? `You passed with ${result.score}%` : `You scored ${result.score}% — you need ${passMark}% to pass`}
+          </div>
+          {!result.passed && remainingRetakes > 0 && (
+            <button onClick={retry} style={{ padding: '9px 20px', background: '#fff', color: '#DC2626', border: 'none', borderRadius: 9, fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
+              🔄 Try Again ({remainingRetakes} attempt{remainingRetakes !== 1 ? 's' : ''} left)
+            </button>
+          )}
+          {!result.passed && remainingRetakes <= 0 && (
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,.75)' }}>No more attempts remaining. Contact your teacher.</div>
+          )}
+        </div>
+        <div style={{ background: '#fff', border: '1px solid #E4EAF2', borderRadius: 13, overflow: 'hidden' }}>
+          <div style={{ padding: '10px 14px', background: '#F7F9FC', borderBottom: '1px solid #E4EAF2', fontSize: 11, fontWeight: 800, color: '#1A365E' }}>📝 Answer Review</div>
+          {questions.map((q, qi) => {
+            const isShort = q.type === 'short' || !q.opts?.length
+            const studentAns = answers[qi]
+            const correct = !isShort && studentAns === q.ans
+            return (
+              <div key={qi} style={{ padding: '12px 14px', borderBottom: qi < questions.length - 1 ? '1px solid #F0F4FA' : 'none', background: isShort ? '#F7F9FC' : correct ? '#F0FDF4' : '#FFF7F7' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#1A365E', marginBottom: 6 }}>
+                  {isShort ? '📝' : correct ? '✅' : '❌'} Q{qi + 1}: {q.q}
+                </div>
+                {isShort ? (
+                  <>
+                    <div style={{ fontSize: 10, color: '#5A7290' }}>Short answer — teacher will review your response.</div>
+                    {studentAns !== undefined && <div style={{ fontSize: 10, color: '#3D5475', marginTop: 4, padding: '5px 8px', background: '#F7F9FC', borderRadius: 6 }}><em>{String(studentAns)}</em></div>}
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontSize: 10, color: correct ? '#059669' : '#DC2626', marginBottom: 3 }}>
+                      Your answer: {studentAns !== undefined ? `${String.fromCharCode(65 + Number(studentAns))}. ${q.opts?.[Number(studentAns)] ?? ''}` : 'Not answered'}
+                    </div>
+                    {!correct && <div style={{ fontSize: 10, fontWeight: 700, color: '#059669' }}>Correct answer: {String.fromCharCode(65 + (q.ans ?? 0))}. {q.opts?.[q.ans ?? 0] ?? ''}</div>}
+                  </>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
+  const currentQ = questions[qIdx]
+  const isLast = qIdx === questions.length - 1
+  const isShort = currentQ.type === 'short' || !currentQ.opts?.length
+  const timedOut = timeLimitSecs > 0 && timeLeft === 0
+
+  return (
+    <div style={{ background: '#F7F9FC', borderRadius: 13, padding: 20, border: '1px solid #E4EAF2' }}>
+      {timeLimitSecs > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', background: '#FFF7ED', border: '1px solid #FDE68A', borderRadius: 8, marginBottom: 10 }}>
+          <span style={{ fontSize: 18 }}>⏱</span>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#92400E', textTransform: 'uppercase' }}>Time Remaining</div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: timeLeft < 60 ? SP_RED : '#D97706', fontVariantNumeric: 'tabular-nums' }}>
+              {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}
+            </div>
+          </div>
+        </div>
+      )}
+      {timedOut && (
+        <div style={{ padding: '8px 12px', background: '#FEE2E2', borderRadius: 8, fontSize: 11, fontWeight: 700, color: SP_RED, marginBottom: 10 }}>
+          ⏱ Time's up! Please submit your answers.
+        </div>
+      )}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: '#7A92B0' }}>Question {qIdx + 1} of {questions.length}</div>
+        <div style={{ display: 'flex', gap: 5 }}>
+          {questions.map((_, i) => (
+            <div key={i} style={{ width: i === qIdx ? 20 : 8, height: 8, borderRadius: 4, background: i < qIdx ? '#059669' : i === qIdx ? '#1A365E' : '#E4EAF2', transition: 'all .3s' }} />
+          ))}
+        </div>
+      </div>
+      <div style={{ background: '#fff', border: '1.5px solid #E4EAF2', borderRadius: 12, padding: '16px 18px', marginBottom: 14 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#1A365E', lineHeight: 1.6, marginBottom: 14 }}>{currentQ.q}</div>
+        {isShort ? (
+          <textarea
+            rows={3}
+            placeholder="Type your answer here..."
+            value={String(answers[qIdx] ?? '')}
+            onChange={(e) => setAnswers((p) => ({ ...p, [qIdx]: e.target.value }))}
+            style={{ width: '100%', padding: 10, border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 12, fontFamily: 'Poppins,sans-serif', resize: 'vertical', boxSizing: 'border-box' }}
+          />
+        ) : (
+          currentQ.opts?.map((opt, oi) => {
+            const selected = answers[qIdx] === oi
+            return (
+              <label
+                key={oi}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 9, cursor: 'pointer', fontSize: 12, color: selected ? '#1A365E' : '#3D5475', marginBottom: 6, background: selected ? '#EEF3FF' : '#fff', border: `1.5px solid ${selected ? '#1A365E' : '#E4EAF2'}`, transition: 'all .15s' }}
+                onClick={() => setAnswers((p) => ({ ...p, [qIdx]: oi }))}
+              >
+                <input type="radio" name={`q_${qIdx}`} value={oi} checked={selected} onChange={() => setAnswers((p) => ({ ...p, [qIdx]: oi }))} style={{ flexShrink: 0, accentColor: '#1A365E' }} readOnly />
+                <span style={{ fontSize: 10, fontWeight: 800, color: '#7A92B0', background: '#F0F4FA', padding: '2px 7px', borderRadius: 4, flexShrink: 0 }}>{String.fromCharCode(65 + oi)}</span>
+                <span>{opt}</span>
+              </label>
+            )
+          })
+        )}
+      </div>
+      <button
+        onClick={isLast || timedOut ? () => void submitQuiz(answers) : () => setQIdx((p) => p + 1)}
+        disabled={saving || (!timedOut && answers[qIdx] === undefined)}
+        style={{ width: '100%', padding: 11, background: saving ? '#94A3B8' : (answers[qIdx] !== undefined || timedOut) ? '#1A365E' : '#E4EAF2', color: (answers[qIdx] !== undefined || timedOut) ? '#fff' : '#94A3B8', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: (answers[qIdx] !== undefined || timedOut) ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}
+      >
+        {saving ? 'Saving…' : (isLast || timedOut) ? `Submit Mastery Test (${questions.length} question${questions.length !== 1 ? 's' : ''})` : 'Next Question →'}
+      </button>
+    </div>
+  )
+}
+
+// ─── Assignment Panel ──────────────────────────────────────────────────────────
+function AssignmentPanel({ item, prog, studentId, masteryPassed, onUpdate }: {
+  item: LMSContent
+  prog: LMSProgress | undefined
+  studentId: string
+  masteryPassed: boolean
+  onUpdate: (updates: Partial<LMSProgress>) => void
+}) {
+  const hasMastery = item.hasMastery === true || item.hasMastery === 'TRUE'
+  const locked = hasMastery && !masteryPassed
+  const maxScore = item.assignMaxScore ?? 100
+  const masteryWeight = item.masteryWeight ?? 60
+  const assignWeight = item.assignWeight ?? 40
+
+  const assignScore = prog?.assignScore != null && !Number.isNaN(Number(prog.assignScore)) ? Number(prog.assignScore) : null
+  const assignStatus = prog?.assignStatus
+  const isSubmitted = assignStatus === 'submitted' || assignScore !== null
+  const isScored = assignScore !== null
+  const masteryScore = prog?.masteryScore != null ? Number(prog.masteryScore) : null
+  const finalScore = masteryScore !== null && assignScore !== null
+    ? Math.round((masteryScore * masteryWeight + assignScore * assignWeight) / 100)
+    : null
+
+  const [note, setNote] = useState('')
+  const [link, setLink] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  if (locked) {
+    return (
+      <div style={{ padding: '14px 16px', background: '#F7F9FC', borderRadius: 10, border: '1px solid #E4EAF2', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontSize: 24 }}>🔒</span>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#7A92B0' }}>Assignment Locked</div>
+          <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>Pass the mastery test first to unlock this assignment.</div>
+        </div>
+      </div>
+    )
+  }
+
+  async function submitAssignment() {
+    setSubmitting(true)
+    const assignPayload: Record<string, unknown> = {
+      student_id: studentId,
+      course_id: item.courseId,
+      content_id: item.id,
+      status: prog?.status ?? 'in_progress',
+      assign_status: 'submitted',
+    }
+    if (prog?.id) assignPayload.id = prog.id
+    await supabase.from('lms_progress').upsert(assignPayload, { onConflict: 'student_id,content_id' })
+    try {
+      await supabase.from('lms_submissions').insert({
+        student_id: studentId,
+        content_id: item.id,
+        course_id: item.courseId,
+        note: note.trim() || null,
+        link_url: link.trim() || null,
+        submitted_at: new Date().toISOString(),
+      })
+    } catch { /* table may not exist yet */ }
+    setSubmitting(false)
+    onUpdate({ assignStatus: 'submitted' })
+  }
+
+  return (
+    <div style={{ background: '#fff', border: '1.5px solid #1A365E22', borderRadius: 12, overflow: 'hidden' }}>
+      <div style={{ background: 'linear-gradient(135deg,#1A365E,#0F2240)', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 18 }}>📋</span>
+          <span style={{ fontSize: 13, fontWeight: 800, color: '#fff' }}>Assignment</span>
+          <span style={{ fontSize: 10, color: 'rgba(255,255,255,.6)', marginLeft: 4 }}>Max: {maxScore} pts</span>
+        </div>
+        {isScored && <span style={{ background: '#059669', color: '#fff', fontSize: 12, fontWeight: 900, padding: '4px 12px', borderRadius: 20 }}>{assignScore}%</span>}
+        {isSubmitted && !isScored && <span style={{ background: '#D97706', color: '#fff', fontSize: 10, fontWeight: 700, padding: '4px 10px', borderRadius: 20 }}>⏳ Awaiting Score</span>}
+      </div>
+      <div style={{ padding: '14px 16px' }}>
+        {hasMastery && (masteryScore !== null || assignScore !== null) && (
+          <div style={{ background: '#F0F4FA', borderRadius: 8, padding: '10px 12px', marginBottom: 12, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ textAlign: 'center', flex: 1 }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase' }}>Mastery ({masteryWeight}%)</div>
+              <div style={{ fontSize: 18, fontWeight: 900, color: masteryScore !== null ? '#059669' : '#94A3B8' }}>{masteryScore !== null ? `${masteryScore}%` : '—'}</div>
+            </div>
+            <div style={{ textAlign: 'center', flex: 1 }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase' }}>Assignment ({assignWeight}%)</div>
+              <div style={{ fontSize: 18, fontWeight: 900, color: assignScore !== null ? '#1A365E' : '#94A3B8' }}>{assignScore !== null ? `${assignScore}%` : 'Pending'}</div>
+            </div>
+            <div style={{ textAlign: 'center', flex: 1, borderLeft: '1px solid #E4EAF2', paddingLeft: 12 }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase' }}>Final Grade</div>
+              <div style={{ fontSize: 20, fontWeight: 900, color: finalScore !== null ? (finalScore >= 70 ? '#059669' : SP_RED) : '#1A365E' }}>{finalScore !== null ? `${finalScore}%` : '—'}</div>
+            </div>
+          </div>
+        )}
+        {isScored && (
+          <div style={{ padding: '10px 12px', background: '#DCFCE7', borderRadius: 8, fontSize: 11, color: '#059669', fontWeight: 700 }}>
+            ✅ Assignment scored by teacher: {assignScore}%
+          </div>
+        )}
+        {isSubmitted && !isScored && (
+          <div style={{ padding: '10px 12px', background: '#FEF3C7', borderRadius: 8, fontSize: 11, color: '#D97706', fontWeight: 700 }}>
+            ⏳ Your assignment has been submitted and is awaiting teacher scoring.
+          </div>
+        )}
+        {!isSubmitted && (
+          <>
+            {item.assignInstructions && (
+              <div style={{ background: '#FEF9E7', borderRadius: 8, padding: '10px 12px', marginBottom: 10, borderLeft: '3px solid #F59E0B' }}>
+                <div style={{ fontSize: 9, fontWeight: 800, color: '#92400E', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 4 }}>📋 Assignment Instructions</div>
+                <div style={{ fontSize: 11, color: '#3D5475', whiteSpace: 'pre-wrap' }}>{item.assignInstructions}</div>
+              </div>
+            )}
+            <div style={{ fontSize: 11, color: '#3D5475', marginBottom: 10 }}>Submit your work below. Your teacher will review and score it.</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div>
+                <label style={{ fontSize: 10, fontWeight: 700, color: '#5A7290', textTransform: 'uppercase', letterSpacing: '.5px', display: 'block', marginBottom: 4 }}>Submission Notes</label>
+                <textarea rows={3} placeholder="Describe what you submitted or add notes for your teacher..." value={note} onChange={(e) => setNote(e.target.value)} style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 11, fontFamily: 'Poppins,sans-serif', resize: 'vertical', boxSizing: 'border-box' }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 10, fontWeight: 700, color: '#5A7290', textTransform: 'uppercase', letterSpacing: '.5px', display: 'block', marginBottom: 4 }}>Link (Google Doc, Drive…)</label>
+                <input type="url" placeholder="https://docs.google.com/..." value={link} onChange={(e) => setLink(e.target.value)} style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 11, fontFamily: 'Poppins,sans-serif', boxSizing: 'border-box' }} />
+              </div>
+              <button
+                onClick={() => void submitAssignment()}
+                disabled={submitting || (!note.trim() && !link.trim())}
+                style={{ padding: '9px 16px', background: (note.trim() || link.trim()) ? '#1A365E' : '#E4EAF2', color: (note.trim() || link.trim()) ? '#fff' : '#94A3B8', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: (note.trim() || link.trim()) ? 'pointer' : 'not-allowed', alignSelf: 'flex-end', fontFamily: 'inherit' }}
+              >
+                {submitting ? 'Submitting…' : '📤 Submit Assignment'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
 }
 
 function LessonPreviewContent({
@@ -320,7 +655,16 @@ export function SPMyLearningPage() {
         moduleOrder: Number(r.module_order ?? 0) || undefined,
         hasMastery: extra.hasMastery as boolean | 'TRUE' | undefined,
         masteryPassMark: Number(extra.masteryPassMark ?? 0) || undefined,
+        masteryRetakes: extra.masteryRetakes !== undefined ? Number(extra.masteryRetakes) : undefined,
+        masteryTimeLimit: Number(extra.masteryTimeLimit ?? 0) || undefined,
+        masteryWeight: Number(extra.masteryWeight ?? 0) || undefined,
+        masteryQuizJson: (extra.masteryQuizJson as string) ?? undefined,
+        quizJson: (extra.quizJson as string) ?? undefined,
         hasAssignment: extra.hasAssignment as boolean | 'TRUE' | undefined,
+        assignInstructions: (extra.assignInstructions as string) ?? undefined,
+        assignMaxScore: Number(extra.assignMaxScore ?? 0) || undefined,
+        assignWeight: Number(extra.assignWeight ?? 0) || undefined,
+        assignRubric: (extra.assignRubric as string) ?? undefined,
       }
     })
 
@@ -334,6 +678,7 @@ export function SPMyLearningPage() {
       masteryPassed: r.mastery_passed === true,
       assignScore: r.assign_score as number | null,
       assignStatus: (r.assign_status as string) ?? undefined,
+      masteryAttempts: Number(r.mastery_attempts ?? 0),
       timeSpentMins: Number(r.time_spent_mins ?? 0),
     }))
 
@@ -347,19 +692,22 @@ export function SPMyLearningPage() {
     if (!session) return
     const existing = progress.find((entry) => entry.contentId === item.id && entry.studentId === session.dbId)
     const next = existing?.status === 'completed' ? 'in_progress' : 'completed'
-    await supabase.from('lms_progress').upsert({
-      id: existing?.id ?? `${session.dbId}_${item.id}`,
-      student_id: session.dbId,
-      course_id: item.courseId,
-      content_id: item.id,
-      status: next,
-      completed_at: next === 'completed' ? new Date().toISOString() : null,
-    }, { onConflict: 'student_id,content_id' })
 
+    // Optimistic update — button responds immediately
     setProgress((prev) => {
       const filtered = prev.filter((entry) => !(entry.contentId === item.id && entry.studentId === session.dbId))
       return [...filtered, { ...existing, studentId: session.dbId, courseId: item.courseId, contentId: item.id, status: next }]
     })
+
+    const payload: Record<string, unknown> = {
+      student_id: session.dbId,
+      course_id: item.courseId,
+      content_id: item.id,
+      status: next,
+    }
+    if (existing?.id) payload.id = existing.id
+    const { error } = await supabase.from('lms_progress').upsert(payload, { onConflict: 'student_id,content_id' })
+    if (error) console.error('markComplete error:', error)
   }
 
   function openLesson(item: LMSContent) {
@@ -378,6 +726,18 @@ export function SPMyLearningPage() {
       }
     }
     setActiveLessonId(item.id)
+  }
+
+  function handleProgressUpdate(contentId: string, updates: Partial<LMSProgress>) {
+    setProgress((prev) => {
+      const idx = prev.findIndex((p) => p.contentId === contentId && p.studentId === session?.dbId)
+      if (idx === -1) {
+        return [...prev, { studentId: session?.dbId ?? '', courseId: updates.courseId ?? '', contentId, status: 'in_progress', ...updates }]
+      }
+      const next = [...prev]
+      next[idx] = { ...next[idx], ...updates }
+      return next
+    })
   }
 
   const subjects = useMemo(() => {
@@ -712,6 +1072,30 @@ export function SPMyLearningPage() {
           </div>
 
           <LessonPreviewContent item={activeLesson} />
+
+          {(activeLesson.hasMastery === true || activeLesson.hasMastery === 'TRUE') && (
+            <MasteryQuiz
+              item={activeLesson}
+              prog={progress.find((p) => p.contentId === activeLesson.id && p.studentId === session?.dbId)}
+              studentId={session?.dbId ?? ''}
+              coursePassMark={selectedCourse.passMark || 80}
+              onUpdate={(updates) => handleProgressUpdate(activeLesson.id, updates)}
+            />
+          )}
+
+          {(activeLesson.hasAssignment === true || activeLesson.hasAssignment === 'TRUE') && (() => {
+            const lessonProg = progress.find((p) => p.contentId === activeLesson.id && p.studentId === session?.dbId)
+            const masteryPassed = lessonProg?.masteryPassed === true || lessonProg?.masteryPassed === 'TRUE'
+            return (
+              <AssignmentPanel
+                item={activeLesson}
+                prog={lessonProg}
+                studentId={session?.dbId ?? ''}
+                masteryPassed={masteryPassed}
+                onUpdate={(updates) => handleProgressUpdate(activeLesson.id, updates)}
+              />
+            )
+          })()}
 
           <div style={{ ...card, padding: 16 }}>
             {(() => {

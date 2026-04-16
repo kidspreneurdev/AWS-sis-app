@@ -33,20 +33,42 @@ function mapStudentSession(row: Record<string, unknown>): StudentSession {
   }
 }
 
+function getStoredSession(): StudentSession | null {
+  try {
+    const raw = sessionStorage.getItem('sp_session')
+    if (!raw) return null
+    return JSON.parse(raw) as StudentSession
+  } catch {
+    return null
+  }
+}
+
 export function StudentPortalProvider({ children }: { children: ReactNode }) {
   const [session, setSessionState] = useState<StudentSession | null>(null)
   const [loading, setLoading] = useState(true)
 
   function setSession(s: StudentSession | null) {
     setSessionState(s)
+    if (!s) {
+      try { sessionStorage.removeItem('sp_session') } catch { /* ignore */ }
+    }
   }
 
   async function refreshSession() {
+    // Check sessionStorage first (portal_password-based auth)
+    const stored = getStoredSession()
+    if (stored) {
+      setSessionState(stored)
+      setLoading(false)
+      return stored
+    }
+
+    // Fallback: Supabase auth (legacy flow)
     const { data: { session: authSession } } = await supabase.auth.getSession()
     const email = authSession?.user?.email
 
     if (!email) {
-      setSession(null)
+      setSessionState(null)
       setLoading(false)
       return null
     }
@@ -58,20 +80,21 @@ export function StudentPortalProvider({ children }: { children: ReactNode }) {
       .single()
 
     if (error || !data) {
-      setSession(null)
+      setSessionState(null)
       setLoading(false)
       return null
     }
 
     const next = mapStudentSession(data as Record<string, unknown>)
-    setSession(next)
+    setSessionState(next)
     setLoading(false)
     return next
   }
 
   async function logout() {
+    try { sessionStorage.removeItem('sp_session') } catch { /* ignore */ }
     await supabase.auth.signOut()
-    setSession(null)
+    setSessionState(null)
   }
 
   useEffect(() => {
@@ -79,11 +102,13 @@ export function StudentPortalProvider({ children }: { children: ReactNode }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_OUT') {
-        setSession(null)
-        setLoading(false)
+        const stored = getStoredSession()
+        if (!stored) {
+          setSessionState(null)
+          setLoading(false)
+        }
         return
       }
-
       void refreshSession()
     })
 

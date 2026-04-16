@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useCohorts } from '@/hooks/useCohorts'
+import { RubricBuilder } from '@/components/shared/RubricBuilder'
 import {
   loadLMS, saveLMS, loadLMSFromDB, deleteLMSCourse, deleteLMSContent, deleteLMSEnrolment,
   lmsId, fmtTime, hasMasteryBool, hasAssignBool, isActiveBool,
@@ -1289,6 +1290,26 @@ export function LMSPage() {
     const [assignDueDays, setAssignDueDays] = useState(String(item?.assignDueDays ?? ''))
     const [assignSubType, setAssignSubType] = useState(item?.assignSubType ?? 'both')
     const [assignWeight, setAssignWeight] = useState(String(item?.assignWeight ?? 40))
+    const [assignRubric, setAssignRubric] = useState(item?.assignRubric ?? '')
+
+    // Mastery questions state
+    interface MasteryQuestion { q: string; type: 'mcq' | 'short'; opts: string[]; ans: number }
+    const [masteryQuestions, setMasteryQuestions] = useState<MasteryQuestion[]>(() => {
+      try { return JSON.parse(item?.masteryQuizJson || '[]') } catch { return [] }
+    })
+
+    function addMasteryQuestion() {
+      setMasteryQuestions(p => [...p, { q: '', type: 'mcq', opts: ['', '', '', ''], ans: 0 }])
+    }
+    function removeMasteryQuestion(qi: number) {
+      setMasteryQuestions(p => p.filter((_, i) => i !== qi))
+    }
+    function updateMasteryQuestion(qi: number, field: string, val: string | number) {
+      setMasteryQuestions(p => p.map((q, i) => i === qi ? { ...q, [field]: val } : q))
+    }
+    function updateMasteryOption(qi: number, oi: number, val: string) {
+      setMasteryQuestions(p => p.map((q, i) => i === qi ? { ...q, opts: q.opts.map((o, j) => j === oi ? val : o) } : q))
+    }
 
     const save = () => {
       if (!title.trim()) { alert('Title is required'); return }
@@ -1324,6 +1345,8 @@ export function LMSPage() {
         assignDueDays: parseInt(assignDueDays) || undefined,
         assignSubType,
         assignWeight: parseInt(assignWeight) || 40,
+        assignRubric: assignRubric || undefined,
+        masteryQuizJson: masteryQuestions.length ? JSON.stringify(masteryQuestions) : undefined,
       }
       const content = [...store.content]
       if (isNew) content.push(obj); else content[editLessonIdx!] = obj
@@ -1397,6 +1420,70 @@ export function LMSPage() {
                       </label>
                     </div>
                   </div>
+                  {/* Mastery Questions Builder */}
+                  <div style={{ border: '1px solid #E4EAF2', borderRadius: 10, overflow: 'hidden' }}>
+                    <div style={{ background: '#F7F9FC', padding: '8px 12px', borderBottom: '1px solid #E4EAF2', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: '#1A365E' }}>🎯 Mastery Test Questions <span style={{ fontWeight: 400, color: '#7A92B0' }}>({masteryQuestions.length})</span></span>
+                    </div>
+                    <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {masteryQuestions.length === 0 && (
+                        <div style={{ fontSize: 11, color: '#94A3B8', padding: '6px 0' }}>No questions yet. Click the button below to add one.</div>
+                      )}
+                      {masteryQuestions.map((q, qi) => (
+                        <div key={qi} style={{ background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 8, padding: '10px 12px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                            <span style={{ fontSize: 11, fontWeight: 800, color: '#1A365E', flexShrink: 0 }}>{qi + 1}.</span>
+                            <input
+                              value={q.q}
+                              onChange={e => updateMasteryQuestion(qi, 'q', e.target.value)}
+                              placeholder="Question text..."
+                              style={{ flex: 1, padding: '5px 8px', border: '1.5px solid #E4EAF2', borderRadius: 6, fontSize: 11, fontFamily: 'inherit' }}
+                            />
+                            <select
+                              value={q.type}
+                              onChange={e => {
+                                updateMasteryQuestion(qi, 'type', e.target.value)
+                                if (e.target.value === 'mcq' && !q.opts?.length) updateMasteryQuestion(qi, 'opts', ['', '', '', ''] as unknown as string)
+                              }}
+                              style={{ padding: '4px 6px', border: '1px solid #E4EAF2', borderRadius: 5, fontSize: 10 }}
+                            >
+                              <option value="mcq">MCQ</option>
+                              <option value="short">Short</option>
+                            </select>
+                            <button type="button" onClick={() => removeMasteryQuestion(qi)} style={{ padding: '3px 7px', background: '#FFF0F1', color: '#D61F31', border: '1px solid #F5C2C7', borderRadius: 5, fontSize: 11, cursor: 'pointer' }}>×</button>
+                          </div>
+                          {q.type === 'mcq' ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              {(q.opts || ['', '', '', '']).map((opt, oi) => (
+                                <div key={oi} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  <input
+                                    type="radio"
+                                    name={`mastery_ans_${qi}`}
+                                    checked={q.ans === oi}
+                                    onChange={() => updateMasteryQuestion(qi, 'ans', oi)}
+                                    title="Mark as correct answer"
+                                    style={{ flexShrink: 0, cursor: 'pointer' }}
+                                  />
+                                  <span style={{ fontSize: 10, fontWeight: 700, color: '#7A92B0', width: 14 }}>{['A', 'B', 'C', 'D'][oi]}</span>
+                                  <input
+                                    value={opt}
+                                    onChange={e => updateMasteryOption(qi, oi, e.target.value)}
+                                    placeholder={`Option ${['A', 'B', 'C', 'D'][oi]}...`}
+                                    style={{ flex: 1, padding: '4px 8px', border: '1px solid #E4EAF2', borderRadius: 5, fontSize: 11, fontFamily: 'inherit' }}
+                                  />
+                                </div>
+                              ))}
+                              <div style={{ fontSize: 9, color: '#94A3B8', marginTop: 2 }}>Click the radio button to mark the correct answer</div>
+                            </div>
+                          ) : (
+                            <div style={{ fontSize: 10, color: '#7A92B0', fontStyle: 'italic' }}>Short answer — student types their response</div>
+                          )}
+                        </div>
+                      ))}
+                      <button type="button" onClick={addMasteryQuestion} style={{ padding: '8px 14px', background: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', width: '100%' }}>+ Add Mastery Question</button>
+                    </div>
+                  </div>
+
                   <div style={{ padding: 10, background: '#EEF3FF', borderRadius: 8, border: '1px solid #C7D9FF' }}>
                     <div style={{ fontSize: 10, fontWeight: 800, color: '#1A365E', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>⚖️ Grade Weighting</div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -1422,6 +1509,11 @@ export function LMSPage() {
                         <option value="both">Both</option>
                       </select>
                     </div>
+                  </div>
+                  {/* Assignment Rubric */}
+                  <div>
+                    <label style={{ ...labelStyle, marginBottom: 6 }}>Assignment Rubric <span style={{ fontWeight: 400, color: '#94A3B8' }}>(optional)</span></label>
+                    <RubricBuilder value={assignRubric} onChange={setAssignRubric} />
                   </div>
                 </div>
               )}

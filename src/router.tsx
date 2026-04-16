@@ -30,6 +30,8 @@ import { HealthRecordsPage } from '@/pages/operations/HealthRecordsPage'
 import { BehaviourLogPage } from '@/pages/operations/BehaviourLogPage'
 import { AlertsPage } from '@/pages/admin/AlertsPage'
 import { SettingsPage } from '@/pages/admin/SettingsPage'
+import { AuditLogPage } from '@/pages/admin/AuditLogPage'
+import { SettingsAnalyticsPage } from '@/pages/admin/SettingsAnalyticsPage'
 import { UserManagementPage } from '@/pages/admin/UserManagementPage'
 import { StaffDirectoryPage } from '@/pages/admin/StaffDirectoryPage'
 
@@ -195,6 +197,8 @@ export const router = createBrowserRouter([
         // Settings
         { path: '/admin/alerts', element: <Lazy><AlertsPage /></Lazy> },
         { path: '/admin/settings', element: <Lazy><SettingsPage /></Lazy> },
+        { path: '/admin/analytics', element: <Lazy><SettingsAnalyticsPage /></Lazy> },
+        { path: '/admin/audit', element: <Lazy><AuditLogPage /></Lazy> },
         { path: '/admin/users', element: <Lazy><UserManagementPage /></Lazy> },
         { path: '/admin/staff', element: <Lazy><StaffDirectoryPage /></Lazy> },
       ],

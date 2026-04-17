@@ -53,6 +53,7 @@ const GRAD_REQS = [
   {key:'PE',  label:'PE or Health',  required:1, area:'PE or Health',  color:'#16A34A', icon:'🏃', category:'elective', mandatory:[],mandatoryNote:'PE or Health'},
   {key:'ELEC',label:'Free Electives',required:8, area:'Electives',     color:'#6B7280', icon:'⭐', category:'elective', mandatory:[],mandatoryNote:'Any discipline'},
 ]
+type GradReq = (typeof GRAD_REQS)[number]
 const TOTAL_CREDITS = 24
 
 const DE_CORE_AREAS = ['Language Arts','Mathematics','Science','Social Studies']
@@ -561,6 +562,7 @@ export function GradesHSPage() {
   const [courseModal, setCourseModal] = useState<CourseRecord|null>(null)
   const [transferModal, setTransferModal] = useState<TransferCredit|null>(null)
   const [catalogDraft, setCatalogDraft] = useState<CatalogCourse|null>(null)
+  const [gradBreakdownKey, setGradBreakdownKey] = useState<string | null>(null)
   const printRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -597,6 +599,86 @@ export function GradesHSPage() {
   const student = students.find(s => s.id === selectedId)
   const studentCourses = useMemo(() => courses.filter(c => c.studentId === selectedId), [courses, selectedId])
   const studentTransfers = useMemo(() => transfers.filter(t => t.studentId === selectedId), [transfers, selectedId])
+  const selectedGradReq = useMemo<GradReq | null>(() => {
+    if (!gradBreakdownKey) return null
+    return GRAD_REQS.find(r => r.key === gradBreakdownKey) ?? null
+  }, [gradBreakdownKey])
+  const gradBreakdown = useMemo(() => {
+    if (!selectedGradReq) return null
+    type BreakdownItem = {
+      id: string
+      title: string
+      source: string
+      area: string
+      grade: string
+      credits: number
+    }
+    const getReqKeyFromArea = (area: string) => {
+      const match = GRAD_REQS.find(r => r.area === area)
+      return match ? match.key : 'ELEC'
+    }
+    const earnedItems: BreakdownItem[] = []
+    const pendingItems: BreakdownItem[] = []
+
+    studentCourses.forEach(c => {
+      const area = c.area || 'Electives'
+      const reqKey = getReqKeyFromArea(area)
+      if (reqKey !== selectedGradReq.key) return
+      const pending = !c.grade || c.grade === 'IP'
+      if (pending) {
+        const attempted = parseFloat(String(c.creditsAttempted)) || 0
+        if (attempted > 0) {
+          pendingItems.push({
+            id: c._id,
+            title: c.title || 'Untitled course',
+            source: c.type === 'DE' || c.type === 'EC' ? 'Course (EC/DE)' : 'Course',
+            area,
+            grade: c.grade || 'IP',
+            credits: attempted,
+          })
+        }
+        return
+      }
+      if (c.grade === 'F') return
+      const earned = parseFloat(String(c.creditsEarned)) || 0
+      if (earned <= 0) return
+      earnedItems.push({
+        id: c._id,
+        title: c.title || 'Untitled course',
+        source: c.type === 'DE' || c.type === 'EC' ? 'Course (EC/DE)' : 'Course',
+        area,
+        grade: c.grade || '—',
+        credits: earned,
+      })
+    })
+
+    studentTransfers
+      .filter(t => t.status === 'Approved')
+      .forEach(t => {
+        const area = t.area || 'Electives'
+        const reqKey = getReqKeyFromArea(area)
+        if (reqKey !== selectedGradReq.key) return
+        const earned = parseFloat(String(t.creditsAwarded)) || 0
+        if (earned <= 0) return
+        earnedItems.push({
+          id: t._id,
+          title: t.origTitle || 'Transfer credit',
+          source: t.kind === 'DE' ? 'Transfer (DE)' : 'Transfer',
+          area,
+          grade: t.origGrade || 'TR',
+          credits: earned,
+        })
+      })
+
+    earnedItems.sort((a, b) => a.title.localeCompare(b.title))
+    pendingItems.sort((a, b) => a.title.localeCompare(b.title))
+
+    const earnedTotal = Math.round(earnedItems.reduce((sum, item) => sum + item.credits, 0) * 10) / 10
+    const pendingTotal = Math.round(pendingItems.reduce((sum, item) => sum + item.credits, 0) * 10) / 10
+    const remainingAfterPending = Math.max(0, selectedGradReq.required - earnedTotal - pendingTotal)
+
+    return { earnedItems, pendingItems, earnedTotal, pendingTotal, remainingAfterPending }
+  }, [selectedGradReq, studentCourses, studentTransfers])
 
   async function saveCourseModal() {
     if (!courseModal) return
@@ -1796,34 +1878,41 @@ ${deTotal > 0 ? `
                       ELECTIVE REQUIREMENTS — 10 CREDITS
                     </div>
                   )}
-                  <div style={{ padding:'12px 14px', borderRadius:10, border:`1.5px solid ${met ? '#C6F6D5' : metWithPending ? '#FDE68A' : '#E4EAF2'}`, background: met ? '#F0FFF4' : metWithPending ? '#FFFBEA' : '#FAFBFF' }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                      <div style={{ fontSize:20 }}>{req.icon}</div>
-                      <div style={{ flex:1 }}>
-                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
-                          <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                            <span style={{ fontSize:12, fontWeight:700, color:'#1A365E' }}>{req.label}</span>
-                            {req.category === 'core' && <span style={{ fontSize:9, background:'#EEF3FF', color:'#1A365E', padding:'2px 6px', borderRadius:4, fontWeight:700 }}>CORE</span>}
+                  <button
+                    type="button"
+                    onClick={() => setGradBreakdownKey(req.key)}
+                    style={{ width:'100%', background:'transparent', border:'none', padding:0, textAlign:'left', cursor:'pointer' }}
+                  >
+                    <div style={{ padding:'12px 14px', borderRadius:10, border:`1.5px solid ${met ? '#C6F6D5' : metWithPending ? '#FDE68A' : '#E4EAF2'}`, background: met ? '#F0FFF4' : metWithPending ? '#FFFBEA' : '#FAFBFF' }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                        <div style={{ fontSize:20 }}>{req.icon}</div>
+                        <div style={{ flex:1 }}>
+                          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
+                            <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                              <span style={{ fontSize:12, fontWeight:700, color:'#1A365E' }}>{req.label}</span>
+                              {req.category === 'core' && <span style={{ fontSize:9, background:'#EEF3FF', color:'#1A365E', padding:'2px 6px', borderRadius:4, fontWeight:700 }}>CORE</span>}
+                            </div>
+                            <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                              <span style={{ fontSize:10, fontWeight:800, color:'#0E6B3B', background:'#E8FBF0', padding:'2px 7px', borderRadius:6 }}>✓ {earned} earned</span>
+                              {pending > 0 && <span style={{ fontSize:10, fontWeight:800, color:'#92400E', background:'#FEF3C7', padding:'2px 7px', borderRadius:6 }}>⏳ {pending} pending</span>}
+                              <span style={{ padding:'2px 8px', borderRadius:6, fontSize:10, fontWeight:800, background:statusBg, color:statusCol }}>{statusLabel}</span>
+                            </div>
                           </div>
-                          <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                            <span style={{ fontSize:10, fontWeight:800, color:'#0E6B3B', background:'#E8FBF0', padding:'2px 7px', borderRadius:6 }}>✓ {earned} earned</span>
-                            {pending > 0 && <span style={{ fontSize:10, fontWeight:800, color:'#92400E', background:'#FEF3C7', padding:'2px 7px', borderRadius:6 }}>⏳ {pending} pending</span>}
-                            <span style={{ padding:'2px 8px', borderRadius:6, fontSize:10, fontWeight:800, background:statusBg, color:statusCol }}>{statusLabel}</span>
+                          {/* 3-color segmented bar */}
+                          <div style={{ height:7, borderRadius:4, background:'#E4EAF2', overflow:'hidden', display:'flex' }}>
+                            {pctEarned > 0 && <div style={{ width:`${pctEarned}%`, background:'#1DBD6A', transition:'width 0.3s' }} />}
+                            {pctPending > 0 && <div style={{ width:`${pctPending}%`, background:'#F5A623', transition:'width 0.3s' }} />}
                           </div>
+                          {/* Numeric summary */}
+                          <div style={{ fontSize:10, color:'#7A92B0', marginTop:3 }}>
+                            {earned} of {req.required} cr required{pending > 0 ? ` · ${pending} cr in progress` : ''}{remAfterPending > 0 ? ` · ${remAfterPending.toFixed(1)} cr still needed` : ''}
+                          </div>
+                          {req.mandatoryNote && <div style={{ fontSize:10, color:'#7A92B0', marginTop:2 }}>📌 {req.mandatoryNote}</div>}
+                          <div style={{ fontSize:10, color:'#3D5475', marginTop:3, fontWeight:700 }}>Click to view credit breakdown</div>
                         </div>
-                        {/* 3-color segmented bar */}
-                        <div style={{ height:7, borderRadius:4, background:'#E4EAF2', overflow:'hidden', display:'flex' }}>
-                          {pctEarned > 0 && <div style={{ width:`${pctEarned}%`, background:'#1DBD6A', transition:'width 0.3s' }} />}
-                          {pctPending > 0 && <div style={{ width:`${pctPending}%`, background:'#F5A623', transition:'width 0.3s' }} />}
-                        </div>
-                        {/* Numeric summary */}
-                        <div style={{ fontSize:10, color:'#7A92B0', marginTop:3 }}>
-                          {earned} of {req.required} cr required{pending > 0 ? ` · ${pending} cr in progress` : ''}{remAfterPending > 0 ? ` · ${remAfterPending.toFixed(1)} cr still needed` : ''}
-                        </div>
-                        {req.mandatoryNote && <div style={{ fontSize:10, color:'#7A92B0', marginTop:2 }}>📌 {req.mandatoryNote}</div>}
                       </div>
                     </div>
-                  </div>
+                  </button>
                 </div>
               )
             })}
@@ -2439,6 +2528,89 @@ ${deTotal > 0 ? `
       {/* Modals */}
       {courseModal && <CourseModal draft={courseModal} catalog={catalog} onChange={setCourseModal} onSave={saveCourseModal} onClose={() => setCourseModal(null)} />}
       {transferModal && <TransferModal draft={transferModal} onChange={setTransferModal} onSave={saveTransferModal} onClose={() => setTransferModal(null)} />}
+      {selectedGradReq && gradBreakdown && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', display:'grid', placeItems:'center', zIndex:9999, padding:16 }} onClick={() => setGradBreakdownKey(null)}>
+          <div style={{ width:'min(860px,96vw)', maxHeight:'86vh', overflow:'auto', background:'#fff', borderRadius:14, border:'1px solid #E4EAF2', boxShadow:'0 20px 40px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ padding:'14px 16px', borderBottom:'1px solid #E4EAF2', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <div>
+                <div style={{ fontSize:14, fontWeight:800, color:'#1A365E' }}>{selectedGradReq.icon} {selectedGradReq.label} Credit Breakdown</div>
+                <div style={{ fontSize:11, color:'#7A92B0', marginTop:2 }}>Required: {selectedGradReq.required} cr · Earned: {gradBreakdown.earnedTotal} cr · Pending: {gradBreakdown.pendingTotal} cr</div>
+              </div>
+              <button onClick={() => setGradBreakdownKey(null)} style={{ width:30, height:30, borderRadius:8, border:'1px solid #E4EAF2', background:'#fff', color:'#1A365E', fontSize:16, cursor:'pointer' }}>×</button>
+            </div>
+            <div style={{ padding:16, display:'flex', flexDirection:'column', gap:12 }}>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8 }}>
+                <div style={{ border:'1px solid #E4EAF2', borderRadius:8, padding:'10px 12px', background:'#F7F9FC' }}>
+                  <div style={{ fontSize:10, color:'#7A92B0', fontWeight:700, textTransform:'uppercase' }}>Required</div>
+                  <div style={{ fontSize:22, color:'#1A365E', fontWeight:900 }}>{selectedGradReq.required}</div>
+                </div>
+                <div style={{ border:'1px solid #C6F6D5', borderRadius:8, padding:'10px 12px', background:'#F0FFF4' }}>
+                  <div style={{ fontSize:10, color:'#0E6B3B', fontWeight:700, textTransform:'uppercase' }}>Earned</div>
+                  <div style={{ fontSize:22, color:'#0E6B3B', fontWeight:900 }}>{gradBreakdown.earnedTotal}</div>
+                </div>
+                <div style={{ border:'1px solid #E4EAF2', borderRadius:8, padding:'10px 12px', background:'#FAFBFF' }}>
+                  <div style={{ fontSize:10, color:'#7A92B0', fontWeight:700, textTransform:'uppercase' }}>Still Needed</div>
+                  <div style={{ fontSize:22, color:gradBreakdown.remainingAfterPending > 0 ? '#D61F31' : '#0E6B3B', fontWeight:900 }}>{gradBreakdown.remainingAfterPending.toFixed(1)}</div>
+                </div>
+              </div>
+
+              <div style={{ border:'1px solid #E4EAF2', borderRadius:10, overflow:'hidden' }}>
+                <div style={{ padding:'8px 12px', fontSize:11, fontWeight:800, color:'#1A365E', background:'#F7F9FC', borderBottom:'1px solid #E4EAF2' }}>Completed Credits ({gradBreakdown.earnedItems.length})</div>
+                {gradBreakdown.earnedItems.length === 0 ? (
+                  <div style={{ padding:12, fontSize:12, color:'#7A92B0' }}>No completed courses or approved transfers counted in this category yet.</div>
+                ) : (
+                  <table style={{ width:'100%', borderCollapse:'collapse' }}>
+                    <thead>
+                      <tr style={{ background:'#FAFBFF' }}>
+                        {['Course / Credit','Source','Area','Grade','Credits Counted'].map(h => (
+                          <th key={h} style={{ textAlign:'left', fontSize:10, color:'#7A92B0', fontWeight:700, padding:'8px 10px', borderBottom:'1px solid #E4EAF2' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {gradBreakdown.earnedItems.map(item => (
+                        <tr key={item.id}>
+                          <td style={{ padding:'8px 10px', fontSize:12, color:'#1A365E', borderBottom:'1px solid #F1F5F9', fontWeight:600 }}>{item.title}</td>
+                          <td style={{ padding:'8px 10px', fontSize:11, color:'#3D5475', borderBottom:'1px solid #F1F5F9' }}>{item.source}</td>
+                          <td style={{ padding:'8px 10px', fontSize:11, color:'#3D5475', borderBottom:'1px solid #F1F5F9' }}>{item.area}</td>
+                          <td style={{ padding:'8px 10px', fontSize:11, color:'#3D5475', borderBottom:'1px solid #F1F5F9' }}>{item.grade}</td>
+                          <td style={{ padding:'8px 10px', fontSize:12, color:'#0E6B3B', borderBottom:'1px solid #F1F5F9', fontWeight:800 }}>{item.credits}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+
+              {gradBreakdown.pendingItems.length > 0 && (
+                <div style={{ border:'1px solid #FDE68A', borderRadius:10, overflow:'hidden' }}>
+                  <div style={{ padding:'8px 12px', fontSize:11, fontWeight:800, color:'#92400E', background:'#FFFBEA', borderBottom:'1px solid #FDE68A' }}>In Progress / Pending ({gradBreakdown.pendingItems.length})</div>
+                  <table style={{ width:'100%', borderCollapse:'collapse' }}>
+                    <thead>
+                      <tr style={{ background:'#FFFBEB' }}>
+                        {['Course','Source','Area','Status','Potential Credits'].map(h => (
+                          <th key={h} style={{ textAlign:'left', fontSize:10, color:'#92400E', fontWeight:700, padding:'8px 10px', borderBottom:'1px solid #FDE68A' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {gradBreakdown.pendingItems.map(item => (
+                        <tr key={item.id}>
+                          <td style={{ padding:'8px 10px', fontSize:12, color:'#1A365E', borderBottom:'1px solid #FEF3C7', fontWeight:600 }}>{item.title}</td>
+                          <td style={{ padding:'8px 10px', fontSize:11, color:'#3D5475', borderBottom:'1px solid #FEF3C7' }}>{item.source}</td>
+                          <td style={{ padding:'8px 10px', fontSize:11, color:'#3D5475', borderBottom:'1px solid #FEF3C7' }}>{item.area}</td>
+                          <td style={{ padding:'8px 10px', fontSize:11, color:'#92400E', borderBottom:'1px solid #FEF3C7' }}>{item.grade || 'IP'}</td>
+                          <td style={{ padding:'8px 10px', fontSize:12, color:'#92400E', borderBottom:'1px solid #FEF3C7', fontWeight:800 }}>{item.credits}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div></>
   )
 }

@@ -97,13 +97,26 @@ export function AnalyticsPage() {
   useEffect(() => {
     supabase.from('students')
       .select('id,status,grade,campus,app_date,created_at')
-      .then(({ data }) => { if (data) setStudents(data) })
+      .then(({ data, error }) => {
+        if (!error && data) { setStudents(data); return }
+        // Fallback: app_date column may not exist yet
+        void supabase.from('students')
+          .select('id,status,grade,campus,created_at')
+          .then(({ data: d2 }) => {
+            if (d2) setStudents(d2.map(r => ({ ...r, app_date: null })))
+          })
+      })
   }, [])
 
-  // Status distribution
+  // Status distribution (normalize display label)
   const byStatus = useMemo(() => {
     const map = new Map<string, number>()
-    students.forEach(s => map.set(s.status, (map.get(s.status) ?? 0) + 1))
+    students.forEach(s => {
+      const raw = s.status ?? 'Unknown'
+      // Capitalize for consistent display
+      const label = raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase().replace(/\b\w/g, c => c.toUpperCase())
+      map.set(label, (map.get(label) ?? 0) + 1)
+    })
     return Array.from(map.entries())
       .map(([label, value]) => ({ label, value, color: STATUS_COLORS[label] ?? '#7A92B0' }))
       .sort((a, b) => b.value - a.value)
@@ -144,15 +157,16 @@ export function AnalyticsPage() {
     return months.map(({ key, label }) => ({ label, value: map.get(key) ?? 0 }))
   }, [students])
 
-  // KPIs
+  // KPIs (case-insensitive status matching)
+  const norm = (s: string | null) => (s ?? '').toLowerCase().trim()
   const total = students.length
-  const enrolled = students.filter(s => s.status === 'Enrolled').length
-  const accepted = students.filter(s => s.status === 'Accepted' || s.status === 'Enrolled').length
-  const applied = students.filter(s => s.status !== 'Inquiry').length
+  const enrolled = students.filter(s => norm(s.status) === 'enrolled').length
+  const accepted = students.filter(s => norm(s.status) === 'accepted' || norm(s.status) === 'enrolled').length
+  const applied = students.filter(s => norm(s.status) !== 'inquiry').length
   const acceptRate = applied > 0 ? Math.round((accepted / applied) * 100) : 0
   const enrollRate = accepted > 0 ? Math.round((enrolled / accepted) * 100) : 0
-  const inReview = students.filter(s => s.status === 'Under Review' || s.status === 'Applied').length
-  const waitlisted = students.filter(s => s.status === 'Waitlisted').length
+  const inReview = students.filter(s => norm(s.status) === 'under review' || norm(s.status) === 'applied').length
+  const waitlisted = students.filter(s => norm(s.status) === 'waitlisted').length
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>

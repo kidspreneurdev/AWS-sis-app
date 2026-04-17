@@ -55,7 +55,7 @@ function StaffModal({ user, campuses, onClose, onSave }: {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20, backdropFilter: 'blur(4px)' }}>
-      <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 480, overflow: 'hidden', boxShadow: '0 24px 60px rgba(0,0,0,.3)' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 480, overflow: 'hidden', boxShadow: '0 24px 60px rgba(0,0,0,.3)' }}>
         <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '18px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>{isEdit ? 'Edit User' : 'Add Staff User'}</div>
           <button onClick={onClose} style={{ background: 'rgba(255,255,255,.15)', border: 'none', color: '#fff', width: 28, height: 28, borderRadius: 7, fontSize: 14, cursor: 'pointer' }}>✕</button>
@@ -126,7 +126,7 @@ function SetPasswordModal({ student, onClose, onSave }: {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20, backdropFilter: 'blur(4px)' }}>
-      <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 460, overflow: 'hidden', boxShadow: '0 24px 60px rgba(0,0,0,.3)' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 460, overflow: 'hidden', boxShadow: '0 24px 60px rgba(0,0,0,.3)' }}>
         <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '18px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>🔑 Set Portal Password</div>
           <button onClick={onClose} style={{ background: 'rgba(255,255,255,.15)', border: 'none', color: '#fff', width: 28, height: 28, borderRadius: 7, fontSize: 14, cursor: 'pointer' }}>✕</button>

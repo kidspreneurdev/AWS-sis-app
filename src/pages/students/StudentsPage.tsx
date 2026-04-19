@@ -6,6 +6,7 @@ import { toast } from '@/lib/toast'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
 import { type Student, type StudentInsert, type StudentStatus, fullName } from '@/types/student'
 import { useCohorts } from '@/hooks/useCohorts'
+import { useCampuses } from '@/hooks/useCampuses'
 
 // Reuse the same row conversion from ApplicationsPage
 function fromRow(row: Record<string, unknown>): Student {
@@ -183,7 +184,7 @@ export function StudentsPage() {
     a.click()
   }
 
-  const campuses = [...new Set(students.map(s => s.campus).filter(Boolean) as string[])]
+  const campuses = useCampuses()
   const cohorts = useCohorts()
   const grades = [...new Set(students.map(s => s.grade).filter(v => v !== null) as number[])].sort((a, b) => a - b)
 

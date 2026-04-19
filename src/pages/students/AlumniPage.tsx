@@ -4,9 +4,8 @@ import { StudentModal } from '@/components/students/StudentModal'
 import { type Student, type StudentInsert, fullName } from '@/types/student'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
 import { useCohorts } from '@/hooks/useCohorts'
+import { useCampuses } from '@/hooks/useCampuses'
 import { toast } from '@/lib/toast'
-
-const CAMPUSES_DEFAULT = ['Main Campus', 'North Campus']
 
 function toRow(s: StudentInsert) {
   return {
@@ -129,7 +128,7 @@ export function AlumniPage() {
 
   const years = [...new Set(students.map(s => s.yearGraduated).filter(Boolean) as string[])].sort((a, b) => Number(b) - Number(a))
   const campuses = [...new Set(students.map(s => s.campus).filter(Boolean) as string[])]
-  const modalCampuses = campuses.concat(CAMPUSES_DEFAULT).filter((v, i, a) => a.indexOf(v) === i)
+  const modalCampuses = useCampuses()
 
   // Stats
   const graduatingClasses = years.length

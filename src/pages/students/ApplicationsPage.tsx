@@ -11,8 +11,7 @@ import {
   STATUSES, GRADES, fullName,
 } from '@/types/student'
 import { useCohorts } from '@/hooks/useCohorts'
-
-const CAMPUSES_DEFAULT = ['Main Campus', 'North Campus']
+import { useCampuses } from '@/hooks/useCampuses'
 
 // ─── DB helpers ──────────────────────────────────────────────────────────────
 function toRow(s: StudentInsert) {
@@ -245,7 +244,7 @@ export function ApplicationsPage() {
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'students-applications.csv'; a.click()
   }
 
-  const campuses = [...new Set(students.map(s => s.campus).filter(Boolean) as string[])].concat(CAMPUSES_DEFAULT).filter((v, i, a) => a.indexOf(v) === i)
+  const campuses = useCampuses()
   const cohorts = useCohorts()
   const BULK_STATUSES: StudentStatus[] = ['Under Review', 'Accepted', 'Waitlisted', 'Enrolled', 'Denied']
 

@@ -66,24 +66,26 @@ const NAV: NavGroup[] = [
     ],
   },
   {
-    label: 'Teaching & Planning',
-    items: [
-      { title: 'T&P Dashboard', icon: Presentation, to: '/tpms/dashboard' },
-      { title: 'Lesson Plans', icon: BookOpen, to: '/tpms/lessons' },
-      { title: 'Unit Plans', icon: Layers, to: '/tpms/units' },
-      { title: 'Blocks / Timetable', icon: Calendar, to: '/tpms/blocks' },
-      { title: 'Curriculum Map', icon: Map, to: '/tpms/curriculum' },
-      { title: 'Professional Dev', icon: Award, to: '/tpms/pd' },
-      { title: 'Teaching Analytics', icon: BarChart2, to: '/tpms/analytics' },
-    ],
-  },
-  {
     label: 'Operations',
     items: [
       { title: 'Health Records', icon: Heart, to: '/operations/health' },
       { title: 'Behaviour Log', icon: AlertTriangle, to: '/operations/behaviour' },
     ],
     accordion: [
+      {
+        id: 'tpms',
+        title: 'Teaching & Planning',
+        icon: Presentation,
+        items: [
+          { title: 'T&P Dashboard', icon: BarChart, to: '/tpms/dashboard' },
+          { title: 'Lesson Plans', icon: BookOpen, to: '/tpms/lessons' },
+          { title: 'Unit Plans', icon: Layers, to: '/tpms/units' },
+          { title: 'Blocks / Timetable', icon: Calendar, to: '/tpms/blocks' },
+          { title: 'Curriculum Map', icon: Map, to: '/tpms/curriculum' },
+          { title: 'Professional Dev', icon: Award, to: '/tpms/pd' },
+          { title: 'Teaching Analytics', icon: BarChart2, to: '/tpms/analytics' },
+        ],
+      },
       {
         id: 'at',
         title: 'Assignment Tracker',
@@ -398,6 +400,8 @@ export function AppLayout() {
     const open = new Set<string>()
     if (location.pathname.startsWith('/at/')) open.add('at')
     if (location.pathname.startsWith('/pt/')) open.add('pt')
+    if (location.pathname.startsWith('/tpms/')) open.add('tpms')
+    if (location.pathname.startsWith('/lms/')) open.add('lms')
     return open
   })
 

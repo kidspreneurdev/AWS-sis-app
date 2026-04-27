@@ -1,6 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
-import { hasSupabaseServiceEnv, supabaseAdmin } from '@/lib/supabaseAdmin'
 
 const ROLES = ['admin', 'staff', 'teacher', 'principal', 'partner', 'coach', 'viewer']
 const ROLE_COLORS: Record<string, { bg: string; tc: string }> = {
@@ -56,29 +55,37 @@ function StaffModal({ user, campuses, onClose, onSave }: {
     if (isEdit && user) {
       await supabase.from('profiles').update({ full_name: fullName, role, campus: campus || null, active }).eq('id', user.id)
     } else {
-      if (!supabaseAdmin || !hasSupabaseServiceEnv) {
-        setErr('Staff account creation is not configured for this deployment. Add a secure server-side admin endpoint before using this action.')
+      const { data: sessionData } = await supabase.auth.getSession()
+      const accessToken = sessionData.session?.access_token
+
+      if (!accessToken) {
+        setErr('Your session has expired. Please sign in again and retry.')
         setSaving(false)
         return
       }
-      const { data: { user: newUser }, error } = await supabaseAdmin.auth.admin.createUser({
-        email: email.trim(),
-        password,
-        email_confirm: true,
+
+      const response = await fetch('/api/admin/create-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          email: email.trim(),
+          password,
+          fullName,
+          role,
+          campus: campus || null,
+        }),
       })
-      if (error || !newUser) {
-        setErr(error?.message ?? 'Failed to create account.')
+
+      const payload = await response.json().catch(() => null) as { error?: string } | null
+
+      if (!response.ok) {
+        setErr(payload?.error ?? 'Failed to create account.')
         setSaving(false)
         return
       }
-      await supabase.from('profiles').insert({
-        id: newUser.id,
-        email: email.trim(),
-        full_name: fullName,
-        role,
-        campus: campus || null,
-        active: true,
-      })
     }
     setSaving(false)
     onSave()

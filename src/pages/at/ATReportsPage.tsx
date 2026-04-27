@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
+import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { supabase } from '@/lib/supabase'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 20 }
@@ -27,6 +28,7 @@ interface AssessRec { student_id: string; subject: string; raw_score: number | n
 interface AttendRec { student_id: string; date: string; status: string }
 
 export function ATReportsPage() {
+  const cf = useCampusFilter()
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [submissions, setSubmissions] = useState<Submission[]>([])
   const [students, setStudents] = useState<Student[]>([])
@@ -43,10 +45,12 @@ export function ATReportsPage() {
 
   useEffect(() => {
     async function load() {
+      let sQuery = supabase.from('students').select('id,full_name,grade,cohort').eq('status', 'enrolled').order('full_name')
+      if (cf) sQuery = sQuery.eq('campus', cf)
       const [{ data: a }, { data: sub }, { data: st }, { data: assess }, { data: att }] = await Promise.all([
         supabase.from('at_assignments').select('id,title,subject,due_date,max_score').order('due_date'),
         supabase.from('at_submissions').select('assignment_id,student_id,status,score,teacher_note'),
-        supabase.from('students').select('id,full_name,grade,cohort').eq('status', 'enrolled').order('full_name'),
+        sQuery,
         supabase.from('at_assessments').select('student_id,subject,raw_score,max_score,week_start'),
         supabase.from('attendance').select('student_id,date,status'),
       ])
@@ -57,7 +61,7 @@ export function ATReportsPage() {
       if (att) setAttendance(att.map((r: Record<string, unknown>) => ({ student_id: r.student_id as string, date: r.date as string, status: r.status as string })))
     }
     load()
-  }, [])
+  }, [cf])
 
   const subMap = useMemo(() => {
     const m: Record<string, Submission> = {}

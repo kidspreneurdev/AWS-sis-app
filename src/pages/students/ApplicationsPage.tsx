@@ -12,6 +12,7 @@ import {
 } from '@/types/student'
 import { useCohorts } from '@/hooks/useCohorts'
 import { useCampuses } from '@/hooks/useCampuses'
+import { useCampusFilter } from '@/hooks/useCampusFilter'
 
 // ─── DB helpers ──────────────────────────────────────────────────────────────
 function toRow(s: StudentInsert) {
@@ -119,6 +120,7 @@ type SortKey = 'firstName' | 'studentId' | 'grade' | 'status' | 'campus' | 'appD
 
 // ─── Component ───────────────────────────────────────────────────────────────
 export function ApplicationsPage() {
+  const cf = useCampusFilter()
   const [students, setStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
@@ -139,11 +141,13 @@ export function ApplicationsPage() {
   const [sortKey, setSortKey] = useState<SortKey>('appDate')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
-  useEffect(() => { fetchStudents() }, [])
+  useEffect(() => { fetchStudents() }, [cf])
 
   async function fetchStudents() {
     setLoading(true)
-    const { data } = await supabase.from('students').select('*').order('created_at', { ascending: false })
+    let q = supabase.from('students').select('*').order('created_at', { ascending: false })
+    if (cf) q = q.eq('campus', cf)
+    const { data } = await q
     setStudents((data ?? []).map(fromRow))
     setLoading(false)
   }

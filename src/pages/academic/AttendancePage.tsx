@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useCampusFilter } from '@/hooks/useCampusFilter'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type AStatus = 'P' | 'A' | 'T' | 'E' | 'R'
@@ -133,6 +134,7 @@ function StatCard({ label, value, sub, color }: { label: string; value: string |
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export function AttendancePage() {
+  const cf = useCampusFilter()
   const [students, setStudents] = useState<Stu[]>([])
   const [records, setRecords] = useState<AttendanceRecord[]>([])
   const [tab, setTab] = useState<'daily' | 'cohort' | 'monthly'>('daily')
@@ -143,8 +145,10 @@ export function AttendancePage() {
 
   useEffect(() => {
     async function load() {
+      let sQuery = supabase.from('students').select('id,first_name,last_name,grade,cohort').eq('status', 'Enrolled')
+      if (cf) sQuery = sQuery.eq('campus', cf)
       const [stuRes, attRes] = await Promise.all([
-        supabase.from('students').select('id,first_name,last_name,grade,cohort').eq('status', 'Enrolled'),
+        sQuery,
         supabase.from('attendance').select('*'),
       ])
       if (stuRes.data) setStudents(stuRes.data)
@@ -157,7 +161,7 @@ export function AttendancePage() {
       })))
     }
     load()
-  }, [])
+  }, [cf])
 
   useEffect(() => {
     const map: Record<string, string> = {}

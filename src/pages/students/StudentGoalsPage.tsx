@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
+import { useCampusFilter } from '@/hooks/useCampusFilter'
 
 interface Goal {
   id: string
@@ -40,6 +41,7 @@ const card: React.CSSProperties = {
 }
 
 export function StudentGoalsPage() {
+  const cf = useCampusFilter()
   const [goals, setGoals] = useState<Goal[]>([])
   const [students, setStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(true)
@@ -50,9 +52,11 @@ export function StudentGoalsPage() {
 
   async function load() {
     setLoading(true)
+    let sQuery = supabase.from('students').select('id,first_name,last_name,grade').in('status', ['Enrolled', 'Alumni'])
+    if (cf) sQuery = sQuery.eq('campus', cf)
     const [{ data: gData }, { data: sData }] = await Promise.all([
       supabase.from('goals').select('*').order('updated_at', { ascending: false }),
-      supabase.from('students').select('id,first_name,last_name,grade').in('status', ['Enrolled', 'Alumni']),
+      sQuery,
     ])
     const stuMap: Record<string, Student> = {}
     if (sData) {
@@ -93,7 +97,7 @@ export function StudentGoalsPage() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [cf])
 
   const categories = useMemo(() =>
     Array.from(new Set(goals.map(g => g.category).filter(Boolean))).sort(), [goals])

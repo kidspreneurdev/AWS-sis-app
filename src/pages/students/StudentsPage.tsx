@@ -7,6 +7,7 @@ import { useHeaderActions } from '@/contexts/PageHeaderContext'
 import { type Student, type StudentInsert, type StudentStatus, fullName } from '@/types/student'
 import { useCohorts } from '@/hooks/useCohorts'
 import { useCampuses } from '@/hooks/useCampuses'
+import { useCampusFilter } from '@/hooks/useCampusFilter'
 
 // Reuse the same row conversion from ApplicationsPage
 function fromRow(row: Record<string, unknown>): Student {
@@ -104,6 +105,7 @@ const td: React.CSSProperties = {
 }
 
 export function StudentsPage() {
+  const cf = useCampusFilter()
   const [students, setStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
@@ -114,11 +116,13 @@ export function StudentsPage() {
   const [filterCohort, setFilterCohort] = useState('All')
   const [filterGrade, setFilterGrade] = useState('All')
 
-  useEffect(() => { fetchStudents() }, [])
+  useEffect(() => { fetchStudents() }, [cf])
 
   async function fetchStudents() {
     setLoading(true)
-    const { data } = await supabase.from('students').select('*').eq('status', 'Enrolled').order('last_name')
+    let q = supabase.from('students').select('*').eq('status', 'Enrolled').order('last_name')
+    if (cf) q = q.eq('campus', cf)
+    const { data } = await q
     setStudents((data ?? []).map(fromRow))
     setLoading(false)
   }

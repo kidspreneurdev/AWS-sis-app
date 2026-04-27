@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { supabase } from '@/lib/supabase'
 
 const EP_SUBJECTS = ['Mathematics', 'Reading', 'Language Arts']
@@ -21,6 +22,7 @@ interface Student { id: string; fullName: string; grade: string; cohort: string 
 
 
 export function ATExactPathPage() {
+  const cf = useCampusFilter()
   const [records, setRecords] = useState<EPRecord[]>([])
   const [students, setStudents] = useState<Student[]>([])
   const [cohorts, setCohorts] = useState<string[]>([])
@@ -32,9 +34,11 @@ export function ATExactPathPage() {
   const friday = useMemo(() => getFriday(monday), [monday])
 
   const load = useCallback(async () => {
+    let sQuery = supabase.from('students').select('id,full_name,grade,cohort').eq('status', 'enrolled').order('full_name')
+    if (cf) sQuery = sQuery.eq('campus', cf)
     const [{ data: ep }, { data: st }, { data: settings }] = await Promise.all([
       supabase.from('at_exact_path').select('*').order('week_start', { ascending: false }),
-      supabase.from('students').select('id,full_name,grade,cohort').eq('status', 'enrolled').order('full_name'),
+      sQuery,
       supabase.from('settings').select('cohorts').single(),
     ])
     if (ep) setRecords(ep.map((r: Record<string, unknown>) => ({
@@ -45,7 +49,7 @@ export function ATExactPathPage() {
     })))
     if (st) setStudents(st.map((r: Record<string, unknown>) => ({ id: r.id as string, fullName: (r.full_name as string) ?? '', grade: (r.grade as string) ?? '', cohort: (r.cohort as string) ?? '' })))
     if (settings?.cohorts) setCohorts(settings.cohorts as string[])
-  }, [])
+  }, [cf])
 
   useEffect(() => { load() }, [load])
 

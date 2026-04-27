@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useCampusFilter } from '@/hooks/useCampusFilter'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const LS_LEVELS: Record<string, { label: string; col: string; bg: string }> = {
@@ -295,6 +296,7 @@ function NarrModal({
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export function GradesLSPage() {
+  const cf = useCampusFilter()
   const [students, setStudents]         = useState<Student[]>([])
   const [tab, setTab]                   = useState<'overview' | 'progress' | 'ms_grades' | 'narratives' | 'skills'>('overview')
   const [activeTerm, setActiveTerm]     = useState('Term 1')
@@ -305,18 +307,19 @@ export function GradesLSPage() {
   const refresh = useCallback(() => { setModal(null) }, [])
 
   useEffect(() => {
-    supabase.from('students')
+    let q = supabase.from('students')
       .select('id,first_name,last_name,grade')
       .eq('status', 'Enrolled')
       .in('grade', ALL_LS_VALUES)
-      .then(({ data }) => {
+    if (cf) q = q.eq('campus', cf)
+    q.then(({ data }) => {
         if (data) setStudents(data.map((r: Record<string, unknown>) => ({
           id: r.id as string,
           name: `${r.first_name} ${r.last_name}`,
           grade: String(r.grade),
         })))
       })
-  }, [])
+  }, [cf])
 
   useEffect(() => {
     supabase.from('ls_grade_records').select('*')

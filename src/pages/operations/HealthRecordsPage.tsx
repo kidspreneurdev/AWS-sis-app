@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/lib/toast'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
+import { useCampusFilter } from '@/hooks/useCampusFilter'
 
 interface HealthRec {
   id: string; studentId: string; studentName: string; grade: string
@@ -79,15 +80,18 @@ function HealthModal({ rec, students, onClose, onSave, onDelete }: {
 }
 
 export function HealthRecordsPage() {
+  const cf = useCampusFilter()
   const [records, setRecords] = useState<HealthRec[]>([])
   const [students, setStudents] = useState<Student[]>([])
   const [search, setSearch] = useState('')
   const [modal, setModal] = useState<{ open: boolean; rec: HealthRec | null }>({ open: false, rec: null })
 
   async function load() {
+    let sQuery = supabase.from('students').select('id,first_name,last_name,grade').eq('status', 'Enrolled')
+    if (cf) sQuery = sQuery.eq('campus', cf)
     const [{ data: recs }, { data: studs }] = await Promise.all([
       supabase.from('health_records').select('*').order('created_at', { ascending: false }),
-      supabase.from('students').select('id,first_name,last_name,grade').eq('status', 'Enrolled'),
+      sQuery,
     ])
     if (studs) setStudents(studs.map((s: Record<string, unknown>) => ({ id: s.id as string, name: `${s.first_name} ${s.last_name}`, grade: s.grade as string })))
     if (recs && studs) {
@@ -109,7 +113,7 @@ export function HealthRecordsPage() {
       })))
     }
   }
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [cf])
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()

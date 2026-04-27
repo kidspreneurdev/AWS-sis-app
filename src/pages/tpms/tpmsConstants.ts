@@ -148,6 +148,12 @@ export interface TpmsUnit {
   stage2Tasks: string
   stage3Plan: string
   notes: string
+  coachId: string
+  managerId: string
+  diff: string
+  resources: string
+  crossCurricular: string
+  reflection: string
 }
 
 export interface TpmsEvent {
@@ -246,6 +252,12 @@ export function mapUnit(r: Record<string, unknown>): TpmsUnit {
     stage2Tasks: (c.stage2Tasks as string) ?? '',
     stage3Plan: (c.stage3Plan as string) ?? '',
     notes: (c.notes as string) ?? '',
+    coachId: (c.coachId as string) ?? '',
+    managerId: (c.managerId as string) ?? '',
+    diff: (c.diff as string) ?? '',
+    resources: (c.resources as string) ?? '',
+    crossCurricular: (c.crossCurricular as string) ?? '',
+    reflection: (c.reflection as string) ?? '',
   }
 }
 

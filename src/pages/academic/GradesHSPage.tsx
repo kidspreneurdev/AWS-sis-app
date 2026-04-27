@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
+import { useCampusFilter } from '@/hooks/useCampusFilter'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const GRADE_PTS: Record<string, number | null> = {
@@ -551,6 +552,7 @@ const TABS: {id:Tab; label:string; icon:string}[] = [
 ]
 
 export function GradesHSPage() {
+  const cf = useCampusFilter()
   const [students, setStudents] = useState<Student[]>([])
   const [selectedId, setSelectedId] = useState<string>('')
   const [tab, setTab] = useState<Tab>('overview')
@@ -568,7 +570,9 @@ export function GradesHSPage() {
   useEffect(() => {
     async function loadAll() {
       // Load students
-      const { data: stData } = await supabase.from('students').select('id,first_name,last_name,grade').eq('status','Enrolled').in('grade',['9','10','11','12'])
+      let sQuery = supabase.from('students').select('id,first_name,last_name,grade').eq('status','Enrolled').in('grade',['9','10','11','12'])
+      if (cf) sQuery = sQuery.eq('campus', cf)
+      const { data: stData } = await sQuery
       if (stData) {
         const list = stData.map((r: Record<string,unknown>) => ({ id: r.id as string, name: `${r.first_name} ${r.last_name}`, grade: String(r.grade) }))
         setStudents(list)
@@ -585,7 +589,7 @@ export function GradesHSPage() {
       if (catData && catData.length) setCatalog(catData.map(rowToCatalog))
     }
     loadAll()
-  }, [])
+  }, [cf])
 
   useEffect(() => {
     if (!selectedId) return

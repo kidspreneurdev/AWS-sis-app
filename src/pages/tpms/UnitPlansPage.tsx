@@ -14,6 +14,8 @@ type UnitForm = {
   status: string; pacing: string; weeks: string; standards: string[]
   essentialQuestions: string; enduringUnderstandings: string; transferGoals: string
   stage2Evidence: string; stage2Tasks: string; stage3Plan: string; notes: string
+  coachId: string; managerId: string; diff: string; resources: string
+  crossCurricular: string; reflection: string
 }
 
 const EMPTY: UnitForm = {
@@ -21,10 +23,11 @@ const EMPTY: UnitForm = {
   startDate: '', endDate: '', status: 'Planning', pacing: 'On Track', weeks: '',
   standards: [], essentialQuestions: '', enduringUnderstandings: '', transferGoals: '',
   stage2Evidence: '', stage2Tasks: '', stage3Plan: '', notes: '',
+  coachId: '', managerId: '', diff: '', resources: '', crossCurricular: '', reflection: '',
 }
 
 function unitToForm(u: TpmsUnit): UnitForm {
-  return { title: u.title, subject: u.subject, grade: u.grade, startDate: u.startDate, endDate: u.endDate, status: u.status, pacing: u.pacing, weeks: u.weeks, standards: u.standards, essentialQuestions: u.essentialQuestions, enduringUnderstandings: u.enduringUnderstandings, transferGoals: u.transferGoals, stage2Evidence: u.stage2Evidence, stage2Tasks: u.stage2Tasks, stage3Plan: u.stage3Plan, notes: u.notes }
+  return { title: u.title, subject: u.subject, grade: u.grade, startDate: u.startDate, endDate: u.endDate, status: u.status, pacing: u.pacing, weeks: u.weeks, standards: u.standards, essentialQuestions: u.essentialQuestions, enduringUnderstandings: u.enduringUnderstandings, transferGoals: u.transferGoals, stage2Evidence: u.stage2Evidence, stage2Tasks: u.stage2Tasks, stage3Plan: u.stage3Plan, notes: u.notes, coachId: u.coachId, managerId: u.managerId, diff: u.diff, resources: u.resources, crossCurricular: u.crossCurricular, reflection: u.reflection }
 }
 
 function StdMultiSelect({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
@@ -56,8 +59,9 @@ function StdMultiSelect({ value, onChange }: { value: string[]; onChange: (v: st
   )
 }
 
-function UnitModal({ unit, onClose, onSave, onDelete }: {
-  unit: TpmsUnit | null; onClose: () => void
+function UnitModal({ unit, coaches, onClose, onSave, onDelete }: {
+  unit: TpmsUnit | null; coaches: { id: string; name: string }[]
+  onClose: () => void
   onSave: (f: UnitForm, id?: string) => Promise<void>; onDelete?: (id: string) => Promise<void>
 }) {
   const [form, setForm] = useState<UnitForm>(unit ? unitToForm(unit) : { ...EMPTY })
@@ -89,9 +93,9 @@ function UnitModal({ unit, onClose, onSave, onDelete }: {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 400, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto', backdropFilter: 'blur(4px)' }}>
       <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 720, boxShadow: '0 24px 60px rgba(0,0,0,.3)', margin: 'auto' }}>
-        <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '18px 24px', borderRadius: '18px 18px 0 0', position: 'sticky', top: 0, zIndex: 10 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>📐 {unit ? 'Edit' : 'New'} Unit Plan</div>
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,.4)', marginTop: 2 }}>UbD Framework · Understanding by Design · 3-Stage Process</div>
+        <div style={{ background: 'linear-gradient(135deg,#3B0764,#7C3AED)', padding: '18px 24px', borderRadius: '18px 18px 0 0', position: 'sticky', top: 0, zIndex: 10 }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>📐 {unit ? 'Edit' : 'New'} Unit Plan — UbD Framework</div>
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,.4)', marginTop: 2 }}>Understanding by Design · Backward Design</div>
         </div>
 
         <div style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -125,6 +129,20 @@ function UnitModal({ unit, onClose, onSave, onDelete }: {
                   {TPMS_UNIT_STATUS.map(s => <option key={s}>{s}</option>)}
                 </select>
               </div>
+              <div style={{ gridColumn: 'span 2', background: '#F0FFF4', borderRadius: 8, padding: 10 }}>
+                <label style={{ ...lbl, color: '#059669' }}>🟢 Lead Success Coach</label>
+                <select value={form.coachId} onChange={e => set('coachId', e.target.value)} style={{ ...inp, borderColor: '#D1FAE5' }}>
+                  <option value="">— Not Assigned —</option>
+                  {coaches.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div style={{ gridColumn: 'span 2', background: '#FAF5FF', borderRadius: 8, padding: 10 }}>
+                <label style={{ ...lbl, color: '#7C3AED' }}>🔵 Supervising Success Manager</label>
+                <select value={form.managerId} onChange={e => set('managerId', e.target.value)} style={{ ...inp, borderColor: '#EDE9FE' }}>
+                  <option value="">— Not Assigned —</option>
+                  {coaches.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
             </div>
           </div>
 
@@ -156,12 +174,12 @@ function UnitModal({ unit, onClose, onSave, onDelete }: {
             {secHdr('#D97706', '📊 Stage 2 — Assessment Evidence', 'How will we know students have achieved the desired results?')}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div>
-                <label style={lbl}>Performance Tasks <span style={{ fontWeight: 400, color: '#94A3B8' }}>(authentic evidence of understanding)</span></label>
-                <textarea value={form.stage2Tasks} onChange={e => set('stage2Tasks', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} placeholder="Students will demonstrate understanding by... (GRASPS format: Goal, Role, Audience, Situation, Product, Standards)" />
+                <label style={lbl}>Summative Assessment <span style={{ fontWeight: 400, color: '#94A3B8' }}>(authentic evidence of understanding)</span></label>
+                <textarea value={form.stage2Tasks} onChange={e => set('stage2Tasks', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Description of major assessment task(s)..." />
               </div>
               <div>
-                <label style={lbl}>Other Evidence <span style={{ fontWeight: 400, color: '#94A3B8' }}>(quizzes, tests, observations, work samples)</span></label>
-                <textarea value={form.stage2Evidence} onChange={e => set('stage2Evidence', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Unit test, exit tickets, lab reports, class discussions, portfolios..." />
+                <label style={lbl}>Formative Assessments <span style={{ fontWeight: 400, color: '#94A3B8' }}>(checks for understanding throughout the unit)</span></label>
+                <textarea value={form.stage2Evidence} onChange={e => set('stage2Evidence', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Exit tickets, lab reports, class discussions, portfolios..." />
               </div>
             </div>
           </div>
@@ -175,10 +193,26 @@ function UnitModal({ unit, onClose, onSave, onDelete }: {
             </div>
           </div>
 
-          {/* Notes */}
-          <div>
-            <label style={lbl}>Additional Notes</label>
-            <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Resources, cross-curricular connections, teacher notes..." />
+          {/* Additional Information */}
+          <div style={{ background: '#F7F9FC', borderRadius: 10, padding: 14 }}>
+            {secHdr('#0891B2', '📎 Additional Information', 'Differentiation, resources, cross-curricular connections and reflection')}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div><label style={lbl}>Differentiation Notes <span style={{ fontWeight: 400, color: '#94A3B8' }}>(IEP / ELL / Gifted)</span></label>
+                <textarea value={form.diff} onChange={e => set('diff', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Accommodations applied across the unit..." />
+              </div>
+              <div><label style={lbl}>Resources & Materials</label>
+                <textarea value={form.resources} onChange={e => set('resources', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Textbooks, websites, manipulatives, technology..." />
+              </div>
+              <div><label style={lbl}>Cross-Curricular Links</label>
+                <input value={form.crossCurricular} onChange={e => set('crossCurricular', e.target.value)} style={inp} placeholder="Connections to other subjects/courses at same grade..." />
+              </div>
+              <div><label style={lbl}>Teacher Reflection <span style={{ fontWeight: 400, color: '#94A3B8' }}>(Post-Unit)</span></label>
+                <textarea value={form.reflection} onChange={e => set('reflection', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="What worked? What to revise? Student response?" />
+              </div>
+              <div><label style={lbl}>Additional Notes</label>
+                <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Any other notes, links, or context..." />
+              </div>
+            </div>
           </div>
 
           {/* Footer */}
@@ -199,13 +233,18 @@ function UnitModal({ unit, onClose, onSave, onDelete }: {
 
 export function UnitPlansPage() {
   const [units, setUnits] = useState<TpmsUnit[]>([])
+  const [coaches, setCoaches] = useState<{ id: string; name: string }[]>([])
   const [selSub, setSelSub] = useState('All')
   const [selStatus, setSelStatus] = useState('All')
   const [modal, setModal] = useState<{ open: boolean; unit: TpmsUnit | null }>({ open: false, unit: null })
 
   async function load() {
-    const { data } = await supabase.from('tpms').select('*').eq('type', 'unit').order('created_at', { ascending: false })
-    if (data) setUnits(data.map(r => mapUnit(r as Record<string, unknown>)))
+    const [ur, cr] = await Promise.all([
+      supabase.from('tpms').select('*').eq('type', 'unit').order('created_at', { ascending: false }),
+      supabase.from('profiles').select('id,full_name').in('role', ['coach', 'teacher', 'principal', 'staff']).order('full_name'),
+    ])
+    if (ur.data) setUnits(ur.data.map(r => mapUnit(r as Record<string, unknown>)))
+    if (cr.data) setCoaches(cr.data.map((r: Record<string, unknown>) => ({ id: r.id as string, name: (r.full_name as string) || 'Unknown' })))
   }
   useEffect(() => { load() }, [])
 
@@ -216,7 +255,7 @@ export function UnitPlansPage() {
   }), [units, selSub, selStatus])
 
   async function saveUnit(form: UnitForm, id?: string) {
-    const content = JSON.stringify({ subject: form.subject, grade: form.grade, startDate: form.startDate, endDate: form.endDate, pacing: form.pacing, weeks: form.weeks, standards: form.standards, essentialQuestions: form.essentialQuestions, enduringUnderstandings: form.enduringUnderstandings, transferGoals: form.transferGoals, stage2Evidence: form.stage2Evidence, stage2Tasks: form.stage2Tasks, stage3Plan: form.stage3Plan, notes: form.notes })
+    const content = JSON.stringify({ subject: form.subject, grade: form.grade, startDate: form.startDate, endDate: form.endDate, pacing: form.pacing, weeks: form.weeks, standards: form.standards, essentialQuestions: form.essentialQuestions, enduringUnderstandings: form.enduringUnderstandings, transferGoals: form.transferGoals, stage2Evidence: form.stage2Evidence, stage2Tasks: form.stage2Tasks, stage3Plan: form.stage3Plan, notes: form.notes, coachId: form.coachId, managerId: form.managerId, diff: form.diff, resources: form.resources, crossCurricular: form.crossCurricular, reflection: form.reflection })
     if (id) await supabase.from('tpms').update({ title: form.title, status: form.status, content }).eq('id', id)
     else await supabase.from('tpms').insert({ type: 'unit', title: form.title, status: form.status, content })
     await load()
@@ -271,13 +310,13 @@ export function UnitPlansPage() {
           {filtered.map(u => {
             const sm = UNIT_STATUS_META[u.status] ?? UNIT_STATUS_META.Planning
             const pm = PACING_META[u.pacing] ?? PACING_META['On Track']
-            // Progress bar: days elapsed / total days
             let pct = 0
             if (u.startDate && u.endDate) {
               const total = new Date(u.endDate).getTime() - new Date(u.startDate).getTime()
               const elapsed = Date.now() - new Date(u.startDate).getTime()
               pct = Math.max(0, Math.min(100, Math.round((elapsed / total) * 100)))
             }
+            const coach = coaches.find(c => c.id === u.coachId)
             return (
               <div key={u.id} style={{ ...card, padding: '14px 16px' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
@@ -293,14 +332,35 @@ export function UnitPlansPage() {
                       {u.weeks && <span> · {u.weeks}w</span>}
                       {u.startDate && <span> · {u.startDate}</span>}
                       {u.endDate && <span> → {u.endDate}</span>}
-                      {u.standards?.length > 0 && <span> · 📋 {u.standards.length} standards</span>}
+                      {coach && <span> · <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#1DBD6A', marginRight: 3, verticalAlign: 'middle' }} />{coach.name}</span>}
                     </div>
                     {(u.startDate && u.endDate) && (
-                      <div style={{ background: '#F0F4FA', borderRadius: 4, height: 5, marginBottom: 6, overflow: 'hidden' }}>
-                        <div style={{ width: `${pct}%`, height: '100%', background: pct >= 100 ? '#1DBD6A' : '#0EA5E9', borderRadius: 4 }} />
+                      <div style={{ marginBottom: 8 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#7A92B0', marginBottom: 3 }}>
+                          <span>{u.startDate}</span>
+                          <span>{pct}% elapsed</span>
+                          <span>{u.endDate}</span>
+                        </div>
+                        <div style={{ background: '#F0F4FA', borderRadius: 4, height: 5, overflow: 'hidden' }}>
+                          <div style={{ width: `${pct}%`, height: '100%', background: pct >= 100 ? '#1DBD6A' : '#0EA5E9', borderRadius: 4 }} />
+                        </div>
                       </div>
                     )}
-                    {u.essentialQuestions && <div style={{ fontSize: 10, color: '#3D5475', maxWidth: 560, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>❓ {u.essentialQuestions}</div>}
+                    {/* Mini KPI grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6, marginBottom: 8 }}>
+                      {[
+                        { label: 'STANDARDS', value: u.standards?.length > 0 ? `${u.standards.length} tagged` : '—' },
+                        { label: 'PACING', value: u.pacing || '—', color: pm.tc },
+                        { label: 'ASSESSMENT', value: u.stage2Tasks ? u.stage2Tasks.slice(0, 18) + (u.stage2Tasks.length > 18 ? '…' : '') : '—' },
+                        { label: 'WEEKS', value: u.weeks ? `${u.weeks}w` : '—' },
+                      ].map(k => (
+                        <div key={k.label} style={{ background: '#F7F9FC', borderRadius: 8, padding: '6px 8px' }}>
+                          <div style={{ fontSize: 8, color: '#7A92B0', fontWeight: 700, textTransform: 'uppercase' }}>{k.label}</div>
+                          <div style={{ fontSize: 11, fontWeight: 800, color: k.color ?? '#1A365E', marginTop: 1 }}>{k.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {u.essentialQuestions && <div style={{ fontSize: 10, color: '#7A92B0', fontStyle: 'italic', background: '#F7F9FC', borderRadius: 7, padding: '6px 10px' }}>❓ {u.essentialQuestions}</div>}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0 }}>
                     <button onClick={() => setModal({ open: true, unit: u })} style={{ padding: '5px 12px', background: '#EDE9FE', color: '#6D28D9', border: 'none', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>✏️ Edit</button>
@@ -313,7 +373,7 @@ export function UnitPlansPage() {
         </div>
       )}
 
-      {modal.open && <UnitModal unit={modal.unit} onClose={() => setModal({ open: false, unit: null })} onSave={saveUnit} onDelete={deleteUnit} />}
+      {modal.open && <UnitModal unit={modal.unit} coaches={coaches} onClose={() => setModal({ open: false, unit: null })} onSave={saveUnit} onDelete={deleteUnit} />}
     </div>
   )
 }

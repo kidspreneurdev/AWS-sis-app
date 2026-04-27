@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/lib/toast'
+import { useCampusFilter } from '@/hooks/useCampusFilter'
 
 // ─── Doc keys & labels ────────────────────────────────────────────────────────
 const DOC_KEYS = [
@@ -392,6 +393,7 @@ function DocCellModal({
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export function DocumentsPage() {
+  const cf = useCampusFilter()
   const [students, setStudents] = useState<DocStudent[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -405,8 +407,9 @@ export function DocumentsPage() {
     const docsMap = loadDocsMap()
     const filesMap = loadDocFilesMap()
 
-    supabase.from('students').select('id,first_name,last_name,grade,status')
-      .then(({ data, error }) => {
+    let q = supabase.from('students').select('id,first_name,last_name,grade,status,campus')
+    if (cf) q = q.eq('campus', cf)
+    q.then(({ data, error }) => {
         if (error) {
           console.error('DocumentsPage fetch error:', error)
           toast(error.message || 'Failed to load documents', 'err')
@@ -417,7 +420,7 @@ export function DocumentsPage() {
         if (data) setStudents(data.map(r => fromRow(r as Record<string, unknown>, docsMap, filesMap)))
         setLoading(false)
       })
-  }, [])
+  }, [cf])
 
   const grades = useMemo(() => {
     const set = new Set<string>()

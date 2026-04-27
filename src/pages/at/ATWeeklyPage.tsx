@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
+import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { supabase } from '@/lib/supabase'
 
 const STATUS_COLORS: Record<string, { bg: string; tc: string }> = {
@@ -41,6 +42,7 @@ interface Student { id: string; fullName: string; grade: string; cohort: string 
 interface Submission { assignment_id: string; student_id: string; status: string; score: number | null; file_url: string; link_url: string }
 
 export function ATWeeklyPage() {
+  const cf = useCampusFilter()
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [students, setStudents] = useState<Student[]>([])
   const [submissions, setSubmissions] = useState<Submission[]>([])
@@ -51,9 +53,11 @@ export function ATWeeklyPage() {
 
   useEffect(() => {
     async function load() {
+      let sQuery = supabase.from('students').select('id,full_name,grade,cohort').eq('status', 'enrolled').order('full_name')
+      if (cf) sQuery = sQuery.eq('campus', cf)
       const [{ data: a }, { data: st }, { data: sub }, { data: settings }] = await Promise.all([
         supabase.from('at_assignments').select('id,title,type,subject,due_date,max_score').order('due_date'),
-        supabase.from('students').select('id,full_name,grade,cohort').eq('status', 'enrolled').order('full_name'),
+        sQuery,
         supabase.from('at_submissions').select('assignment_id,student_id,status,score'),
         supabase.from('settings').select('cohorts').single(),
       ])
@@ -63,7 +67,7 @@ export function ATWeeklyPage() {
       if (settings?.cohorts) setCohorts(settings.cohorts as string[])
     }
     load()
-  }, [])
+  }, [cf])
 
   const monday = useMemo(() => getMonday(weekOffset), [weekOffset])
   const friday = useMemo(() => getFriday(monday), [monday])

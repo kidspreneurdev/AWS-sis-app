@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useCampusFilter } from '@/hooks/useCampusFilter'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface RawStudent {
@@ -92,21 +93,22 @@ function StatCard({ label, value, sub, color }: { label: string; value: string |
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export function AnalyticsPage() {
+  const cf = useCampusFilter()
   const [students, setStudents] = useState<RawStudent[]>([])
 
   useEffect(() => {
-    supabase.from('students')
-      .select('id,status,grade,campus,app_date,created_at')
-      .then(({ data, error }) => {
+    let q = supabase.from('students').select('id,status,grade,campus,app_date,created_at')
+    if (cf) q = q.eq('campus', cf)
+    q.then(({ data, error }) => {
         if (!error && data) { setStudents(data); return }
         // Fallback: app_date column may not exist yet
-        void supabase.from('students')
-          .select('id,status,grade,campus,created_at')
-          .then(({ data: d2 }) => {
+        let q2 = supabase.from('students').select('id,status,grade,campus,created_at')
+        if (cf) q2 = q2.eq('campus', cf)
+        void q2.then(({ data: d2 }) => {
             if (d2) setStudents(d2.map(r => ({ ...r, app_date: null })))
           })
       })
-  }, [])
+  }, [cf])
 
   // Status distribution (normalize display label)
   const byStatus = useMemo(() => {

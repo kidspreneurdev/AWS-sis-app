@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
+import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { supabase } from '@/lib/supabase'
 
 const AT_LATE_REASONS = ['Absent', 'Technical Issues', 'Family Circumstance', 'Medical', 'Forgot', 'No Reason Given', 'Other']
@@ -12,6 +13,7 @@ interface Student { id: string; fullName: string }
 interface LateRecord { assign: Assignment; student: Student; sub: Submission; daysLate: number }
 
 export function ATLatePage() {
+  const cf = useCampusFilter()
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [submissions, setSubmissions] = useState<Submission[]>([])
   const [students, setStudents] = useState<Student[]>([])
@@ -24,10 +26,12 @@ export function ATLatePage() {
   const assignMap = useMemo(() => Object.fromEntries(assignments.map(a => [a.id, a])), [assignments])
 
   async function load() {
+    let sQuery = supabase.from('students').select('id,full_name').eq('status', 'enrolled').order('full_name')
+    if (cf) sQuery = sQuery.eq('campus', cf)
     const [{ data: a }, { data: sub }, { data: st }] = await Promise.all([
       supabase.from('at_assignments').select('id,title,subject,due_date,max_score').order('due_date'),
       supabase.from('at_submissions').select('id,assignment_id,student_id,status,score,late_reason,penalty_applied,penalty_waived').in('status', ['Late', 'Missing']),
-      supabase.from('students').select('id,full_name').eq('status', 'enrolled').order('full_name'),
+      sQuery,
     ])
     if (a) setAssignments(a.map((r: Record<string, unknown>) => ({
       id: r.id as string, title: r.title as string, subject: (r.subject as string) ?? '',
@@ -43,7 +47,7 @@ export function ATLatePage() {
     })))
     if (st) setStudents(st.map((r: Record<string, unknown>) => ({ id: r.id as string, fullName: (r.full_name as string) ?? '' })))
   }
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [cf])
 
   const lateRecords = useMemo((): LateRecord[] => {
     const recs: LateRecord[] = []

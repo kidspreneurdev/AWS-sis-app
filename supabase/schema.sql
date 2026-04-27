@@ -392,13 +392,14 @@ create policy "settings_write" on settings for all to authenticated using (get_m
 -- Students: all authenticated can read; admin/counselor can write
 create policy "students_read" on students for select to authenticated using (true);
 create policy "students_write" on students for all to authenticated
-  using (get_my_role() in ('admin', 'counselor'));
+  using (get_my_role() in ('admin', 'counselor', 'staff', 'principal'))
+  with check (get_my_role() in ('admin', 'counselor', 'staff', 'principal'));
 
 -- Catalog: all read; admin can write
 create policy "catalog_read" on catalog for select to authenticated using (true);
 create policy "catalog_write" on catalog for all to authenticated using (get_my_role() = 'admin');
 
--- All other tables: all authenticated can read; admin/counselor/teacher can write
+-- All other tables: all authenticated can read; admin/counselor/teacher/staff can write
 do $$
 declare
   tbl text;
@@ -409,6 +410,6 @@ begin
     'transfer_credits','ec_de_credits','tpms','at_assignments','pt_projects'
   ] loop
     execute format('create policy "%s_read" on %s for select to authenticated using (true)', tbl, tbl);
-    execute format('create policy "%s_write" on %s for all to authenticated using (get_my_role() in (''admin'', ''teacher'', ''counselor''))', tbl, tbl);
+    execute format('create policy "%s_write" on %s for all to authenticated using (get_my_role() in (''admin'', ''teacher'', ''counselor'', ''staff'', ''principal'')) with check (get_my_role() in (''admin'', ''teacher'', ''counselor'', ''staff'', ''principal''))', tbl, tbl);
   end loop;
 end $$;

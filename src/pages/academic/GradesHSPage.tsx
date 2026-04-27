@@ -3,6 +3,21 @@ import { supabase } from '@/lib/supabase'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
 
+const TRANSCRIPT_NUMERAL_FONT = 'Cambria, "Times New Roman", serif'
+const transcriptNumStyle: React.CSSProperties = {
+  fontFamily: TRANSCRIPT_NUMERAL_FONT,
+  fontVariantNumeric: 'lining-nums tabular-nums',
+}
+
+function renderTranscriptText(value: unknown) {
+  return String(value ?? '')
+    .split(/(\d[\d.,]*)/g)
+    .filter(Boolean)
+    .map((part, idx) => /\d/.test(part)
+      ? <span key={`${part}-${idx}`} style={transcriptNumStyle}>{part}</span>
+      : part)
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 const GRADE_PTS: Record<string, number | null> = {
   'A*':4.0,'A+':4.0,'A':4.0,'A-':3.7,'B+':3.3,'B':3.0,'B-':2.7,
@@ -774,6 +789,7 @@ export function GradesHSPage() {
     const win = window.open('', '_blank', 'width=900,height=780,scrollbars=yes,resizable=yes')
     if (!win) { alert('Please allow pop-ups for this site to use the print feature.'); return }
     const h = (s: unknown) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    const hn = (s: unknown) => h(s).replace(/(\d[\d.,]*)/g, `<span class="num">$1</span>`)
     const byYear: Record<string, CourseRecord[]> = {}
     studentCourses.forEach(c => { const y = c.year || 'Unknown'; if (!byYear[y]) byYear[y] = []; byYear[y].push(c) })
     const approvedTr = studentTransfers.filter(t => t.status === 'Approved')
@@ -788,11 +804,11 @@ export function GradesHSPage() {
     Object.keys(byYear).sort().forEach(yr => {
       const yc = byYear[yr]
       const yrU = calcGPA(yc), yrW = calcWeightedGPA(yc)
-      courseRows += `<div style="margin-bottom:14px"><div style="background:#1A365E;color:#fff;padding:5px 12px;font-size:12px;font-weight:700;border-radius:4px;margin-bottom:6px">${h(yr)}<span style="float:right;font-weight:400;font-size:11px">GPA — Unweighted: ${yrU.toFixed(2)}&nbsp;&nbsp;Weighted: ${yrW.toFixed(2)}</span></div>`
+      courseRows += `<div style="margin-bottom:14px"><div style="background:#1A365E;color:#fff;padding:5px 12px;font-size:12px;font-weight:700;border-radius:4px;margin-bottom:6px">${hn(yr)}<span style="float:right;font-weight:400;font-size:11px">GPA — Unweighted: ${hn(yrU.toFixed(2))}&nbsp;&nbsp;Weighted: ${hn(yrW.toFixed(2))}</span></div>`
       courseRows += `<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:#F7F9FC"><th style="padding:5px 8px;text-align:left;border:1px solid #E4EAF2">Course</th><th style="padding:5px 8px;border:1px solid #E4EAF2">Type</th><th style="padding:5px 8px;border:1px solid #E4EAF2">A–G</th><th style="padding:5px 8px;border:1px solid #E4EAF2">Sem</th><th style="padding:5px 8px;border:1px solid #E4EAF2">Cr</th><th style="padding:5px 8px;border:1px solid #E4EAF2">Grade</th><th style="padding:5px 8px;border:1px solid #E4EAF2">Pts</th></tr></thead><tbody>`
       yc.forEach(cr => {
         const wp = getWeightedPts(cr.grade, cr.type)
-        courseRows += `<tr><td style="padding:5px 8px;border:1px solid #E4EAF2">${h(cr.title)}</td><td style="padding:5px 8px;border:1px solid #E4EAF2;text-align:center;font-size:9px">${h(cr.type)}</td><td style="padding:5px 8px;border:1px solid #E4EAF2;font-size:9px">${h(cr.area)}</td><td style="padding:5px 8px;border:1px solid #E4EAF2;text-align:center;font-size:9px">${h(cr.semester)}</td><td style="padding:5px 8px;border:1px solid #E4EAF2;text-align:center;font-weight:700">${h(cr.creditsEarned)}</td><td style="padding:5px 8px;border:1px solid #E4EAF2;text-align:center;font-weight:800">${h(cr.grade || '—')}</td><td style="padding:5px 8px;border:1px solid #E4EAF2;text-align:center">${wp !== null ? wp.toFixed(1) : '—'}</td></tr>`
+        courseRows += `<tr><td style="padding:5px 8px;border:1px solid #E4EAF2">${hn(cr.title)}</td><td style="padding:5px 8px;border:1px solid #E4EAF2;text-align:center;font-size:9px">${h(cr.type)}</td><td style="padding:5px 8px;border:1px solid #E4EAF2;font-size:9px">${hn(cr.area)}</td><td style="padding:5px 8px;border:1px solid #E4EAF2;text-align:center;font-size:9px">${hn(cr.semester)}</td><td style="padding:5px 8px;border:1px solid #E4EAF2;text-align:center;font-weight:700">${hn(cr.creditsEarned)}</td><td style="padding:5px 8px;border:1px solid #E4EAF2;text-align:center;font-weight:800">${hn(cr.grade || '—')}</td><td style="padding:5px 8px;border:1px solid #E4EAF2;text-align:center">${wp !== null ? hn(wp.toFixed(1)) : '—'}</td></tr>`
       })
       courseRows += '</tbody></table></div>'
     })
@@ -800,19 +816,19 @@ export function GradesHSPage() {
     let trRows = ''
     if (approvedTr.length) {
       trRows = `<div style="margin-bottom:14px"><div style="background:#F5A623;color:#fff;padding:5px 12px;font-size:12px;font-weight:700;border-radius:4px;margin-bottom:6px">TRANSFER CREDITS</div><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:#FFF6E0"><th style="padding:5px 8px;text-align:left;border:1px solid #E4EAF2">Course</th><th style="padding:5px 8px;border:1px solid #E4EAF2">Source Institution</th><th style="padding:5px 8px;border:1px solid #E4EAF2">Original Grade</th><th style="padding:5px 8px;border:1px solid #E4EAF2">Credits</th><th style="padding:5px 8px;border:1px solid #E4EAF2">A–G</th></tr></thead><tbody>`
-      approvedTr.forEach(t => { trRows += `<tr><td style="padding:5px 8px;border:1px solid #E4EAF2">${h(t.origTitle)} <span style="font-size:9px;color:#F5A623">TRANSFER</span></td><td style="padding:5px 8px;border:1px solid #E4EAF2;font-size:10px">${h(t.sourceSchool || '—')}</td><td style="padding:5px 8px;border:1px solid #E4EAF2;text-align:center;font-weight:800">${h(t.origGrade || '—')}</td><td style="padding:5px 8px;border:1px solid #E4EAF2;text-align:center;font-weight:700">${h(t.creditsAwarded)}</td><td style="padding:5px 8px;border:1px solid #E4EAF2;font-size:9px">${h(t.area)}</td></tr>` })
+      approvedTr.forEach(t => { trRows += `<tr><td style="padding:5px 8px;border:1px solid #E4EAF2">${hn(t.origTitle)} <span style="font-size:9px;color:#F5A623">TRANSFER</span></td><td style="padding:5px 8px;border:1px solid #E4EAF2;font-size:10px">${hn(t.sourceSchool || '—')}</td><td style="padding:5px 8px;border:1px solid #E4EAF2;text-align:center;font-weight:800">${hn(t.origGrade || '—')}</td><td style="padding:5px 8px;border:1px solid #E4EAF2;text-align:center;font-weight:700">${hn(t.creditsAwarded)}</td><td style="padding:5px 8px;border:1px solid #E4EAF2;font-size:9px">${hn(t.area)}</td></tr>` })
       trRows += '</tbody></table></div>'
     }
 
     let apRows = ''
     if (apCourses.length) {
       apRows = `<div style="margin-bottom:14px"><div style="background:#7040CC;color:#fff;padding:5px 12px;font-size:12px;font-weight:700;border-radius:4px;margin-bottom:6px">AP / IB EXAM SCORES</div><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:#F3EEFF"><th style="padding:5px 8px;text-align:left;border:1px solid #E4EAF2">Exam</th><th style="padding:5px 8px;border:1px solid #E4EAF2">Score</th><th style="padding:5px 8px;border:1px solid #E4EAF2">College Credit Eligible</th></tr></thead><tbody>`
-      apCourses.forEach(c => { const sc = c.apScore!; apRows += `<tr><td style="padding:5px 8px;border:1px solid #E4EAF2">${h(c.title)}</td><td style="padding:5px 8px;border:1px solid #E4EAF2;text-align:center;font-weight:800;color:${sc >= 3 ? '#1DBD6A' : '#D61F31'}">${sc}</td><td style="padding:5px 8px;border:1px solid #E4EAF2;font-size:10px">${sc >= 3 ? '✓ Eligible (score 3+)' : '✗ Score below 3'}</td></tr>` })
+      apCourses.forEach(c => { const sc = c.apScore!; apRows += `<tr><td style="padding:5px 8px;border:1px solid #E4EAF2">${hn(c.title)}</td><td style="padding:5px 8px;border:1px solid #E4EAF2;text-align:center;font-weight:800;color:${sc >= 3 ? '#1DBD6A' : '#D61F31'}">${hn(sc)}</td><td style="padding:5px 8px;border:1px solid #E4EAF2;font-size:10px">${sc >= 3 ? '✓ Eligible (score <span class="num">3</span>+)' : '✗ Score below <span class="num">3</span>'}</td></tr>` })
       apRows += '</tbody></table></div>'
     }
 
     const doc = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Transcript — ${h(student.name)}</title>
-<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Georgia,serif;font-size:12px;color:#1A365E;background:#fff;max-width:780px;margin:0 auto;padding:32px 36px}.toolbar{display:flex;gap:10px;margin-bottom:20px;align-items:center}@media print{.toolbar{display:none!important}@page{size:A4;margin:18mm 16mm}}</style>
+<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Georgia,serif;font-size:12px;color:#1A365E;background:#fff;max-width:780px;margin:0 auto;padding:32px 36px}.num{font-family:${TRANSCRIPT_NUMERAL_FONT};font-variant-numeric:lining-nums tabular-nums}.toolbar{display:flex;gap:10px;margin-bottom:20px;align-items:center}@media print{.toolbar{display:none!important}@page{size:A4;margin:18mm 16mm}}</style>
 </head><body>
 <div class="toolbar">
   <button onclick="window.print()" style="padding:9px 22px;background:#1A365E;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer">🖨️ Print / Save as PDF</button>
@@ -823,30 +839,30 @@ export function GradesHSPage() {
   <img src="/Logo_b.png" alt="American World School" style="height:70px;width:auto;object-fit:contain;margin-bottom:8px"/>
   <div style="font-size:22px;font-weight:900;color:#1A365E;letter-spacing:1px">AMERICAN WORLD SCHOOL</div>
   <div style="font-size:11px;color:#7A92B0;letter-spacing:2px;margin-top:2px">OFFICIAL ACADEMIC TRANSCRIPT</div>
-  <div style="font-size:11px;color:#3D5475;margin-top:4px">24-Credit Graduation Program · 2025–2026</div>
+  <div style="font-size:11px;color:#3D5475;margin-top:4px"><span class="num">24</span>-Credit Graduation Program · <span class="num">2025</span>–<span class="num">2026</span></div>
   <div style="font-size:11px;color:#D61F31;font-weight:700;margin-top:4px">CONFIDENTIAL — FERPA PROTECTED</div>
 </div>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;font-size:12px">
-  <div><strong>Student Name:</strong> ${h(student.name)}</div>
-  <div><strong>Student ID:</strong> ${h(student.studentId || '—')}</div>
+  <div><strong>Student Name:</strong> ${hn(student.name)}</div>
+  <div><strong>Student ID:</strong> ${hn(student.studentId || '—')}</div>
   <div><strong>Date of Birth:</strong> —</div>
-  <div><strong>Grade:</strong> ${h(student.grade)}</div>
+  <div><strong>Grade:</strong> ${hn(student.grade)}</div>
   <div><strong>Campus:</strong> —</div>
-  <div><strong>Academic Year:</strong> 2025–2026</div>
+  <div><strong>Academic Year:</strong> <span class="num">2025</span>–<span class="num">2026</span></div>
   <div><strong>Counselor Notes:</strong> —</div>
-  <div><strong>Issue Date:</strong> ${issueDate}</div>
+  <div><strong>Issue Date:</strong> ${hn(issueDate)}</div>
 </div>
 ${courseRows}${trRows}${apRows}
 <div style="background:#F7F9FC;border:2px solid #1A365E;border-radius:8px;padding:14px;margin-bottom:16px">
   <div style="font-size:12px;font-weight:700;color:#1A365E;margin-bottom:8px">CUMULATIVE GPA SUMMARY</div>
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:12px">
-    <div style="text-align:center"><div style="font-size:11px;color:#7A92B0">Unweighted GPA</div><div style="font-size:22px;font-weight:900;color:#1A365E">${uw.toFixed(2)}</div></div>
-    <div style="text-align:center"><div style="font-size:11px;color:#7A92B0">Weighted GPA</div><div style="font-size:22px;font-weight:900;color:#7040CC">${wt.toFixed(2)}</div></div>
-    <div style="text-align:center"><div style="font-size:11px;color:#7A92B0">Academic GPA</div><div style="font-size:22px;font-weight:900;color:#0EA5E9">${uc.toFixed(2)}</div></div>
+    <div style="text-align:center"><div style="font-size:11px;color:#7A92B0">Unweighted GPA</div><div class="num" style="font-size:22px;font-weight:900;color:#1A365E">${uw.toFixed(2)}</div></div>
+    <div style="text-align:center"><div style="font-size:11px;color:#7A92B0">Weighted GPA</div><div class="num" style="font-size:22px;font-weight:900;color:#7040CC">${wt.toFixed(2)}</div></div>
+    <div style="text-align:center"><div style="font-size:11px;color:#7A92B0">Academic GPA</div><div class="num" style="font-size:22px;font-weight:900;color:#0EA5E9">${uc.toFixed(2)}</div></div>
   </div>
 </div>
 <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:10px">
-  <span><strong>Total Credits Earned:</strong> ${totCr} / 24 credits</span>
+  <span><strong>Total Credits Earned:</strong> ${hn(totCr)} / <span class="num">24</span> credits</span>
   ${totCr >= 24 ? '<span style="background:#1DBD6A;color:#fff;padding:4px 12px;border-radius:8px;font-weight:700">✓ GRADUATION REQUIREMENTS MET</span>' : ''}
 </div>
 ${dist ? `<div style="text-align:center;padding:10px;background:#FAC60020;border:2px solid #FAC600;border-radius:8px;font-weight:800;color:#7A5100;margin-bottom:12px">🏆 Academic Distinction: ${h(dist.label)}</div>` : ''}
@@ -2217,7 +2233,7 @@ ${deTotal > 0 ? `
             <img src="/Logo_b.png" alt="American World School" style={{ height:70, width:'auto', objectFit:'contain', marginBottom:8, display:'block', margin:'0 auto 8px' }} />
             <div style={{ fontSize:22, fontWeight:900, color:'#1A365E', letterSpacing:1 }}>AMERICAN WORLD SCHOOL</div>
             <div style={{ fontSize:11, color:'#7A92B0', letterSpacing:2, marginTop:2 }}>OFFICIAL ACADEMIC TRANSCRIPT</div>
-            <div style={{ fontSize:11, color:'#3D5475', marginTop:4 }}>24-Credit Graduation Program · 2025–2026</div>
+            <div style={{ fontSize:11, color:'#3D5475', marginTop:4 }}>{renderTranscriptText('24-Credit Graduation Program · 2025–2026')}</div>
             <div style={{ fontSize:11, color:'#D61F31', fontWeight:700, marginTop:4 }}>CONFIDENTIAL — FERPA PROTECTED</div>
           </div>
 
@@ -2234,7 +2250,7 @@ ${deTotal > 0 ? `
               ['Issue Date',      issueDate],
             ].map(([l, v]) => (
               <div key={l} style={{ fontSize:12 }}>
-                <strong>{l}:</strong> {v}
+                <strong>{l}:</strong> {renderTranscriptText(v)}
               </div>
             ))}
           </div>
@@ -2246,8 +2262,8 @@ ${deTotal > 0 ? `
             return (
               <div key={y} style={{ marginBottom:14 }}>
                 <div style={{ background:'#1A365E', color:'#fff', padding:'5px 12px', fontSize:12, fontWeight:700, borderRadius:4, marginBottom:6, display:'flex', justifyContent:'space-between' }}>
-                  <span>{y}</span>
-                  <span style={{ fontWeight:400, fontSize:11 }}>GPA — Unweighted: {yrU.toFixed(2)} &nbsp; Weighted: {yrW.toFixed(2)}</span>
+                  <span>{renderTranscriptText(y)}</span>
+                  <span style={{ fontWeight:400, fontSize:11 }}>GPA — Unweighted: {renderTranscriptText(yrU.toFixed(2))} &nbsp; Weighted: {renderTranscriptText(yrW.toFixed(2))}</span>
                 </div>
                 <table style={{ width:'100%', borderCollapse:'collapse', fontSize:11 }}>
                   <thead>
@@ -2267,15 +2283,15 @@ ${deTotal > 0 ? `
                       return (
                         <tr key={c._id}>
                           <td style={cellStyle}>
-                            {c.title}
+                            {renderTranscriptText(c.title)}
                             {c.type !== 'STD' && <span style={{ fontSize:9, fontWeight:800, color:TYPE_COLOR[c.type], marginLeft:4 }}>{c.type}</span>}
                           </td>
                           <td style={{ ...cellStyle, textAlign:'center', fontSize:9 }}>{c.type}</td>
-                          <td style={{ ...cellStyle, fontSize:9 }}>{c.area}</td>
-                          <td style={{ ...cellStyle, textAlign:'center', fontSize:9 }}>{c.semester}</td>
-                          <td style={{ ...cellStyle, textAlign:'center', fontWeight:700 }}>{c.creditsEarned}</td>
-                          <td style={{ ...cellStyle, textAlign:'center', fontWeight:800 }}>{c.grade || '—'}</td>
-                          <td style={{ ...cellStyle, textAlign:'center' }}>{wp !== null ? wp.toFixed(1) : '—'}</td>
+                          <td style={{ ...cellStyle, fontSize:9 }}>{renderTranscriptText(c.area)}</td>
+                          <td style={{ ...cellStyle, textAlign:'center', fontSize:9 }}>{renderTranscriptText(c.semester)}</td>
+                          <td style={{ ...cellStyle, textAlign:'center', fontWeight:700 }}>{renderTranscriptText(c.creditsEarned)}</td>
+                          <td style={{ ...cellStyle, textAlign:'center', fontWeight:800 }}>{renderTranscriptText(c.grade || '—')}</td>
+                          <td style={{ ...cellStyle, textAlign:'center' }}>{wp !== null ? renderTranscriptText(wp.toFixed(1)) : '—'}</td>
                         </tr>
                       )
                     })}
@@ -2302,11 +2318,11 @@ ${deTotal > 0 ? `
                 <tbody>
                   {approvedTransfers.map(t => (
                     <tr key={t._id}>
-                      <td style={cellStyle}>{t.origTitle} <span style={{ fontSize:9, color:'#F5A623' }}>TRANSFER</span></td>
-                      <td style={{ ...cellStyle, fontSize:10 }}>{t.sourceSchool || '—'}</td>
-                      <td style={{ ...cellStyle, textAlign:'center', fontWeight:800 }}>{t.origGrade || '—'}</td>
-                      <td style={{ ...cellStyle, textAlign:'center', fontWeight:700 }}>{t.creditsAwarded}</td>
-                      <td style={{ ...cellStyle, fontSize:9 }}>{t.area}</td>
+                      <td style={cellStyle}>{renderTranscriptText(t.origTitle)} <span style={{ fontSize:9, color:'#F5A623' }}>TRANSFER</span></td>
+                      <td style={{ ...cellStyle, fontSize:10 }}>{renderTranscriptText(t.sourceSchool || '—')}</td>
+                      <td style={{ ...cellStyle, textAlign:'center', fontWeight:800 }}>{renderTranscriptText(t.origGrade || '—')}</td>
+                      <td style={{ ...cellStyle, textAlign:'center', fontWeight:700 }}>{renderTranscriptText(t.creditsAwarded)}</td>
+                      <td style={{ ...cellStyle, fontSize:9 }}>{renderTranscriptText(t.area)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -2331,9 +2347,9 @@ ${deTotal > 0 ? `
                     const sc = c.apScore!
                     return (
                       <tr key={c._id}>
-                        <td style={cellStyle}>{c.title}</td>
-                        <td style={{ ...cellStyle, textAlign:'center', fontWeight:800, color: sc >= 3 ? '#1DBD6A' : '#D61F31' }}>{sc}</td>
-                        <td style={{ ...cellStyle, fontSize:10 }}>{sc >= 3 ? '✓ Eligible (score 3+)' : '✗ Score below 3'}</td>
+                        <td style={cellStyle}>{renderTranscriptText(c.title)}</td>
+                        <td style={{ ...cellStyle, textAlign:'center', fontWeight:800, color: sc >= 3 ? '#1DBD6A' : '#D61F31' }}>{renderTranscriptText(sc)}</td>
+                        <td style={{ ...cellStyle, fontSize:10 }}>{renderTranscriptText(sc >= 3 ? '✓ Eligible (score 3+)' : '✗ Score below 3')}</td>
                       </tr>
                     )
                   })}
@@ -2348,22 +2364,22 @@ ${deTotal > 0 ? `
             <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, fontSize:12 }}>
               <div style={{ textAlign:'center' }}>
                 <div style={{ fontSize:11, color:'#7A92B0' }}>Unweighted GPA</div>
-                <div style={{ fontSize:22, fontWeight:900, color:'#1A365E' }}>{uw.toFixed(2)}</div>
+                <div style={{ ...transcriptNumStyle, fontSize:22, fontWeight:900, color:'#1A365E' }}>{uw.toFixed(2)}</div>
               </div>
               <div style={{ textAlign:'center' }}>
                 <div style={{ fontSize:11, color:'#7A92B0' }}>Weighted GPA</div>
-                <div style={{ fontSize:22, fontWeight:900, color:'#7040CC' }}>{wt.toFixed(2)}</div>
+                <div style={{ ...transcriptNumStyle, fontSize:22, fontWeight:900, color:'#7040CC' }}>{wt.toFixed(2)}</div>
               </div>
               <div style={{ textAlign:'center' }}>
                 <div style={{ fontSize:11, color:'#7A92B0' }}>Academic GPA</div>
-                <div style={{ fontSize:22, fontWeight:900, color:'#0EA5E9' }}>{uc.toFixed(2)}</div>
+                <div style={{ ...transcriptNumStyle, fontSize:22, fontWeight:900, color:'#0EA5E9' }}>{uc.toFixed(2)}</div>
               </div>
             </div>
           </div>
 
           {/* Credits + graduation badge */}
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', fontSize:12, marginBottom:10 }}>
-            <span><strong>Total Credits Earned:</strong> {totCr} / 24 credits</span>
+            <span><strong>Total Credits Earned:</strong> {renderTranscriptText(`${totCr} / 24 credits`)}</span>
             {totCr >= 24 && <span style={{ background:'#1DBD6A', color:'#fff', padding:'4px 12px', borderRadius:8, fontWeight:700 }}>✓ GRADUATION REQUIREMENTS MET</span>}
           </div>
 

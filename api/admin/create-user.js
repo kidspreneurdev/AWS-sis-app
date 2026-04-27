@@ -109,16 +109,20 @@ export default async function handler(req, res) {
     return json(res, 400, { error: createError?.message || 'Failed to create account.' })
   }
 
+  const profilePayload = {
+    id: newUser.id,
+    email: normalizedEmail,
+    full_name: safeFullName,
+    role: safeRole,
+    campus: safeCampus,
+    active: true,
+  }
+
+  // Supabase may already create the profile row via an auth trigger.
+  // Use upsert so this endpoint works with either bootstrap path.
   const { error: profileError } = await adminClient
     .from('profiles')
-    .insert({
-      id: newUser.id,
-      email: normalizedEmail,
-      full_name: safeFullName,
-      role: safeRole,
-      campus: safeCampus,
-      active: true,
-    })
+    .upsert(profilePayload, { onConflict: 'id' })
 
   if (profileError) {
     await adminClient.auth.admin.deleteUser(newUser.id)

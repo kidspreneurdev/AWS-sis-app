@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
-import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { hasSupabaseServiceEnv, supabaseAdmin } from '@/lib/supabaseAdmin'
 
 const ROLES = ['admin', 'staff', 'teacher', 'principal', 'partner', 'coach', 'viewer']
 const ROLE_COLORS: Record<string, { bg: string; tc: string }> = {
@@ -56,6 +56,11 @@ function StaffModal({ user, campuses, onClose, onSave }: {
     if (isEdit && user) {
       await supabase.from('profiles').update({ full_name: fullName, role, campus: campus || null, active }).eq('id', user.id)
     } else {
+      if (!supabaseAdmin || !hasSupabaseServiceEnv) {
+        setErr('Staff account creation is not configured for this deployment. Add a secure server-side admin endpoint before using this action.')
+        setSaving(false)
+        return
+      }
       const { data: { user: newUser }, error } = await supabaseAdmin.auth.admin.createUser({
         email: email.trim(),
         password,

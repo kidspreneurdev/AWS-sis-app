@@ -82,6 +82,12 @@ function StaffModal({ user, campuses, onClose, onSave }: {
       const payload = await response.json().catch(() => null) as { error?: string } | null
 
       if (!response.ok) {
+        if (response.status === 404) {
+          setErr('Admin API not found. In Vercel, set the project Root Directory to awsc-sis-app and redeploy.')
+          setSaving(false)
+          return
+        }
+
         setErr(payload?.error ?? 'Failed to create account.')
         setSaving(false)
         return

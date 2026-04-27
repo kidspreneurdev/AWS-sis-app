@@ -12,6 +12,7 @@ const DEV_PROFILE: Profile = {
   full_name: 'Dev Admin',
   role: 'admin',
   campus: null,
+  active: true,
   avatar_url: null,
   created_at: new Date().toISOString(),
 }

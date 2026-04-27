@@ -32,7 +32,7 @@ export type Database = {
     Enums: {
       student_status: 'Applied' | 'Under Review' | 'Accepted' | 'Denied' | 'Waitlisted' | 'Inquiry' | 'Enrolled' | 'Alumni' | 'Withdrawn'
       attendance_status: 'Present' | 'Absent' | 'Late' | 'Excused'
-      user_role: 'admin' | 'teacher' | 'counselor' | 'readonly'
+      user_role: 'admin' | 'staff' | 'teacher' | 'principal' | 'partner' | 'coach' | 'viewer' | 'counselor' | 'readonly'
     }
   }
 }
@@ -332,6 +332,7 @@ export interface Profile {
   full_name: string | null
   role: Database['public']['Enums']['user_role']
   campus: string | null
+  active: boolean
   avatar_url: string | null
   created_at: string
 }

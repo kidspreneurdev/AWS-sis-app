@@ -277,7 +277,31 @@ export function UserManagementPage() {
 
   async function removeUser(u: UserProfile) {
     if (!confirm(`Remove ${u.fullName || u.email} from the system?`)) return
-    await supabase.from('profiles').delete().eq('id', u.id)
+
+    const { data: sessionData } = await supabase.auth.getSession()
+    const accessToken = sessionData.session?.access_token
+
+    if (!accessToken) {
+      alert('Your session has expired. Please sign in again and retry.')
+      return
+    }
+
+    const response = await fetch('/api/admin/delete-user', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ userId: u.id }),
+    })
+
+    const payload = await response.json().catch(() => null) as { error?: string } | null
+
+    if (!response.ok) {
+      alert(payload?.error ?? 'Failed to remove account.')
+      return
+    }
+
     void load()
   }
 

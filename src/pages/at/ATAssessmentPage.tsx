@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { supabase } from '@/lib/supabase'
 
 const AT_SUBJECTS = ['Mathematics', 'English Language Arts', 'Reading', 'Science', 'Social Studies']
@@ -24,6 +25,7 @@ interface AssessRec { id: string; student_id: string; week_start: string; subjec
 interface Student { id: string; fullName: string; grade: string; cohort: string }
 
 export function ATAssessmentPage() {
+  const cf = useCampusFilter()
   const [records, setRecords] = useState<AssessRec[]>([])
   const [students, setStudents] = useState<Student[]>([])
   const [weekOffset, setWeekOffset] = useState(0)
@@ -33,9 +35,11 @@ export function ATAssessmentPage() {
   const monday = useMemo(() => getMonday(weekOffset), [weekOffset])
 
   const load = useCallback(async () => {
+    let sQuery = supabase.from('students').select('id,full_name,grade,cohort').eq('status', 'enrolled').order('full_name')
+    if (cf) sQuery = sQuery.eq('campus', cf)
     const [{ data: recs }, { data: st }] = await Promise.all([
       supabase.from('at_assessments').select('*').order('week_start', { ascending: false }),
-      supabase.from('students').select('id,full_name,grade,cohort').eq('status', 'enrolled').order('full_name'),
+      sQuery,
     ])
     if (recs) setRecords(recs.map((r: Record<string, unknown>) => ({
       id: r.id as string,
@@ -50,7 +54,7 @@ export function ATAssessmentPage() {
       id: r.id as string, fullName: (r.full_name as string) ?? '',
       grade: (r.grade as string) ?? '', cohort: (r.cohort as string) ?? '',
     })))
-  }, [])
+  }, [cf])
 
   useEffect(() => { load() }, [load])
 

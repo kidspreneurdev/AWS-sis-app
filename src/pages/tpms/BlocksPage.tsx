@@ -26,8 +26,11 @@ function mapBlock(r: Record<string, unknown>): TpmsBlock {
   }
 }
 
-function BlockModal({ block, onClose, onSave, onDelete }: {
-  block: TpmsBlock | null; onClose: () => void
+function BlockModal({ block, cohorts, coaches, onClose, onSave, onDelete }: {
+  block: TpmsBlock | null
+  cohorts: string[]
+  coaches: { id: string; name: string }[]
+  onClose: () => void
   onSave: (data: Omit<TpmsBlock, 'id'>, id?: string) => Promise<void>
   onDelete?: (id: string) => Promise<void>
 }) {
@@ -85,15 +88,24 @@ function BlockModal({ block, onClose, onSave, onDelete }: {
           </div>
           <div style={{ gridColumn: 'span 2', background: '#F0FFF4', borderRadius: 8, padding: 10 }}>
             <label style={{ ...lbl, color: '#059669' }}>👥 Assigned Cohort</label>
-            <input value={form.cohort} onChange={e => set('cohort', e.target.value)} style={{ ...inp, borderColor: '#D1FAE5' }} placeholder="e.g. Grade 9A, Cohort Blue…" />
+            <select value={form.cohort} onChange={e => set('cohort', e.target.value)} style={{ ...inp, borderColor: '#D1FAE5' }}>
+              <option value="">— None —</option>
+              {cohorts.map(c => <option key={c}>{c}</option>)}
+            </select>
           </div>
           <div style={{ gridColumn: 'span 2', background: '#F0FFF4', borderRadius: 8, padding: 10 }}>
-            <label style={{ ...lbl, color: '#059669' }}>🟢 Success Coach (name or ID)</label>
-            <input value={form.coachId} onChange={e => set('coachId', e.target.value)} style={{ ...inp, borderColor: '#D1FAE5' }} placeholder="Coach name or staff ID…" />
+            <label style={{ ...lbl, color: '#059669' }}>🟢 Success Coach</label>
+            <select value={form.coachId} onChange={e => set('coachId', e.target.value)} style={{ ...inp, borderColor: '#D1FAE5' }}>
+              <option value="">— Not Assigned —</option>
+              {coaches.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
           </div>
           <div style={{ gridColumn: 'span 2', background: '#FAF5FF', borderRadius: 8, padding: 10 }}>
             <label style={{ ...lbl, color: '#7C3AED' }}>🔵 Success Manager <span style={{ fontWeight: 400, color: '#AAB8CC' }}>(supervisor)</span></label>
-            <input value={form.managerId} onChange={e => set('managerId', e.target.value)} style={{ ...inp, borderColor: '#EDE9FE' }} placeholder="Manager name or staff ID…" />
+            <select value={form.managerId} onChange={e => set('managerId', e.target.value)} style={{ ...inp, borderColor: '#EDE9FE' }}>
+              <option value="">— Not Assigned —</option>
+              {coaches.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
           </div>
           <div><label style={lbl}>Room / Location</label><input value={form.room} onChange={e => set('room', e.target.value)} style={inp} placeholder="Room 101" /></div>
           <div><label style={lbl}>Max Students</label><input type="number" value={form.maxStudents} onChange={e => set('maxStudents', parseInt(e.target.value) || 25)} min={1} style={inp} /></div>
@@ -113,11 +125,24 @@ function BlockModal({ block, onClose, onSave, onDelete }: {
 
 export function BlocksPage() {
   const [blocks, setBlocks] = useState<TpmsBlock[]>([])
+  const [cohorts, setCohorts] = useState<string[]>([])
+  const [coaches, setCoaches] = useState<{ id: string; name: string }[]>([])
   const [modal, setModal] = useState<{ open: boolean; block: TpmsBlock | null }>({ open: false, block: null })
 
   async function load() {
-    const { data } = await supabase.from('timetable_blocks').select('*').order('created_at', { ascending: true })
-    if (data) setBlocks(data.map(r => mapBlock(r as Record<string, unknown>)))
+    const [br, sr, cr] = await Promise.all([
+      supabase.from('timetable_blocks').select('*').order('created_at', { ascending: true }),
+      supabase.from('settings').select('cohorts').single(),
+      supabase.from('profiles').select('id,full_name').in('role', ['coach', 'teacher', 'principal', 'staff']).order('full_name'),
+    ])
+    if (br.data) setBlocks(br.data.map(r => mapBlock(r as Record<string, unknown>)))
+    if (sr.data?.cohorts) {
+      const raw = sr.data.cohorts as unknown[]
+      if (raw.length === 1 && typeof raw[0] === 'string' && (raw[0] as string).startsWith('[')) {
+        try { const p = JSON.parse(raw[0] as string); if (Array.isArray(p)) { setCohorts(p.map(String).filter(Boolean)); } } catch { setCohorts(raw.map(String).filter(Boolean)) }
+      } else { setCohorts(raw.map(String).filter(Boolean)) }
+    }
+    if (cr.data) setCoaches(cr.data.map((r: Record<string, unknown>) => ({ id: r.id as string, name: (r.full_name as string) || 'Unknown' })))
   }
   useEffect(() => { load() }, [])
 
@@ -153,7 +178,7 @@ export function BlocksPage() {
 
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
-        {[['Total Blocks', blocks.length, '#1A365E'], ['Cohorts', cohortSet.size, '#059669'], ['Coaches', coachSet.size, '#0EA5E9'], ['Subjects', new Set(blocks.map(b => b.subject).filter(Boolean)).size, '#7C3AED']].map(([l, v, c]) => (
+        {[['Total Blocks', blocks.length, '#1A365E'], ['Cohorts', cohortSet.size, '#059669'], ['Coaches', coachSet.size, '#0EA5E9'], ['Managers Assigned', new Set(blocks.map(b => b.managerId).filter(Boolean)).size, '#7C3AED']].map(([l, v, c]) => (
           <div key={l as string} style={{ background: '#fff', borderRadius: 12, padding: 14, border: '1.5px solid #E4EAF2', textAlign: 'center' }}>
             <div style={{ fontSize: 9, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>{l}</div>
             <div style={{ fontSize: 24, fontWeight: 900, color: c as string }}>{v}</div>
@@ -251,7 +276,7 @@ export function BlocksPage() {
         </div>
       )}
 
-      {modal.open && <BlockModal block={modal.block} onClose={() => setModal({ open: false, block: null })} onSave={saveBlock} onDelete={deleteBlock} />}
+      {modal.open && <BlockModal block={modal.block} cohorts={cohorts} coaches={coaches} onClose={() => setModal({ open: false, block: null })} onSave={saveBlock} onDelete={deleteBlock} />}
     </div>
   )
 }

@@ -39,7 +39,6 @@ export function TPMSDashboardPage() {
 
   const published = lessons.filter(l => l.status === 'Published').length
   const inReview = lessons.filter(l => l.status === 'Ready for Review').length
-  const activeUnits = units.filter(u => u.status === 'Active').length
 
   const thisWeekLessons = lessons.filter(l => l.date >= todayStr && l.date <= in7Str)
   const upcomingEvents = events.filter(e => e.date >= todayStr).slice(0, 5)
@@ -72,14 +71,14 @@ export function TPMSDashboardPage() {
       {/* Quick action cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
         {[
-          { icon: '📝', label: 'New Lesson Plan', path: '/tpms/lessons', col: '#0EA5E9' },
-          { icon: '📐', label: 'New Unit Plan', path: '/tpms/units', col: '#7C3AED' },
-          { icon: '📆', label: 'Curriculum Map', path: '/tpms/curriculum', col: '#D97706' },
-          { icon: '📊', label: 'Teaching Analytics', path: '/tpms/analytics', col: '#059669' },
+          { icon: '📝', label: 'New Lesson Plan', path: '/tpms/lessons' },
+          { icon: '📐', label: 'New Unit Plan', path: '/tpms/units' },
+          { icon: '📆', label: 'Add Calendar Event', path: '/academic/calendar' },
+          { icon: '🗺️', label: 'Curriculum Map', path: '/tpms/curriculum' },
         ].map(qa => (
           <button key={qa.path} onClick={() => navigate(qa.path)} style={{ background: '#fff', border: '1.5px solid #E4EAF2', borderRadius: 12, padding: '16px 12px', cursor: 'pointer', textAlign: 'center' }}>
             <div style={{ fontSize: 28, marginBottom: 6 }}>{qa.icon}</div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: qa.col }}>{qa.label}</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#1A365E' }}>{qa.label}</div>
           </button>
         ))}
       </div>
@@ -134,25 +133,6 @@ export function TPMSDashboardPage() {
           })}
         </div>
       </div>
-
-      {/* Active units overview */}
-      {activeUnits > 0 && (
-        <div style={{ ...card, padding: 16 }}>
-          <div style={{ fontSize: 11, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>📐 Active Unit Plans ({activeUnits})</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
-            {units.filter(u => u.status === 'Active').slice(0, 6).map(u => {
-              const pacCol = u.pacing === 'Behind' ? '#F5A623' : u.pacing === 'Significantly Behind' ? '#D61F31' : u.pacing === 'Ahead' ? '#0EA5E9' : '#1DBD6A'
-              return (
-                <div key={u.id} style={{ padding: '10px 12px', borderRadius: 10, background: '#F7F9FC', border: '1.5px solid #E4EAF2' }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: '#1A365E', marginBottom: 3 }}>{u.title}</div>
-                  <div style={{ fontSize: 10, color: '#7A92B0' }}>{u.subject} · {u.grade}</div>
-                  {u.pacing && <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 5, background: pacCol + '18', color: pacCol, marginTop: 4, display: 'inline-block' }}>{u.pacing}</span>}
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
 
       {/* Implementation roadmap */}
       <div style={{ ...card, padding: 16 }}>

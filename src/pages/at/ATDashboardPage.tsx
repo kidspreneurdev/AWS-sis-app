@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
+import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { supabase } from '@/lib/supabase'
 import { useNavigate } from 'react-router-dom'
 
@@ -43,6 +44,7 @@ interface Student { id: string; fullName: string; grade: string }
 interface Correction { id: string; status: string; deadline: string }
 
 export function ATDashboardPage() {
+  const cf = useCampusFilter()
   const navigate = useNavigate()
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [submissions, setSubmissions] = useState<Submission[]>([])
@@ -51,10 +53,12 @@ export function ATDashboardPage() {
 
   useEffect(() => {
     async function load() {
+      let sQuery = supabase.from('students').select('id,full_name,grade').eq('status', 'enrolled').order('full_name')
+      if (cf) sQuery = sQuery.eq('campus', cf)
       const [{ data: a }, { data: sub }, { data: st }, { data: corr }] = await Promise.all([
         supabase.from('at_assignments').select('id,title,type,subject,due_date,max_score').order('due_date'),
         supabase.from('at_submissions').select('assignment_id,student_id,status,score'),
-        supabase.from('students').select('id,full_name,grade').eq('status', 'enrolled').order('full_name'),
+        sQuery,
         supabase.from('at_corrections').select('id,status,deadline'),
       ])
       if (a) setAssignments(a.map((r: Record<string, unknown>) => ({ id: r.id as string, title: r.title as string, type: (r.type as string) ?? 'Homework', subject: (r.subject as string) ?? '', dueDate: (r.due_date as string) ?? '', maxScore: r.max_score as number | null })))
@@ -63,7 +67,7 @@ export function ATDashboardPage() {
       if (corr) setCorrections(corr.map((r: Record<string, unknown>) => ({ id: r.id as string, status: (r.status as string) ?? '', deadline: (r.deadline as string) ?? '' })))
     }
     load()
-  }, [])
+  }, [cf])
 
   const monday = getMonday()
   const friday = getFriday(monday)

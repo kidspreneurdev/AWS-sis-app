@@ -142,7 +142,7 @@ export function CurriculumMapPage() {
             const tcol = cnt >= 1 ? '#1A365E' : '#7A92B0'
             return (
               <div key={s} style={{ padding: '10px 12px', borderRadius: 9, border: `1.5px solid ${col}`, background: col + '18' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: tcol, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={s}>{s.split(' — ')[0]}</div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: tcol, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={s}>{s}</div>
                 <div style={{ fontSize: 10, color: '#7A92B0', marginTop: 2 }}>{cnt} unit{cnt !== 1 ? 's' : ''}{cnt === 0 ? ' — Not yet addressed' : ''}</div>
               </div>
             )

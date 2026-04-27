@@ -5,6 +5,7 @@ import { StudentDetailPanel } from '@/components/students/StudentDetailPanel'
 import { toast } from '@/lib/toast'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
 import { type Student, type StudentStatus, fullName } from '@/types/student'
+import { useCampusFilter } from '@/hooks/useCampusFilter'
 
 function fromRow(row: Record<string, unknown>): Student {
   let ext: Record<string, unknown> = {}
@@ -51,17 +52,20 @@ function daysSince(dateStr: string | null) {
 }
 
 export function WaitlistPage() {
+  const cf = useCampusFilter()
   const [students, setStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
   const [panelStudent, setPanelStudent] = useState<Student | null>(null)
 
-  useEffect(() => { fetchStudents() }, [])
+  useEffect(() => { fetchStudents() }, [cf])
 
   async function fetchStudents() {
     setLoading(true)
-    const { data } = await supabase.from('students').select('*').eq('status', 'Waitlisted').order('application_date')
+    let q = supabase.from('students').select('*').eq('status', 'Waitlisted').order('application_date')
+    if (cf) q = q.eq('campus', cf)
+    const { data } = await q
     setStudents((data ?? []).map(fromRow))
     setLoading(false)
   }

@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/auth.store'
 import { toast } from '@/lib/toast'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
+import { useCampusFilter } from '@/hooks/useCampusFilter'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type CommType = 'Email' | 'Call' | 'SMS' | 'Meeting' | 'Letter'
@@ -107,6 +108,7 @@ function AddCommModal({ students, onClose, onSave, defaultSentBy }: {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export function CommunicationsPage() {
+  const cf = useCampusFilter()
   const { profile } = useAuthStore()
   const [comms, setComms] = useState<CommRecord[]>([])
   const [commSchema, setCommSchema] = useState<CommSchema>('modern')
@@ -136,8 +138,10 @@ export function CommunicationsPage() {
     const schema = await detectCommSchema()
     setCommSchema(schema)
 
+    let sQuery = supabase.from('students').select('id,first_name,last_name')
+    if (cf) sQuery = sQuery.eq('campus', cf)
     const [stuRes, commRes] = await Promise.all([
-      supabase.from('students').select('id,first_name,last_name'),
+      sQuery,
       supabase.from('communications').select('*'),
     ])
     if (stuRes.error) {
@@ -181,7 +185,7 @@ export function CommunicationsPage() {
     setComms(mapped)
   }
 
-  useEffect(() => { void load() }, [])
+  useEffect(() => { void load() }, [cf])
 
   const filtered = useMemo(() => comms.filter(c => {
     if (search && !c.studentName.toLowerCase().includes(search.toLowerCase()) && !c.subject.toLowerCase().includes(search.toLowerCase())) return false

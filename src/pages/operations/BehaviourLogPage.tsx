@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/lib/toast'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
+import { useCampusFilter } from '@/hooks/useCampusFilter'
 
 const TYPES = [
   'Positive Recognition', 'Tardiness', 'Disruption', 'Conflict', 'Academic Concern',
@@ -97,15 +98,18 @@ function BehaviourModal({ entry, students, onClose, onSave, onDelete }: {
 }
 
 export function BehaviourLogPage() {
+  const cf = useCampusFilter()
   const [entries, setEntries] = useState<BehaviourEntry[]>([])
   const [students, setStudents] = useState<Student[]>([])
   const [search, setSearch] = useState(''); const [filterType, setFilterType] = useState('All')
   const [modal, setModal] = useState<{ open: boolean; entry: BehaviourEntry | null }>({ open: false, entry: null })
 
   async function load() {
+    let sQuery = supabase.from('students').select('id,first_name,last_name,grade').eq('status', 'Enrolled')
+    if (cf) sQuery = sQuery.eq('campus', cf)
     const [{ data: logs }, { data: studs }] = await Promise.all([
       supabase.from('behaviour_log').select('*').order('date', { ascending: false }),
-      supabase.from('students').select('id,first_name,last_name,grade').eq('status', 'Enrolled'),
+      sQuery,
     ])
     if (studs) setStudents(studs.map((s: Record<string, unknown>) => ({ id: s.id as string, name: `${s.first_name} ${s.last_name}`, grade: s.grade as string })))
     if (logs && studs) {
@@ -124,7 +128,7 @@ export function BehaviourLogPage() {
       })))
     }
   }
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [cf])
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()

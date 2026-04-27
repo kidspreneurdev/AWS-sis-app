@@ -4,9 +4,9 @@ import { StudentModal } from '@/components/students/StudentModal'
 import { type Student, type StudentInsert, fullName } from '@/types/student'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
 import { useCohorts } from '@/hooks/useCohorts'
+import { useCampuses } from '@/hooks/useCampuses'
+import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { toast } from '@/lib/toast'
-
-const CAMPUSES_DEFAULT = ['Main Campus', 'North Campus']
 
 function toRow(s: StudentInsert) {
   return {
@@ -82,6 +82,7 @@ const DISTINCTION_COLORS: Record<string, string> = {
 }
 
 export function AlumniPage() {
+  const cf = useCampusFilter()
   const [students, setStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
@@ -92,14 +93,14 @@ export function AlumniPage() {
 
   async function fetchAlumni() {
     setLoading(true)
-    supabase.from('students').select('*').eq('status', 'Alumni').order('year_graduated', { ascending: false })
-      .then(({ data }) => {
-        setStudents((data ?? []).map(fromRow))
-        setLoading(false)
-      })
+    let q = supabase.from('students').select('*').eq('status', 'Alumni').order('year_graduated', { ascending: false })
+    if (cf) q = q.eq('campus', cf)
+    const { data } = await q
+    setStudents((data ?? []).map(fromRow))
+    setLoading(false)
   }
 
-  useEffect(() => { void fetchAlumni() }, [])
+  useEffect(() => { void fetchAlumni() }, [cf])
 
   async function handleSave(data: StudentInsert) {
     const payload: StudentInsert = {
@@ -129,7 +130,7 @@ export function AlumniPage() {
 
   const years = [...new Set(students.map(s => s.yearGraduated).filter(Boolean) as string[])].sort((a, b) => Number(b) - Number(a))
   const campuses = [...new Set(students.map(s => s.campus).filter(Boolean) as string[])]
-  const modalCampuses = campuses.concat(CAMPUSES_DEFAULT).filter((v, i, a) => a.indexOf(v) === i)
+  const modalCampuses = useCampuses()
 
   // Stats
   const graduatingClasses = years.length

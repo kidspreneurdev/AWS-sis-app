@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
+import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { supabase } from '@/lib/supabase'
 
 const AT_NOTE_TYPES = ['Academic Observation', 'Misconception', 'Participation', 'Behaviour', 'Positive Highlight', 'Other']
@@ -145,6 +146,7 @@ function CorrModal({ note, studentName, onClose, onSave }: { note: ATNote; stude
 }
 
 export function ATNotesPage() {
+  const cf = useCampusFilter()
   const [notes, setNotes] = useState<ATNote[]>([])
   const [corrections, setCorrections] = useState<ATCorrection[]>([])
   const [students, setStudents] = useState<Student[]>([])
@@ -156,10 +158,12 @@ export function ATNotesPage() {
   const studentMap = useMemo(() => Object.fromEntries(students.map(s => [s.id, s])), [students])
 
   async function load() {
+    let sQuery = supabase.from('students').select('id,full_name').eq('status', 'enrolled').order('full_name')
+    if (cf) sQuery = sQuery.eq('campus', cf)
     const [{ data: n }, { data: c }, { data: st }] = await Promise.all([
       supabase.from('at_notes').select('*').order('date_logged', { ascending: false }),
       supabase.from('at_corrections').select('*').order('deadline'),
-      supabase.from('students').select('id,full_name').eq('status', 'enrolled').order('full_name'),
+      sQuery,
     ])
     if (n) setNotes(n.map((r: Record<string, unknown>) => ({
       id: r.id as string, student_id: r.student_id as string, type: (r.type as string) ?? 'Other',
@@ -174,7 +178,7 @@ export function ATNotesPage() {
     })))
     if (st) setStudents(st.map((r: Record<string, unknown>) => ({ id: r.id as string, fullName: (r.full_name as string) ?? '' })))
   }
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [cf])
 
   const pendingCorr = useMemo(() => corrections.filter(c => c.status !== 'Verified Complete'), [corrections])
   const overdueCorr = useMemo(() => pendingCorr.filter(c => c.deadline < today), [pendingCorr, today])

@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { supabase } from '@/lib/supabase'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
 import { useCohorts } from '@/hooks/useCohorts'
@@ -202,6 +203,7 @@ function AssignModal({ item, cohorts, onClose, onSave }: {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export function ATAssignmentsPage() {
+  const cf = useCampusFilter()
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [submissions, setSubmissions] = useState<Submission[]>([])
   const [students, setStudents] = useState<Student[]>([])
@@ -217,10 +219,12 @@ export function ATAssignmentsPage() {
   const [rubricModal, setRubricModal] = useState<{ assignId: string; studentId: string; studentName: string; rubric: Rubric; assignMax: number; existingScores: Record<string, number> } | null>(null)
 
   const load = useCallback(async () => {
+    let sQuery = supabase.from('students').select('id,first_name,last_name,grade').eq('status', 'Enrolled').order('last_name')
+    if (cf) sQuery = sQuery.eq('campus', cf)
     const [{ data: a }, { data: sub }, { data: st }] = await Promise.all([
       supabase.from('at_assignments').select('*').order('due_date'),
       supabase.from('at_submissions').select('*'),
-      supabase.from('students').select('id,first_name,last_name,grade').eq('status', 'Enrolled').order('last_name'),
+      sQuery,
     ])
     if (a) setAssignments(a.map((r: Record<string, unknown>) => ({
       id: r.id as string,
@@ -254,7 +258,7 @@ export function ATAssignmentsPage() {
       fullName: `${(r.first_name as string) ?? ''} ${(r.last_name as string) ?? ''}`.trim(),
       grade: String(r.grade ?? ''),
     })))
-  }, [])
+  }, [cf])
 
   useEffect(() => { load() }, [load])
 

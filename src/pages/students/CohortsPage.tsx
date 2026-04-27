@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import type { StudentStatus } from '@/types/student'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
+import { useCampusFilter } from '@/hooks/useCampusFilter'
 
 interface StudentMin {
   id: string
@@ -141,18 +142,21 @@ function AssignModal({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export function CohortsPage() {
+  const cf = useCampusFilter()
   const [students, setStudents] = useState<StudentMin[]>([])
   const [cohortNames, setCohortNames] = useState<string[]>([])
   const [settingsId, setSettingsId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [assigningTo, setAssigningTo] = useState<string | null>(null)
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [cf])
 
   async function load() {
     setLoading(true)
+    let sQuery = supabase.from('students').select('id,first_name,last_name,grade,cohort,status').eq('status', 'Enrolled')
+    if (cf) sQuery = sQuery.eq('campus', cf)
     const [sRes, setRes] = await Promise.all([
-      supabase.from('students').select('id,first_name,last_name,grade,cohort,status').eq('status', 'Enrolled'),
+      sQuery,
       supabase.from('settings').select('id,cohorts').single(),
     ])
     setStudents((sRes.data ?? []).map(fromRow))

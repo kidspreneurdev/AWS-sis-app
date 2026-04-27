@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { toast } from '@/lib/toast'
 
 interface InterviewStudent {
@@ -130,16 +131,18 @@ function InterviewModal({ student, onClose, onSave }: {
 }
 
 export function InterviewsPage() {
+  const cf = useCampusFilter()
   const [students, setStudents] = useState<InterviewStudent[]>([])
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('All')
   const [editing, setEditing] = useState<InterviewStudent | null>(null)
 
   useEffect(() => {
-    supabase.from('students').select('id,first_name,last_name,grade,status,campus,notes')
+    let q = supabase.from('students').select('id,first_name,last_name,grade,status,campus,notes')
       .in('status', ['Applied', 'Under Review', 'Accepted', 'Enrolled', 'Denied', 'Waitlisted'])
-      .then(({ data }) => { if (data) setStudents(data.map(r => fromRow(r as Record<string, unknown>))) })
-  }, [])
+    if (cf) q = q.eq('campus', cf)
+    q.then(({ data }) => { if (data) setStudents(data.map(r => fromRow(r as Record<string, unknown>))) })
+  }, [cf])
 
   const filtered = useMemo(() => students.filter(s => {
     if (search && !`${s.firstName} ${s.lastName}`.toLowerCase().includes(search.toLowerCase())) return false

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
+import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { type Student, type StudentStatus, STATUS_META, fullName } from '@/types/student'
 
@@ -293,6 +294,7 @@ function RecentApplications({ students }: { students: Student[] }) {
 
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 export function DashboardPage() {
+  const cf = useCampusFilter()
   const [students, setStudents] = useState<Student[]>([])
   const [attendance, setAttendance] = useState<Record<string, { status: string }>>({})
   const [overdueFees, setOverdueFees] = useState(0)
@@ -307,8 +309,10 @@ export function DashboardPage() {
   const iso = todayISO()
 
   useEffect(() => {
+    let sQuery = supabase.from('students').select('*')
+    if (cf) sQuery = sQuery.eq('campus', cf)
     Promise.all([
-      supabase.from('students').select('*'),
+      sQuery,
       supabase.from('attendance').select('student_id,status').eq('date', iso),
       supabase.from('fees').select('id').eq('paid', false).lt('due_date', iso),
       supabase.from('communications').select('id').in('outcome', ['Action Required', 'Follow-up Needed']),
@@ -329,7 +333,7 @@ export function DashboardPage() {
       if (settRes.data?.academic_year) setAcademicYear(settRes.data.academic_year)
       setLoading(false)
     })
-  }, [iso])
+  }, [iso, cf])
 
   // Computed stats
   const tot = students.length
@@ -386,7 +390,7 @@ export function DashboardPage() {
 
         <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', padding: '26px 30px', gap: 24, flexWrap: 'wrap' }}>
           {/* AWS Logo */}
-          <img src="/Logo.png" alt="AWS" style={{ height: 68, width: 'auto', objectFit: 'contain', flexShrink: 0, filter: 'drop-shadow(0 2px 12px rgba(0,0,0,.4))' }} />
+          <img src="/Logo_w.png" alt="AWS" style={{ height: 68, width: 'auto', objectFit: 'contain', flexShrink: 0, filter: 'drop-shadow(0 2px 12px rgba(0,0,0,.4))' }} />
 
           {/* Divider */}
           <div style={{ width: 1, height: 56, background: 'rgba(255,255,255,.12)', flexShrink: 0 }} />

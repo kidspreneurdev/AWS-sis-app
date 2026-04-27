@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { type Student, fullName, STATUS_META } from '@/types/student'
+import { useCampusFilter } from '@/hooks/useCampusFilter'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -588,15 +589,18 @@ function ProfileView({ student, data, activeTab, setActiveTab, onBack }: {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function Student360Page() {
+  const cf = useCampusFilter()
   const [students, setStudents] = useState<Student[]>([])
   const [selected, setSelected] = useState<Student | null>(null)
   const [data, setData] = useState<S360Data | null>(null)
   const [activeTab, setActiveTab] = useState('overview')
   const [loading, setLoading] = useState(true)
 
-  // Load enrolled+alumni students once
-  useState(() => {
-    supabase.from('students').select('*').in('status', ['Enrolled', 'Alumni']).order('first_name')
+  // Load enrolled+alumni students
+  useEffect(() => {
+    let q = supabase.from('students').select('*').in('status', ['Enrolled', 'Alumni']).order('first_name')
+    if (cf) q = q.eq('campus', cf)
+    q
       .then(({ data: rows }) => {
         if (rows) setStudents(rows.map((r: Record<string, unknown>) => ({
           id: r.id as string,
@@ -653,7 +657,7 @@ export function Student360Page() {
         })))
         setLoading(false)
       })
-  })
+  }, [cf])
 
   async function loadStudentData(s: Student) {
     setSelected(s)

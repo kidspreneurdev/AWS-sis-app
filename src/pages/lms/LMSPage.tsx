@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useCohorts } from '@/hooks/useCohorts'
+import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { RubricBuilder } from '@/components/shared/RubricBuilder'
 import {
   loadLMS, saveLMS, loadLMSFromDB, deleteLMSCourse, deleteLMSContent, deleteLMSEnrolment,
@@ -130,6 +131,7 @@ function EnrolModal({ courses, students, cohorts, onSave, onClose }: EnrolModalP
 }
 
 export function LMSPage() {
+  const cf = useCampusFilter()
   const location = useLocation()
   const navigate = useNavigate()
   const activeTab = TAB_PATHS[location.pathname] || 'manage'
@@ -168,7 +170,9 @@ export function LMSPage() {
   useEffect(() => { loadLMSFromDB().then(setStore) }, [])
 
   useEffect(() => {
-    supabase.from('students').select('id,first_name,last_name,cohort,grade').eq('status', 'Enrolled').order('last_name').then(({ data, error }) => {
+    let q = supabase.from('students').select('id,first_name,last_name,cohort,grade').eq('status', 'Enrolled').order('last_name')
+    if (cf) q = q.eq('campus', cf)
+    q.then(({ data, error }) => {
       if (error) { console.error('LMS students load error:', error); return }
       if (data) {
         const mapped = data.map((r: Record<string, unknown>) => {
@@ -186,7 +190,7 @@ export function LMSPage() {
         setStudents(mapped)
       }
     })
-  }, [])
+  }, [cf])
 
   useEffect(() => {
     if (activeTab !== 'student') return

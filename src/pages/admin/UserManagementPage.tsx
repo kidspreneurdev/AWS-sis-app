@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 const ROLES = ['admin', 'staff', 'teacher', 'principal', 'partner', 'coach', 'viewer']
 const ROLE_COLORS: Record<string, { bg: string; tc: string }> = {
@@ -40,13 +41,39 @@ function StaffModal({ user, campuses, onClose, onSave }: {
   const [role, setRole] = useState(user?.role ?? 'staff')
   const [campus, setCampus] = useState(user?.campus ?? '')
   const [email, setEmail] = useState(user?.email ?? '')
+  const [password, setPassword] = useState('')
   const [active, setActive] = useState(user?.active !== false)
   const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState('')
 
   async function save() {
+    setErr('')
+    if (!isEdit) {
+      if (!email.trim()) { setErr('Email is required.'); return }
+      if (password.length < 8) { setErr('Password must be at least 8 characters.'); return }
+    }
     setSaving(true)
     if (isEdit && user) {
-      await supabase.from('profiles').update({ full_name: fullName, role, campus, active }).eq('id', user.id)
+      await supabase.from('profiles').update({ full_name: fullName, role, campus: campus || null, active }).eq('id', user.id)
+    } else {
+      const { data: { user: newUser }, error } = await supabaseAdmin.auth.admin.createUser({
+        email: email.trim(),
+        password,
+        email_confirm: true,
+      })
+      if (error || !newUser) {
+        setErr(error?.message ?? 'Failed to create account.')
+        setSaving(false)
+        return
+      }
+      await supabase.from('profiles').insert({
+        id: newUser.id,
+        email: email.trim(),
+        full_name: fullName,
+        role,
+        campus: campus || null,
+        active: true,
+      })
     }
     setSaving(false)
     onSave()
@@ -75,7 +102,10 @@ function StaffModal({ user, campuses, onClose, onSave }: {
             </div>
           </div>
           {!isEdit && (
-            <div><label style={lbl}>Email</label><input value={email} onChange={e => setEmail(e.target.value)} style={inp} placeholder="user@school.edu" /></div>
+            <>
+              <div><label style={lbl}>Email</label><input value={email} onChange={e => { setEmail(e.target.value); setErr('') }} style={inp} placeholder="user@school.edu" autoComplete="off" /></div>
+              <div><label style={lbl}>Temporary Password</label><input type="password" value={password} onChange={e => { setPassword(e.target.value); setErr('') }} style={inp} placeholder="Minimum 8 characters" autoComplete="new-password" /></div>
+            </>
           )}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div><label style={lbl}>Campus</label>
@@ -93,9 +123,10 @@ function StaffModal({ user, campuses, onClose, onSave }: {
               </div>
             )}
           </div>
+          {err && <div style={{ fontSize: 11, color: '#D61F31', fontWeight: 600 }}>{err}</div>}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 8, borderTop: '1px solid #E4EAF2' }}>
             <button onClick={onClose} style={{ padding: '8px 18px', border: '1.5px solid #E4EAF2', background: '#fff', color: '#3D5475', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-            <button onClick={() => void save()} disabled={saving} style={{ padding: '8px 22px', background: '#D61F31', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>{saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Add User'}</button>
+            <button onClick={() => void save()} disabled={saving} style={{ padding: '8px 22px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>{saving ? 'Saving…' : isEdit ? 'Save Changes' : '✓ Create Account'}</button>
           </div>
         </div>
       </div>

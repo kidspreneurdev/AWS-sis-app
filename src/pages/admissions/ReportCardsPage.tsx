@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useCampusFilter } from '@/hooks/useCampusFilter'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 const CURRENT_YEAR = new Date().getFullYear().toString()
@@ -196,6 +197,7 @@ function ReportCard({ student, grades, attendance }: {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export function ReportCardsPage() {
+  const cf = useCampusFilter()
   const [students, setStudents] = useState<Student[]>([])
   const [allGrades, setAllGrades] = useState<Array<GradeRow & { studentId: string }>>([])
   const [allAttendance, setAllAttendance] = useState<Array<AttendanceRow & { studentId: string }>>([])
@@ -206,8 +208,10 @@ export function ReportCardsPage() {
 
   useEffect(() => {
     async function load() {
+      let sQuery = supabase.from('students').select('id,first_name,last_name,grade,status,campus,cohort').eq('status', 'Enrolled')
+      if (cf) sQuery = sQuery.eq('campus', cf)
       const [stuRes, gradesRes, attRes] = await Promise.all([
-        supabase.from('students').select('id,first_name,last_name,grade,status,campus,cohort').eq('status', 'Enrolled'),
+        sQuery,
         supabase.from('grades').select('*').eq('school_year', CURRENT_YEAR),
         supabase.from('attendance').select('student_id,date,status'),
       ])
@@ -243,7 +247,7 @@ export function ReportCardsPage() {
       }
     }
     load()
-  }, [])
+  }, [cf])
 
   const grades = useMemo(() => {
     const set = new Set<string>()

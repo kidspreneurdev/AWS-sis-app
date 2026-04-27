@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { toast } from '@/lib/toast'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
 
@@ -126,6 +127,7 @@ function FeeModal({ students, fee, onClose, onSave }: {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export function FeesPage() {
+  const cf = useCampusFilter()
   const [fees, setFees] = useState<FeeRecord[]>([])
   const [stuList, setStuList] = useState<{ id: string; name: string; grade: string | null }[]>([])
   const [search, setSearch] = useState('')
@@ -135,8 +137,10 @@ export function FeesPage() {
   const [editing, setEditing] = useState<FeeRecord | null>(null)
 
   async function load() {
+    let sQuery = supabase.from('students').select('id,first_name,last_name,grade').eq('status', 'Enrolled')
+    if (cf) sQuery = sQuery.eq('campus', cf)
     const [stuRes, feesRes] = await Promise.all([
-      supabase.from('students').select('id,first_name,last_name,grade').eq('status', 'Enrolled'),
+      sQuery,
       supabase.from('fees').select('*').eq('school_year', CURRENT_YEAR),
     ])
     const stus = (stuRes.data ?? []).map((r: Record<string, unknown>) => ({
@@ -161,7 +165,7 @@ export function FeesPage() {
     })))
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [cf])
 
   const filtered = useMemo(() => fees.filter(f => {
     if (search && !f.studentName.toLowerCase().includes(search.toLowerCase())) return false

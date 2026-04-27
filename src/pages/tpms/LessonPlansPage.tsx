@@ -15,7 +15,7 @@ const secTitle = (color: string, text: string) => (
 
 type LessonForm = {
   title: string; subject: string; grade: string; date: string; lessonNum: string
-  unitId: string; status: string; objectives: string; standards: string[]
+  unitId: string; status: string; coachId: string; objectives: string; standards: string[]
   langObjective: string; resources: string; tech: string; room: string
   hook: string; direct: string; guided: string; independent: string; closure: string
   formative: string; successCriteria: string; homework: string
@@ -25,7 +25,7 @@ type LessonForm = {
 
 const EMPTY_FORM: LessonForm = {
   title: '', subject: 'English Language Arts', grade: 'Grade 9', date: '', lessonNum: '1',
-  unitId: '', status: 'Draft', objectives: '', standards: [],
+  unitId: '', status: 'Draft', coachId: '', objectives: '', standards: [],
   langObjective: '', resources: '', tech: '', room: '',
   hook: '', direct: '', guided: '', independent: '', closure: '',
   formative: '', successCriteria: '', homework: '',
@@ -34,7 +34,7 @@ const EMPTY_FORM: LessonForm = {
 }
 
 function lessonToForm(l: TpmsLesson): LessonForm {
-  return { ...EMPTY_FORM, title: l.title, subject: l.subject, grade: l.grade, date: l.date, lessonNum: String(l.lessonNum), unitId: l.unitId, status: l.status, objectives: l.objectives, standards: l.standards, langObjective: l.langObjective, resources: l.resources, tech: l.tech, room: l.room, hook: l.hook, direct: l.direct, guided: l.guided, independent: l.independent, closure: l.closure, formative: l.formative, successCriteria: l.successCriteria, homework: l.homework, extension: l.extension, support: l.support, iep: l.iep, reflection: l.reflection, engagement: l.engagement, carryForward: l.carryForward }
+  return { ...EMPTY_FORM, title: l.title, subject: l.subject, grade: l.grade, date: l.date, lessonNum: String(l.lessonNum), unitId: l.unitId, status: l.status, coachId: l.coachId, objectives: l.objectives, standards: l.standards, langObjective: l.langObjective, resources: l.resources, tech: l.tech, room: l.room, hook: l.hook, direct: l.direct, guided: l.guided, independent: l.independent, closure: l.closure, formative: l.formative, successCriteria: l.successCriteria, homework: l.homework, extension: l.extension, support: l.support, iep: l.iep, reflection: l.reflection, engagement: l.engagement, carryForward: l.carryForward }
 }
 
 function StdSelect({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
@@ -82,8 +82,9 @@ function StdSelect({ value, onChange }: { value: string[]; onChange: (v: string[
   )
 }
 
-function LessonModal({ lesson, units, onClose, onSave, onDelete }: {
+function LessonModal({ lesson, units, coaches, onClose, onSave, onDelete }: {
   lesson: TpmsLesson | null; units: TpmsUnit[]
+  coaches: { id: string; name: string }[]
   onClose: () => void; onSave: (f: LessonForm, id?: string) => Promise<void>; onDelete?: (id: string) => Promise<void>
 }) {
   const isEdit = !!lesson
@@ -133,9 +134,15 @@ function LessonModal({ lesson, units, onClose, onSave, onDelete }: {
                   {units.map(u => <option key={u.id} value={u.id}>{u.title}</option>)}
                 </select>
               </div>
-              <div style={{ gridColumn: 'span 2' }}><label style={lbl}>Status</label>
+              <div><label style={lbl}>Status</label>
                 <select value={form.status} onChange={e => set('status', e.target.value)} style={inp}>
                   {TPMS_LESSON_STATUS.map(s => <option key={s}>{s}</option>)}
+                </select>
+              </div>
+              <div><label style={lbl}>Success Coach</label>
+                <select value={form.coachId} onChange={e => set('coachId', e.target.value)} style={{ ...inp, background: form.coachId ? '#F0FFF4' : '#fff' }}>
+                  <option value="">— Not Assigned —</option>
+                  {coaches.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
             </div>
@@ -239,18 +246,21 @@ function LessonModal({ lesson, units, onClose, onSave, onDelete }: {
 export function LessonPlansPage() {
   const [lessons, setLessons] = useState<TpmsLesson[]>([])
   const [units, setUnits] = useState<TpmsUnit[]>([])
+  const [coaches, setCoaches] = useState<{ id: string; name: string }[]>([])
   const [selSub, setSelSub] = useState('All')
   const [selGrade, setSelGrade] = useState('All')
   const [selStatus, setSelStatus] = useState('All')
   const [modal, setModal] = useState<{ open: boolean; lesson: TpmsLesson | null }>({ open: false, lesson: null })
 
   async function load() {
-    const [lr, ur] = await Promise.all([
+    const [lr, ur, cr] = await Promise.all([
       supabase.from('tpms').select('*').eq('type', 'lesson').order('date', { ascending: false }),
       supabase.from('tpms').select('*').eq('type', 'unit').order('created_at', { ascending: false }),
+      supabase.from('profiles').select('id,full_name,role').in('role', ['coach', 'teacher', 'principal', 'staff']).order('full_name'),
     ])
     if (lr.data) setLessons(lr.data.map(r => mapLesson(r as Record<string,unknown>)))
     if (ur.data) setUnits(ur.data.map(r => mapUnit(r as Record<string,unknown>)))
+    if (cr.data) setCoaches(cr.data.map((r: Record<string,unknown>) => ({ id: r.id as string, name: (r.full_name as string) || 'Unknown' })))
   }
   useEffect(() => { load() }, [])
 
@@ -264,7 +274,7 @@ export function LessonPlansPage() {
   async function savePlan(form: LessonForm, id?: string) {
     const content = JSON.stringify({
       subject: form.subject, grade: form.grade, lessonNum: parseInt(form.lessonNum) || 1,
-      unitId: form.unitId, objectives: form.objectives, standards: form.standards,
+      unitId: form.unitId, coachId: form.coachId, objectives: form.objectives, standards: form.standards,
       langObjective: form.langObjective, resources: form.resources, tech: form.tech, room: form.room,
       hook: form.hook, direct: form.direct, guided: form.guided, independent: form.independent, closure: form.closure,
       formative: form.formative, successCriteria: form.successCriteria, homework: form.homework,
@@ -276,6 +286,17 @@ export function LessonPlansPage() {
     await load()
   }
   async function deletePlan(id: string) { await supabase.from('tpms').delete().eq('id', id); setLessons(prev => prev.filter(l => l.id !== id)) }
+  async function pushToAT(l: TpmsLesson) {
+    const content = JSON.stringify({ subject: l.subject, grade: l.grade, description: l.objectives, fromLesson: l.id })
+    await supabase.from('at_assignments').insert({
+      title: l.title,
+      date_assigned: l.date || null,
+      due_date: l.date || null,
+      status: 'Not Started',
+      content,
+    })
+    alert(`"${l.title}" pushed to Assignment Tracker.`)
+  }
   async function quickPublish(l: TpmsLesson) {
     await supabase.from('tpms').update({ status: 'Published' }).eq('id', l.id)
     setLessons(prev => prev.map(x => x.id === l.id ? { ...x, status: 'Published' } : x))
@@ -334,6 +355,7 @@ export function LessonPlansPage() {
             const sm = LESSON_STATUS_META[l.status] ?? LESSON_STATUS_META.Draft
             const d = l.date ? new Date(l.date + 'T00:00:00') : null
             const unit = units.find(u => u.id === l.unitId)
+            const coach = coaches.find(c => c.id === l.coachId)
             return (
               <div key={l.id} style={{ ...card, padding: '14px 16px', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
                 {/* Date badge */}
@@ -352,6 +374,7 @@ export function LessonPlansPage() {
                     {l.grade && <span> · {l.grade}</span>}
                     {unit && <span> · 📐 {unit.title}</span>}
                     {l.standards?.length > 0 && <span> · 📋 {l.standards.length} standard(s)</span>}
+                    {coach && <span> · <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#1DBD6A', marginRight: 3, verticalAlign: 'middle' }} />{coach.name}</span>}
                   </div>
                   {l.objectives && <div style={{ fontSize: 10, color: '#3D5475', marginTop: 4, maxWidth: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>🎯 {l.objectives}</div>}
                   {l.standards?.length > 0 && (
@@ -366,6 +389,7 @@ export function LessonPlansPage() {
                   <button onClick={() => setModal({ open: true, lesson: l })} style={{ padding: '5px 12px', background: '#EEF3FF', color: '#1A365E', border: 'none', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>✏️ Edit</button>
                   {l.status === 'Draft' && <button onClick={() => quickPublish(l)} style={{ padding: '5px 12px', background: '#E8FBF0', color: '#0E6B3B', border: '1px solid #C6F6D5', borderRadius: 7, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>✓ Publish</button>}
                   {l.status === 'Ready for Review' && <button onClick={() => quickPublish(l)} style={{ padding: '5px 12px', background: '#FFF7E0', color: '#92400E', border: '1px solid #FDE68A', borderRadius: 7, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>✓ Approve</button>}
+                  <button onClick={() => void pushToAT(l)} style={{ padding: '5px 12px', background: '#FFF7ED', color: '#C2500A', border: '1px solid #FED7AA', borderRadius: 7, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>📋 Push to AT</button>
                   <button onClick={() => { if (confirm('Delete this lesson plan?')) deletePlan(l.id) }} style={{ padding: '5px 12px', background: '#FFF0F1', color: '#D61F31', border: '1px solid #F5C2C7', borderRadius: 7, fontSize: 10, cursor: 'pointer' }}>🗑</button>
                 </div>
               </div>
@@ -374,7 +398,7 @@ export function LessonPlansPage() {
         </div>
       )}
 
-      {modal.open && <LessonModal lesson={modal.lesson} units={units} onClose={() => setModal({ open: false, lesson: null })} onSave={savePlan} onDelete={deletePlan} />}
+      {modal.open && <LessonModal lesson={modal.lesson} units={units} coaches={coaches} onClose={() => setModal({ open: false, lesson: null })} onSave={savePlan} onDelete={deletePlan} />}
     </div>
   )
 }

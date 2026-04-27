@@ -174,7 +174,7 @@ const ACCREDITATION_OPTS = ['','EC Program','WASC','NEASC','CDE','Regional Unive
 
 type SkillScores = Record<string, number>
 
-interface Student { id: string; name: string; grade: string }
+interface Student { id: string; studentId: string; name: string; grade: string }
 
 // ─── Supabase row-mapping helpers ─────────────────────────────────────────────
 function rowToCourse(r: Record<string,unknown>): CourseRecord {
@@ -570,11 +570,16 @@ export function GradesHSPage() {
   useEffect(() => {
     async function loadAll() {
       // Load students
-      let sQuery = supabase.from('students').select('id,first_name,last_name,grade').eq('status','Enrolled').in('grade',['9','10','11','12'])
+      let sQuery = supabase.from('students').select('id,student_id,first_name,last_name,grade').eq('status','Enrolled').in('grade',['9','10','11','12'])
       if (cf) sQuery = sQuery.eq('campus', cf)
       const { data: stData } = await sQuery
       if (stData) {
-        const list = stData.map((r: Record<string,unknown>) => ({ id: r.id as string, name: `${r.first_name} ${r.last_name}`, grade: String(r.grade) }))
+        const list = stData.map((r: Record<string,unknown>) => ({
+          id: r.id as string,
+          studentId: (r.student_id as string) ?? '',
+          name: `${r.first_name} ${r.last_name}`,
+          grade: String(r.grade),
+        }))
         setStudents(list)
         if (list.length && !selectedId) setSelectedId(list[0].id)
       }
@@ -823,7 +828,7 @@ export function GradesHSPage() {
 </div>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;font-size:12px">
   <div><strong>Student Name:</strong> ${h(student.name)}</div>
-  <div><strong>Student ID:</strong> ${h(student.id.slice(0,8))}</div>
+  <div><strong>Student ID:</strong> ${h(student.studentId || '—')}</div>
   <div><strong>Date of Birth:</strong> —</div>
   <div><strong>Grade:</strong> ${h(student.grade)}</div>
   <div><strong>Campus:</strong> —</div>
@@ -1591,7 +1596,7 @@ tr:nth-child(even) td{background:#F7F9FC}
 
 <div class="student-bar">
   <div class="sb-item"><div class="label">Student Name</div><div class="value">${h(student?.name)}</div></div>
-  <div class="sb-item"><div class="label">Student ID</div><div class="value" style="font-family:monospace">${h(student?.id||'—')}</div></div>
+  <div class="sb-item"><div class="label">Student ID</div><div class="value" style="font-family:monospace">${h(student?.studentId||'—')}</div></div>
   <div class="sb-item"><div class="label">Grade Level</div><div class="value">${h(student?.grade||'—')}</div></div>
   <div class="sb-item"><div class="label">Academic Year</div><div class="value">${h(acYear)}</div></div>
 </div>
@@ -2220,7 +2225,7 @@ ${deTotal > 0 ? `
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:16, fontSize:12 }}>
             {[
               ['Student Name',    student?.name || '—'],
-              ['Student ID',      student?.id.slice(0,8) || '—'],
+              ['Student ID',      student?.studentId || '—'],
               ['Date of Birth',   '—'],
               ['Grade',           student?.grade || '—'],
               ['Campus',          '—'],

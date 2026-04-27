@@ -87,6 +87,7 @@ create table students (
   iep                boolean default false,
   support_needs      text,
   priority           text,
+  notes              text,
   created_at         timestamptz default now(),
   updated_at         timestamptz default now()
 );

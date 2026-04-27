@@ -1,4 +1,4 @@
-import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { Outlet, NavLink, useNavigate, useLocation, Navigate } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupLabel,
@@ -395,6 +395,7 @@ export function AppLayout() {
   const navigate = useNavigate()
   const location = useLocation()
   const { profile, reset } = useAuthStore()
+  const isStaff = profile?.role === 'staff'
   const [academicYear, setAcademicYear] = useState('')
   const [openAccordions, setOpenAccordions] = useState<Set<string>>(() => {
     const open = new Set<string>()
@@ -428,6 +429,14 @@ export function AppLayout() {
     ? profile.full_name.split(' ').map(n => n[0]).join('').toUpperCase()
     : profile?.email?.[0]?.toUpperCase() ?? '?'
 
+  const visibleNav = isStaff
+    ? NAV.filter(group => group.label !== 'Settings')
+    : NAV
+
+  if (isStaff && location.pathname.startsWith('/admin/')) {
+    return <Navigate to="/dashboard" replace />
+  }
+
   return (
     <PageHeaderProvider>
       <SidebarProvider>
@@ -452,7 +461,7 @@ export function AppLayout() {
             </SidebarHeader>
 
             <SidebarContent style={{ background: 'linear-gradient(180deg,#0F2240 0%,#1A365E 100%)', overflowY: 'auto' }}>
-              {NAV.map((group, gi) => (
+              {visibleNav.map((group, gi) => (
                 <SidebarGroup
                   key={group.label}
                   style={{
@@ -554,10 +563,14 @@ export function AppLayout() {
                   </div>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent side="top" align="start" className="w-48">
-                  <DropdownMenuItem onClick={() => navigate('/admin/settings')}>
-                    <Settings className="mr-2 h-4 w-4" /> Settings
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
+                  {!isStaff && (
+                    <>
+                      <DropdownMenuItem onClick={() => navigate('/admin/settings')}>
+                        <Settings className="mr-2 h-4 w-4" /> Settings
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
                   <DropdownMenuItem onClick={handleLogout} style={{ color: '#D61F31' }}>
                     <LogOut className="mr-2 h-4 w-4" /> Log out
                   </DropdownMenuItem>

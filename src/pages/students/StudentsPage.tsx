@@ -18,7 +18,7 @@ function fromRow(row: Record<string, unknown>): Student {
     studentId: row.student_id as string ?? '',
     firstName: row.first_name as string ?? '',
     lastName: row.last_name as string ?? '',
-    dob: ext.dob as string ?? null,
+    dob: (row.date_of_birth as string) ?? (ext.dob as string) ?? null,
     gender: ext.gender as Student['gender'] ?? null,
     nationality: row.nationality as string ?? null,
     lang: ext.lang as string ?? null,
@@ -69,10 +69,44 @@ function fromRow(row: Record<string, unknown>): Student {
 }
 
 function toRow(s: StudentInsert) {
+  const notes = JSON.stringify({
+    dob: s.dob,
+    gender: s.gender,
+    lang: s.lang,
+    studentType: s.studentType,
+    prevSchool: s.prevSchool,
+    priorGpa: s.priorGpa,
+    relation: s.relation,
+    ecName: s.ecName,
+    ecPhone: s.ecPhone,
+    address: s.address,
+    bloodGroup: s.bloodGroup,
+    allergy: s.allergy,
+    meds: s.meds,
+    physician: s.physician,
+    physicianPhone: s.physicianPhone,
+    healthNotes: s.healthNotes,
+    notes: s.notes,
+    counselorNotes: s.counselorNotes,
+    documents: s.documents,
+    intDate: s.intDate,
+    intTime: s.intTime,
+    intViewer: s.intViewer,
+    intScore: s.intScore,
+    intNotes: s.intNotes,
+    intCommittee: s.intCommittee,
+    decDate: s.decDate,
+    decNotes: s.decNotes,
+    postSecondary: s.postSecondary,
+    gradDistinction: s.gradDistinction,
+    alumniNotes: s.alumniNotes,
+  })
+
   return {
     student_id: s.studentId,
     first_name: s.firstName,
     last_name: s.lastName,
+    date_of_birth: s.dob,
     nationality: s.nationality,
     grade: s.grade,
     status: s.status,
@@ -88,6 +122,7 @@ function toRow(s: StudentInsert) {
     year_joined: s.yearJoined,
     year_graduated: s.yearGraduated,
     grade_when_joined: s.gradeWhenJoined,
+    notes,
   }
 }
 

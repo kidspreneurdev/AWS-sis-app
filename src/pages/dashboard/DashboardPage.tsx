@@ -390,7 +390,7 @@ export function DashboardPage() {
 
         <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', padding: '26px 30px', gap: 24, flexWrap: 'wrap' }}>
           {/* AWS Logo */}
-          <img src="/Logo.png" alt="AWS" style={{ height: 68, width: 'auto', objectFit: 'contain', flexShrink: 0, filter: 'drop-shadow(0 2px 12px rgba(0,0,0,.4))' }} />
+          <img src="/Logo_w.png" alt="AWS" style={{ height: 68, width: 'auto', objectFit: 'contain', flexShrink: 0, filter: 'drop-shadow(0 2px 12px rgba(0,0,0,.4))' }} />
 
           {/* Divider */}
           <div style={{ width: 1, height: 56, background: 'rgba(255,255,255,.12)', flexShrink: 0 }} />

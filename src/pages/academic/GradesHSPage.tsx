@@ -815,7 +815,7 @@ export function GradesHSPage() {
   <span style="margin-left:auto;font-size:11px;color:#7A92B0">Tip: In print dialog → Save as PDF · enable Background graphics</span>
 </div>
 <div style="text-align:center;border-bottom:3px solid #1A365E;padding-bottom:16px;margin-bottom:16px">
-  <img src="/Logo.png" alt="American World School" style="height:70px;width:auto;object-fit:contain;margin-bottom:8px"/>
+  <img src="/Logo_b.png" alt="American World School" style="height:70px;width:auto;object-fit:contain;margin-bottom:8px"/>
   <div style="font-size:22px;font-weight:900;color:#1A365E;letter-spacing:1px">AMERICAN WORLD SCHOOL</div>
   <div style="font-size:11px;color:#7A92B0;letter-spacing:2px;margin-top:2px">OFFICIAL ACADEMIC TRANSCRIPT</div>
   <div style="font-size:11px;color:#3D5475;margin-top:4px">24-Credit Graduation Program · 2025–2026</div>
@@ -2209,7 +2209,7 @@ ${deTotal > 0 ? `
 
           {/* Header — centered, exactly like HTML */}
           <div style={{ textAlign:'center', borderBottom:'3px solid #1A365E', paddingBottom:16, marginBottom:16 }}>
-            <img src="/Logo.png" alt="American World School" style={{ height:70, width:'auto', objectFit:'contain', marginBottom:8, display:'block', margin:'0 auto 8px' }} />
+            <img src="/Logo_b.png" alt="American World School" style={{ height:70, width:'auto', objectFit:'contain', marginBottom:8, display:'block', margin:'0 auto 8px' }} />
             <div style={{ fontSize:22, fontWeight:900, color:'#1A365E', letterSpacing:1 }}>AMERICAN WORLD SCHOOL</div>
             <div style={{ fontSize:11, color:'#7A92B0', letterSpacing:2, marginTop:2 }}>OFFICIAL ACADEMIC TRANSCRIPT</div>
             <div style={{ fontSize:11, color:'#3D5475', marginTop:4 }}>24-Credit Graduation Program · 2025–2026</div>

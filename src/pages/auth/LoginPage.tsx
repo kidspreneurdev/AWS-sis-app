@@ -155,7 +155,7 @@ export function LoginPage({ initialTab = 'staff' }: { initialTab?: LoginTab }) {
       <div style={panel}>
         <div style={{ background: '#0F2240', borderRadius: 14, padding: '16px 12px', textAlign: 'center', marginBottom: 20 }}>
           <img
-            src="/Logo.png"
+            src="/Logo_w.png"
             alt="AWS"
             style={{ width: '100%', maxWidth: 280, height: 'auto', objectFit: 'contain', margin: '0 auto' }}
           />

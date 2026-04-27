@@ -54,7 +54,7 @@ export function StudentPortalLayout() {
         {/* Logo */}
         <div style={{ padding: '14px 12px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
           <img
-            src="/Logo.png"
+            src="/Logo_w.png"
             alt="AWS"
             style={{ height: 48, width: 'auto', objectFit: 'contain', margin: '16px auto 8px', display: 'block' }}
           />

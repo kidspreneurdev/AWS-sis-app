@@ -445,7 +445,7 @@ export function AppLayout() {
           >
             {/* Logo Header */}
             <SidebarHeader style={{ background: '#0F2240', borderBottom: '1px solid rgba(255,255,255,.1)', padding: '14px 12px' }}>
-              <img src="/Logo.png" alt="AWS" style={{ width: '100%', maxWidth: 180, height: 'auto', objectFit: 'contain' }} />
+              <img src="/Logo_w.png" alt="AWS" style={{ width: '100%', maxWidth: 180, height: 'auto', objectFit: 'contain' }} />
               <div style={{ fontSize: 10, color: 'rgba(255,255,255,.45)', marginTop: 5, letterSpacing: '.3px' }}>
                 {academicYear || '2024–2025'} · Admissions SIS
               </div>

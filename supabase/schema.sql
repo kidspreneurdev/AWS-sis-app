@@ -14,7 +14,7 @@ create type student_status as enum (
 
 create type attendance_status as enum ('Present', 'Absent', 'Late', 'Excused');
 
-create type user_role as enum ('admin', 'teacher', 'counselor', 'readonly');
+create type user_role as enum ('admin', 'staff', 'teacher', 'principal', 'partner', 'coach', 'viewer', 'counselor', 'readonly');
 
 create type course_type as enum ('STD', 'HON', 'AP', 'IB', 'DE', 'EC', 'CR');
 
@@ -29,6 +29,7 @@ create table profiles (
   full_name   text,
   role        user_role not null default 'readonly',
   campus      text,
+  active      boolean not null default true,
   avatar_url  text,
   created_at  timestamptz default now()
 );

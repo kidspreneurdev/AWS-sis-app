@@ -3,6 +3,21 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY
+const ALLOWED_ROLES = ['admin', 'staff', 'teacher', 'principal', 'partner', 'coach', 'viewer']
+
+function getSchemaGuidance(error) {
+  const message = error?.message || ''
+
+  if (message.includes("column profiles.active does not exist")) {
+    return 'The profiles table is missing the active column. Run the latest Supabase migration and retry.'
+  }
+
+  if (message.includes('invalid input value for enum user_role')) {
+    return 'The profiles role enum is outdated. Run the latest Supabase migration so staff roles match the app.'
+  }
+
+  return null
+}
 
 function json(res, status, body) {
   res.status(status).setHeader('Content-Type', 'application/json')
@@ -45,8 +60,13 @@ export default async function handler(req, res) {
     .eq('id', authData.user.id)
     .single()
 
+  const actorSchemaGuidance = getSchemaGuidance(actorError)
+  if (actorSchemaGuidance) {
+    return json(res, 500, { error: actorSchemaGuidance })
+  }
+
   if (actorError || !actorProfile) {
-    return json(res, 403, { error: 'Unable to verify admin permissions.' })
+    return json(res, 403, { error: 'Unable to verify admin permissions. Make sure your signed-in account has a matching profiles row.' })
   }
 
   if (actorProfile.active === false || actorProfile.role !== 'admin') {
@@ -67,6 +87,10 @@ export default async function handler(req, res) {
 
   if (typeof password !== 'string' || password.length < 8) {
     return json(res, 400, { error: 'Password must be at least 8 characters.' })
+  }
+
+  if (typeof role !== 'undefined' && !ALLOWED_ROLES.includes(role)) {
+    return json(res, 400, { error: 'Invalid staff role.' })
   }
 
   const normalizedEmail = email.trim().toLowerCase()
@@ -98,7 +122,7 @@ export default async function handler(req, res) {
 
   if (profileError) {
     await adminClient.auth.admin.deleteUser(newUser.id)
-    return json(res, 500, { error: profileError.message || 'Failed to create profile.' })
+    return json(res, 500, { error: getSchemaGuidance(profileError) || profileError.message || 'Failed to create profile.' })
   }
 
   return json(res, 200, {

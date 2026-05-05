@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
+import { toast } from '@/lib/toast'
 
 const SUBJECTS = ['English','Mathematics','Science','History','Foreign Language','PE','Arts','Elective','Reading','Writing','Social Studies','Music','Other']
 
@@ -94,11 +95,20 @@ export function AssignmentTrackerPage() {
 
   async function saveAssignment(form: typeof EMPTY, id?: string) {
     const payload = { title: form.title, cohort: form.cohort || null, subject: form.subject, due_date: form.dueDate || null, max_score: parseFloat(form.maxScore) || 100, academic_year: form.academicYear, created_by: form.createdBy }
-    if (id) await supabase.from('at_assignments').update(payload).eq('id', id)
-    else await supabase.from('at_assignments').insert(payload)
+    if (id) {
+      const { error } = await supabase.from('at_assignments').update(payload).eq('id', id)
+      if (error) { toast(error.message, 'err'); return }
+    } else {
+      const { error } = await supabase.from('at_assignments').insert(payload)
+      if (error) { toast(error.message, 'err'); return }
+    }
     await load()
   }
-  async function deleteAssignment(id: string) { await supabase.from('at_assignments').delete().eq('id', id); setAssignments(prev => prev.filter(a => a.id !== id)) }
+  async function deleteAssignment(id: string) {
+    const { error } = await supabase.from('at_assignments').delete().eq('id', id)
+    if (error) { toast(error.message, 'err'); return }
+    setAssignments(prev => prev.filter(a => a.id !== id))
+  }
 
   const iStyle: React.CSSProperties = { padding: '7px 12px', borderRadius: 8, border: '1px solid #E4EAF2', fontSize: 13, color: '#1A365E', background: '#fff' }
 

@@ -16,10 +16,44 @@ import { useCampusFilter } from '@/hooks/useCampusFilter'
 
 // ─── DB helpers ──────────────────────────────────────────────────────────────
 function toRow(s: StudentInsert) {
+  const notes = JSON.stringify({
+    dob: s.dob,
+    gender: s.gender,
+    lang: s.lang,
+    studentType: s.studentType,
+    prevSchool: s.prevSchool,
+    priorGpa: s.priorGpa,
+    relation: s.relation,
+    ecName: s.ecName,
+    ecPhone: s.ecPhone,
+    address: s.address,
+    bloodGroup: s.bloodGroup,
+    allergy: s.allergy,
+    meds: s.meds,
+    physician: s.physician,
+    physicianPhone: s.physicianPhone,
+    healthNotes: s.healthNotes,
+    notes: s.notes,
+    counselorNotes: s.counselorNotes,
+    documents: s.documents,
+    intDate: s.intDate,
+    intTime: s.intTime,
+    intViewer: s.intViewer,
+    intScore: s.intScore,
+    intNotes: s.intNotes,
+    intCommittee: s.intCommittee,
+    decDate: s.decDate,
+    decNotes: s.decNotes,
+    postSecondary: s.postSecondary,
+    gradDistinction: s.gradDistinction,
+    alumniNotes: s.alumniNotes,
+  })
+
   return {
     student_id: s.studentId,
     first_name: s.firstName,
     last_name: s.lastName,
+    date_of_birth: s.dob,
     nationality: s.nationality,
     grade: s.grade,
     status: s.status,
@@ -35,6 +69,7 @@ function toRow(s: StudentInsert) {
     year_joined: s.yearJoined,
     year_graduated: s.yearGraduated,
     grade_when_joined: s.gradeWhenJoined,
+    notes,
   }
 }
 
@@ -46,7 +81,7 @@ function fromRow(row: Record<string, unknown>): Student {
     studentId: row.student_id as string ?? '',
     firstName: row.first_name as string ?? '',
     lastName: row.last_name as string ?? '',
-    dob: ext.dob as string ?? null,
+    dob: (row.date_of_birth as string) ?? (ext.dob as string) ?? null,
     gender: ext.gender as Student['gender'] ?? null,
     nationality: row.nationality as string ?? null,
     lang: ext.lang as string ?? null,
@@ -212,7 +247,12 @@ export function ApplicationsPage() {
 
   async function handleDelete(id: string) {
     setDeleting(id)
-    await supabase.from('students').delete().eq('id', id)
+    const { error } = await supabase.from('students').delete().eq('id', id)
+    if (error) {
+      setDeleting(null)
+      toast(error.message, 'err')
+      return
+    }
     setStudents(prev => prev.filter(s => s.id !== id))
     setSelected(prev => { const n = new Set(prev); n.delete(id); return n })
     if (panelStudent?.id === id) setPanelStudent(null)
@@ -221,19 +261,27 @@ export function ApplicationsPage() {
   }
 
   async function handleStatusChange(id: string, status: StudentStatus) {
-    await supabase.from('students').update({ status }).eq('id', id)
+    const { error } = await supabase.from('students').update({ status }).eq('id', id)
+    if (error) { toast(error.message, 'err'); return }
     setStudents(prev => prev.map(s => s.id === id ? { ...s, status } : s))
     setPanelStudent(prev => prev?.id === id ? { ...prev, status } : prev)
   }
 
   async function handleDocumentsUpdated(id: string, documents: string[]) {
+    const current = students.find(s => s.id === id)
+    if (!current) return
+    const { id: _id, createdAt: _c, updatedAt: _u, ...rest } = current
+    const { error } = await supabase.from('students').update(toRow({ ...rest, documents })).eq('id', id)
+    if (error) { toast(error.message, 'err'); return }
     setStudents(prev => prev.map(s => s.id === id ? { ...s, documents } : s))
     setPanelStudent(prev => prev?.id === id ? { ...prev, documents } : prev)
   }
 
   async function bulkStatus(status: StudentStatus) {
     const ids = [...selected]
-    await Promise.all(ids.map(id => supabase.from('students').update({ status }).eq('id', id)))
+    const results = await Promise.all(ids.map(id => supabase.from('students').update({ status }).eq('id', id)))
+    const failed = results.find(r => r.error)
+    if (failed?.error) { toast(failed.error.message, 'err'); return }
     setStudents(prev => prev.map(s => ids.includes(s.id) ? { ...s, status } : s))
     setSelected(new Set())
     toast(`${ids.length} student${ids.length !== 1 ? 's' : ''} → ${status}`, 'ok')

@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
+import { toast } from '@/lib/toast'
 import {
   mapLesson, mapUnit, TPMS_SUBJECTS, TPMS_GRADES, TPMS_LESSON_STATUS, STANDARDS_BANK,
   LESSON_STATUS_META, type TpmsLesson, type TpmsUnit,
@@ -281,24 +282,35 @@ export function LessonPlansPage() {
       extension: form.extension, support: form.support, iep: form.iep,
       reflection: form.reflection, engagement: form.engagement, carryForward: form.carryForward,
     })
-    if (id) await supabase.from('tpms').update({ title: form.title, date: form.date || null, status: form.status, content }).eq('id', id)
-    else await supabase.from('tpms').insert({ type: 'lesson', title: form.title, date: form.date || null, status: form.status, content })
+    if (id) {
+      const { error } = await supabase.from('tpms').update({ title: form.title, date: form.date || null, status: form.status, content }).eq('id', id)
+      if (error) { toast(error.message, 'err'); return }
+    } else {
+      const { error } = await supabase.from('tpms').insert({ type: 'lesson', title: form.title, date: form.date || null, status: form.status, content })
+      if (error) { toast(error.message, 'err'); return }
+    }
     await load()
   }
-  async function deletePlan(id: string) { await supabase.from('tpms').delete().eq('id', id); setLessons(prev => prev.filter(l => l.id !== id)) }
+  async function deletePlan(id: string) {
+    const { error } = await supabase.from('tpms').delete().eq('id', id)
+    if (error) { toast(error.message, 'err'); return }
+    setLessons(prev => prev.filter(l => l.id !== id))
+  }
   async function pushToAT(l: TpmsLesson) {
     const content = JSON.stringify({ subject: l.subject, grade: l.grade, description: l.objectives, fromLesson: l.id })
-    await supabase.from('at_assignments').insert({
+    const { error } = await supabase.from('at_assignments').insert({
       title: l.title,
       date_assigned: l.date || null,
       due_date: l.date || null,
       status: 'Not Started',
       content,
     })
+    if (error) { toast(error.message, 'err'); return }
     alert(`"${l.title}" pushed to Assignment Tracker.`)
   }
   async function quickPublish(l: TpmsLesson) {
-    await supabase.from('tpms').update({ status: 'Published' }).eq('id', l.id)
+    const { error } = await supabase.from('tpms').update({ status: 'Published' }).eq('id', l.id)
+    if (error) { toast(error.message, 'err'); return }
     setLessons(prev => prev.map(x => x.id === l.id ? { ...x, status: 'Published' } : x))
   }
 

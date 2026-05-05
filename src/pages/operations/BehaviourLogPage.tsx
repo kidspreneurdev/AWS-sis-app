@@ -147,11 +147,23 @@ export function BehaviourLogPage() {
 
   async function saveEntry(form: typeof EMPTY, id?: string) {
     const payload = { student_id: form.studentId, date: form.date, time: form.time || null, location: form.location || null, type: form.type, description: form.description, action_taken: form.actionTaken, follow_up: form.followUp, staff_member: form.staffMember, notes: form.notes }
-    if (id) { await supabase.from('behaviour_log').update(payload).eq('id', id); toast('Entry updated', 'ok') }
-    else { await supabase.from('behaviour_log').insert(payload); toast('Entry logged', 'ok') }
+    if (id) {
+      const { error } = await supabase.from('behaviour_log').update(payload).eq('id', id)
+      if (error) { toast(error.message, 'err'); return }
+      toast('Entry updated', 'ok')
+    } else {
+      const { error } = await supabase.from('behaviour_log').insert(payload)
+      if (error) { toast(error.message, 'err'); return }
+      toast('Entry logged', 'ok')
+    }
     await load()
   }
-  async function deleteEntry(id: string) { await supabase.from('behaviour_log').delete().eq('id', id); setEntries(prev => prev.filter(e => e.id !== id)); toast('Entry deleted', 'ok') }
+  async function deleteEntry(id: string) {
+    const { error } = await supabase.from('behaviour_log').delete().eq('id', id)
+    if (error) { toast(error.message, 'err'); return }
+    setEntries(prev => prev.filter(e => e.id !== id))
+    toast('Entry deleted', 'ok')
+  }
 
   const iStyle: React.CSSProperties = { padding: '7px 12px', borderRadius: 8, border: '1px solid #E4EAF2', fontSize: 13, color: '#1A365E', background: '#fff' }
 

@@ -53,7 +53,43 @@ function StaffModal({ user, campuses, onClose, onSave }: {
     }
     setSaving(true)
     if (isEdit && user) {
-      await supabase.from('profiles').update({ full_name: fullName, role, campus: campus || null, active }).eq('id', user.id)
+      const { data: sessionData } = await supabase.auth.getSession()
+      const accessToken = sessionData.session?.access_token
+
+      if (!accessToken) {
+        setErr('Your session has expired. Please sign in again and retry.')
+        setSaving(false)
+        return
+      }
+
+      const response = await fetch('/api/admin/update-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          fullName,
+          role,
+          campus: campus || null,
+          active,
+        }),
+      })
+
+      const payload = await response.json().catch(() => null) as { error?: string } | null
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          setErr('Admin API not found. Use the deployed app or run via Vercel dev so /api/admin/update-user is available.')
+          setSaving(false)
+          return
+        }
+
+        setErr(payload?.error ?? 'Failed to update account.')
+        setSaving(false)
+        return
+      }
     } else {
       const { data: sessionData } = await supabase.auth.getSession()
       const accessToken = sessionData.session?.access_token

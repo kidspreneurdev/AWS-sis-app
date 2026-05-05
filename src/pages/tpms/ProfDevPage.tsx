@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
+import { toast } from '@/lib/toast'
 import { mapPd, type TpmsPd } from './tpmsConstants'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 14, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)' }
@@ -72,16 +73,19 @@ export function ProfDevPage() {
 
   async function savePd(data: Omit<TpmsPd, 'id'>) {
     const content = JSON.stringify({ pdType: data.type, hours: data.hours, provider: data.provider, notes: data.notes })
-    await supabase.from('tpms').insert({ type: 'pd', title: data.title, date: data.date || null, status: null, content })
+    const { error } = await supabase.from('tpms').insert({ type: 'pd', title: data.title, date: data.date || null, status: null, content })
+    if (error) { toast(error.message, 'err'); return }
     await load()
   }
   async function deletePd(id: string) {
-    await supabase.from('tpms').delete().eq('id', id)
+    const { error } = await supabase.from('tpms').delete().eq('id', id)
+    if (error) { toast(error.message, 'err'); return }
     setRecords(prev => prev.filter(r => r.id !== id))
   }
 
   async function saveGoals() {
-    await supabase.from('tpms_ipdp').upsert({ owner_id: 'default', ...goals }, { onConflict: 'owner_id' })
+    const { error } = await supabase.from('tpms_ipdp').upsert({ owner_id: 'default', ...goals }, { onConflict: 'owner_id' })
+    if (error) { toast(error.message, 'err'); return }
     setGoalsSaved(true)
     setTimeout(() => setGoalsSaved(false), 2000)
   }

@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
+import { toast } from '@/lib/toast'
 import {
   mapUnit, TPMS_SUBJECTS, TPMS_GRADES, TPMS_UNIT_STATUS, TPMS_PACING_STATUS,
   STANDARDS_BANK, UNIT_STATUS_META, PACING_META, type TpmsUnit,
@@ -256,11 +257,20 @@ export function UnitPlansPage() {
 
   async function saveUnit(form: UnitForm, id?: string) {
     const content = JSON.stringify({ subject: form.subject, grade: form.grade, startDate: form.startDate, endDate: form.endDate, pacing: form.pacing, weeks: form.weeks, standards: form.standards, essentialQuestions: form.essentialQuestions, enduringUnderstandings: form.enduringUnderstandings, transferGoals: form.transferGoals, stage2Evidence: form.stage2Evidence, stage2Tasks: form.stage2Tasks, stage3Plan: form.stage3Plan, notes: form.notes, coachId: form.coachId, managerId: form.managerId, diff: form.diff, resources: form.resources, crossCurricular: form.crossCurricular, reflection: form.reflection })
-    if (id) await supabase.from('tpms').update({ title: form.title, status: form.status, content }).eq('id', id)
-    else await supabase.from('tpms').insert({ type: 'unit', title: form.title, status: form.status, content })
+    if (id) {
+      const { error } = await supabase.from('tpms').update({ title: form.title, status: form.status, content }).eq('id', id)
+      if (error) { toast(error.message, 'err'); return }
+    } else {
+      const { error } = await supabase.from('tpms').insert({ type: 'unit', title: form.title, status: form.status, content })
+      if (error) { toast(error.message, 'err'); return }
+    }
     await load()
   }
-  async function deleteUnit(id: string) { await supabase.from('tpms').delete().eq('id', id); setUnits(prev => prev.filter(u => u.id !== id)) }
+  async function deleteUnit(id: string) {
+    const { error } = await supabase.from('tpms').delete().eq('id', id)
+    if (error) { toast(error.message, 'err'); return }
+    setUnits(prev => prev.filter(u => u.id !== id))
+  }
 
   const iStyle: React.CSSProperties = { padding: '6px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 11 }
   const active = units.filter(u => u.status === 'Active').length

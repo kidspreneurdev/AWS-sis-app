@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
+import { toast } from '@/lib/toast'
 
 const STATUSES = ['Not Started', 'In Progress', 'Submitted', 'Graded']
 const STATUS_META: Record<string, { bg: string; tc: string }> = {
@@ -122,11 +123,20 @@ export function ProjectsPage() {
 
   async function saveProject(form: typeof EMPTY, id?: string) {
     const payload = { title: form.title, student_id: form.studentId, cohort: form.cohort || null, due_date: form.dueDate || null, status: form.status, score: form.score !== '' ? parseFloat(form.score) : null, feedback: form.feedback }
-    if (id) await supabase.from('pt_projects').update(payload).eq('id', id)
-    else await supabase.from('pt_projects').insert(payload)
+    if (id) {
+      const { error } = await supabase.from('pt_projects').update(payload).eq('id', id)
+      if (error) { toast(error.message, 'err'); return }
+    } else {
+      const { error } = await supabase.from('pt_projects').insert(payload)
+      if (error) { toast(error.message, 'err'); return }
+    }
     await load()
   }
-  async function deleteProject(id: string) { await supabase.from('pt_projects').delete().eq('id', id); setProjects(prev => prev.filter(p => p.id !== id)) }
+  async function deleteProject(id: string) {
+    const { error } = await supabase.from('pt_projects').delete().eq('id', id)
+    if (error) { toast(error.message, 'err'); return }
+    setProjects(prev => prev.filter(p => p.id !== id))
+  }
 
   const iStyle: React.CSSProperties = { padding: '7px 12px', borderRadius: 8, border: '1px solid #E4EAF2', fontSize: 13, color: '#1A365E', background: '#fff' }
 

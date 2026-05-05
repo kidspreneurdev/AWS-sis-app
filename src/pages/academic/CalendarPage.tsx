@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
+import { toast } from '@/lib/toast'
 
 const EVENT_TYPES = ['Holiday', 'Exam', 'Meeting', 'Activity', 'Deadline', 'Other']
 const TYPE_META: Record<string, { bg: string; tc: string; dot: string }> = {
@@ -90,10 +91,20 @@ export function CalendarPage() {
 
   async function saveEvent(data: Omit<CalEvent,'id'>, id?: string) {
     const p = { title: data.title, date: data.date, end_date: data.endDate, type: data.type, description: data.description, campus: data.campus }
-    if (id) await supabase.from('calendar').update(p).eq('id', id); else await supabase.from('calendar').insert(p)
+    if (id) {
+      const { error } = await supabase.from('calendar').update(p).eq('id', id)
+      if (error) { toast(error.message, 'err'); return }
+    } else {
+      const { error } = await supabase.from('calendar').insert(p)
+      if (error) { toast(error.message, 'err'); return }
+    }
     await load()
   }
-  async function deleteEvent(id: string) { await supabase.from('calendar').delete().eq('id', id); setEvents(prev => prev.filter(e => e.id !== id)) }
+  async function deleteEvent(id: string) {
+    const { error } = await supabase.from('calendar').delete().eq('id', id)
+    if (error) { toast(error.message, 'err'); return }
+    setEvents(prev => prev.filter(e => e.id !== id))
+  }
 
   const headerPortal = useHeaderActions(
     <button onClick={() => setModal({ open: true, event: { date: selectedDate ?? todayStr } })} style={{ padding: '7px 18px', borderRadius: 8, border: 'none', background: '#D61F31', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>+ Add Event</button>

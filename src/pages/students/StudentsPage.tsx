@@ -193,19 +193,26 @@ export function StudentsPage() {
   }
 
   async function handleStatusChange(id: string, status: StudentStatus) {
-    await supabase.from('students').update({ status }).eq('id', id)
+    const { error } = await supabase.from('students').update({ status }).eq('id', id)
+    if (error) { toast(error.message, 'err'); return }
     setStudents(prev => prev.map(s => s.id === id ? { ...s, status } : s))
     setPanelStudent(prev => prev?.id === id ? { ...prev, status } : prev)
   }
 
   async function handleDocumentsUpdated(id: string, documents: string[]) {
+    const current = students.find(s => s.id === id)
+    if (!current) return
+    const { id: _id, createdAt: _c, updatedAt: _u, ...rest } = current
+    const { error } = await supabase.from('students').update(toRow({ ...rest, documents })).eq('id', id)
+    if (error) { toast(error.message, 'err'); return }
     setStudents(prev => prev.map(s => s.id === id ? { ...s, documents } : s))
     setPanelStudent(prev => prev?.id === id ? { ...prev, documents } : prev)
   }
 
   async function handleRemove(id: string, name: string) {
     if (!confirm(`Remove ${name} from enrolled? This will set their status to Withdrawn.`)) return
-    await supabase.from('students').update({ status: 'Withdrawn' }).eq('id', id)
+    const { error } = await supabase.from('students').update({ status: 'Withdrawn' }).eq('id', id)
+    if (error) { toast(error.message, 'err'); return }
     setStudents(prev => prev.filter(s => s.id !== id))
     if (panelStudent?.id === id) setPanelStudent(null)
     toast(`${name} withdrawn`, 'ok')

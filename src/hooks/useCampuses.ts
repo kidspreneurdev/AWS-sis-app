@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase'
 
 /**
  * Returns the canonical campus list from settings.campuses.
- * Falls back to ['Main Campus'] if not configured.
+ * Falls back to ['Chennai'] if not configured.
  */
 export function useCampuses(): string[] {
   const [campuses, setCampuses] = useState<string[]>([])

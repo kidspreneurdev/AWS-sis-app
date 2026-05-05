@@ -6,6 +6,10 @@ import { useCampusFilter } from '@/hooks/useCampusFilter'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+type CommSchema = 'legacy' | 'modern'
+type FeeSchema = 'legacy' | 'modern'
+type BehaviourSchema = 'legacy' | 'modern'
+
 interface S360Data {
   attendance: { date: string; status: string; note: string | null }[]
   behaviour: { id: string; type: string; severity: string; date: string; description: string; action: string | null }[]
@@ -14,6 +18,7 @@ interface S360Data {
   wellness: { id: string; date: string; energy: number; mood: number; stress: number; focus: number; note: string | null }[]
   grades: { id: string; course: string; area: string; credits: number; grade: string; status: string; year: string | null; semester: string | null }[]
   counselorNotes: string | null
+  warnings: Partial<Record<'attendance' | 'behaviour' | 'fees' | 'wellness' | 'grades', string>>
 }
 
 const TABS = [
@@ -65,6 +70,119 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
       {children}
     </div>
   )
+}
+
+function parseStudentRow(row: Record<string, unknown>): Student {
+  let ext: Record<string, unknown> = {}
+  try { ext = JSON.parse((row.notes as string) || '{}') } catch { /* */ }
+  return {
+    id: row.id as string,
+    studentId: (row.student_id as string) ?? '',
+    firstName: (row.first_name as string) ?? '',
+    lastName: (row.last_name as string) ?? '',
+    dob: (row.date_of_birth as string) ?? (ext.dob as string) ?? null,
+    gender: (ext.gender as Student['gender']) ?? null,
+    nationality: (row.nationality as string) ?? null,
+    lang: (ext.lang as string) ?? null,
+    grade: typeof row.grade === 'number' ? row.grade : null,
+    status: (row.status as Student['status']) ?? 'Enrolled',
+    campus: (row.campus as string) ?? null,
+    cohort: (row.cohort as string) ?? null,
+    studentType: (ext.studentType as Student['studentType']) ?? 'New',
+    appDate: (row.application_date as string) ?? null,
+    enrollDate: (row.enroll_date as string) ?? null,
+    yearJoined: typeof row.year_joined === 'string' ? row.year_joined : null,
+    yearGraduated: typeof row.year_graduated === 'string' ? row.year_graduated : null,
+    gradeWhenJoined: typeof row.grade_when_joined === 'number' ? row.grade_when_joined : null,
+    priority: (row.priority as Student['priority']) ?? 'Normal',
+    prevSchool: (ext.prevSchool as string) ?? null,
+    priorGpa: (ext.priorGpa as string) ?? null,
+    iep: (row.support_needs as string) ?? null,
+    email: (row.email as string) ?? null,
+    phone: (row.phone as string) ?? null,
+    parent: (row.parent as string) ?? null,
+    relation: (ext.relation as string) ?? null,
+    ecName: (ext.ecName as string) ?? null,
+    ecPhone: (ext.ecPhone as string) ?? null,
+    address: (ext.address as string) ?? null,
+    bloodGroup: (ext.bloodGroup as string) ?? null,
+    allergy: (ext.allergy as string) ?? null,
+    meds: (ext.meds as string) ?? null,
+    physician: (ext.physician as string) ?? null,
+    physicianPhone: (ext.physicianPhone as string) ?? null,
+    healthNotes: (ext.healthNotes as string) ?? null,
+    notes: (ext.notes as string) ?? null,
+    counselorNotes: (ext.counselorNotes as string) ?? null,
+    documents: (ext.documents as string[]) ?? [],
+    intDate: (ext.intDate as string) ?? null,
+    intTime: (ext.intTime as string) ?? null,
+    intViewer: (ext.intViewer as string) ?? null,
+    intScore: (ext.intScore as number) ?? null,
+    intNotes: (ext.intNotes as string) ?? null,
+    intCommittee: (ext.intCommittee as string) ?? null,
+    decDate: (ext.decDate as string) ?? null,
+    decNotes: (ext.decNotes as string) ?? null,
+    postSecondary: (ext.postSecondary as string) ?? null,
+    gradDistinction: (ext.gradDistinction as string) ?? null,
+    alumniNotes: (ext.alumniNotes as string) ?? null,
+    createdAt: (row.created_at as string) ?? '',
+    updatedAt: (row.updated_at as string) ?? '',
+  }
+}
+
+function normalizeStudentComm(row: Record<string, unknown>, schema: CommSchema) {
+  return {
+    id: row.id as string,
+    type: (row.type as string) ?? '',
+    subject: schema === 'modern'
+      ? ((row.subject as string | null | undefined) ?? '')
+      : ((row.outcome as string | null | undefined) ?? ''),
+    direction: (row.direction as string) ?? '',
+    sentAt: schema === 'modern'
+      ? ((row.sent_at as string | null | undefined) ?? null)
+      : ((row.date as string | null | undefined) ?? null),
+    sentBy: schema === 'modern'
+      ? ((row.sent_by as string | null | undefined) ?? null)
+      : ((row.staff_member as string | null | undefined) ?? null),
+    body: schema === 'modern'
+      ? ((row.body as string | null | undefined) ?? null)
+      : ((row.notes as string | null | undefined) ?? null),
+  }
+}
+
+function normalizeAttendanceStatus(value: unknown): string {
+  const status = typeof value === 'string' ? value : ''
+  if (status === 'Present') return 'P'
+  if (status === 'Absent') return 'A'
+  if (status === 'Late') return 'T'
+  if (status === 'Excused') return 'E'
+  if (status === 'Remote') return 'R'
+  return status || 'P'
+}
+
+function normalizeBehaviourSeverity(value: unknown): string {
+  const severity = typeof value === 'string' ? value : ''
+  return ['Low', 'Medium', 'High', 'Critical'].includes(severity) ? severity : 'Low'
+}
+
+function normalizeFee(row: Record<string, unknown>, schema: FeeSchema) {
+  return {
+    id: row.id as string,
+    type: schema === 'modern'
+      ? ((row.fee_type as string | null | undefined) ?? (row.type as string | null | undefined) ?? '')
+      : ((row.type as string | null | undefined) ?? ''),
+    amount: typeof row.amount === 'number' ? row.amount : Number(row.amount ?? 0),
+    currency: (row.currency as string) ?? 'USD',
+    dueDate: schema === 'modern'
+      ? ((row.due_date as string | null | undefined) ?? null)
+      : null,
+    status: schema === 'modern'
+      ? ((row.status as string | null | undefined) ?? 'Pending')
+      : ((row.paid as boolean | null | undefined) ? 'Paid' : 'Unpaid'),
+    reference: schema === 'modern'
+      ? ((row.reference as string | null | undefined) ?? null)
+      : ((row.note as string | null | undefined) ?? null),
+  }
 }
 
 // ─── Search Screen ────────────────────────────────────────────────────────────
@@ -145,6 +263,7 @@ function ProfileView({ student, data, activeTab, setActiveTab, onBack }: {
   setActiveTab: (t: string) => void
   onBack: () => void
 }) {
+  const [selectedComm, setSelectedComm] = useState<S360Data['comms'][number] | null>(null)
   const initials = [student.firstName, student.lastName].filter(Boolean).map(n => n[0]).join('').toUpperCase().slice(0, 2)
   const sMeta = STATUS_META[student.status]
 
@@ -159,6 +278,17 @@ function ProfileView({ student, data, activeTab, setActiveTab, onBack }: {
   const avgWellness = (data?.wellness ?? []).length
     ? (data!.wellness.reduce((s, w) => s + (w.mood + w.energy + w.focus) / 3, 0) / data!.wellness.length).toFixed(1)
     : null
+
+  function renderWarning(key: keyof S360Data['warnings']) {
+    const message = data?.warnings[key]
+    if (!message) return null
+    return (
+      <div style={{ ...card, border: '1px solid #F5D18A', background: '#FFFBE6', color: '#92400E', padding: '12px 16px' }}>
+        <div style={{ fontSize: 12, fontWeight: 700 }}>Data warning</div>
+        <div style={{ fontSize: 12, marginTop: 4 }}>{message}</div>
+      </div>
+    )
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -281,6 +411,7 @@ function ProfileView({ student, data, activeTab, setActiveTab, onBack }: {
             {/* Academic */}
             {activeTab === 'academic' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {renderWarning('grades')}
                 <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
                   <div style={{ padding: '14px 20px', borderBottom: '1px solid #E4EAF2', fontWeight: 700, color: '#1A365E' }}>Grades & Courses</div>
                   {data.grades.length === 0 ? (
@@ -312,6 +443,7 @@ function ProfileView({ student, data, activeTab, setActiveTab, onBack }: {
             {/* Attendance */}
             {activeTab === 'attendance' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {renderWarning('attendance')}
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                   {Object.entries(ATT_META).map(([k, v]) => {
                     const count = data.attendance.filter(a => a.status === k).length
@@ -360,6 +492,7 @@ function ProfileView({ student, data, activeTab, setActiveTab, onBack }: {
             {/* Behaviour */}
             {activeTab === 'behaviour' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {renderWarning('behaviour')}
                 <div style={{ display: 'flex', gap: 12 }}>
                   {[
                     { label: 'Total', val: data.behaviour.length, col: '#1A365E' },
@@ -404,6 +537,7 @@ function ProfileView({ student, data, activeTab, setActiveTab, onBack }: {
             {/* Wellness */}
             {activeTab === 'wellness' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {renderWarning('wellness')}
                 {data.wellness.length > 0 && (
                   <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                     {(['energy', 'mood', 'stress', 'focus'] as const).map(dim => {
@@ -445,6 +579,7 @@ function ProfileView({ student, data, activeTab, setActiveTab, onBack }: {
             {/* Financial */}
             {activeTab === 'financial' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {renderWarning('fees')}
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                   {[
                     { label: 'Total Billed', val: `$${totalFees.toLocaleString()}`, col: '#1A365E' },
@@ -500,7 +635,11 @@ function ProfileView({ student, data, activeTab, setActiveTab, onBack }: {
                   </tr></thead>
                   <tbody>
                     {data.comms.map((c, i) => (
-                      <tr key={c.id} style={{ background: i % 2 === 0 ? '#fff' : '#FAFBFC' }}>
+                      <tr
+                        key={c.id}
+                        onClick={() => setSelectedComm(c)}
+                        style={{ background: i % 2 === 0 ? '#fff' : '#FAFBFC', cursor: 'pointer' }}
+                      >
                         <td style={{ ...td, whiteSpace: 'nowrap' }}>{c.sentAt ? new Date(c.sentAt).toLocaleDateString() : '—'}</td>
                         <td style={td}>{c.type}</td>
                         <td style={{ ...td, fontWeight: 600 }}>{c.subject || '—'}</td>
@@ -511,7 +650,9 @@ function ProfileView({ student, data, activeTab, setActiveTab, onBack }: {
                           }}>{c.direction || '—'}</span>
                         </td>
                         <td style={{ ...td, color: '#7A92B0' }}>{c.sentBy || '—'}</td>
-                        <td style={{ ...td, color: '#7A92B0', maxWidth: 240 }}>{c.body ? c.body.slice(0, 100) + (c.body.length > 100 ? '…' : '') : '—'}</td>
+                        <td style={{ ...td, color: '#7A92B0', maxWidth: 240 }}>
+                          {c.body ? c.body.slice(0, 100) + (c.body.length > 100 ? '…' : '') : '—'}
+                        </td>
                       </tr>
                     ))}
                     {data.comms.length === 0 && (
@@ -582,6 +723,56 @@ function ProfileView({ student, data, activeTab, setActiveTab, onBack }: {
           </div>
         </>
       )}
+
+      {selectedComm && (
+        <div
+          onClick={() => setSelectedComm(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15,34,64,0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 20,
+            zIndex: 1200,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: 760,
+              maxHeight: '80vh',
+              overflow: 'auto',
+              background: '#fff',
+              borderRadius: 16,
+              boxShadow: '0 24px 80px rgba(15,34,64,0.22)',
+              border: '1px solid #E4EAF2',
+            }}
+          >
+            <div style={{ padding: '18px 22px', borderBottom: '1px solid #E4EAF2', display: 'flex', justifyContent: 'space-between', gap: 16 }}>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: '#1A365E' }}>{selectedComm.subject || 'Communication'}</div>
+                <div style={{ fontSize: 12, color: '#7A92B0', marginTop: 6 }}>
+                  {selectedComm.type || '—'} · {selectedComm.sentAt ? new Date(selectedComm.sentAt).toLocaleString() : '—'} · {selectedComm.sentBy || '—'}
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedComm(null)}
+                style={{ background: 'none', border: 'none', color: '#7A92B0', fontSize: 24, cursor: 'pointer', lineHeight: 1 }}
+              >
+                ×
+              </button>
+            </div>
+            <div style={{ padding: 22 }}>
+              <div style={{ fontSize: 14, lineHeight: 1.7, color: '#35506F', whiteSpace: 'pre-wrap' }}>
+                {selectedComm.body || 'No body content available.'}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -602,59 +793,7 @@ export function Student360Page() {
     if (cf) q = q.eq('campus', cf)
     q
       .then(({ data: rows }) => {
-        if (rows) setStudents(rows.map((r: Record<string, unknown>) => ({
-          id: r.id as string,
-          studentId: (r.student_id as string) ?? '',
-          firstName: (r.first_name as string) ?? '',
-          lastName: (r.last_name as string) ?? '',
-          dob: typeof r.dob === 'string' ? r.dob : null,
-          gender: (r.gender as Student['gender']) ?? null,
-          nationality: (r.nationality as string) ?? null,
-          lang: (r.lang as string) ?? null,
-          grade: typeof r.grade === 'number' ? r.grade : null,
-          status: (r.status as Student['status']) ?? 'Enrolled',
-          campus: (r.campus as string) ?? null,
-          cohort: (r.cohort as string) ?? null,
-          studentType: (r.student_type as Student['studentType']) ?? 'Existing',
-          appDate: typeof r.app_date === 'string' ? r.app_date : null,
-          enrollDate: typeof r.enroll_date === 'string' ? r.enroll_date : null,
-          yearJoined: typeof r.year_joined === 'string' ? r.year_joined : null,
-          yearGraduated: typeof r.year_graduated === 'string' ? r.year_graduated : null,
-          gradeWhenJoined: typeof r.grade_when_joined === 'number' ? r.grade_when_joined : null,
-          priority: (r.priority as Student['priority']) ?? 'Normal',
-          prevSchool: (r.prev_school as string) ?? null,
-          priorGpa: (r.prior_gpa as string) ?? null,
-          iep: (r.iep as string) ?? null,
-          email: (r.email as string) ?? null,
-          phone: (r.phone as string) ?? null,
-          parent: (r.parent as string) ?? null,
-          relation: (r.relation as string) ?? null,
-          ecName: (r.ec_name as string) ?? null,
-          ecPhone: (r.ec_phone as string) ?? null,
-          address: (r.address as string) ?? null,
-          bloodGroup: (r.blood_group as string) ?? null,
-          allergy: (r.allergy as string) ?? null,
-          meds: (r.meds as string) ?? null,
-          physician: (r.physician as string) ?? null,
-          physicianPhone: (r.physician_phone as string) ?? null,
-          healthNotes: (r.health_notes as string) ?? null,
-          notes: (r.notes as string) ?? null,
-          counselorNotes: (r.counselor_notes as string) ?? null,
-          documents: Array.isArray(r.documents) ? r.documents as string[] : [],
-          intDate: typeof r.int_date === 'string' ? r.int_date : null,
-          intTime: typeof r.int_time === 'string' ? r.int_time : null,
-          intViewer: (r.int_viewer as string) ?? null,
-          intScore: typeof r.int_score === 'number' ? r.int_score : null,
-          intNotes: (r.int_notes as string) ?? null,
-          intCommittee: (r.int_committee as string) ?? null,
-          decDate: typeof r.dec_date === 'string' ? r.dec_date : null,
-          decNotes: (r.dec_notes as string) ?? null,
-          postSecondary: (r.post_secondary as string) ?? null,
-          gradDistinction: (r.grad_distinction as string) ?? null,
-          alumniNotes: (r.alumni_notes as string) ?? null,
-          createdAt: (r.created_at as string) ?? '',
-          updatedAt: (r.updated_at as string) ?? '',
-        })))
+        if (rows) setStudents(rows.map((r: Record<string, unknown>) => parseStudentRow(r)))
         setLoading(false)
       })
   }, [cf])
@@ -664,33 +803,55 @@ export function Student360Page() {
     setData(null)
     setActiveTab('overview')
 
+    const commProbe = await supabase.from('communications').select('id,sent_at').limit(1)
+    const commSchema: CommSchema = commProbe.error && (commProbe.error.message ?? '').toLowerCase().includes('sent_at')
+      ? 'legacy'
+      : 'modern'
+    const feeProbe = await supabase.from('fees').select('id,fee_type').limit(1)
+    const feeSchema: FeeSchema = feeProbe.error && (feeProbe.error.message ?? '').toLowerCase().includes('fee_type')
+      ? 'legacy'
+      : 'modern'
+    const behaviourProbe = await supabase.from('behaviour_log').select('id,severity').limit(1)
+    const behaviourSchema: BehaviourSchema = behaviourProbe.error && (behaviourProbe.error.message ?? '').toLowerCase().includes('severity')
+      ? 'legacy'
+      : 'modern'
+
+    const commQuery = commSchema === 'modern'
+      ? supabase.from('communications').select('id,type,subject,direction,sent_at,sent_by,body').eq('student_id', s.id).order('sent_at', { ascending: false }).limit(50)
+      : supabase.from('communications').select('id,type,outcome,date,staff_member,notes').eq('student_id', s.id).order('date', { ascending: false }).limit(50)
+    const behaviourQuery = behaviourSchema === 'modern'
+      ? supabase.from('behaviour_log').select('id,type,severity,date,description,action_taken').eq('student_id', s.id).order('date', { ascending: false }).limit(50)
+      : supabase.from('behaviour_log').select('id,type,date,description,action_taken').eq('student_id', s.id).order('date', { ascending: false }).limit(50)
+    const feeQuery = feeSchema === 'modern'
+      ? supabase.from('fees').select('id,fee_type,amount,currency,due_date,status,reference').eq('student_id', s.id).order('due_date', { ascending: false })
+      : supabase.from('fees').select('id,type,amount,currency,paid,paid_date,note').eq('student_id', s.id).order('paid_date', { ascending: false })
+
     const [attRes, bhRes, comRes, feeRes, welRes, graRes] = await Promise.all([
       supabase.from('attendance').select('date,status,note').eq('student_id', s.id).order('date', { ascending: false }).limit(120),
-      supabase.from('behaviour_log').select('id,type,severity,date,description,action_taken').eq('student_id', s.id).order('date', { ascending: false }).limit(50),
-      supabase.from('communications').select('id,type,subject,direction,sent_at,sent_by,body').eq('student_id', s.id).order('sent_at', { ascending: false }).limit(50),
-      supabase.from('fees').select('id,type,amount,currency,due_date,status,reference').eq('student_id', s.id).order('due_date', { ascending: false }),
+      behaviourQuery,
+      commQuery,
+      feeQuery,
       supabase.from('wellness').select('id,date,energy,mood,stress,focus,note').eq('student_id', s.id).order('date', { ascending: false }).limit(30),
       supabase.from('student_grades').select('id,course,area,credits,grade,status,year,semester').eq('student_id', s.id),
     ])
 
+    const warnings: S360Data['warnings'] = {}
+    if (attRes.error) warnings.attendance = attRes.error.message || 'Attendance records could not be loaded.'
+    if (bhRes.error) warnings.behaviour = bhRes.error.message || 'Behaviour records could not be loaded.'
+    if (feeRes.error) warnings.fees = feeRes.error.message || 'Financial records could not be loaded.'
+    if (welRes.error) warnings.wellness = welRes.error.message || 'Wellbeing records could not be loaded.'
+    if (graRes.error) warnings.grades = graRes.error.message || 'Academic records could not be loaded.'
+
     setData({
       attendance: (attRes.data ?? []).map((r: Record<string, unknown>) => ({
-        date: (r.date as string) ?? '', status: (r.status as string) ?? 'P', note: (r.note as string) ?? null,
+        date: (r.date as string) ?? '', status: normalizeAttendanceStatus(r.status), note: (r.note as string) ?? null,
       })),
       behaviour: (bhRes.data ?? []).map((r: Record<string, unknown>) => ({
-        id: r.id as string, type: (r.type as string) ?? '', severity: (r.severity as string) ?? 'Low',
+        id: r.id as string, type: (r.type as string) ?? '', severity: normalizeBehaviourSeverity(r.severity),
         date: (r.date as string) ?? '', description: (r.description as string) ?? '', action: (r.action_taken as string) ?? null,
       })),
-      comms: (comRes.data ?? []).map((r: Record<string, unknown>) => ({
-        id: r.id as string, type: (r.type as string) ?? '', subject: (r.subject as string) ?? '',
-        direction: (r.direction as string) ?? '', sentAt: (r.sent_at as string) ?? null,
-        sentBy: (r.sent_by as string) ?? null, body: (r.body as string) ?? null,
-      })),
-      fees: (feeRes.data ?? []).map((r: Record<string, unknown>) => ({
-        id: r.id as string, type: (r.type as string) ?? '', amount: typeof r.amount === 'number' ? r.amount : 0,
-        currency: (r.currency as string) ?? 'USD', dueDate: (r.due_date as string) ?? null,
-        status: (r.status as string) ?? 'Pending', reference: (r.reference as string) ?? null,
-      })),
+      comms: (comRes.data ?? []).map((r: Record<string, unknown>) => normalizeStudentComm(r, commSchema)),
+      fees: (feeRes.data ?? []).map((r: Record<string, unknown>) => normalizeFee(r, feeSchema)),
       wellness: (welRes.data ?? []).map((r: Record<string, unknown>) => ({
         id: r.id as string, date: (r.date as string) ?? '',
         energy: typeof r.energy === 'number' ? r.energy : 0,
@@ -705,6 +866,7 @@ export function Student360Page() {
         status: (r.status as string) ?? '', year: (r.year as string) ?? null, semester: (r.semester as string) ?? null,
       })),
       counselorNotes: s.counselorNotes,
+      warnings,
     })
   }
 

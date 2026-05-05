@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
+import { toast } from '@/lib/toast'
 import { TPMS_SUBJECTS, DAYS, PERIODS, type TpmsBlock } from './tpmsConstants'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 14, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', overflow: 'hidden' }
@@ -148,11 +149,20 @@ export function BlocksPage() {
 
   async function saveBlock(data: Omit<TpmsBlock, 'id'>, id?: string) {
     const row = { name: data.name, day: data.day, period: data.period, time: data.time, duration: data.duration, subject: data.subject, cohort: data.cohort, coach_id: data.coachId, manager_id: data.managerId, room: data.room, max_students: data.maxStudents, notes: data.notes }
-    if (id) await supabase.from('timetable_blocks').update(row).eq('id', id)
-    else await supabase.from('timetable_blocks').insert(row)
+    if (id) {
+      const { error } = await supabase.from('timetable_blocks').update(row).eq('id', id)
+      if (error) { toast(error.message, 'err'); return }
+    } else {
+      const { error } = await supabase.from('timetable_blocks').insert(row)
+      if (error) { toast(error.message, 'err'); return }
+    }
     await load()
   }
-  async function deleteBlock(id: string) { await supabase.from('timetable_blocks').delete().eq('id', id); setBlocks(prev => prev.filter(b => b.id !== id)) }
+  async function deleteBlock(id: string) {
+    const { error } = await supabase.from('timetable_blocks').delete().eq('id', id)
+    if (error) { toast(error.message, 'err'); return }
+    setBlocks(prev => prev.filter(b => b.id !== id))
+  }
 
   // Stats
   const cohortSet = useMemo(() => new Set(blocks.map(b => b.cohort).filter(Boolean)), [blocks])

@@ -122,11 +122,23 @@ export function HealthRecordsPage() {
 
   async function saveRec(form: typeof EMPTY, id?: string) {
     const payload = { student_id: form.studentId, blood_group: form.bloodGroup || null, allergies: form.allergies, medications: form.medications, conditions: form.conditions, immunizations: form.immunizations, vision_hearing: form.visionHearing || null, dietary: form.dietary || null, iep: form.iep || null, physician: form.physician || null, physician_phone: form.physicianPhone || null, notes: form.notes }
-    if (id) { await supabase.from('health_records').update(payload).eq('id', id); toast('Health record updated', 'ok') }
-    else { await supabase.from('health_records').insert(payload); toast('Health record added', 'ok') }
+    if (id) {
+      const { error } = await supabase.from('health_records').update(payload).eq('id', id)
+      if (error) { toast(error.message, 'err'); return }
+      toast('Health record updated', 'ok')
+    } else {
+      const { error } = await supabase.from('health_records').insert(payload)
+      if (error) { toast(error.message, 'err'); return }
+      toast('Health record added', 'ok')
+    }
     await load()
   }
-  async function deleteRec(id: string) { await supabase.from('health_records').delete().eq('id', id); setRecords(prev => prev.filter(r => r.id !== id)); toast('Record deleted', 'ok') }
+  async function deleteRec(id: string) {
+    const { error } = await supabase.from('health_records').delete().eq('id', id)
+    if (error) { toast(error.message, 'err'); return }
+    setRecords(prev => prev.filter(r => r.id !== id))
+    toast('Record deleted', 'ok')
+  }
 
   const iStyle: React.CSSProperties = { padding: '7px 12px', borderRadius: 8, border: '1px solid #E4EAF2', fontSize: 13, color: '#1A365E', background: '#fff' }
 

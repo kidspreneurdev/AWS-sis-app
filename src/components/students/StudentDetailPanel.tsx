@@ -7,6 +7,8 @@ import {
 } from '@/types/student'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+type CommSchema = 'legacy' | 'modern'
+
 const PANEL_TABS = ['Info', 'Documents', 'Fees', 'Interview', 'Comms', 'Attendance'] as const
 type PanelTab = typeof PANEL_TABS[number]
 
@@ -43,6 +45,28 @@ const ATT_META: Record<string, { bg: string; tc: string; label: string }> = {
   T: { bg: '#FFF6E0', tc: '#B45309', label: 'Tardy' },
   E: { bg: '#E6F4FF', tc: '#0369A1', label: 'Excused' },
   R: { bg: '#F3EDFF', tc: '#A36CFF', label: 'Remote' },
+}
+
+function normalizeComm(row: Record<string, unknown>, schema: CommSchema): CommRec {
+  return {
+    id: row.id as string,
+    type: (row.type as string) ?? '',
+    subject: schema === 'modern'
+      ? ((row.subject as string | null | undefined) ?? '')
+      : ((row.outcome as string | null | undefined) ?? ''),
+    outcome: schema === 'modern'
+      ? null
+      : ((row.outcome as string | null | undefined) ?? null),
+    date: schema === 'modern'
+      ? ((row.sent_at as string | null | undefined) ?? null)
+      : ((row.date as string | null | undefined) ?? null),
+    staff: schema === 'modern'
+      ? ((row.sent_by as string | null | undefined) ?? null)
+      : ((row.staff_member as string | null | undefined) ?? null),
+    notes: schema === 'modern'
+      ? ((row.body as string | null | undefined) ?? null)
+      : ((row.notes as string | null | undefined) ?? null),
+  }
 }
 
 // ── Row ───────────────────────────────────────────────────────────────────────
@@ -93,14 +117,23 @@ export function StudentDetailPanel({ student, onClose, onStatusChange, onEdit, o
     }
     if (tab === 'Comms' && comms.length === 0) {
       setLoadingComms(true)
-      supabase.from('communications').select('*').eq('student_id', student.id).order('sent_at', { ascending: false }).limit(20)
-        .then(({ data }) => {
-          setComms((data ?? []).map((r: Record<string, unknown>) => ({
-            id: r.id as string, type: r.type as string,
-            subject: r.subject as string ?? '', outcome: null,
-            date: r.sent_at as string ?? null, staff: r.sent_by as string ?? null,
-            notes: r.body as string ?? null,
-          })))
+      supabase.from('communications').select('id,sent_at').limit(1)
+        .then(({ error }) => {
+          const schema: CommSchema = error && (error.message ?? '').toLowerCase().includes('sent_at')
+            ? 'legacy'
+            : 'modern'
+
+          const query = schema === 'modern'
+            ? supabase.from('communications').select('*').eq('student_id', student.id).order('sent_at', { ascending: false }).limit(20)
+            : supabase.from('communications').select('*').eq('student_id', student.id).order('date', { ascending: false }).limit(20)
+
+          return query.then(({ data }) => {
+            setComms((data ?? []).map((r: Record<string, unknown>) => normalizeComm(r, schema)))
+          })
+        }, () => {
+          setComms([])
+        })
+        .then(() => {
           setLoadingComms(false)
         })
     }

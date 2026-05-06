@@ -113,6 +113,21 @@ export function fullName(s: Student) {
   return [s.firstName, s.lastName].filter(v => v && v.trim()).join(' ')
 }
 
+export function parseStudentGrade(value: string): number | null {
+  if (!value) return null
+  if (value === 'Pre-K') return -1
+  if (value === 'K') return 0
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+export function formatStudentGrade(grade: number | null | undefined): string {
+  if (grade == null) return ''
+  if (grade === -1) return 'Pre-K'
+  if (grade === 0) return 'K'
+  return String(grade)
+}
+
 export function generateStudentId(): string {
   const year = new Date().getFullYear()
   const rand = Math.floor(10000 + Math.random() * 90000)

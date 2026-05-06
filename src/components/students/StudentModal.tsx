@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import {
   STATUSES, GRADES, BLOOD_GROUPS, IEP_OPTIONS, DOCUMENT_TYPES,
   PRIORITIES, STUDENT_TYPES, generateStudentId, EMPTY_STUDENT,
+  formatStudentGrade, parseStudentGrade,
   type Student, type StudentInsert,
 } from '@/types/student'
 
@@ -312,7 +313,7 @@ export function StudentModal({ open, student, initialStudentType = 'New', campus
               </Grid2>
               <Grid2>
                 <Field label="Grade">
-                  <FSelect value={form.grade ?? ''} onChange={e => set('grade', e.target.value ? Number(e.target.value) : null)}>
+                  <FSelect value={formatStudentGrade(form.grade)} onChange={e => set('grade', parseStudentGrade(e.target.value))}>
                     <option value="">— Select Grade —</option>
                     {GRADES.map(g => <option key={g} value={g}>{g}</option>)}
                   </FSelect>

@@ -4,7 +4,7 @@ import { PriorityBadge } from '@/components/shared/PriorityBadge'
 import { StudentDetailPanel } from '@/components/students/StudentDetailPanel'
 import { toast } from '@/lib/toast'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
-import { type Student, type StudentStatus, fullName } from '@/types/student'
+import { type Student, type StudentStatus, formatStudentGrade, fullName } from '@/types/student'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
 
 function fromRow(row: Record<string, unknown>): Student {
@@ -115,7 +115,7 @@ export function WaitlistPage() {
       ['#', 'Name', 'Campus', 'Nationality', 'Grade', 'Applied', 'Days Waiting', 'Priority', 'Docs'],
       ...filtered.map((s, i) => [
         i + 1, fullName(s), s.campus ?? '', s.nationality ?? '',
-        s.grade ?? '', s.appDate ?? '', daysSince(s.appDate),
+        formatStudentGrade(s.grade), s.appDate ?? '', daysSince(s.appDate),
         s.priority, `${s.documents.length}/6`,
       ]),
     ]

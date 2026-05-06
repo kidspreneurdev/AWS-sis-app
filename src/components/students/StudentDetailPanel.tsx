@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { toast } from '@/lib/toast'
 import {
   type Student, type StudentStatus,
-  STATUSES, STATUS_META, DOCUMENT_TYPES, fullName,
+  STATUSES, STATUS_META, DOCUMENT_TYPES, formatStudentGrade, fullName,
 } from '@/types/student'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -196,7 +196,7 @@ export function StudentDetailPanel({ student, onClose, onStatusChange, onEdit, o
               <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', marginBottom: 4 }}>{fullName(student)}</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
                 <span style={{ padding: '3px 10px', borderRadius: 20, background: smeta.bg, color: smeta.tc, fontSize: 11, fontWeight: 700 }}>{student.status}</span>
-                {student.grade !== null && <span style={{ fontSize: 12, color: '#9EB3C8' }}>Grade {student.grade}</span>}
+                {student.grade !== null && <span style={{ fontSize: 12, color: '#9EB3C8' }}>{formatStudentGrade(student.grade)}</span>}
                 {student.campus && <span style={{ fontSize: 12, color: '#9EB3C8' }}>· {student.campus}</span>}
                 {student.studentId && <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#7A94B8' }}>#{student.studentId}</span>}
               </div>
@@ -281,7 +281,7 @@ export function StudentDetailPanel({ student, onClose, onStatusChange, onEdit, o
               <InfoRow label="Priority" value={student.priority} />
               {student.yearJoined && <InfoRow label="Year Joined" value={student.yearJoined} />}
               {student.yearGraduated && <InfoRow label="Year Graduated" value={student.yearGraduated} />}
-              {student.gradeWhenJoined !== null && <InfoRow label="Grade (Joined)" value={student.gradeWhenJoined} />}
+              {student.gradeWhenJoined !== null && <InfoRow label="Grade (Joined)" value={formatStudentGrade(student.gradeWhenJoined)} />}
 
               <div style={{ fontSize: 11, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 14, marginBottom: 8 }}>Contact</div>
               <InfoRow label="Parent" value={`${student.parent ?? ''} ${student.relation ? `(${student.relation})` : ''}`.trim()} />

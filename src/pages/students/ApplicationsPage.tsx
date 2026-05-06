@@ -8,7 +8,7 @@ import { toast } from '@/lib/toast'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
 import {
   type Student, type StudentInsert, type StudentStatus,
-  STATUSES, GRADES, fullName,
+  STATUSES, GRADES, formatStudentGrade, fullName,
 } from '@/types/student'
 import { useCohorts } from '@/hooks/useCohorts'
 import { useCampuses } from '@/hooks/useCampuses'
@@ -197,7 +197,7 @@ export function ApplicationsPage() {
     let list = students.filter(s => {
       if (filterStatus !== 'All' && s.status !== filterStatus) return false
       if (filterType !== 'All' && s.studentType !== filterType) return false
-      if (filterGrade !== 'All' && String(s.grade) !== filterGrade) return false
+      if (filterGrade !== 'All' && formatStudentGrade(s.grade) !== filterGrade) return false
       if (filterCampus !== 'All' && s.campus !== filterCampus) return false
       if (q) {
         const hay = [s.firstName, s.lastName, s.studentId, s.nationality,
@@ -290,7 +290,7 @@ export function ApplicationsPage() {
   function exportCSV() {
     const rows = [
       ['ID', 'First Name', 'Last Name', 'Status', 'Grade', 'Campus', 'Applied', 'Priority', 'Nationality', 'Parent', 'Email', 'Phone'],
-      ...filtered.map(s => [s.studentId, s.firstName, s.lastName, s.status, s.grade ?? '', s.campus ?? '', s.appDate ?? '', s.priority, s.nationality ?? '', s.parent ?? '', s.email ?? '', s.phone ?? '']),
+      ...filtered.map(s => [s.studentId, s.firstName, s.lastName, s.status, formatStudentGrade(s.grade), s.campus ?? '', s.appDate ?? '', s.priority, s.nationality ?? '', s.parent ?? '', s.email ?? '', s.phone ?? '']),
     ]
     const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'students-applications.csv'; a.click()

@@ -4,7 +4,7 @@ import { StudentModal } from '@/components/students/StudentModal'
 import { StudentDetailPanel } from '@/components/students/StudentDetailPanel'
 import { toast } from '@/lib/toast'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
-import { type Student, type StudentInsert, type StudentStatus, fullName } from '@/types/student'
+import { type Student, type StudentInsert, type StudentStatus, formatStudentGrade, fullName } from '@/types/student'
 import { useCohorts } from '@/hooks/useCohorts'
 import { useCampuses } from '@/hooks/useCampuses'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
@@ -167,9 +167,9 @@ export function StudentsPage() {
     return students.filter(s => {
       if (filterCampus !== 'All' && s.campus !== filterCampus) return false
       if (filterCohort !== 'All' && s.cohort !== filterCohort) return false
-      if (filterGrade !== 'All' && String(s.grade) !== filterGrade) return false
+      if (filterGrade !== 'All' && formatStudentGrade(s.grade) !== filterGrade) return false
       if (q) {
-        const hay = [s.firstName, s.lastName, s.studentId, String(s.grade ?? ''), s.cohort ?? ''].join(' ').toLowerCase()
+        const hay = [s.firstName, s.lastName, s.studentId, formatStudentGrade(s.grade), s.cohort ?? ''].join(' ').toLowerCase()
         if (!hay.includes(q)) return false
       }
       return true
@@ -221,7 +221,7 @@ export function StudentsPage() {
   function exportCSV() {
     const rows = [
       ['Name', 'Student ID', 'Grade', 'Cohort', 'Campus', 'Enrolled', 'IEP/Support'],
-      ...filtered.map(s => [fullName(s), s.studentId, s.grade ?? '', s.cohort ?? '', s.campus ?? '', s.enrollDate ?? '', s.iep ?? '']),
+      ...filtered.map(s => [fullName(s), s.studentId, formatStudentGrade(s.grade), s.cohort ?? '', s.campus ?? '', s.enrollDate ?? '', s.iep ?? '']),
     ]
     const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
     const a = document.createElement('a')
@@ -262,7 +262,7 @@ export function StudentsPage() {
           {[
             { label: 'All Campuses', value: filterCampus, set: setFilterCampus, opts: campuses },
             { label: 'All Cohorts', value: filterCohort, set: setFilterCohort, opts: cohorts },
-            { label: 'All Grades', value: filterGrade, set: setFilterGrade, opts: grades.map(String) },
+            { label: 'All Grades', value: filterGrade, set: setFilterGrade, opts: grades.map(formatStudentGrade) },
           ].map(f => (
             <select
               key={f.label}

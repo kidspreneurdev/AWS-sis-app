@@ -35,6 +35,8 @@ interface CourseRow {
   type: CourseType
   area: string
   credits: number
+  credits_earned: number
+  course_status: string | null
   grade_letter: string | null
   grade_percent: number | null
   ap_score: number | null
@@ -107,6 +109,28 @@ interface DistinctionRow {
 
 const TYPE_WEIGHT: Record<CourseType, number> = { STD: 0, HON: 0.5, AP: 1, IB: 1, DE: 1, EC: 1, CR: 0 }
 
+const GRADE_PTS: Record<string, number> = {
+  'A+': 4.0, 'A': 4.0, 'A-': 3.7,
+  'B+': 3.3, 'B': 3.0, 'B-': 2.7,
+  'C+': 2.3, 'C': 2.0, 'C-': 1.7,
+  'D+': 1.3, 'D': 1.0, 'D-': 0.7,
+  'F': 0.0,
+}
+
+function weightedPts(grade: string | null, type: CourseType): number | null {
+  if (!grade || !(grade in GRADE_PTS)) return null
+  const base = GRADE_PTS[grade]
+  return Math.min(base + (TYPE_WEIGHT[type] ?? 0), 5)
+}
+
+const STATUS_STYLE: Record<string, { bg: string; color: string; icon: string }> = {
+  'Completed':   { bg: '#DCFCE7', color: '#166534', icon: '✓' },
+  'In Progress': { bg: '#DBEAFE', color: '#1E40AF', icon: '↻' },
+  'Assigned':    { bg: '#FEF9C3', color: '#854D0E', icon: '📋' },
+  'Not Started': { bg: '#F1F5F9', color: '#64748B', icon: '○' },
+  'Withdrawn':   { bg: '#FEE2E2', color: '#991B1B', icon: '✕' },
+}
+
 function letterGrade(pct: number) {
   if (pct >= 97) return 'A+'
   if (pct >= 93) return 'A'
@@ -174,6 +198,18 @@ function gradeColor(pct: number) {
   return SP_RED
 }
 
+function letterGradeColor(letter: string | null) {
+  if (!letter) return '#94A3B8'
+  const l = letter.toUpperCase()
+  if (l.startsWith('A')) return SP_GREEN
+  if (l.startsWith('B')) return '#3B82F6'
+  if (l.startsWith('C')) return SP_GOLD
+  if (l.startsWith('D')) return '#F97316'
+  if (l === 'F') return SP_RED
+  if (l === 'IP') return '#94A3B8'
+  return SP_NAVY
+}
+
 function attendanceRate(rows: AttendanceRow[]) {
   if (!rows.length) return null
   const present = rows.filter((row) => row.status === 'Present' || row.status === 'Excused').length
@@ -203,6 +239,7 @@ export function SPGradesPage() {
   const [ecdeCredits, setEcdeCredits] = useState<ECDECreditRow[]>([])
   const [attendance, setAttendance] = useState<AttendanceRow[]>([])
   const [tab, setTab] = useState<'audit' | 'courses' | 'remark'>('remark')
+  const [breakdownReq, setBreakdownReq] = useState<GraduationRequirement | null>(null)
   const [configLoaded, setConfigLoaded] = useState(false)
 
   if (!session) return null
@@ -291,6 +328,8 @@ export function SPGradesPage() {
         type: ((row.type as CourseType) ?? 'STD'),
         area: (row.area as string) ?? '',
         credits: Number(row.credits ?? 0),
+        credits_earned: Number(row.credits_earned ?? row.credits ?? 0),
+        course_status: (row.course_status as string) ?? null,
         grade_letter: (row.grade_letter as string) ?? null,
         grade_percent: row.grade_percent == null ? null : Number(row.grade_percent),
         ap_score: row.ap_score == null ? null : Number(row.ap_score),
@@ -310,13 +349,13 @@ export function SPGradesPage() {
 
       setTransfers(((transferRes.data as Record<string, unknown>[] | null) ?? []).map((row) => ({
         id: row.id as string,
-        institution: (row.institution as string) ?? '',
-        course_title: (row.course_title as string) ?? '',
-        credits: Number(row.credits ?? 0),
-        grade_letter: (row.grade_letter as string) ?? null,
+        institution: (row.institution as string) ?? (row.source_school as string) ?? '',
+        course_title: (row.course_title as string) ?? (row.orig_title as string) ?? '',
+        credits: Number(row.credits_awarded ?? row.credits ?? 0),
+        grade_letter: (row.grade_letter as string) ?? (row.orig_grade as string) ?? null,
         year: (row.year as string) ?? null,
         status: (row.status as string) ?? null,
-        type: (row.type as string) ?? null,
+        type: (row.type as string) ?? (row.kind as string) ?? null,
         area: (row.area as string) ?? null,
       })))
 
@@ -352,7 +391,10 @@ export function SPGradesPage() {
     requirements.forEach((req) => { result[req.key] = 0 })
 
     courses.forEach((course) => {
-      const earned = course.grade_letter && course.grade_letter !== 'F' ? (course.credits || 0) : 0
+      if (course.grade_letter === 'F') return
+      const isPending = !course.grade_letter || course.grade_letter === 'IP'
+      if (isPending) return  // in-progress: don't count toward earned
+      const earned = course.credits_earned || 0
       if (!earned) return
       result.total += earned
       const matched = requirements.find((req) => req.area === course.area)
@@ -375,7 +417,7 @@ export function SPGradesPage() {
 
   const uwGpa = useMemo(() => calcGPA(courses), [courses])
   const wGpa = useMemo(() => calcWeightedGPA(courses), [courses])
-  const graduationCreditsRequired = settings?.graduation_credits ?? 0
+  const graduationCreditsRequired = settings?.graduation_credits ?? 24
   const associateDegreeCreditsRequired = settings?.associate_degree_credits_required ?? 0
   const totalEarned = Math.round((creditState.total || 0) * 10) / 10
   const pctDone = graduationCreditsRequired > 0 ? Math.min(100, Math.round((totalEarned / graduationCreditsRequired) * 100)) : 0
@@ -502,9 +544,118 @@ export function SPGradesPage() {
     { key: 'remark' as const, label: '📝 Report Card' },
   ]
 
+  // ─── Breakdown modal data ───────────────────────────────────────────────────
+  const breakdownData = breakdownReq ? (() => {
+    const req = breakdownReq
+    const earned = Math.round((creditState[req.key] || 0) * 10) / 10
+    const stillNeeded = Math.max(0, Math.round((req.required_credits - earned) * 10) / 10)
+
+    type BreakdownRow = { title: string; source: string; area: string; grade: string; credits: number }
+    const rows: BreakdownRow[] = []
+
+    courses.forEach((c) => {
+      if (c.grade_letter === 'F' || !c.grade_letter || c.grade_letter === 'IP') return
+      const matched = requirements.find((r) => r.area === c.area)
+      if ((matched?.key ?? 'ELEC') !== req.key) return
+      rows.push({ title: c.title, source: 'Course', area: c.area, grade: c.grade_letter, credits: c.credits_earned || 0 })
+    })
+
+    approvedTransfers.forEach((t) => {
+      const matched = requirements.find((r) => r.area === t.area)
+      if ((matched?.key ?? 'ELEC') !== req.key) return
+      rows.push({ title: t.course_title || 'Transfer Credit', source: `Transfer${t.type ? ` (${t.type})` : ''}`, area: t.area ?? '', grade: t.grade_letter ?? '—', credits: t.credits })
+    })
+
+    if (req.key === 'ELEC') {
+      ecdeCredits.forEach((c) => {
+        rows.push({ title: c.course_title, source: c.type, area: c.institution, grade: c.grade_letter ?? '—', credits: c.hs_credits })
+      })
+    }
+
+    return { req, earned, stillNeeded, rows }
+  })() : null
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ fontSize: 18, fontWeight: 800, color: SP_NAVY }}>📊 My Grades</div>
+
+      {/* ─── Credit Breakdown Modal ─────────────────────────────────────── */}
+      {breakdownData && (
+        <div
+          onClick={() => setBreakdownReq(null)}
+          style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(10,25,50,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 680, maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}
+          >
+            {/* Header */}
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #E4EAF2', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: SP_NAVY }}>
+                  {breakdownData.req.icon} {breakdownData.req.label} Credit Breakdown
+                </div>
+                <div style={{ fontSize: 12, color: '#7A92B0', marginTop: 3 }}>
+                  Required: {breakdownData.req.required_credits} cr · Earned: {breakdownData.earned} cr · Still Needed: {breakdownData.stillNeeded} cr
+                </div>
+              </div>
+              <button
+                onClick={() => setBreakdownReq(null)}
+                style={{ background: '#F0F4F8', border: 'none', borderRadius: 8, width: 32, height: 32, fontSize: 16, cursor: 'pointer', color: '#7A92B0', flexShrink: 0 }}
+              >✕</button>
+            </div>
+
+            {/* Stats */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, padding: '16px 20px' }}>
+              {[
+                { label: 'REQUIRED', value: breakdownData.req.required_credits, color: SP_NAVY },
+                { label: 'EARNED', value: breakdownData.earned, color: SP_GREEN },
+                { label: 'STILL NEEDED', value: breakdownData.stillNeeded, color: breakdownData.stillNeeded > 0 ? SP_RED : SP_GREEN },
+              ].map(s => (
+                <div key={s.label} style={{ background: s.label === 'EARNED' ? '#F0FDF4' : '#F7F9FC', borderRadius: 10, padding: '14px 16px', border: `1px solid ${s.label === 'EARNED' ? '#BBF7D0' : '#E4EAF2'}` }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#7A92B0', letterSpacing: '0.08em', marginBottom: 6 }}>{s.label}</div>
+                  <div style={{ fontSize: 28, fontWeight: 900, color: s.color }}>{s.value}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Table */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px 20px' }}>
+              {breakdownData.rows.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '30px 0', color: '#7A92B0', fontSize: 13 }}>
+                  No completed credits recorded for this requirement yet.
+                </div>
+              ) : (
+                <>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: SP_NAVY, marginBottom: 10 }}>
+                    Completed Credits ({breakdownData.rows.length})
+                  </div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid #E4EAF2' }}>
+                        {['Course / Credit', 'Source', 'Area', 'Grade', 'Credits Counted'].map(h => (
+                          <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {breakdownData.rows.map((row, i) => (
+                        <tr key={i} style={{ borderBottom: '1px solid #F0F4F8' }}>
+                          <td style={{ padding: '10px', fontSize: 13, fontWeight: 600, color: SP_NAVY }}>{row.title}</td>
+                          <td style={{ padding: '10px', fontSize: 12, color: '#7A92B0' }}>{row.source}</td>
+                          <td style={{ padding: '10px', fontSize: 12, color: '#7A92B0' }}>{row.area}</td>
+                          <td style={{ padding: '10px', fontSize: 12, color: SP_NAVY }}>{row.grade}</td>
+                          <td style={{ padding: '10px', fontSize: 13, fontWeight: 700, color: SP_GREEN }}>{row.credits}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 0, border: '1.5px solid #E4EAF2', borderRadius: 10, overflow: 'hidden' }}>
         {tabs.map((item) => (
@@ -612,13 +763,22 @@ export function SPGradesPage() {
                 const pct = req.required_credits > 0 ? Math.min(100, Math.round((earned / req.required_credits) * 100)) : 0
                 const color = pct >= 100 ? SP_GREEN : pct >= 50 ? SP_GOLD : SP_RED
                 return (
-                  <div key={req.key} style={{ ...card, padding: '12px 16px' }}>
+                  <div
+                    key={req.key}
+                    onClick={() => setBreakdownReq(req)}
+                    style={{ ...card, padding: '12px 16px', cursor: 'pointer' }}
+                    onMouseEnter={e => (e.currentTarget.style.borderColor = '#C7D7EA')}
+                    onMouseLeave={e => (e.currentTarget.style.borderColor = '#E4EAF2')}
+                  >
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span style={{ fontSize: 16 }}>{req.icon ?? '•'}</span>
                         <span style={{ fontSize: 12, fontWeight: 700, color: SP_NAVY }}>{req.label}</span>
                       </div>
-                      <span style={{ fontSize: 12, fontWeight: 800, color }}>{earned} / {req.required_credits} cr {pct >= 100 ? '✅' : ''}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontSize: 12, fontWeight: 800, color }}>{earned} / {req.required_credits} cr {pct >= 100 ? '✅' : ''}</span>
+                        <span style={{ fontSize: 10, color: '#94A3B8' }}>View breakdown →</span>
+                      </div>
                     </div>
                     <div style={{ background: '#E4EAF2', borderRadius: 4, height: 8 }}>
                       <div style={{ background: color, width: `${pct}%`, height: '100%', borderRadius: 4 }} />
@@ -806,28 +966,48 @@ export function SPGradesPage() {
             </div>
           ) : (
             courses.map((course) => {
-              const pct = course.grade_percent ?? 0
-              const color = gradeColor(pct)
+              const color = course.grade_letter
+                ? letterGradeColor(course.grade_letter)
+                : gradeColor(course.grade_percent ?? 0)
+              const creditsDisplay = course.credits_earned || course.credits || 0
+              const wPts = weightedPts(course.grade_letter, course.type)
+              const status = course.course_status ?? 'In Progress'
+              const ss = STATUS_STYLE[status] ?? STATUS_STYLE['In Progress']
               return (
                 <div key={course.id} style={{ ...card, padding: 0, overflow: 'hidden', borderLeft: `4px solid ${color}` }}>
-                  <div style={{ padding: '14px 18px 10px', borderBottom: '1px solid #F0F4FA' }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5, flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: 15, fontWeight: 800, color: SP_NAVY }}>{course.title}</span>
-                          <span style={{ background: `${color}15`, color, padding: '2px 10px', borderRadius: 10, fontSize: 10, fontWeight: 800 }}>{course.grade_letter ?? 'IP'}</span>
+                  <div style={{ padding: '12px 18px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                      {/* Left: title + meta */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 14, fontWeight: 800, color: SP_NAVY }}>{course.title}</span>
                           <span style={{ background: '#F7F9FC', color: '#7A92B0', padding: '2px 8px', borderRadius: 6, fontSize: 9, fontWeight: 700 }}>{course.type}</span>
                         </div>
                         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                           <span style={{ fontSize: 11, color: '#7A92B0' }}>📚 {course.area}</span>
-                          <span style={{ fontSize: 11, color: '#7A92B0' }}>🎓 {course.credits} credits</span>
                           {course.term && <span style={{ fontSize: 11, color: '#7A92B0' }}>🗓 {course.term}</span>}
                           <span style={{ fontSize: 11, color: '#7A92B0' }}>🏫 {course.academic_year}</span>
                         </div>
                       </div>
-                      <div style={{ textAlign: 'center', padding: '12px 18px', background: `${color}15`, borderRadius: 10, minWidth: 90, flexShrink: 0 }}>
-                        <div style={{ fontSize: 26, fontWeight: 900, color }}>{course.grade_percent != null ? Math.round(course.grade_percent) : '—'}</div>
-                        <div style={{ fontSize: 10, color: '#7A92B0', marginTop: 2 }}>{course.grade_percent != null ? '%' : 'No score'}</div>
+
+                      {/* Right: CR · GRADE · WTD PTS · STATUS */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 0, flexShrink: 0, borderLeft: '1px solid #F0F4F8' }}>
+                        {[
+                          { label: 'CR.', value: creditsDisplay },
+                          { label: 'GRADE', value: course.grade_letter ?? '—', valueColor: color },
+                          { label: 'WTD PTS', value: wPts != null ? wPts.toFixed(1) : '—' },
+                        ].map(col => (
+                          <div key={col.label} style={{ textAlign: 'center', padding: '6px 16px', borderRight: '1px solid #F0F4F8' }}>
+                            <div style={{ fontSize: 9, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>{col.label}</div>
+                            <div style={{ fontSize: 15, fontWeight: 800, color: (col as {valueColor?: string}).valueColor ?? SP_NAVY }}>{col.value}</div>
+                          </div>
+                        ))}
+                        <div style={{ textAlign: 'center', padding: '6px 16px' }}>
+                          <div style={{ fontSize: 9, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>STATUS</div>
+                          <span style={{ background: ss.bg, color: ss.color, padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                            {ss.icon} {status}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>

@@ -4,7 +4,7 @@ import { PriorityBadge } from '@/components/shared/PriorityBadge'
 import { StudentDetailPanel } from '@/components/students/StudentDetailPanel'
 import { toast } from '@/lib/toast'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
-import { type Student, type StudentStatus, formatStudentGrade, fullName } from '@/types/student'
+import { type Student, type StudentStatus, formatStudentGrade, fullName, normalizeStudentGrade } from '@/types/student'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
 
 function fromRow(row: Record<string, unknown>): Student {
@@ -14,7 +14,7 @@ function fromRow(row: Record<string, unknown>): Student {
     id: row.id as string, studentId: row.student_id as string ?? '',
     firstName: row.first_name as string ?? '', lastName: row.last_name as string ?? '',
     dob: null, gender: null, nationality: row.nationality as string ?? null, lang: null,
-    grade: row.grade as number ?? null, status: 'Waitlisted',
+    grade: normalizeStudentGrade(row.grade), status: 'Waitlisted',
     campus: row.campus as string ?? null, cohort: row.cohort as string ?? null,
     studentType: (ext.studentType as Student['studentType']) ?? 'New',
     appDate: row.application_date as string ?? null, enrollDate: null,

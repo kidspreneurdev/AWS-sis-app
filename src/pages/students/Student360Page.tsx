@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
-import { type Student, fullName, STATUS_META } from '@/types/student'
+import { type Student, formatStudentGrade, fullName, normalizeStudentGrade, STATUS_META } from '@/types/student'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -84,7 +84,7 @@ function parseStudentRow(row: Record<string, unknown>): Student {
     gender: (ext.gender as Student['gender']) ?? null,
     nationality: (row.nationality as string) ?? null,
     lang: (ext.lang as string) ?? null,
-    grade: typeof row.grade === 'number' ? row.grade : null,
+    grade: normalizeStudentGrade(row.grade),
     status: (row.status as Student['status']) ?? 'Enrolled',
     campus: (row.campus as string) ?? null,
     cohort: (row.cohort as string) ?? null,
@@ -93,7 +93,7 @@ function parseStudentRow(row: Record<string, unknown>): Student {
     enrollDate: (row.enroll_date as string) ?? null,
     yearJoined: typeof row.year_joined === 'string' ? row.year_joined : null,
     yearGraduated: typeof row.year_graduated === 'string' ? row.year_graduated : null,
-    gradeWhenJoined: typeof row.grade_when_joined === 'number' ? row.grade_when_joined : null,
+    gradeWhenJoined: normalizeStudentGrade(row.grade_when_joined),
     priority: (row.priority as Student['priority']) ?? 'Normal',
     prevSchool: (ext.prevSchool as string) ?? null,
     priorGpa: (ext.priorGpa as string) ?? null,
@@ -235,7 +235,7 @@ function SearchScreen({ students, onSelect }: { students: Student[]; onSelect: (
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#1A365E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fullName(s)}</div>
                 <div style={{ fontSize: 11, color: '#7A92B0', marginTop: 2 }}>
-                  {s.grade != null ? `Grade ${s.grade}` : '—'}{s.cohort ? ` · ${s.cohort}` : ''}
+                  {s.grade != null ? formatStudentGrade(s.grade) : '—'}{s.cohort ? ` · ${s.cohort}` : ''}
                 </div>
                 <span style={{ display: 'inline-block', marginTop: 4, padding: '1px 8px', borderRadius: 10, background: meta.bg, color: meta.tc, fontSize: 10, fontWeight: 700 }}>
                   {s.status}
@@ -305,7 +305,7 @@ function ProfileView({ student, data, activeTab, setActiveTab, onBack }: {
             </div>
             <div style={{ fontSize: 13, color: '#9EB3C8', marginTop: 4 }}>
               {student.studentId}
-              {student.grade != null ? ` · Grade ${student.grade}` : ''}
+              {student.grade != null ? ` · ${formatStudentGrade(student.grade)}` : ''}
               {student.cohort ? ` · ${student.cohort}` : ''}
               {student.campus ? ` · ${student.campus}` : ''}
             </div>
@@ -678,7 +678,7 @@ function ProfileView({ student, data, activeTab, setActiveTab, onBack }: {
                 </div>
                 <div style={card}>
                   <SectionTitle>Academic</SectionTitle>
-                  <InfoRow label="Grade" value={student.grade != null ? String(student.grade) : null} />
+                  <InfoRow label="Grade" value={student.grade != null ? formatStudentGrade(student.grade) : null} />
                   <InfoRow label="Cohort" value={student.cohort} />
                   <InfoRow label="Campus" value={student.campus} />
                   <InfoRow label="Status" value={student.status} />

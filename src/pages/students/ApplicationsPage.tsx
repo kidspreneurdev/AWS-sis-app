@@ -8,7 +8,7 @@ import { toast } from '@/lib/toast'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
 import {
   type Student, type StudentInsert, type StudentStatus,
-  STATUSES, GRADES, formatStudentGrade, fullName,
+  STATUSES, GRADES, formatStudentGrade, fullName, isLegacyStudentGradeSchemaError, normalizeStudentGrade, studentGradeSortIndex, toLegacyStudentGradeValue,
 } from '@/types/student'
 import { useCohorts } from '@/hooks/useCohorts'
 import { useCampuses } from '@/hooks/useCampuses'
@@ -73,6 +73,14 @@ function toRow(s: StudentInsert) {
   }
 }
 
+function toLegacyRow(s: StudentInsert) {
+  return {
+    ...toRow(s),
+    grade: toLegacyStudentGradeValue(s.grade),
+    grade_when_joined: toLegacyStudentGradeValue(s.gradeWhenJoined),
+  }
+}
+
 function fromRow(row: Record<string, unknown>): Student {
   let ext: Record<string, unknown> = {}
   try { ext = JSON.parse((row.notes as string) || '{}') } catch { /* */ }
@@ -85,7 +93,7 @@ function fromRow(row: Record<string, unknown>): Student {
     gender: ext.gender as Student['gender'] ?? null,
     nationality: row.nationality as string ?? null,
     lang: ext.lang as string ?? null,
-    grade: row.grade as number ?? null,
+    grade: normalizeStudentGrade(row.grade),
     status: row.status as StudentStatus ?? 'Inquiry',
     campus: row.campus as string ?? null,
     cohort: row.cohort as string ?? null,
@@ -94,7 +102,7 @@ function fromRow(row: Record<string, unknown>): Student {
     enrollDate: row.enroll_date as string ?? null,
     yearJoined: typeof row.year_joined === 'string' ? row.year_joined : null,
     yearGraduated: typeof row.year_graduated === 'string' ? row.year_graduated : null,
-    gradeWhenJoined: typeof row.grade_when_joined === 'number' ? row.grade_when_joined : null,
+    gradeWhenJoined: normalizeStudentGrade(row.grade_when_joined),
     priority: (row.priority as Student['priority']) ?? 'Normal',
     prevSchool: ext.prevSchool as string ?? null,
     priorGpa: ext.priorGpa as string ?? null,
@@ -210,7 +218,7 @@ export function ApplicationsPage() {
       let av: string | number | null = null, bv: string | number | null = null
       if (sortKey === 'firstName') { av = `${a.firstName} ${a.lastName}`; bv = `${b.firstName} ${b.lastName}` }
       else if (sortKey === 'studentId') { av = a.studentId; bv = b.studentId }
-      else if (sortKey === 'grade') { av = a.grade ?? -1; bv = b.grade ?? -1 }
+      else if (sortKey === 'grade') { av = studentGradeSortIndex(a.grade); bv = studentGradeSortIndex(b.grade) }
       else if (sortKey === 'status') { av = a.status; bv = b.status }
       else if (sortKey === 'campus') { av = a.campus ?? ''; bv = b.campus ?? '' }
       else if (sortKey === 'appDate') { av = a.appDate ?? ''; bv = b.appDate ?? '' }
@@ -234,11 +242,19 @@ export function ApplicationsPage() {
 
   async function handleSave(data: StudentInsert) {
     if (editing) {
-      const { error } = await supabase.from('students').update(toRow(data)).eq('id', editing.id)
+      const row = toRow(data)
+      let { error } = await supabase.from('students').update(row).eq('id', editing.id)
+      if (error && isLegacyStudentGradeSchemaError(error.message)) {
+        ;({ error } = await supabase.from('students').update(toLegacyRow(data)).eq('id', editing.id))
+      }
       if (error) { console.error('Update error:', error); toast(error.message, 'err'); return }
       toast('Application updated', 'ok')
     } else {
-      const { error } = await supabase.from('students').insert(toRow(data))
+      const row = toRow(data)
+      let { error } = await supabase.from('students').insert(row)
+      if (error && isLegacyStudentGradeSchemaError(error.message)) {
+        ;({ error } = await supabase.from('students').insert(toLegacyRow(data)))
+      }
       if (error) { console.error('Insert error:', error); toast(error.message, 'err'); return }
       toast('Application added', 'ok')
     }
@@ -271,7 +287,11 @@ export function ApplicationsPage() {
     const current = students.find(s => s.id === id)
     if (!current) return
     const { id: _id, createdAt: _c, updatedAt: _u, ...rest } = current
-    const { error } = await supabase.from('students').update(toRow({ ...rest, documents })).eq('id', id)
+    const updated = { ...rest, documents }
+    let { error } = await supabase.from('students').update(toRow(updated)).eq('id', id)
+    if (error && isLegacyStudentGradeSchemaError(error.message)) {
+      ;({ error } = await supabase.from('students').update(toLegacyRow(updated)).eq('id', id))
+    }
     if (error) { toast(error.message, 'err'); return }
     setStudents(prev => prev.map(s => s.id === id ? { ...s, documents } : s))
     setPanelStudent(prev => prev?.id === id ? { ...prev, documents } : prev)

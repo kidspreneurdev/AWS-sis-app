@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { StatusBadge } from '@/components/shared/StatusBadge'
-import { type Student, type StudentStatus, STATUS_META, fullName } from '@/types/student'
+import { type Student, type StudentStatus, normalizeStudentGrade, STATUS_META, fullName } from '@/types/student'
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 function fromRow(row: Record<string, unknown>): Student {
@@ -13,7 +13,7 @@ function fromRow(row: Record<string, unknown>): Student {
     id: row.id as string, studentId: row.student_id as string ?? '',
     firstName: row.first_name as string ?? '', lastName: row.last_name as string ?? '',
     dob: null, gender: null, nationality: row.nationality as string ?? null, lang: null,
-    grade: row.grade as number ?? null, status: row.status as StudentStatus ?? 'Inquiry',
+    grade: normalizeStudentGrade(row.grade), status: row.status as StudentStatus ?? 'Inquiry',
     campus: row.campus as string ?? null, cohort: row.cohort as string ?? null,
     studentType: (ext.studentType as Student['studentType']) ?? 'New',
     appDate: row.application_date as string ?? null,

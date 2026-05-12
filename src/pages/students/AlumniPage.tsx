@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { StudentModal } from '@/components/students/StudentModal'
-import { type Student, type StudentInsert, fullName } from '@/types/student'
+import { type Student, type StudentInsert, formatStudentGrade, fullName, isLegacyStudentGradeSchemaError, normalizeStudentGrade, toLegacyStudentGradeValue } from '@/types/student'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
 import { useCohorts } from '@/hooks/useCohorts'
 import { useCampuses } from '@/hooks/useCampuses'
@@ -31,6 +31,14 @@ function toRow(s: StudentInsert) {
   }
 }
 
+function toLegacyRow(s: StudentInsert) {
+  return {
+    ...toRow(s),
+    grade: toLegacyStudentGradeValue(s.grade),
+    grade_when_joined: toLegacyStudentGradeValue(s.gradeWhenJoined),
+  }
+}
+
 function fromRow(row: Record<string, unknown>): Student {
   let ext: Record<string, unknown> = {}
   try { ext = JSON.parse((row.notes as string) || '{}') } catch { /* */ }
@@ -38,13 +46,13 @@ function fromRow(row: Record<string, unknown>): Student {
     id: row.id as string, studentId: row.student_id as string ?? '',
     firstName: row.first_name as string ?? '', lastName: row.last_name as string ?? '',
     dob: null, gender: null, nationality: row.nationality as string ?? null, lang: null,
-    grade: row.grade as number ?? null, status: 'Alumni',
+    grade: normalizeStudentGrade(row.grade), status: 'Alumni',
     campus: row.campus as string ?? null, cohort: row.cohort as string ?? null,
     studentType: 'Alumni', appDate: row.application_date as string ?? null,
     enrollDate: row.enroll_date as string ?? null,
     yearJoined: row.year_joined as string ?? null,
     yearGraduated: row.year_graduated as string ?? null,
-    gradeWhenJoined: row.grade_when_joined as number ?? null,
+    gradeWhenJoined: normalizeStudentGrade(row.grade_when_joined),
     priority: (row.priority as Student['priority']) ?? 'Normal',
     prevSchool: null, priorGpa: null, iep: null, email: row.email as string ?? null,
     phone: row.phone as string ?? null, parent: row.parent as string ?? null,
@@ -108,7 +116,10 @@ export function AlumniPage() {
       status: 'Alumni',
       studentType: 'Alumni',
     }
-    const { error } = await supabase.from('students').insert(toRow(payload))
+    let { error } = await supabase.from('students').insert(toRow(payload))
+    if (error && isLegacyStudentGradeSchemaError(error.message)) {
+      ;({ error } = await supabase.from('students').insert(toLegacyRow(payload)))
+    }
     if (error) {
       toast(error.message, 'err')
       return
@@ -153,7 +164,7 @@ export function AlumniPage() {
       ['Name', 'Student ID', 'Graduated', 'Campus', 'Grade', 'Year Joined', 'Years at AWS', 'Distinction', 'Post-Secondary', 'Email'],
       ...filtered.map(s => {
         const yrsAtAws = s.yearJoined && s.yearGraduated ? Number(s.yearGraduated) - Number(s.yearJoined) : ''
-        return [fullName(s), s.studentId, s.yearGraduated ?? '', s.campus ?? '', s.grade ?? '', s.yearJoined ?? '', yrsAtAws, s.gradDistinction ?? '', s.postSecondary ?? '', s.email ?? '']
+        return [fullName(s), s.studentId, s.yearGraduated ?? '', s.campus ?? '', formatStudentGrade(s.grade), s.yearJoined ?? '', yrsAtAws, s.gradDistinction ?? '', s.postSecondary ?? '', s.email ?? '']
       }),
     ]
     const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')

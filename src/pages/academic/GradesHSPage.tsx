@@ -189,7 +189,7 @@ const ACCREDITATION_OPTS = ['','EC Program','WASC','NEASC','CDE','Regional Unive
 
 type SkillScores = Record<string, number>
 
-interface Student { id: string; studentId: string; name: string; grade: string }
+interface Student { id: string; studentId: string; name: string; grade: string; dob: string; campus: string; nationality: string; cohort: string; notes: string }
 
 // ─── Supabase row-mapping helpers ─────────────────────────────────────────────
 function rowToCourse(r: Record<string,unknown>): CourseRecord {
@@ -580,12 +580,14 @@ export function GradesHSPage() {
   const [transferModal, setTransferModal] = useState<TransferCredit|null>(null)
   const [catalogDraft, setCatalogDraft] = useState<CatalogCourse|null>(null)
   const [gradBreakdownKey, setGradBreakdownKey] = useState<string | null>(null)
+  const [academicYear, setAcademicYear] = useState('2025–2026')
+  const [graduationCreditsRequired, setGraduationCreditsRequired] = useState(24)
   const printRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     async function loadAll() {
       // Load students
-      let sQuery = supabase.from('students').select('id,student_id,first_name,last_name,grade').eq('status','Enrolled').in('grade',['9','10','11','12'])
+      let sQuery = supabase.from('students').select('id,student_id,first_name,last_name,grade,date_of_birth,campus,nationality,cohort,notes').eq('status','Enrolled').in('grade',['9','10','11','12'])
       if (cf) sQuery = sQuery.eq('campus', cf)
       const { data: stData } = await sQuery
       if (stData) {
@@ -594,6 +596,11 @@ export function GradesHSPage() {
           studentId: (r.student_id as string) ?? '',
           name: `${r.first_name} ${r.last_name}`,
           grade: String(r.grade),
+          dob: (r.date_of_birth as string) ?? '',
+          campus: (r.campus as string) ?? '',
+          nationality: (r.nationality as string) ?? '',
+          cohort: (r.cohort as string) ?? '',
+          notes: (r.notes as string) ?? '',
         }))
         setStudents(list)
         if (list.length && !selectedId) setSelectedId(list[0].id)
@@ -607,6 +614,12 @@ export function GradesHSPage() {
       // Load catalog
       const { data: catData } = await supabase.from('catalog').select('*')
       if (catData && catData.length) setCatalog(catData.map(rowToCatalog))
+      // Load settings
+      const { data: settingsData } = await supabase.from('settings').select('academic_year,graduation_credits').single()
+      if (settingsData) {
+        if (settingsData.academic_year) setAcademicYear(settingsData.academic_year)
+        if (settingsData.graduation_credits) setGraduationCreditsRequired(Number(settingsData.graduation_credits))
+      }
     }
     loadAll()
   }, [cf])
@@ -839,16 +852,16 @@ export function GradesHSPage() {
   <img src="/Logo_b.png" alt="American World School" style="height:70px;width:auto;object-fit:contain;margin-bottom:8px"/>
   <div style="font-size:22px;font-weight:900;color:#1A365E;letter-spacing:1px">AMERICAN WORLD SCHOOL</div>
   <div style="font-size:11px;color:#7A92B0;letter-spacing:2px;margin-top:2px">OFFICIAL ACADEMIC TRANSCRIPT</div>
-  <div style="font-size:11px;color:#3D5475;margin-top:4px"><span class="num">24</span>-Credit Graduation Program · <span class="num">2025</span>–<span class="num">2026</span></div>
+  <div style="font-size:11px;color:#3D5475;margin-top:4px"><span class="num">${graduationCreditsRequired}</span>-Credit Graduation Program · <span class="num">${h(academicYear)}</span></div>
   <div style="font-size:11px;color:#D61F31;font-weight:700;margin-top:4px">CONFIDENTIAL — FERPA PROTECTED</div>
 </div>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;font-size:12px">
   <div><strong>Student Name:</strong> ${hn(student.name)}</div>
   <div><strong>Student ID:</strong> ${hn(student.studentId || '—')}</div>
-  <div><strong>Date of Birth:</strong> —</div>
+  <div><strong>Date of Birth:</strong> ${hn(student.dob || '—')}</div>
   <div><strong>Grade:</strong> ${hn(student.grade)}</div>
-  <div><strong>Campus:</strong> —</div>
-  <div><strong>Academic Year:</strong> <span class="num">2025</span>–<span class="num">2026</span></div>
+  <div><strong>Campus:</strong> ${hn(student.campus || '—')}</div>
+  <div><strong>Academic Year:</strong> ${hn(academicYear)}</div>
   <div><strong>Counselor Notes:</strong> —</div>
   <div><strong>Issue Date:</strong> ${hn(issueDate)}</div>
 </div>
@@ -862,8 +875,8 @@ ${courseRows}${trRows}${apRows}
   </div>
 </div>
 <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:10px">
-  <span><strong>Total Credits Earned:</strong> ${hn(totCr)} / <span class="num">24</span> credits</span>
-  ${totCr >= 24 ? '<span style="background:#1DBD6A;color:#fff;padding:4px 12px;border-radius:8px;font-weight:700">✓ GRADUATION REQUIREMENTS MET</span>' : ''}
+  <span><strong>Total Credits Earned:</strong> ${hn(totCr)} / <span class="num">${graduationCreditsRequired}</span> credits</span>
+  ${totCr >= graduationCreditsRequired ? '<span style="background:#1DBD6A;color:#fff;padding:4px 12px;border-radius:8px;font-weight:700">✓ GRADUATION REQUIREMENTS MET</span>' : ''}
 </div>
 ${dist ? `<div style="text-align:center;padding:10px;background:#FAC60020;border:2px solid #FAC600;border-radius:8px;font-weight:800;color:#7A5100;margin-bottom:12px">🏆 Academic Distinction: ${h(dist.label)}</div>` : ''}
 <div style="border:2px dashed #B0C4DE;border-radius:10px;padding:16px;margin-bottom:16px;display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:center">
@@ -999,7 +1012,7 @@ ${dist ? `<div style="text-align:center;padding:10px;background:#FAC60020;border
             { label:'Unweighted GPA', val: uw ? uw.toFixed(2) : '—', col: uwCol,    icon:'📊' },
             { label:'Weighted GPA',   val: wt ? wt.toFixed(2) : '—', col:'#7040CC', icon:'⭐' },
             { label:'Academic GPA',   val: uc ? uc.toFixed(2) : '—', col:'#0EA5E9', icon:'🎓' },
-            { label:'Total Credits',  val: `${Math.round(gc.total * 10) / 10} / 24`, col:'#1A365E', icon:'📚' },
+            { label:'Total Credits',  val: `${Math.round(gc.total * 10) / 10} / ${graduationCreditsRequired}`, col:'#1A365E', icon:'📚' },
           ].map(c => (
             <div key={c.label} style={{ ...card, padding:'14px 16px' }}>
               <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
@@ -2233,7 +2246,7 @@ ${deTotal > 0 ? `
             <img src="/Logo_b.png" alt="American World School" style={{ height:70, width:'auto', objectFit:'contain', marginBottom:8, display:'block', margin:'0 auto 8px' }} />
             <div style={{ fontSize:22, fontWeight:900, color:'#1A365E', letterSpacing:1 }}>AMERICAN WORLD SCHOOL</div>
             <div style={{ fontSize:11, color:'#7A92B0', letterSpacing:2, marginTop:2 }}>OFFICIAL ACADEMIC TRANSCRIPT</div>
-            <div style={{ fontSize:11, color:'#3D5475', marginTop:4 }}>{renderTranscriptText('24-Credit Graduation Program · 2025–2026')}</div>
+            <div style={{ fontSize:11, color:'#3D5475', marginTop:4 }}>{renderTranscriptText(`${graduationCreditsRequired}-Credit Graduation Program · ${academicYear}`)}</div>
             <div style={{ fontSize:11, color:'#D61F31', fontWeight:700, marginTop:4 }}>CONFIDENTIAL — FERPA PROTECTED</div>
           </div>
 
@@ -2242,10 +2255,10 @@ ${deTotal > 0 ? `
             {[
               ['Student Name',    student?.name || '—'],
               ['Student ID',      student?.studentId || '—'],
-              ['Date of Birth',   '—'],
+              ['Date of Birth',   student?.dob || '—'],
               ['Grade',           student?.grade || '—'],
-              ['Campus',          '—'],
-              ['Academic Year',   '2025–2026'],
+              ['Campus',          student?.campus || '—'],
+              ['Academic Year',   academicYear],
               ['Counselor Notes', '—'],
               ['Issue Date',      issueDate],
             ].map(([l, v]) => (
@@ -2379,8 +2392,8 @@ ${deTotal > 0 ? `
 
           {/* Credits + graduation badge */}
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', fontSize:12, marginBottom:10 }}>
-            <span><strong>Total Credits Earned:</strong> {renderTranscriptText(`${totCr} / 24 credits`)}</span>
-            {totCr >= 24 && <span style={{ background:'#1DBD6A', color:'#fff', padding:'4px 12px', borderRadius:8, fontWeight:700 }}>✓ GRADUATION REQUIREMENTS MET</span>}
+            <span><strong>Total Credits Earned:</strong> {renderTranscriptText(`${totCr} / ${graduationCreditsRequired} credits`)}</span>
+            {totCr >= graduationCreditsRequired && <span style={{ background:'#1DBD6A', color:'#fff', padding:'4px 12px', borderRadius:8, fontWeight:700 }}>✓ GRADUATION REQUIREMENTS MET</span>}
           </div>
 
           {/* Distinction */}

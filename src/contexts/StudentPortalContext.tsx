@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { supabase } from '@/lib/supabase'
+import { formatStudentGrade } from '@/types/student'
 
 export interface StudentSession {
   studentId: string
@@ -25,7 +26,7 @@ function mapStudentSession(row: Record<string, unknown>): StudentSession {
   return {
     studentId: (row.student_id as string) ?? '',
     fullName: `${(row.first_name as string) ?? ''} ${(row.last_name as string) ?? ''}`.trim(),
-    grade: row.grade != null ? String(row.grade) : '',
+    grade: formatStudentGrade(row.grade),
     campus: (row.campus as string) ?? '',
     cohort: (row.cohort as string) ?? '',
     dbId: row.id as string,

@@ -14,7 +14,7 @@ export interface Student {
   gender: 'Male' | 'Female' | 'Other' | null
   nationality: string | null
   lang: string | null
-  grade: number | null
+  grade: string | null
   status: StudentStatus
   campus: string | null
   cohort: string | null
@@ -23,7 +23,7 @@ export interface Student {
   enrollDate: string | null
   yearJoined: string | null
   yearGraduated: string | null
-  gradeWhenJoined: number | null
+  gradeWhenJoined: string | null
   priority: Priority
   prevSchool: string | null
   priorGpa: string | null
@@ -113,19 +113,55 @@ export function fullName(s: Student) {
   return [s.firstName, s.lastName].filter(v => v && v.trim()).join(' ')
 }
 
-export function parseStudentGrade(value: string): number | null {
-  if (!value) return null
-  if (value === 'Pre-K') return -1
-  if (value === 'K') return 0
-  const parsed = Number(value)
+export function normalizeStudentGrade(value: unknown): string | null {
+  if (value == null) return null
+  if (typeof value === 'number') {
+    if (value === -1) return 'Pre-K'
+    if (value === 0) return 'K'
+    return String(value)
+  }
+
+  const trimmed = String(value).trim()
+  if (!trimmed) return null
+
+  const lower = trimmed.toLowerCase()
+  if (trimmed === '-1' || lower === 'pre-k' || lower === 'prek' || lower === 'pre k') return 'Pre-K'
+  if (trimmed === '0' || lower === 'k' || lower === 'kindergarten') return 'K'
+
+  const parsed = Number(trimmed)
+  if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 12) return String(parsed)
+  return trimmed
+}
+
+export function formatStudentGrade(grade: unknown): string {
+  return normalizeStudentGrade(grade) ?? ''
+}
+
+export function studentGradeSortIndex(grade: unknown): number {
+  const normalized = normalizeStudentGrade(grade)
+  if (!normalized) return Number.POSITIVE_INFINITY
+  const order = GRADES.indexOf(normalized)
+  return order === -1 ? Number.POSITIVE_INFINITY : order
+}
+
+export function compareStudentGrades(a: unknown, b: unknown): number {
+  return studentGradeSortIndex(a) - studentGradeSortIndex(b)
+}
+
+export function toLegacyStudentGradeValue(grade: unknown): number | null {
+  const normalized = normalizeStudentGrade(grade)
+  if (!normalized) return null
+  if (normalized === 'Pre-K') return -1
+  if (normalized === 'K') return 0
+  const parsed = Number(normalized)
   return Number.isFinite(parsed) ? parsed : null
 }
 
-export function formatStudentGrade(grade: number | null | undefined): string {
-  if (grade == null) return ''
-  if (grade === -1) return 'Pre-K'
-  if (grade === 0) return 'K'
-  return String(grade)
+export function isLegacyStudentGradeSchemaError(message: string | undefined | null): boolean {
+  const text = (message ?? '').toLowerCase()
+  return text.includes('invalid input syntax for type integer')
+    || text.includes('column "grade" is of type integer')
+    || text.includes('column "grade_when_joined" is of type integer')
 }
 
 export function generateStudentId(): string {

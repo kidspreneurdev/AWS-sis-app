@@ -47,7 +47,7 @@ export interface Student {
   phone: string | null
   date_of_birth: string | null
   nationality: string | null
-  grade: number | null
+  grade: string | null
   cohort: string | null
   campus: string | null
   status: Database['public']['Enums']['student_status']
@@ -55,7 +55,7 @@ export interface Student {
   application_date: string | null
   year_joined: string | null
   year_graduated: string | null
-  grade_when_joined: number | null
+  grade_when_joined: string | null
   parent: string | null
   iep: boolean
   support_needs: string | null

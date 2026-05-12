@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { StatusBadge } from '@/components/shared/StatusBadge'
-import type { StudentStatus } from '@/types/student'
+import { compareStudentGrades, formatStudentGrade, normalizeStudentGrade, type StudentStatus } from '@/types/student'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
 
@@ -9,7 +9,7 @@ interface StudentMin {
   id: string
   firstName: string
   lastName: string
-  grade: number | null
+  grade: string | null
   cohort: string | null
   status: StudentStatus
 }
@@ -19,7 +19,7 @@ function fromRow(r: Record<string, unknown>): StudentMin {
     id: r.id as string,
     firstName: r.first_name as string ?? '',
     lastName: r.last_name as string ?? '',
-    grade: r.grade as number ?? null,
+    grade: normalizeStudentGrade(r.grade),
     cohort: r.cohort as string ?? null,
     status: r.status as StudentStatus ?? 'Enrolled',
   }
@@ -115,7 +115,7 @@ function AssignModal({
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#1A365E' }}>{s.firstName} {s.lastName}</div>
-                <div style={{ fontSize: 11, color: '#9EB3C8' }}>{s.grade !== null ? `Grade ${s.grade}` : 'No grade'}</div>
+                <div style={{ fontSize: 11, color: '#9EB3C8' }}>{s.grade !== null ? formatStudentGrade(s.grade) : 'No grade'}</div>
               </div>
               <StatusBadge status={s.status} size="sm" />
             </div>
@@ -274,7 +274,7 @@ export function CohortsPage() {
               {cohortNames.map(cohortName => {
                 const members = students.filter(s => s.cohort === cohortName)
                 const enrolledMembers = members.filter(s => s.status === 'Enrolled')
-                const grades = [...new Set(members.map(s => s.grade).filter(v => v !== null) as number[])].sort((a, b) => a - b)
+                const grades = [...new Set(members.map(s => s.grade).filter((v): v is string => v !== null))].sort(compareStudentGrades)
                 const pct = Math.min(100, Math.round((enrolledMembers.length / CAPACITY) * 100))
                 const unassignedForThis = enrolled.filter(s => !s.cohort)
 

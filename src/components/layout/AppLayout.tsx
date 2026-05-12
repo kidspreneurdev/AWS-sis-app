@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/auth.store'
+import { formatStudentGrade, normalizeStudentGrade } from '@/types/student'
 import {
   LayoutDashboard, TrendingUp, Users, ClipboardList,
   UserCheck, DollarSign, MessageSquare, FileText, Calendar,
@@ -156,7 +157,7 @@ const ROUTE_TITLES: Record<string, string> = (() => {
 
 // ─── Global Search ────────────────────────────────────────────────────────────
 
-interface SearchResult { id: string; name: string; grade: number | null; cohort: string | null; status: string }
+interface SearchResult { id: string; name: string; grade: string | null; cohort: string | null; status: string }
 
 function GlobalSearch() {
   const navigate = useNavigate()
@@ -202,7 +203,7 @@ function GlobalSearch() {
       setResults((data ?? []).map((r: Record<string, unknown>) => ({
         id: r.id as string,
         name: [(r.first_name as string) ?? '', (r.last_name as string) ?? ''].filter(Boolean).join(' '),
-        grade: typeof r.grade === 'number' ? r.grade : null,
+        grade: normalizeStudentGrade(r.grade),
         cohort: (r.cohort as string) ?? null,
         status: (r.status as string) ?? '',
       })))
@@ -256,7 +257,7 @@ function GlobalSearch() {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#1A365E' }}>{r.name}</div>
                 <div style={{ fontSize: 11, color: '#7A92B0' }}>
-                  {r.grade != null ? `Grade ${r.grade}` : ''}
+                  {r.grade != null ? formatStudentGrade(r.grade) : ''}
                   {r.grade != null && r.cohort ? ' · ' : ''}
                   {r.cohort ?? ''}
                 </div>
@@ -528,54 +529,52 @@ export function AppLayout() {
             </SidebarContent>
 
             <SidebarFooter style={{ background: '#0a1a30', borderTop: '1px solid rgba(255,255,255,.08)', padding: '6px 4px 4px' }}>
-              <DropdownMenu>
-                <DropdownMenuTrigger style={{ all: 'unset', width: '100%', display: 'block' }}>
-                  <div style={{
-                    display: 'flex', width: '100%', alignItems: 'center', gap: 8,
-                    padding: '8px 10px', borderRadius: 10,
-                    background: 'rgba(255,255,255,.08)',
-                    cursor: 'pointer',
-                  }}>
-                    <div style={{
-                      width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-                      background: '#D61F31', color: '#fff',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 11, fontWeight: 700,
-                    }}>
-                      {initials}
-                    </div>
-                    <div style={{ flex: 1, textAlign: 'left', minWidth: 0 }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {profile?.full_name ?? 'User'}
-                      </div>
-                      <div style={{ fontSize: 10, color: 'rgba(255,255,255,.4)', textTransform: 'capitalize' }}>
-                        {profile?.role ?? 'staff'}
-                      </div>
-                    </div>
+              <div style={{
+                display: 'flex', width: '100%', alignItems: 'center', gap: 8,
+                padding: '8px 10px', borderRadius: 10,
+                background: 'rgba(255,255,255,.08)',
+              }}>
+                <div style={{
+                  width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                  background: '#D61F31', color: '#fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 11, fontWeight: 700,
+                }}>
+                  {initials}
+                </div>
+                <div style={{ flex: 1, textAlign: 'left', minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {profile?.full_name ?? 'User'}
+                  </div>
+                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,.4)', textTransform: 'capitalize' }}>
+                    {profile?.role ?? 'staff'}
+                  </div>
+                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
                     <span
-                      onClick={(e) => { e.stopPropagation(); handleLogout() }}
-                      title="Sign out"
+                      title="Account options"
                       role="button"
-                      style={{ background: 'rgba(255,255,255,.1)', borderRadius: 5, padding: '3px 7px', fontSize: 10, cursor: 'pointer', color: 'rgba(255,255,255,.5)', userSelect: 'none' }}
+                      style={{ background: 'rgba(255,255,255,.1)', borderRadius: 5, padding: '3px 7px', fontSize: 10, cursor: 'pointer', color: 'rgba(255,255,255,.5)', userSelect: 'none', flexShrink: 0 }}
                     >
                       ⏏
                     </span>
-                  </div>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent side="top" align="start" className="w-48">
-                  {!isStaff && (
-                    <>
-                      <DropdownMenuItem onClick={() => navigate('/admin/settings')}>
-                        <Settings className="mr-2 h-4 w-4" /> Settings
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                    </>
-                  )}
-                  <DropdownMenuItem onClick={handleLogout} style={{ color: '#D61F31' }}>
-                    <LogOut className="mr-2 h-4 w-4" /> Log out
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent side="top" align="end" className="w-48">
+                    {!isStaff && (
+                      <>
+                        <DropdownMenuItem onClick={() => navigate('/admin/settings')}>
+                          <Settings className="mr-2 h-4 w-4" /> Settings
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                      </>
+                    )}
+                    <DropdownMenuItem onClick={handleLogout} style={{ color: '#D61F31' }}>
+                      <LogOut className="mr-2 h-4 w-4" /> Log out
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </SidebarFooter>
           </Sidebar>
 

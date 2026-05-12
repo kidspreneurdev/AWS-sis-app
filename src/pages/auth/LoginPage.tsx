@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
+import { formatStudentGrade } from '@/types/student'
 
 type LoginTab = 'staff' | 'student'
 
@@ -129,7 +130,7 @@ export function LoginPage({ initialTab = 'staff' }: { initialTab?: LoginTab }) {
       const sess = {
         studentId: row.student_id as string,
         fullName: `${row.first_name ?? ''} ${row.last_name ?? ''}`.trim(),
-        grade: row.grade != null ? String(row.grade) : '',
+        grade: formatStudentGrade(row.grade),
         campus: (row.campus as string) ?? '',
         cohort: (row.cohort as string) ?? '',
         dbId: row.id as string,

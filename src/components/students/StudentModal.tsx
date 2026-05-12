@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase'
 import {
   STATUSES, GRADES, BLOOD_GROUPS, IEP_OPTIONS, DOCUMENT_TYPES,
   PRIORITIES, STUDENT_TYPES, generateStudentId, EMPTY_STUDENT,
-  formatStudentGrade, parseStudentGrade,
+  formatStudentGrade, normalizeStudentGrade,
   type Student, type StudentInsert,
 } from '@/types/student'
 
@@ -313,7 +313,7 @@ export function StudentModal({ open, student, initialStudentType = 'New', campus
               </Grid2>
               <Grid2>
                 <Field label="Grade">
-                  <FSelect value={formatStudentGrade(form.grade)} onChange={e => set('grade', parseStudentGrade(e.target.value))}>
+                  <FSelect value={formatStudentGrade(form.grade)} onChange={e => set('grade', normalizeStudentGrade(e.target.value))}>
                     <option value="">— Select Grade —</option>
                     {GRADES.map(g => <option key={g} value={g}>{g}</option>)}
                   </FSelect>
@@ -367,6 +367,17 @@ export function StudentModal({ open, student, initialStudentType = 'New', campus
                 </Field>
               </Grid2>
               <Grid2>
+                <Field label="Grade (Joined)">
+                  <FSelect value={formatStudentGrade(form.gradeWhenJoined)} onChange={e => set('gradeWhenJoined', normalizeStudentGrade(e.target.value))}>
+                    <option value="">— Select Grade —</option>
+                    {GRADES.map(g => <option key={g} value={g}>{g}</option>)}
+                  </FSelect>
+                </Field>
+                <Field label="Year Joined">
+                  <FInput value={form.yearJoined ?? ''} onChange={e => set('yearJoined', e.target.value || null)} placeholder="e.g. 2025" />
+                </Field>
+              </Grid2>
+              <Grid2>
                 <Field label="Previous School">
                   <FInput value={form.prevSchool ?? ''} onChange={e => set('prevSchool', e.target.value || null)} placeholder="School name" />
                 </Field>
@@ -410,12 +421,10 @@ export function StudentModal({ open, student, initialStudentType = 'New', campus
               {/* Alumni-specific fields */}
               {form.studentType === 'Alumni' && (
                 <Grid2>
-                  <Field label="Year Joined">
-                    <FInput value={form.yearJoined ?? ''} onChange={e => set('yearJoined', e.target.value || null)} placeholder="e.g. 2018" />
-                  </Field>
                   <Field label="Year Graduated">
                     <FInput value={form.yearGraduated ?? ''} onChange={e => set('yearGraduated', e.target.value || null)} placeholder="e.g. 2022" />
                   </Field>
+                  <div />
                 </Grid2>
               )}
               {form.studentType === 'Alumni' && (

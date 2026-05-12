@@ -4,7 +4,7 @@ import { StudentModal } from '@/components/students/StudentModal'
 import { StudentDetailPanel } from '@/components/students/StudentDetailPanel'
 import { toast } from '@/lib/toast'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
-import { type Student, type StudentInsert, type StudentStatus, formatStudentGrade, fullName } from '@/types/student'
+import { type Student, type StudentInsert, type StudentStatus, compareStudentGrades, formatStudentGrade, fullName, isLegacyStudentGradeSchemaError, normalizeStudentGrade, toLegacyStudentGradeValue } from '@/types/student'
 import { useCohorts } from '@/hooks/useCohorts'
 import { useCampuses } from '@/hooks/useCampuses'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
@@ -22,7 +22,7 @@ function fromRow(row: Record<string, unknown>): Student {
     gender: ext.gender as Student['gender'] ?? null,
     nationality: row.nationality as string ?? null,
     lang: ext.lang as string ?? null,
-    grade: row.grade as number ?? null,
+    grade: normalizeStudentGrade(row.grade),
     status: (row.status as Student['status']) ?? 'Enrolled',
     campus: row.campus as string ?? null,
     cohort: row.cohort as string ?? null,
@@ -31,7 +31,7 @@ function fromRow(row: Record<string, unknown>): Student {
     enrollDate: row.enroll_date as string ?? null,
     yearJoined: typeof row.year_joined === 'string' ? row.year_joined : null,
     yearGraduated: typeof row.year_graduated === 'string' ? row.year_graduated : null,
-    gradeWhenJoined: typeof row.grade_when_joined === 'number' ? row.grade_when_joined : null,
+    gradeWhenJoined: normalizeStudentGrade(row.grade_when_joined),
     priority: (row.priority as Student['priority']) ?? 'Normal',
     prevSchool: ext.prevSchool as string ?? null,
     priorGpa: ext.priorGpa as string ?? null,
@@ -126,6 +126,14 @@ function toRow(s: StudentInsert) {
   }
 }
 
+function toLegacyRow(s: StudentInsert) {
+  return {
+    ...toRow(s),
+    grade: toLegacyStudentGradeValue(s.grade),
+    grade_when_joined: toLegacyStudentGradeValue(s.gradeWhenJoined),
+  }
+}
+
 const card: React.CSSProperties = {
   background: '#fff', borderRadius: 10,
   border: '1px solid #E4EAF2',
@@ -178,14 +186,20 @@ export function StudentsPage() {
 
   async function handleSave(data: StudentInsert) {
     if (editing) {
-      const { error } = await supabase.from('students').update(toRow(data)).eq('id', editing.id)
+      let { error } = await supabase.from('students').update(toRow(data)).eq('id', editing.id)
+      if (error && isLegacyStudentGradeSchemaError(error.message)) {
+        ;({ error } = await supabase.from('students').update(toLegacyRow(data)).eq('id', editing.id))
+      }
       if (error) { console.error('Student update error:', error); toast(error.message, 'err'); return }
       toast('Student updated', 'ok')
     } else {
       const payload: StudentInsert = { ...data, status: data.status === 'Inquiry' ? 'Enrolled' : data.status }
       const row = toRow(payload)
       console.log('Inserting student row:', row)
-      const { error } = await supabase.from('students').insert(row)
+      let { error } = await supabase.from('students').insert(row)
+      if (error && isLegacyStudentGradeSchemaError(error.message)) {
+        ;({ error } = await supabase.from('students').insert(toLegacyRow(payload)))
+      }
       if (error) { console.error('Student insert error:', error); toast(error.message, 'err'); return }
       toast('Student enrolled', 'ok')
     }
@@ -203,7 +217,11 @@ export function StudentsPage() {
     const current = students.find(s => s.id === id)
     if (!current) return
     const { id: _id, createdAt: _c, updatedAt: _u, ...rest } = current
-    const { error } = await supabase.from('students').update(toRow({ ...rest, documents })).eq('id', id)
+    const updated = { ...rest, documents }
+    let { error } = await supabase.from('students').update(toRow(updated)).eq('id', id)
+    if (error && isLegacyStudentGradeSchemaError(error.message)) {
+      ;({ error } = await supabase.from('students').update(toLegacyRow(updated)).eq('id', id))
+    }
     if (error) { toast(error.message, 'err'); return }
     setStudents(prev => prev.map(s => s.id === id ? { ...s, documents } : s))
     setPanelStudent(prev => prev?.id === id ? { ...prev, documents } : prev)
@@ -232,7 +250,7 @@ export function StudentsPage() {
 
   const campuses = useCampuses()
   const cohorts = useCohorts()
-  const grades = [...new Set(students.map(s => s.grade).filter(v => v !== null) as number[])].sort((a, b) => a - b)
+  const grades = [...new Set(students.map(s => s.grade).filter((v): v is string => v !== null))].sort(compareStudentGrades)
 
   const headerPortal = useHeaderActions(
     <div style={{ display: 'flex', gap: 8 }}>

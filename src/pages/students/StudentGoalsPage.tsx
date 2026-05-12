@@ -2,12 +2,13 @@ import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
+import { formatStudentGrade, normalizeStudentGrade } from '@/types/student'
 
 interface Goal {
   id: string
   studentId: string
   studentName: string
-  grade: number | null
+  grade: string | null
   term: string | null
   status: string
   category: string
@@ -22,7 +23,7 @@ interface Student {
   id: string
   firstName: string
   lastName: string
-  grade: number | null
+  grade: string | null
 }
 
 const STATUS_META: Record<string, { bg: string; tc: string }> = {
@@ -64,7 +65,7 @@ export function StudentGoalsPage() {
         id: r.id as string,
         firstName: (r.first_name as string) ?? '',
         lastName: (r.last_name as string) ?? '',
-        grade: typeof r.grade === 'number' ? r.grade : null,
+        grade: normalizeStudentGrade(r.grade),
       }))
       setStudents(mapped)
       mapped.forEach(s => { stuMap[s.id] = s })
@@ -158,7 +159,7 @@ export function StudentGoalsPage() {
           <option value="">All Students</option>
           {students.map(s => (
             <option key={s.id} value={s.id}>
-              {[s.firstName, s.lastName].filter(Boolean).join(' ')} {s.grade ? `(Gr ${s.grade})` : ''}
+              {[s.firstName, s.lastName].filter(Boolean).join(' ')} {s.grade ? `(${formatStudentGrade(s.grade)})` : ''}
             </option>
           ))}
         </select>
@@ -209,7 +210,7 @@ export function StudentGoalsPage() {
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 700, color: '#1A365E' }}>{g.studentName}</div>
                     <div style={{ fontSize: 11, color: '#7A92B0', marginTop: 2 }}>
-                      {g.grade ? `Grade ${g.grade}` : ''}{g.grade && g.term ? ' · ' : ''}{g.term ?? ''}
+                      {g.grade ? formatStudentGrade(g.grade) : ''}{g.grade && g.term ? ' · ' : ''}{g.term ?? ''}
                     </div>
                   </div>
                   <span style={{ padding: '3px 10px', borderRadius: 20, background: meta.bg, color: meta.tc, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}>

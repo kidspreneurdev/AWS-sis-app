@@ -551,14 +551,11 @@ export function AppLayout() {
                   </div>
                 </div>
                 <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <span
-                      title="Account options"
-                      role="button"
-                      style={{ background: 'rgba(255,255,255,.1)', borderRadius: 5, padding: '3px 7px', fontSize: 10, cursor: 'pointer', color: 'rgba(255,255,255,.5)', userSelect: 'none', flexShrink: 0 }}
-                    >
-                      ⏏
-                    </span>
+                  <DropdownMenuTrigger
+                    title="Account options"
+                    style={{ background: 'rgba(255,255,255,.1)', borderRadius: 5, padding: '3px 7px', fontSize: 10, cursor: 'pointer', color: 'rgba(255,255,255,.5)', userSelect: 'none', flexShrink: 0, border: 'none', outline: 'none' }}
+                  >
+                    ⏏
                   </DropdownMenuTrigger>
                   <DropdownMenuContent side="top" align="end" className="w-48">
                     {!isStaff && (

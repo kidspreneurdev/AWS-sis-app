@@ -16,16 +16,6 @@ const SP_GREEN = '#1DBD6A'
 const SP_GOLD = '#FAC600'
 const SP_BLUE = '#0EA5E9'
 
-const emptyState: React.CSSProperties = {
-  textAlign: 'center',
-  padding: 16,
-  color: '#7A92B0',
-  fontSize: 12,
-  background: '#F8FAFC',
-  border: '1px dashed #D7E0EA',
-  borderRadius: 10,
-}
-
 const STATUS_META: Record<string, { bg: string; color: string; icon: string; border: string }> = {
   'Turned In': { bg: '#DCFCE7', color: SP_GREEN, icon: '✅', border: SP_GREEN },
   Late: { bg: '#FEF3C7', color: SP_GOLD, icon: '⏰', border: SP_GOLD },
@@ -60,39 +50,6 @@ interface SubmissionRow {
   student_note: string
 }
 
-interface NoteRow {
-  id: string
-  subject: string
-  note_text: string
-  topic_tag: string
-  correction_required: boolean
-  date_logged: string
-  visibility: string
-}
-
-interface CorrectionRow {
-  id: string
-  subject: string
-  instructions: string
-  status: string
-  deadline: string
-}
-
-interface ReportRow {
-  id: string
-  week: string
-  coach_note: string
-}
-
-interface AssessmentRow {
-  id: string
-  subject: string
-  raw_score: number | null
-  max_score: number | null
-  feedback: string
-  week_start: string
-}
-
 function getRelativeDueText(dueDate: string, status: string) {
   if (!dueDate) return { text: '', color: '#7A92B0', isOverdue: false }
   const today = new Date()
@@ -117,11 +74,6 @@ export function SPAssignmentsPage() {
   const { session } = useStudentPortal()
   const [assignments, setAssignments] = useState<AssignmentRow[]>([])
   const [submissions, setSubmissions] = useState<SubmissionRow[]>([])
-  const [notes, setNotes] = useState<NoteRow[]>([])
-  const [corrections, setCorrections] = useState<CorrectionRow[]>([])
-  const [reports, setReports] = useState<ReportRow[]>([])
-  const [assessments, setAssessments] = useState<AssessmentRow[]>([])
-  const [filter, setFilter] = useState<'all' | 'pending' | 'overdue' | 'submitted'>('all')
   const [submittingId, setSubmittingId] = useState<string | null>(null)
   const [formState, setFormState] = useState<Record<string, { link: string; note: string }>>({})
 
@@ -175,22 +127,8 @@ export function SPAssignmentsPage() {
       setFormState(Object.fromEntries(mapped.map((item) => [item.assignment_id, { link: item.link_url ?? '', note: item.student_note ?? '' }])))
     }
 
-    async function loadExtras() {
-      const [nts, corr, rep, assess] = await Promise.all([
-        supabase.from('at_notes').select('id,subject,note_text,topic_tag,correction_required,date_logged,visibility').eq('student_id', studentDbId).order('date_logged', { ascending: false }),
-        supabase.from('at_corrections').select('id,subject,instructions,status,deadline').eq('student_id', studentDbId).order('deadline', { ascending: true }),
-        supabase.from('at_reports').select('id,week,coach_note').eq('student_id', studentDbId).order('week', { ascending: false }),
-        supabase.from('at_assessments').select('id,subject,raw_score,max_score,feedback,week_start').eq('student_id', studentDbId).order('week_start', { ascending: false }),
-      ])
-      if (nts.data) setNotes(nts.data.map((row: Record<string, unknown>) => ({ id: row.id as string, subject: (row.subject as string) ?? '', note_text: (row.note_text as string) ?? '', topic_tag: (row.topic_tag as string) ?? '', correction_required: Boolean(row.correction_required), date_logged: (row.date_logged as string) ?? '', visibility: (row.visibility as string) ?? '' })))
-      if (corr.data) setCorrections(corr.data.map((row: Record<string, unknown>) => ({ id: row.id as string, subject: (row.subject as string) ?? '', instructions: (row.instructions as string) ?? '', status: (row.status as string) ?? '', deadline: (row.deadline as string) ?? '' })))
-      if (rep.data) setReports(rep.data.map((row: Record<string, unknown>) => ({ id: row.id as string, week: (row.week as string) ?? '', coach_note: (row.coach_note as string) ?? '' })))
-      if (assess.data) setAssessments(assess.data.map((row: Record<string, unknown>) => ({ id: row.id as string, subject: (row.subject as string) ?? '', raw_score: row.raw_score == null ? null : Number(row.raw_score), max_score: row.max_score == null ? null : Number(row.max_score), feedback: (row.feedback as string) ?? '', week_start: (row.week_start as string) ?? '' })))
-    }
-
     void loadAssignments()
     void loadSubmissions()
-    void loadExtras()
   }, [session, studentCohort, studentDbId])
 
   const submissionMap = useMemo(
@@ -220,14 +158,6 @@ export function SPAssignmentsPage() {
     overdue: enriched.filter((item) => item.overdue).length,
     submitted: enriched.filter((item) => ['Turned In', 'Late', 'Resubmitted'].includes(item.rawStatus)).length,
   }), [enriched])
-
-  const filtered = useMemo(() => {
-    const list = [...enriched]
-    if (filter === 'pending') return list.filter((item) => !['Turned In', 'Late', 'Resubmitted'].includes(item.rawStatus) && !item.overdue)
-    if (filter === 'overdue') return list.filter((item) => item.overdue)
-    if (filter === 'submitted') return list.filter((item) => ['Turned In', 'Late', 'Resubmitted'].includes(item.rawStatus))
-    return list
-  }, [enriched, filter])
 
   if (!session) return null
 

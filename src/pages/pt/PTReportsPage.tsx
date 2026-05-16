@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
+import { downloadUrl } from '@/lib/uploadFile'
 import { PTM, PTQD, mapAssignment, mapEvaluation, ptSUM, ptQST, ptScoreBadge, type PTAssignment, type PTEvaluation } from './ptConstants'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 18 }
@@ -178,7 +179,10 @@ export function PTReportsPage() {
                       </div>
                       {ev?.ov != null && <span style={{ fontSize: 10, fontWeight: 800, background: sb.background as string, color: sb.color as string, padding: '2px 8px', borderRadius: 6 }}>{sb.score} {sb.label}</span>}
                       {ev?.comment && <div style={{ fontSize: 9, color: '#7A92B0', marginTop: 6, fontStyle: 'italic', lineHeight: 1.4 }}>{ev.comment.substring(0, 100)}{ev.comment.length > 100 ? '…' : ''}</div>}
-                      {a.wurl && <div style={{ marginTop: 6 }}><a href={a.wurl} target="_blank" rel="noreferrer" style={{ fontSize: 9, color: '#0369A1', fontWeight: 600, textDecoration: 'none' }}>🔗 View work</a></div>}
+                      {a.wurl && <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <a href={a.wurl} target="_blank" rel="noreferrer" style={{ fontSize: 9, color: '#0369A1', fontWeight: 600, textDecoration: 'none' }}>🔗 View</a>
+                        <button onClick={() => void downloadUrl(a.wurl!)} style={{ fontSize: 9, color: '#059669', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>⬇ Download</button>
+                      </div>}
                     </div>
                   )
                 })}

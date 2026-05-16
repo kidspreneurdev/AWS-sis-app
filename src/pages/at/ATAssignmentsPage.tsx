@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { supabase } from '@/lib/supabase'
+import { downloadUrl } from '@/lib/uploadFile'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
 import { useCohorts } from '@/hooks/useCohorts'
 import { RubricBuilder, rubricParse, rubricMaxPoints, rubricComputeScore, rubricScale, type Rubric } from '@/components/shared/RubricBuilder'
@@ -486,8 +487,14 @@ export function ATAssignmentsPage() {
                           {hasSubContent && (
                             <div style={{ marginBottom: 6, padding: '6px 8px', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 7, display: 'flex', flexDirection: 'column', gap: 3 }}>
                               <div style={{ fontSize: 9, fontWeight: 800, color: '#1D4ED8' }}>📄 Submission</div>
-                              {existingSub?.file_url && <a href={existingSub.file_url} target="_blank" rel="noreferrer" style={{ fontSize: 10, fontWeight: 700, color: '#0369A1', textDecoration: 'none' }}>📎 View uploaded file</a>}
-                              {existingSub?.link_url && <a href={existingSub.link_url} target="_blank" rel="noreferrer" style={{ fontSize: 10, fontWeight: 700, color: '#0369A1', textDecoration: 'none' }}>🔗 {existingSub.link_url.length > 50 ? existingSub.link_url.slice(0, 50) + '…' : existingSub.link_url}</a>}
+                              {existingSub?.file_url && <>
+                                <a href={existingSub.file_url} target="_blank" rel="noreferrer" style={{ fontSize: 10, fontWeight: 700, color: '#0369A1', textDecoration: 'none' }}>📎 View</a>
+                                <button onClick={() => void downloadUrl(existingSub.file_url!)} style={{ fontSize: 10, fontWeight: 700, color: '#059669', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>⬇ Download</button>
+                              </>}
+                              {existingSub?.link_url && <>
+                                <a href={existingSub.link_url} target="_blank" rel="noreferrer" style={{ fontSize: 10, fontWeight: 700, color: '#0369A1', textDecoration: 'none' }}>🔗 {existingSub.link_url.length > 40 ? existingSub.link_url.slice(0, 40) + '…' : existingSub.link_url}</a>
+                                <button onClick={() => void downloadUrl(existingSub.link_url!)} style={{ fontSize: 10, fontWeight: 700, color: '#059669', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>⬇ Download</button>
+                              </>}
                               {existingSub?.student_note && <div style={{ fontSize: 10, color: '#374151', fontStyle: 'italic' }}>💬 "{existingSub.student_note}"</div>}
                             </div>
                           )}

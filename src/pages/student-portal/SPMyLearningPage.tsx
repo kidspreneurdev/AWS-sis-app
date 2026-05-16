@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { uploadFile } from '@/lib/uploadFile'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { TYPE_ICONS, TYPE_COLORS, SUBJECT_COLORS, isActiveBool, type LMSCourse, type LMSContent, type LMSEnrolment, type LMSProgress, type LMSQuestion } from '@/pages/lms/lmsStore'
 
@@ -339,7 +340,7 @@ function AssignmentPanel({ item, prog, studentId, masteryPassed, onUpdate }: {
     : null
 
   const [note, setNote] = useState('')
-  const [link, setLink] = useState('')
+  const [file, setFile] = useState<File | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   if (locked) {
@@ -356,6 +357,17 @@ function AssignmentPanel({ item, prog, studentId, masteryPassed, onUpdate }: {
 
   async function submitAssignment() {
     setSubmitting(true)
+    let fileUrl: string | null = null
+    if (file) {
+      try {
+        const path = `lms/${studentId}/${item.id}/${Date.now()}_${file.name}`
+        fileUrl = await uploadFile(path, file)
+      } catch {
+        alert('Upload failed. Please try again.')
+        setSubmitting(false)
+        return
+      }
+    }
     const assignPayload: Record<string, unknown> = {
       student_id: studentId,
       course_id: item.courseId,
@@ -371,7 +383,7 @@ function AssignmentPanel({ item, prog, studentId, masteryPassed, onUpdate }: {
         content_id: item.id,
         course_id: item.courseId,
         note: note.trim() || null,
-        link_url: link.trim() || null,
+        link_url: fileUrl,
         submitted_at: new Date().toISOString(),
       })
     } catch { /* table may not exist yet */ }
@@ -432,15 +444,18 @@ function AssignmentPanel({ item, prog, studentId, masteryPassed, onUpdate }: {
                 <textarea rows={3} placeholder="Describe what you submitted or add notes for your teacher..." value={note} onChange={(e) => setNote(e.target.value)} style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 11, fontFamily: 'Poppins,sans-serif', resize: 'vertical', boxSizing: 'border-box' }} />
               </div>
               <div>
-                <label style={{ fontSize: 10, fontWeight: 700, color: '#5A7290', textTransform: 'uppercase', letterSpacing: '.5px', display: 'block', marginBottom: 4 }}>Link (Google Doc, Drive…)</label>
-                <input type="url" placeholder="https://docs.google.com/..." value={link} onChange={(e) => setLink(e.target.value)} style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 11, fontFamily: 'Poppins,sans-serif', boxSizing: 'border-box' }} />
+                <label style={{ fontSize: 10, fontWeight: 700, color: '#5A7290', textTransform: 'uppercase', letterSpacing: '.5px', display: 'block', marginBottom: 4 }}>Upload File</label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, border: `2px dashed ${file ? '#1DBD6A' : '#CBD5E0'}`, background: file ? '#F0FDF4' : '#F8FAFC', cursor: 'pointer', fontSize: 11, color: file ? '#1DBD6A' : '#7A92B0', fontWeight: file ? 700 : 400, fontFamily: 'Poppins,sans-serif' }}>
+                  <input type="file" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) setFile(f) }} />
+                  {file ? `✅ ${file.name}` : '+ Choose file (PDF, image, doc…)'}
+                </label>
               </div>
               <button
                 onClick={() => void submitAssignment()}
-                disabled={submitting || (!note.trim() && !link.trim())}
-                style={{ padding: '9px 16px', background: (note.trim() || link.trim()) ? '#1A365E' : '#E4EAF2', color: (note.trim() || link.trim()) ? '#fff' : '#94A3B8', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: (note.trim() || link.trim()) ? 'pointer' : 'not-allowed', alignSelf: 'flex-end', fontFamily: 'inherit' }}
+                disabled={submitting || (!note.trim() && !file)}
+                style={{ padding: '9px 16px', background: (note.trim() || file) ? '#1A365E' : '#E4EAF2', color: (note.trim() || file) ? '#fff' : '#94A3B8', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: (note.trim() || file) ? 'pointer' : 'not-allowed', alignSelf: 'flex-end', fontFamily: 'inherit' }}
               >
-                {submitting ? 'Submitting…' : '📤 Submit Assignment'}
+                {submitting ? '⏳ Uploading & Submitting…' : '📤 Submit Assignment'}
               </button>
             </div>
           </>

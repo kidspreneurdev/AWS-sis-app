@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/lib/toast'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
+import { downloadUrl } from '@/lib/uploadFile'
 
 // ─── Doc keys & labels ────────────────────────────────────────────────────────
 const DOC_KEYS = [
@@ -330,7 +331,10 @@ function DocCellModal({
             <div style={{ fontSize: 13, fontWeight: 700, color: '#1A365E' }}>{hasFile ? 'File uploaded' : (checked ? 'Submitted (without file)' : 'Not submitted')}</div>
             {fileMeta && (
               <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <a href={fileMeta.url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: '#0369A1', fontWeight: 600 }}>🔗 View uploaded file</a>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                  <a href={fileMeta.url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: '#0369A1', fontWeight: 600, textDecoration: 'none' }}>🔗 View</a>
+                  <button onClick={() => void downloadUrl(fileMeta.url, fileMeta.fileName)} style={{ fontSize: 12, color: '#059669', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>⬇ Download</button>
+                </div>
                 <span style={{ fontSize: 11, color: '#7A92B0' }}>{fileMeta.fileName || 'File'} · {Math.max(1, Math.round(fileMeta.size / 1024))} KB</span>
               </div>
             )}

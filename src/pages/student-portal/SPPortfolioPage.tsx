@@ -1,20 +1,38 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { uploadFile, downloadUrl } from '@/lib/uploadFile'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 20 }
 const CATEGORIES = ['Academic', 'Creative', 'Community', 'Innovation', 'Leadership', 'Personal', 'Other']
-const EMPTY = { title: '', category: 'Academic', description: '', url: '' }
+const EMPTY = { title: '', category: 'Academic', description: '' }
 
 interface PortfolioItem { id: string; title: string; category: string; description: string; url: string; created_at: string }
 
-function Modal({ onClose, onSave }: { onClose: () => void; onSave: (f: typeof EMPTY) => Promise<void> }) {
+function Modal({ studentId, onClose, onSave }: { studentId: string; onClose: () => void; onSave: (f: typeof EMPTY, url: string) => Promise<void> }) {
   const [form, setForm] = useState({ ...EMPTY })
+  const [file, setFile] = useState<File | null>(null)
   const [saving, setSaving] = useState(false)
   const set = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }))
   const inp: React.CSSProperties = { width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #E4EAF2', fontSize: 13, color: '#1A365E', background: '#fff', boxSizing: 'border-box' }
   const lbl: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: '#7A92B0', display: 'block', marginBottom: 4 }
-  async function handleSave() { if (!form.title) return; setSaving(true); await onSave(form); setSaving(false); onClose() }
+
+  async function handleSave() {
+    if (!form.title || !file) return
+    setSaving(true)
+    let url = ''
+    try {
+      const path = `portfolio/${studentId}/${Date.now()}_${file.name}`
+      url = await uploadFile(path, file)
+    } catch {
+      alert('Upload failed. Please try again.')
+      setSaving(false)
+      return
+    }
+    await onSave(form, url)
+    setSaving(false)
+    onClose()
+  }
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,24,50,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
@@ -27,11 +45,17 @@ function Modal({ onClose, onSave }: { onClose: () => void; onSave: (f: typeof EM
           <div><label style={lbl}>Title</label><input value={form.title} onChange={e => set('title', e.target.value)} style={inp} /></div>
           <div><label style={lbl}>Category</label><select value={form.category} onChange={e => set('category', e.target.value)} style={inp}>{CATEGORIES.map(c => <option key={c}>{c}</option>)}</select></div>
           <div><label style={lbl}>Description</label><textarea value={form.description} onChange={e => set('description', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} /></div>
-          <div><label style={lbl}>Link / URL (optional)</label><input value={form.url} onChange={e => set('url', e.target.value)} style={inp} placeholder="https://…" /></div>
+          <div>
+            <label style={lbl}>📎 Upload File</label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, border: `2px dashed ${file ? '#1DBD6A' : '#CBD5E0'}`, background: file ? '#F0FDF4' : '#F8FAFC', cursor: 'pointer', fontSize: 13, color: file ? '#1DBD6A' : '#7A92B0', fontWeight: file ? 700 : 400 }}>
+              <input type="file" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) setFile(f) }} />
+              {file ? `✅ ${file.name}` : '+ Choose file (PDF, image, video…)'}
+            </label>
+          </div>
         </div>
         <div style={{ padding: '12px 20px', borderTop: '1px solid #E4EAF2', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
           <button onClick={onClose} style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid #E4EAF2', background: '#fff', color: '#7A92B0', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
-          <button onClick={handleSave} disabled={saving} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: '#D61F31', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>{saving ? 'Saving…' : 'Add'}</button>
+          <button onClick={handleSave} disabled={saving || !file || !form.title} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: '#D61F31', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer', opacity: (!file || !form.title) ? 0.5 : 1 }}>{saving ? '⏳ Uploading…' : 'Add'}</button>
         </div>
       </div>
     </div>
@@ -50,8 +74,8 @@ export function SPPortfolioPage() {
   }
   useEffect(() => { load() }, [session])
 
-  async function save(form: typeof EMPTY) {
-    await supabase.from('portfolio_items').insert({ student_id: session!.dbId, title: form.title, category: form.category, description: form.description, url: form.url || null })
+  async function save(form: typeof EMPTY, url: string) {
+    await supabase.from('portfolio_items').insert({ student_id: session!.dbId, title: form.title, category: form.category, description: form.description, url: url || null })
     await load()
   }
 
@@ -82,13 +106,16 @@ export function SPPortfolioPage() {
               </div>
               <div style={{ fontSize: 15, fontWeight: 700, color: '#1A365E', marginBottom: 6 }}>{item.title}</div>
               {item.description && <p style={{ fontSize: 12, color: '#7A92B0', lineHeight: 1.5, margin: 0 }}>{item.description}</p>}
-              {item.url && <a href={item.url} target="_blank" rel="noopener" style={{ fontSize: 12, color: '#D61F31', display: 'block', marginTop: 8 }}>View →</a>}
+              {item.url && <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+                <a href={item.url} target="_blank" rel="noopener" style={{ fontSize: 12, color: '#D61F31', textDecoration: 'none', fontWeight: 600 }}>View →</a>
+                <button onClick={() => void downloadUrl(item.url)} style={{ fontSize: 12, color: '#059669', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontWeight: 600 }}>⬇ Download</button>
+              </div>}
             </div>
           )
         })}
         {items.length === 0 && <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: 40, color: '#7A92B0', fontSize: 13, background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2' }}>Your portfolio is empty. Add your first item!</div>}
       </div>
-      {modal && <Modal onClose={() => setModal(false)} onSave={save} />}
+      {modal && <Modal studentId={session!.dbId} onClose={() => setModal(false)} onSave={save} />}
     </div>
   )
 }

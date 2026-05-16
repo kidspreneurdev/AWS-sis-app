@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import { uploadFile, downloadUrl } from '@/lib/uploadFile'
 import { PTM, PTQD, PTSTAT, PTDELIV, STAT_META, mapAssignment, type PTAssignment, type PTMethodology } from './ptConstants'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 16 }
@@ -25,6 +26,7 @@ function PTModal({ sid, mn, students, assignments, onClose, onSave }: {
     reflect: ex?.reflect ?? '',
     cnotes: ex?.cnotes ?? '',
   })
+  const [wurlFile, setWurlFile] = useState<File | null>(null)
   const [saving, setSaving] = useState(false)
 
   const fi: React.CSSProperties = { width: '100%', padding: '7px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 12, color: '#1A365E', background: '#fff', boxSizing: 'border-box' }
@@ -32,10 +34,21 @@ function PTModal({ sid, mn, students, assignments, onClose, onSave }: {
 
   async function handleSave() {
     setSaving(true)
+    let wurl = form.wurl
+    if (wurlFile) {
+      try {
+        const path = `pt/${sid}/${mn}/${Date.now()}_${wurlFile.name}`
+        wurl = await uploadFile(path, wurlFile)
+      } catch {
+        alert('Upload failed. Please try again.')
+        setSaving(false)
+        return
+      }
+    }
     const payload = {
       student_id: sid, methodology_n: mn, quarter: m.q,
       status: form.status, title: form.title, brief: form.brief,
-      due: form.due || null, deliv: form.deliv, wurl: form.wurl,
+      due: form.due || null, deliv: form.deliv, wurl,
       reflect: form.reflect, cnotes: form.cnotes,
       ptype: m.type, mastery: ex?.mastery ?? false, score: ex?.score ?? null, yr: '2024-25',
     }
@@ -81,8 +94,19 @@ function PTModal({ sid, mn, students, assignments, onClose, onSave }: {
           </div>
           <div style={{ background: '#F7F9FC', borderRadius: 10, padding: 12, border: '1.5px solid #E4EAF2' }}>
             <div style={{ fontSize: 10, fontWeight: 800, color: '#1A365E', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>📂 Student Work</div>
-            <div style={{ marginBottom: 8 }}><label style={lb}>Work URL <span style={{ fontWeight: 400, textTransform: 'none' }}>(Drive, video, website…)</span></label>
-              <input type="url" value={form.wurl} onChange={e => setForm(p => ({ ...p, wurl: e.target.value }))} placeholder="https://drive.google.com/..." style={fi} />
+            <div style={{ marginBottom: 8 }}>
+              <label style={lb}>Upload Student Work File</label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 8, border: `2px dashed ${wurlFile ? '#059669' : '#CBD5E0'}`, background: wurlFile ? '#F0FDF4' : '#fff', cursor: 'pointer', fontSize: 11, color: wurlFile ? '#059669' : '#7A92B0', fontWeight: wurlFile ? 700 : 400 }}>
+                <input type="file" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) setWurlFile(f) }} />
+                {wurlFile ? `✅ ${wurlFile.name}` : '+ Choose file (PDF, image, doc, video…)'}
+              </label>
+              {form.wurl && !wurlFile && (
+                <div style={{ marginTop: 6, fontSize: 10, color: '#7A92B0', display: 'flex', gap: 10, alignItems: 'center' }}>
+                  Current:
+                  <a href={form.wurl} target="_blank" rel="noreferrer" style={{ color: '#0369A1' }}>View ↗</a>
+                  <button onClick={() => void downloadUrl(form.wurl)} style={{ fontSize: 10, color: '#059669', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontWeight: 600 }}>⬇ Download</button>
+                </div>
+              )}
             </div>
             <div><label style={lb}>Student Reflection / Coach Notes</label>
               <textarea value={form.reflect} onChange={e => setForm(p => ({ ...p, reflect: e.target.value }))} rows={3} placeholder="Record student's reflection, key observations..." style={{ ...fi, resize: 'vertical' }} />

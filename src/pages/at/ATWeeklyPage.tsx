@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { supabase } from '@/lib/supabase'
+import { downloadUrl } from '@/lib/uploadFile'
 
 const STATUS_COLORS: Record<string, { bg: string; tc: string }> = {
   'Turned In': { bg: '#E8FBF0', tc: '#0E6B3B' },
@@ -198,8 +199,8 @@ export function ATWeeklyPage() {
                           </button>
                           <div style={{ fontSize: 10, fontWeight: 700, color: '#1A365E' }}>{scoreDisplay}</div>
                           {subGpa !== null && <span style={{ fontSize: 9, fontWeight: 800, background: sgc.bg, color: sgc.tc, padding: '1px 5px', borderRadius: 4 }}>{subGpa.toFixed(1)}</span>}
-                          {sub?.file_url && <a href={sub.file_url} target="_blank" rel="noreferrer" style={{ fontSize: 9, color: '#0369A1', textDecoration: 'none', display: 'block', marginTop: 2 }}>📎 File</a>}
-                          {!sub?.file_url && sub?.link_url && <a href={sub.link_url} target="_blank" rel="noreferrer" style={{ fontSize: 9, color: '#0369A1', textDecoration: 'none', display: 'block', marginTop: 2 }}>🔗 Link</a>}
+                          {sub?.file_url && <><a href={sub.file_url} target="_blank" rel="noreferrer" style={{ fontSize: 9, color: '#0369A1', textDecoration: 'none', display: 'block', marginTop: 2 }}>📎 View</a><button onClick={() => void downloadUrl(sub.file_url!)} style={{ fontSize: 9, color: '#059669', background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'block' }}>⬇</button></>}
+                          {!sub?.file_url && sub?.link_url && <><a href={sub.link_url} target="_blank" rel="noreferrer" style={{ fontSize: 9, color: '#0369A1', textDecoration: 'none', display: 'block', marginTop: 2 }}>🔗 View</a><button onClick={() => void downloadUrl(sub.link_url!)} style={{ fontSize: 9, color: '#059669', background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'block' }}>⬇</button></>}
                         </td>
                       )
                     })}

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
+import { uploadFile, downloadUrl } from '@/lib/uploadFile'
 import { useCohorts } from '@/hooks/useCohorts'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { RubricBuilder } from '@/components/shared/RubricBuilder'
@@ -1170,9 +1171,12 @@ export function LMSPage() {
                             <div style={{ fontSize: 11, color: '#3D5475', whiteSpace: 'pre-wrap', marginBottom: 4 }}>{String(assignmentSub.row.note)}</div>
                           )}
                           {assignmentSub.row.link_url && (
-                            <a href={String(assignmentSub.row.link_url)} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#1A365E', fontWeight: 700, wordBreak: 'break-all' }}>
-                              🔗 {String(assignmentSub.row.link_url)}
-                            </a>
+                            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                              <a href={String(assignmentSub.row.link_url)} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#1A365E', fontWeight: 700, wordBreak: 'break-all' }}>
+                                🔗 View submission
+                              </a>
+                              <button onClick={() => void downloadUrl(String(assignmentSub.row.link_url))} style={{ fontSize: 11, color: '#059669', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', padding: 0, flexShrink: 0 }}>⬇ Download</button>
+                            </div>
                           )}
                           {!assignmentSub.row.note && !assignmentSub.row.link_url && (
                             <div style={{ fontSize: 11, color: '#94A3B8' }}>Submission record exists, but no note/link was provided.</div>
@@ -1545,6 +1549,7 @@ export function LMSPage() {
     const [type, setType] = useState(item?.type ?? 'video' as LMSContent['type'])
     const [lessonSubType, setLessonSubType] = useState(item?.lessonSubType ?? '')
     const [url, setUrl] = useState(item?.url ?? item?.body ?? '')
+    const [contentFile, setContentFile] = useState<File | null>(null)
     const [estimatedMins, setEstimatedMins] = useState(String(item?.estimatedMins ?? ''))
     const [order, setOrder] = useState(String(item?.order ?? ''))
     const [hasMastery, setHasMastery] = useState(hasMasteryBool(item?.hasMastery))
@@ -1584,13 +1589,23 @@ export function LMSPage() {
       setMasteryQuestions(p => p.map((q, i) => i === qi ? { ...q, opts: q.opts.map((o, j) => j === oi ? val : o) } : q))
     }
 
-    const save = () => {
+    const save = async () => {
       if (!title.trim()) { alert('Title is required'); return }
       let finalUnit = unitTitle
       if (unitTitle === '__new__') {
         const ut = prompt('New unit title:')
         if (!ut?.trim()) return
         finalUnit = ut.trim()
+      }
+      let finalUrl = url.trim()
+      if (contentFile) {
+        try {
+          const path = `lms-content/${Date.now()}_${contentFile.name}`
+          finalUrl = await uploadFile(path, contentFile)
+        } catch {
+          alert('File upload failed. Please try again.')
+          return
+        }
       }
       const obj: LMSContent = {
         id: item?.id ?? lmsId(),
@@ -1599,7 +1614,7 @@ export function LMSPage() {
         unitTitle: finalUnit,
         type,
         lessonSubType,
-        url: url.trim(),
+        url: finalUrl,
         estimatedMins: parseInt(estimatedMins) || undefined,
         order: parseInt(order) || undefined,
         hasMastery,
@@ -1659,7 +1674,17 @@ export function LMSPage() {
                 </select>
               </div>
             </div>
-            <div><label style={labelStyle}>Content URL / Body</label><textarea value={url} onChange={e => setUrl(e.target.value)} rows={3} placeholder="YouTube URL, Google Slides URL, Google Drive file link, or paste article text..." style={taStyle} /></div>
+            <div>
+              <label style={labelStyle}>Content URL (YouTube, Google Slides, Drive link, or article text)</label>
+              <textarea value={url} onChange={e => { setUrl(e.target.value); if (e.target.value) setContentFile(null) }} rows={3} placeholder="YouTube URL, Google Slides URL, or paste article text..." style={taStyle} />
+              <div style={{ marginTop: 8 }}>
+                <label style={{ ...labelStyle, marginBottom: 4 }}>— Or upload a file (PDF, image, doc) —</label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 8, border: `2px dashed ${contentFile ? '#059669' : '#CBD5E0'}`, background: contentFile ? '#F0FDF4' : '#F8FAFC', cursor: 'pointer', fontSize: 12, color: contentFile ? '#059669' : '#7A92B0', fontWeight: contentFile ? 700 : 400 }}>
+                  <input type="file" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) { setContentFile(f); setUrl('') } }} />
+                  {contentFile ? `✅ ${contentFile.name}` : '+ Choose file'}
+                </label>
+              </div>
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div><label style={labelStyle}>Est. Minutes</label><input value={estimatedMins} onChange={e => setEstimatedMins(e.target.value)} type="number" min={1} placeholder="15" style={inputStyle} /></div>
               <div><label style={labelStyle}>Lesson Order</label><input value={order} onChange={e => setOrder(e.target.value)} type="number" min={1} style={inputStyle} /></div>

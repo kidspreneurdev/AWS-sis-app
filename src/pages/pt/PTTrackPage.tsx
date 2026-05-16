@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import { downloadUrl } from '@/lib/uploadFile'
 import { PTM, PTQD, PTSTAT, STAT_META, mapAssignment, mapEvaluation, ptSUM, ptQST, ptScoreBadge, type PTAssignment, type PTEvaluation } from './ptConstants'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)' }
@@ -124,7 +125,7 @@ export function PTTrackPage() {
                           {a.due && <span>📅 Due: <strong style={{ color: iov ? '#D61F31' : '#3D5475' }}>{a.due}</strong></span>}
                           {a.deliv && <span>📦 {a.deliv}</span>}
                           {a.brief && <span style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={a.brief}>📋 {a.brief.substring(0, 50)}{a.brief.length > 50 ? '…' : ''}</span>}
-                          {a.wurl && <><span style={{ color: '#059669', fontWeight: 600 }}>📂 Work on file</span> <a href={a.wurl} target="_blank" rel="noreferrer" style={{ color: '#0369A1', fontWeight: 600, textDecoration: 'none' }}>🔗 Open</a></>}
+                          {a.wurl && <><span style={{ color: '#059669', fontWeight: 600 }}>📂 Work on file</span> <a href={a.wurl} target="_blank" rel="noreferrer" style={{ color: '#0369A1', fontWeight: 600, textDecoration: 'none' }}>🔗 Open</a> <button onClick={() => void downloadUrl(a.wurl!)} style={{ fontSize: 10, color: '#059669', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>⬇ Download</button></>}
                         </div>
                       </div>
                       <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end' }}>

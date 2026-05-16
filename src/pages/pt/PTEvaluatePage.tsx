@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import { downloadUrl } from '@/lib/uploadFile'
 import { PTM, PTCORE, mapAssignment, mapEvaluation, ptScoreBadge, type PTAssignment, type PTEvaluation } from './ptConstants'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 16 }
@@ -181,7 +182,10 @@ export function PTEvaluatePage() {
                     <div style={{ fontSize: 11, fontWeight: 700, color: '#059669' }}>Submitted Work</div>
                     <a href={selA.wurl} target="_blank" rel="noreferrer" style={{ fontSize: 10, color: '#0369A1', wordBreak: 'break-all' }}>{selA.wurl}</a>
                   </div>
-                  <a href={selA.wurl} target="_blank" rel="noreferrer" style={{ padding: '5px 12px', background: '#059669', color: '#fff', borderRadius: 6, fontSize: 10, fontWeight: 700, textDecoration: 'none' }}>Open ↗</a>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0 }}>
+                    <a href={selA.wurl} target="_blank" rel="noreferrer" style={{ padding: '5px 12px', background: '#059669', color: '#fff', borderRadius: 6, fontSize: 10, fontWeight: 700, textDecoration: 'none', textAlign: 'center' }}>Open ↗</a>
+                    <button onClick={() => void downloadUrl(selA.wurl!)} style={{ padding: '5px 12px', background: '#0369A1', color: '#fff', borderRadius: 6, fontSize: 10, fontWeight: 700, border: 'none', cursor: 'pointer' }}>⬇ Download</button>
+                  </div>
                 </div>
               )}
               {selA.brief && (

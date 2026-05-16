@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { uploadFile, downloadUrl } from '@/lib/uploadFile'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 
 const card: React.CSSProperties = {
@@ -75,7 +76,8 @@ export function SPAssignmentsPage() {
   const [assignments, setAssignments] = useState<AssignmentRow[]>([])
   const [submissions, setSubmissions] = useState<SubmissionRow[]>([])
   const [submittingId, setSubmittingId] = useState<string | null>(null)
-  const [formState, setFormState] = useState<Record<string, { link: string; note: string }>>({})
+  const [formState, setFormState] = useState<Record<string, { note: string }>>({})
+  const [pendingFiles, setPendingFiles] = useState<Record<string, File>>({})
 
   const studentDbId = session?.dbId ?? ''
   const studentCohort = session?.cohort ?? ''
@@ -124,7 +126,7 @@ export function SPAssignmentsPage() {
         student_note: (row.student_note as string) ?? '',
       }))
       setSubmissions(mapped)
-      setFormState(Object.fromEntries(mapped.map((item) => [item.assignment_id, { link: item.link_url ?? '', note: item.student_note ?? '' }])))
+      setFormState(Object.fromEntries(mapped.map((item) => [item.assignment_id, { note: item.student_note ?? '' }])))
     }
 
     void loadAssignments()
@@ -162,20 +164,28 @@ export function SPAssignmentsPage() {
   if (!session) return null
 
   async function submitAssignment(assignmentId: string, currentStatus: string) {
-    const form = formState[assignmentId] ?? { link: '', note: '' }
-    if (!form.link.trim()) return
+    const pending = pendingFiles[assignmentId]
+    if (!pending) return
 
     setSubmittingId(assignmentId)
-    const normalizedLink = form.link.startsWith('http://') || form.link.startsWith('https://')
-      ? form.link.trim()
-      : `https://${form.link.trim()}`
+    let fileUrl = ''
+    try {
+      const path = `assignments/${studentDbId}/${assignmentId}/${Date.now()}_${pending.name}`
+      fileUrl = await uploadFile(path, pending)
+    } catch (e) {
+      console.error('Upload error:', e)
+      alert('Upload failed: ' + (e instanceof Error ? e.message : String(e)))
+      setSubmittingId(null)
+      return
+    }
 
     const payload = {
       assignment_id: assignmentId,
       student_id: studentDbId,
       status: currentStatus === 'Resubmit' ? 'Resubmitted' : 'Turned In',
-      link_url: normalizedLink,
-      student_note: form.note.trim(),
+      file_url: fileUrl,
+      link_url: null,
+      student_note: (formState[assignmentId]?.note ?? '').trim(),
       submitted_date: new Date().toISOString().slice(0, 10),
     }
 
@@ -213,20 +223,20 @@ export function SPAssignmentsPage() {
         student_note: (row.student_note as string) ?? '',
       }))
       setSubmissions(mapped)
-      setFormState(Object.fromEntries(mapped.map((item) => [item.assignment_id, { link: item.link_url ?? '', note: item.student_note ?? '' }])))
+      setFormState(Object.fromEntries(mapped.map((item) => [item.assignment_id, { note: item.student_note ?? '' }])))
     }
     setSubmittingId(null)
   }
 
-  function setFormValue(assignmentId: string, field: 'link' | 'note', value: string) {
+  function setFormNote(assignmentId: string, value: string) {
     setFormState((prev) => ({
       ...prev,
-      [assignmentId]: {
-        link: prev[assignmentId]?.link ?? '',
-        note: prev[assignmentId]?.note ?? '',
-        [field]: value,
-      },
+      [assignmentId]: { note: value },
     }))
+  }
+
+  function setPendingFile(assignmentId: string, file: File) {
+    setPendingFiles((prev) => ({ ...prev, [assignmentId]: file }))
   }
 
   // Group enriched assignments by subject
@@ -259,7 +269,8 @@ export function SPAssignmentsPage() {
     const meta = STATUS_META[assignment.displayStatus] ?? STATUS_META.Assigned
     const relative = getRelativeDueText(assignment.dueDate, assignment.rawStatus)
     const score = displayScore(submission?.score ?? null, assignment.maxScore)
-    const form = formState[assignment.id] ?? { link: submission?.link_url ?? '', note: submission?.student_note ?? '' }
+    const note = formState[assignment.id]?.note ?? ''
+    const pendingFile = pendingFiles[assignment.id] ?? null
     const canSubmit = !['Turned In', 'Resubmitted'].includes(assignment.rawStatus) || assignment.rawStatus === 'Resubmit'
 
     return (
@@ -310,10 +321,16 @@ export function SPAssignmentsPage() {
         )}
 
         {(submission?.file_url || submission?.link_url) && (
-          <div style={{ padding: '8px 18px', background: '#F0FDF4', borderTop: '1px solid #BBF7D0', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ padding: '8px 18px', background: '#F0FDF4', borderTop: '1px solid #BBF7D0', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
             <span style={{ fontSize: 10, fontWeight: 700, color: '#0E6B3B' }}>Your submission:</span>
-            {submission.file_url && <a href={submission.file_url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#0369A1', fontWeight: 700, textDecoration: 'none' }}>📎 View uploaded file</a>}
-            {submission.link_url && <a href={submission.link_url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#0369A1', fontWeight: 700, textDecoration: 'none' }}>🔗 View work link</a>}
+            {submission.file_url && <>
+              <a href={submission.file_url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#0369A1', fontWeight: 700, textDecoration: 'none' }}>📎 View</a>
+              <button onClick={() => void downloadUrl(submission.file_url!)} style={{ fontSize: 11, color: '#059669', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>⬇ Download</button>
+            </>}
+            {submission.link_url && <>
+              <a href={submission.link_url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#0369A1', fontWeight: 700, textDecoration: 'none' }}>🔗 View</a>
+              <button onClick={() => void downloadUrl(submission.link_url!)} style={{ fontSize: 11, color: '#059669', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>⬇ Download</button>
+            </>}
           </div>
         )}
 
@@ -333,32 +350,30 @@ export function SPAssignmentsPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div>
                 <label style={{ fontSize: 10, fontWeight: 700, color: '#7A92B0', display: 'block', marginBottom: 4 }}>
-                  🔗 Paste a Link (Google Doc, Slides, Drive folder, website…)
+                  📎 Upload Your Work
                 </label>
-                <input
-                  value={form.link}
-                  onChange={(e) => setFormValue(assignment.id, 'link', e.target.value)}
-                  placeholder="https://docs.google.com/..."
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #E4EAF2', fontSize: 12, color: SP_NAVY, background: '#fff', boxSizing: 'border-box' }}
-                />
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, border: `2px dashed ${pendingFile ? SP_GREEN : '#CBD5E0'}`, background: pendingFile ? '#F0FDF4' : '#F8FAFC', cursor: 'pointer', fontSize: 12, color: pendingFile ? SP_GREEN : '#7A92B0', fontWeight: pendingFile ? 700 : 400 }}>
+                  <input type="file" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) setPendingFile(assignment.id, f) }} />
+                  {pendingFile ? `✅ ${pendingFile.name}` : '+ Choose file (PDF, image, doc…)'}
+                </label>
               </div>
               <div>
                 <label style={{ fontSize: 10, fontWeight: 700, color: '#7A92B0', display: 'block', marginBottom: 4 }}>
                   📝 Note to Teacher (optional)
                 </label>
                 <input
-                  value={form.note}
-                  onChange={(e) => setFormValue(assignment.id, 'note', e.target.value)}
+                  value={note}
+                  onChange={(e) => setFormNote(assignment.id, e.target.value)}
                   placeholder="Any context or comments for your teacher..."
                   style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #E4EAF2', fontSize: 12, color: SP_NAVY, background: '#fff', boxSizing: 'border-box' }}
                 />
               </div>
               <button
                 onClick={() => submitAssignment(assignment.id, assignment.rawStatus)}
-                disabled={submittingId === assignment.id || !form.link.trim()}
-                style={{ padding: '11px 24px', background: SP_GREEN, color: '#fff', border: 'none', borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: 'pointer', width: '100%', fontFamily: 'Poppins,sans-serif', marginTop: 4, opacity: submittingId === assignment.id || !form.link.trim() ? 0.6 : 1 }}
+                disabled={submittingId === assignment.id || !pendingFile}
+                style={{ padding: '11px 24px', background: SP_GREEN, color: '#fff', border: 'none', borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: 'pointer', width: '100%', fontFamily: 'Poppins,sans-serif', marginTop: 4, opacity: submittingId === assignment.id || !pendingFile ? 0.6 : 1 }}
               >
-                {submittingId === assignment.id ? '⏳ Submitting…' : '✅ Turn In Assignment'}
+                {submittingId === assignment.id ? '⏳ Uploading & Submitting…' : '✅ Turn In Assignment'}
               </button>
             </div>
           </div>

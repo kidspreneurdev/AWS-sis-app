@@ -21,7 +21,7 @@ function getEmbedUrl(url: string): string {
   }
   const driveMatch = url.match(/\/file\/d\/([^/]+)/)
   if (driveMatch) return `https://drive.google.com/file/d/${driveMatch[1]}/preview`
-  return url
+  return url.includes('#') ? url : `${url}#toolbar=0`
 }
 
 function lessonElapsedMs(studentId: string | undefined, lessonId: string, openedAtMap: Record<string, number>) {
@@ -480,7 +480,7 @@ function LessonPreviewContent({
       if (ytMatch) {
         return (
           <div style={{ position: 'relative', paddingBottom: '56.25%', height: 0, overflow: 'hidden' }}>
-            <iframe src={`https://www.youtube.com/embed/${ytMatch[1]}`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }} allowFullScreen title={item.title} loading="lazy" />
+            <iframe src={`https://www.youtube.com/embed/${ytMatch[1]}?rel=0&modestbranding=1`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }} title={item.title} loading="lazy" />
           </div>
         )
       }
@@ -507,13 +507,13 @@ function LessonPreviewContent({
       const embedUrl = slideId
         ? `https://docs.google.com/presentation/d/${slideId}/embed?rm=minimal&start=false&loop=false&delayms=99999`
         : getEmbedUrl(url)
-      const SLIDE_H = 500
+      const SLIDE_H = 720
       const pct = Math.round(slideIdx / Math.max(1, slideCount - 1) * 100)
       const isFirst = slideIdx === 0
       const isLast = slideIdx === slideCount - 1
       return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-          <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '10px 10px 0 0', background: '#1A1A2E', height: 390 }}>
+          <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '10px 10px 0 0', background: '#1A1A2E', height: SLIDE_H }}>
             <div style={{ position: 'relative', width: '100%', transform: `translateY(-${slideIdx * SLIDE_H}px)`, transition: 'transform .3s ease' }}>
               <iframe src={embedUrl} style={{ width: '100%', height: slideCount * SLIDE_H + 100, border: 'none', display: 'block', pointerEvents: 'none' }} scrolling="no" allowFullScreen title={item.title} loading="lazy" />
             </div>
@@ -535,8 +535,8 @@ function LessonPreviewContent({
 
     if (item.type === 'file' && url) {
       const driveMatch = url.match(/\/file\/d\/([^/]+)/)
-      const previewUrl = driveMatch ? `https://drive.google.com/file/d/${driveMatch[1]}/preview` : url
-      return <iframe src={previewUrl} style={{ width: '100%', height: 560, border: 'none' }} allowFullScreen title={item.title} loading="lazy" />
+      const previewUrl = driveMatch ? `https://drive.google.com/file/d/${driveMatch[1]}/preview` : `${url}#toolbar=0`
+      return <iframe src={previewUrl} style={{ width: '100%', height: 560, border: 'none' }} title={item.title} loading="lazy" />
     }
 
     if (item.type === 'link' && url) {
@@ -573,9 +573,8 @@ function LessonPreviewContent({
 
   return (
     <div style={{ background: '#fff', borderRadius: 13, border: '1px solid #E4EAF2', overflow: 'hidden' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid #F0F4FA', background: '#F7F9FC' }}>
+      <div style={{ padding: '10px 14px', borderBottom: '1px solid #F0F4FA', background: '#F7F9FC' }}>
         <span style={{ fontSize: 11, fontWeight: 700, color: '#1A365E' }}>{item.unitTitle || 'Lesson Content'}</span>
-        {item.url ? <a href={item.url} target="_blank" rel="noreferrer" style={{ fontSize: 10, color: '#1A365E', fontWeight: 700 }}>↗ Open externally</a> : null}
       </div>
       {renderContent()}
     </div>
@@ -1118,7 +1117,6 @@ export function SPMyLearningPage() {
                 <div style={{ fontSize: 11, color: 'rgba(255,255,255,.78)' }}>{activeLesson.type}{activeLesson.estimatedMins ? ` · ${activeLesson.estimatedMins} min` : ''}</div>
               </div>
             </div>
-            {activeLesson.url ? <a href={activeLesson.url} target="_blank" rel="noreferrer" style={{ fontSize: 10, color: '#fff', fontWeight: 700, textDecoration: 'none' }}>↗ Open externally</a> : null}
           </div>
 
           <LessonPreviewContent item={activeLesson} />

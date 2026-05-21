@@ -3,7 +3,31 @@ import { supabase } from '@/lib/supabase'
 import { mapUnit, TPMS_SUBJECTS, TPMS_STANDARDS_FLAT, type TpmsUnit } from './tpmsConstants'
 
 const MONTHS = ['Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun']
-const MONTH_DATES = ['2025-09', '2025-10', '2025-11', '2025-12', '2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06']
+
+function academicYearFromUnits(units: { startDate?: string }[]): { startYear: number; label: string; monthDates: string[] } {
+  // Try to detect academic year from unit start dates
+  let startYear: number | null = null
+  for (const u of units) {
+    if (u.startDate && u.startDate.length >= 7) {
+      const yr = parseInt(u.startDate.slice(0, 4), 10)
+      const mo = parseInt(u.startDate.slice(5, 7), 10)
+      // Sep-Dec → start of that year's academic year; Jan-Aug → previous year started it
+      const ayStart = mo >= 9 ? yr : yr - 1
+      if (startYear === null || ayStart > startYear) startYear = ayStart
+    }
+  }
+  // Fallback: current academic year
+  if (startYear === null) {
+    const now = new Date()
+    startYear = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1
+  }
+  const endYear = startYear + 1
+  const monthDates = [
+    `${startYear}-09`, `${startYear}-10`, `${startYear}-11`, `${startYear}-12`,
+    `${endYear}-01`, `${endYear}-02`, `${endYear}-03`, `${endYear}-04`, `${endYear}-05`, `${endYear}-06`,
+  ]
+  return { startYear, label: `${startYear}–${String(endYear).slice(2)}`, monthDates }
+}
 
 const HIERARCHY_LEVELS = [
   { n: 1, label: 'School Philosophy & Graduate Profile', desc: 'AWS Mission, core values, graduate attributes', col: '#1A365E' },
@@ -35,6 +59,8 @@ export function CurriculumMapPage() {
       .then(({ data }) => { if (data) setUnits(data.map(r => mapUnit(r as Record<string, unknown>))) })
   }, [])
 
+  const { label: ayLabel, monthDates: MONTH_DATES } = useMemo(() => academicYearFromUnits(units), [units])
+
   const subjects = useMemo(() => {
     const seen = new Set<string>()
     units.forEach(u => { if (u.subject) seen.add(u.subject) })
@@ -59,7 +85,7 @@ export function CurriculumMapPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <div style={{ fontSize: 15, fontWeight: 800, color: '#1A365E' }}>🗺️ Curriculum Map Builder</div>
-          <div style={{ fontSize: 11, color: '#7A92B0', marginTop: 2 }}>Academic Year 2025–2026 · Scope &amp; Sequence Overview</div>
+          <div style={{ fontSize: 11, color: '#7A92B0', marginTop: 2 }}>Academic Year {ayLabel} · Scope &amp; Sequence Overview</div>
         </div>
         {/* Legend */}
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

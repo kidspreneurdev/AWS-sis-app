@@ -3,7 +3,10 @@ import { supabase } from '@/lib/supabase'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-const CURRENT_YEAR = new Date().getFullYear().toString()
+const now = new Date()
+const AY_START = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1
+const AY_FULL = `${AY_START}-${AY_START + 1}`           // "2025-2026"
+const AY_LABEL = `${AY_START}–${String(AY_START + 1).slice(-2)}`  // "2025–26"
 
 interface Student {
   id: string
@@ -15,14 +18,16 @@ interface Student {
   cohort: string | null
 }
 
-interface GradeRow {
-  subject: string
-  schoolType: 'hs' | 'ls'
-  q1: string | null
-  q2: string | null
-  q3: string | null
-  q4: string | null
-  finalGrade: string | null
+interface CourseRow {
+  studentId: string
+  title: string
+  type: string
+  area: string
+  credits: number
+  grade: string
+  status: string
+  term: string
+  academicYear: string
 }
 
 interface AttendanceRow {
@@ -43,15 +48,26 @@ function isHS(g: string | null): boolean {
   return n >= 9 && n <= 12
 }
 
-function scoreToGpa(q: string | null): number | null {
-  if (!q) return null
-  const n = parseFloat(q)
-  if (isNaN(n)) return null
-  if (n >= 90) return 4.0
-  if (n >= 80) return 3.0
-  if (n >= 70) return 2.0
-  if (n >= 60) return 1.0
-  return 0.0
+function letterToGpa(g: string): number | null {
+  const map: Record<string, number> = {
+    'A+': 4.3, 'A': 4.0, 'A-': 3.7,
+    'B+': 3.3, 'B': 3.0, 'B-': 2.7,
+    'C+': 2.3, 'C': 2.0, 'C-': 1.7,
+    'D+': 1.3, 'D': 1.0, 'D-': 0.7,
+    'F': 0.0,
+  }
+  return map[g] ?? null
+}
+
+function gradeColor(g: string): string {
+  if (!g || g === '—') return '#7A92B0'
+  const gpa = letterToGpa(g)
+  if (gpa === null) return '#1A365E'
+  if (gpa >= 3.7) return '#059669'
+  if (gpa >= 3.0) return '#0369A1'
+  if (gpa >= 2.0) return '#F5A623'
+  if (gpa >= 1.0) return '#D97706'
+  return '#D61F31'
 }
 
 function attendanceRate(records: AttendanceRow[]): number | null {
@@ -64,39 +80,26 @@ function attendanceRate(records: AttendanceRow[]): number | null {
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 20 }
 
 // ─── Single Report Card ───────────────────────────────────────────────────────
-function ReportCard({ student, grades, attendance }: {
+function ReportCard({ student, courses, attendance }: {
   student: Student
-  grades: GradeRow[]
+  courses: CourseRow[]
   attendance: AttendanceRow[]
 }) {
   const rate = attendanceRate(attendance)
   const hs = isHS(student.grade)
 
-  // GPA (HS only)
-  const gpas = hs
-    ? grades.map(g => scoreToGpa(g.finalGrade)).filter((x): x is number => x !== null)
-    : []
-  const avgGpa = gpas.length > 0 ? (gpas.reduce((a, b) => a + b) / gpas.length).toFixed(2) : null
+  const completedCourses = courses.filter(c => c.grade && c.grade !== '—')
+  const gpas = completedCourses
+    .map(c => letterToGpa(c.grade))
+    .filter((x): x is number => x !== null)
+  const avgGpa = gpas.length > 0
+    ? Math.min(4.0, gpas.reduce((a, b) => a + b) / gpas.length).toFixed(2)
+    : null
+
+  const totalCredits = courses.reduce((s, c) => s + c.credits, 0)
 
   const thRC: React.CSSProperties = { padding: '8px 12px', fontSize: 11, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1px solid #E4EAF2', textAlign: 'left' }
   const tdRC: React.CSSProperties = { padding: '8px 12px', fontSize: 12, color: '#1A365E', borderBottom: '1px solid #F0F4F8' }
-
-  const quarter = (v: string | null) => v ?? '—'
-  const gpaLabel = (gpa: number | null) => {
-    if (gpa === null) return { text: '—', color: '#7A92B0' }
-    if (gpa >= 3.5) return { text: gpa.toFixed(1), color: '#1DBD6A' }
-    if (gpa >= 2.0) return { text: gpa.toFixed(1), color: '#0369A1' }
-    if (gpa >= 1.0) return { text: gpa.toFixed(1), color: '#F5A623' }
-    return { text: gpa.toFixed(1), color: '#D61F31' }
-  }
-
-  const lsGradeColor = (v: string | null) => {
-    if (v === 'O') return '#1DBD6A'
-    if (v === 'S') return '#0369A1'
-    if (v === 'NI') return '#F5A623'
-    if (v === 'U') return '#D61F31'
-    return '#7A92B0'
-  }
 
   return (
     <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', overflow: 'hidden', pageBreakInside: 'avoid' }}>
@@ -114,64 +117,64 @@ function ReportCard({ student, grades, attendance }: {
           </div>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: 11, color: '#9EB3C8', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Academic Year</div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginTop: 4 }}>{CURRENT_YEAR}–{String(parseInt(CURRENT_YEAR) + 1).slice(-2)}</div>
-            {avgGpa && (
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginTop: 4 }}>{AY_LABEL}</div>
+            {hs && avgGpa && (
               <div style={{ marginTop: 6 }}>
                 <div style={{ fontSize: 11, color: '#9EB3C8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>GPA</div>
                 <div style={{ fontSize: 18, fontWeight: 800, color: '#fff' }}>{avgGpa}</div>
+              </div>
+            )}
+            {totalCredits > 0 && (
+              <div style={{ marginTop: 4 }}>
+                <div style={{ fontSize: 11, color: '#9EB3C8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Credits</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>{totalCredits}</div>
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* Grades */}
-      {grades.length > 0 ? (
-        <div style={{ padding: '0' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: '#F7F9FC' }}>
-                <th style={thRC}>Subject</th>
-                <th style={{ ...thRC, textAlign: 'center' }}>Q1</th>
-                <th style={{ ...thRC, textAlign: 'center' }}>Q2</th>
-                <th style={{ ...thRC, textAlign: 'center' }}>Q3</th>
-                <th style={{ ...thRC, textAlign: 'center' }}>Q4</th>
-                <th style={{ ...thRC, textAlign: 'center' }}>{hs ? 'Final / GPA' : 'Final'}</th>
+      {/* Course table */}
+      {courses.length > 0 ? (
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ background: '#F7F9FC' }}>
+              <th style={thRC}>Course</th>
+              <th style={{ ...thRC }}>Area</th>
+              <th style={{ ...thRC, textAlign: 'center' }}>Credits</th>
+              <th style={{ ...thRC, textAlign: 'center' }}>Term</th>
+              <th style={{ ...thRC, textAlign: 'center' }}>Grade</th>
+              <th style={{ ...thRC, textAlign: 'center' }}>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {courses.map((c, i) => (
+              <tr key={i}>
+                <td style={tdRC}>
+                  <div style={{ fontWeight: 600 }}>{c.title}</div>
+                  {c.type && c.type !== 'STD' && (
+                    <div style={{ fontSize: 10, color: '#7A92B0', marginTop: 1 }}>{c.type}</div>
+                  )}
+                </td>
+                <td style={{ ...tdRC, color: '#7A92B0' }}>{c.area || '—'}</td>
+                <td style={{ ...tdRC, textAlign: 'center' }}>{c.credits}</td>
+                <td style={{ ...tdRC, textAlign: 'center', color: '#7A92B0' }}>{c.term || '—'}</td>
+                <td style={{ ...tdRC, textAlign: 'center', fontWeight: 700, color: gradeColor(c.grade) }}>{c.grade || '—'}</td>
+                <td style={{ ...tdRC, textAlign: 'center' }}>
+                  <span style={{
+                    fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 5,
+                    background: c.status === 'Completed' ? '#D1FAE5' : c.status === 'In Progress' ? '#DBEAFE' : '#F3F4F6',
+                    color: c.status === 'Completed' ? '#065F46' : c.status === 'In Progress' ? '#1E40AF' : '#7A92B0',
+                  }}>{c.status || '—'}</span>
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {grades.map(g => {
-                const gpa = hs ? scoreToGpa(g.finalGrade) : null
-                const gl = gpaLabel(gpa)
-                return (
-                  <tr key={g.subject}>
-                    <td style={tdRC}>{g.subject}</td>
-                    {hs ? (
-                      <>
-                        {([g.q1, g.q2, g.q3, g.q4] as (string | null)[]).map((v, i) => (
-                          <td key={i} style={{ ...tdRC, textAlign: 'center', color: '#7A92B0' }}>{quarter(v)}</td>
-                        ))}
-                        <td style={{ ...tdRC, textAlign: 'center' }}>
-                          <span style={{ fontWeight: 700, color: '#1A365E' }}>{g.finalGrade ?? '—'}</span>
-                          {gpa !== null && <span style={{ marginLeft: 4, fontSize: 11, fontWeight: 700, color: gl.color }}>({gl.text})</span>}
-                        </td>
-                      </>
-                    ) : (
-                      <>
-                        {([g.q1, g.q2, g.q3, g.q4] as (string | null)[]).map((v, i) => (
-                          <td key={i} style={{ ...tdRC, textAlign: 'center', fontWeight: v ? 700 : 400, color: lsGradeColor(v) }}>{v ?? '—'}</td>
-                        ))}
-                        <td style={{ ...tdRC, textAlign: 'center', color: '#7A92B0' }}>—</td>
-                      </>
-                    )}
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </tbody>
+        </table>
       ) : (
-        <div style={{ padding: '20px', textAlign: 'center', color: '#7A92B0', fontSize: 13 }}>No grade data for this year.</div>
+        <div style={{ padding: '20px', textAlign: 'center', color: '#7A92B0', fontSize: 13 }}>
+          No course records for {AY_LABEL}.
+        </div>
       )}
 
       {/* Attendance summary */}
@@ -199,7 +202,7 @@ function ReportCard({ student, grades, attendance }: {
 export function ReportCardsPage() {
   const cf = useCampusFilter()
   const [students, setStudents] = useState<Student[]>([])
-  const [allGrades, setAllGrades] = useState<Array<GradeRow & { studentId: string }>>([])
+  const [allCourses, setAllCourses] = useState<CourseRow[]>([])
   const [allAttendance, setAllAttendance] = useState<Array<AttendanceRow & { studentId: string }>>([])
   const [search, setSearch] = useState('')
   const [filterGrade, setFilterGrade] = useState('All')
@@ -210,9 +213,9 @@ export function ReportCardsPage() {
     async function load() {
       let sQuery = supabase.from('students').select('id,first_name,last_name,grade,status,campus,cohort').eq('status', 'Enrolled')
       if (cf) sQuery = sQuery.eq('campus', cf)
-      const [stuRes, gradesRes, attRes] = await Promise.all([
+      const [stuRes, coursesRes, attRes] = await Promise.all([
         sQuery,
-        supabase.from('grades').select('*').eq('school_year', CURRENT_YEAR),
+        supabase.from('courses').select('student_id,title,type,area,credits,credits_earned,grade_letter,course_status,term,academic_year'),
         supabase.from('attendance').select('student_id,date,status'),
       ])
       if (stuRes.data) {
@@ -226,16 +229,17 @@ export function ReportCardsPage() {
           cohort:    (r.cohort as string) ?? null,
         })))
       }
-      if (gradesRes.data) {
-        setAllGrades(gradesRes.data.map((r: Record<string, unknown>) => ({
-          studentId:   r.student_id as string,
-          subject:     r.subject as string,
-          schoolType:  r.school_type as 'hs' | 'ls',
-          q1:          r.q1 as string | null,
-          q2:          r.q2 as string | null,
-          q3:          r.q3 as string | null,
-          q4:          r.q4 as string | null,
-          finalGrade:  r.final_grade as string | null,
+      if (coursesRes.data) {
+        setAllCourses(coursesRes.data.map((r: Record<string, unknown>) => ({
+          studentId:    r.student_id as string,
+          title:        (r.title as string) ?? '',
+          type:         (r.type as string) ?? 'STD',
+          area:         (r.area as string) ?? '',
+          credits:      Number(r.credits_earned ?? r.credits ?? 1),
+          grade:        (r.grade_letter as string) ?? '',
+          status:       (r.course_status as string) ?? '',
+          term:         (r.term as string) ?? '',
+          academicYear: (r.academic_year as string) ?? '',
         })))
       }
       if (attRes.data) {
@@ -249,7 +253,7 @@ export function ReportCardsPage() {
     load()
   }, [cf])
 
-  const grades = useMemo(() => {
+  const gradeOptions = useMemo(() => {
     const set = new Set<string>()
     students.forEach(s => { if (s.grade) set.add(s.grade) })
     return Array.from(set).sort((a, b) => parseInt(a) - parseInt(b))
@@ -263,7 +267,12 @@ export function ReportCardsPage() {
 
   const selected = selectedId ? students.find(s => s.id === selectedId) ?? null : null
 
-  function getGrades(stuId: string) { return allGrades.filter(g => g.studentId === stuId) }
+  function getCourses(stuId: string): CourseRow[] {
+    const all = allCourses.filter(c => c.studentId === stuId)
+    // Prefer current academic year; fall back to all if none match
+    const current = all.filter(c => c.academicYear === AY_FULL)
+    return current.length > 0 ? current : all
+  }
   function getAttendance(stuId: string) { return allAttendance.filter(a => a.studentId === stuId) }
 
   function handlePrint() {
@@ -293,7 +302,7 @@ export function ReportCardsPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div>
         <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1A365E', margin: 0 }}>Report Cards</h1>
-        <p style={{ fontSize: 13, color: '#7A92B0', margin: '4px 0 0' }}>View and print student report cards — {CURRENT_YEAR}</p>
+        <p style={{ fontSize: 13, color: '#7A92B0', margin: '4px 0 0' }}>View and print student report cards — {AY_LABEL}</p>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 20, alignItems: 'start' }}>
@@ -303,7 +312,7 @@ export function ReportCardsPage() {
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" style={{ ...iStyle, width: '100%', boxSizing: 'border-box' }} />
             <select value={filterGrade} onChange={e => setFilterGrade(e.target.value)} style={{ ...iStyle, width: '100%', boxSizing: 'border-box', marginTop: 8 }}>
               <option value="All">All Grades</option>
-              {grades.map(g => <option key={g} value={g}>{gradeLevelLabel(g)}</option>)}
+              {gradeOptions.map(g => <option key={g} value={g}>{gradeLevelLabel(g)}</option>)}
             </select>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 500, overflowY: 'auto' }}>
@@ -343,7 +352,7 @@ export function ReportCardsPage() {
               <div ref={printRef}>
                 <ReportCard
                   student={selected}
-                  grades={getGrades(selected.id)}
+                  courses={getCourses(selected.id)}
                   attendance={getAttendance(selected.id)}
                 />
               </div>

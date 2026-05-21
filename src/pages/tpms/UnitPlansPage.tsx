@@ -28,7 +28,12 @@ const EMPTY: UnitForm = {
 }
 
 function unitToForm(u: TpmsUnit): UnitForm {
-  return { title: u.title, subject: u.subject, grade: u.grade, startDate: u.startDate, endDate: u.endDate, status: u.status, pacing: u.pacing, weeks: u.weeks, standards: u.standards, essentialQuestions: u.essentialQuestions, enduringUnderstandings: u.enduringUnderstandings, transferGoals: u.transferGoals, stage2Evidence: u.stage2Evidence, stage2Tasks: u.stage2Tasks, stage3Plan: u.stage3Plan, notes: u.notes, coachId: u.coachId, managerId: u.managerId, diff: u.diff, resources: u.resources, crossCurricular: u.crossCurricular, reflection: u.reflection }
+  return {
+    title: u.title,
+    subject: TPMS_SUBJECTS.includes(u.subject) ? u.subject : TPMS_SUBJECTS[0],
+    grade: TPMS_GRADES.includes(u.grade) ? u.grade : TPMS_GRADES[0],
+    startDate: u.startDate, endDate: u.endDate, status: u.status, pacing: u.pacing, weeks: u.weeks, standards: u.standards, essentialQuestions: u.essentialQuestions, enduringUnderstandings: u.enduringUnderstandings, transferGoals: u.transferGoals, stage2Evidence: u.stage2Evidence, stage2Tasks: u.stage2Tasks, stage3Plan: u.stage3Plan, notes: u.notes, coachId: u.coachId, managerId: u.managerId, diff: u.diff, resources: u.resources, crossCurricular: u.crossCurricular, reflection: u.reflection,
+  }
 }
 
 function StdMultiSelect({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {

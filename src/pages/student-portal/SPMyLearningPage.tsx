@@ -471,6 +471,7 @@ function LessonPreviewContent({
   item: LMSContent
 }) {
   const [slideIdx, setSlideIdx] = useState(0)
+  const [pdfLoading, setPdfLoading] = useState(false)
 
   function renderContent() {
     const url = item.url || ''
@@ -504,10 +505,51 @@ function LessonPreviewContent({
       const slideCount = item.slideCount || 20
       const slideM = url.match(/\/presentation\/d\/([a-zA-Z0-9_-]+)/)
       const slideId = slideM ? slideM[1] : null
-      const embedUrl = slideId
-        ? `https://docs.google.com/presentation/d/${slideId}/embed?rm=minimal&start=false&loop=false&delayms=99999`
-        : getEmbedUrl(url)
-      const SLIDE_H = 720
+
+      // Uploaded file (PDF/PPTX): 16:9 container + Prev/Next, scroll blocked by overlay
+      if (!slideId) {
+        const pct2 = Math.round(slideIdx / Math.max(1, slideCount - 1) * 100)
+        const isFirst2 = slideIdx === 0
+        const isLast2 = slideIdx === slideCount - 1
+        const pageUrl = `${url}#page=${slideIdx + 1}&toolbar=0&navpanes=0&scrollbar=0&view=FitH`
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+            <div style={{ position: 'relative', paddingBottom: '56.25%', height: 0, overflow: 'hidden', borderRadius: '10px 10px 0 0', background: '#1A1A2E' }}>
+              <iframe
+                key={slideIdx}
+                src={pageUrl}
+                onLoad={() => setTimeout(() => setPdfLoading(false), 300)}
+                style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none', pointerEvents: 'none', visibility: pdfLoading ? 'hidden' : 'visible' }}
+                title={item.title}
+                scrolling="no"
+              />
+              {/* loading overlay — hides page-1 flash while PDF navigates to #page=N */}
+              {pdfLoading && (
+                <div style={{ position: 'absolute', inset: 0, zIndex: 8, background: '#1A1A2E', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ color: '#9EB3C8', fontSize: 12, fontWeight: 600 }}>Loading slide…</div>
+                </div>
+              )}
+              {/* blocks scroll so only app nav works */}
+              <div style={{ position: 'absolute', inset: 0, zIndex: 10 }} />
+            </div>
+            <div style={{ background: '#F0F4FA', padding: '10px 16px 12px', border: '1px solid #E4EAF2', borderTop: 'none', borderRadius: '0 0 10px 10px' }}>
+              <div style={{ position: 'relative', height: 6, background: '#DDE6F0', borderRadius: 3, marginBottom: 10 }}>
+                <div style={{ height: '100%', width: `${pct2}%`, background: '#1A365E', borderRadius: 3, transition: 'width .2s' }} />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <button onClick={() => { setPdfLoading(true); setSlideIdx(p => Math.max(0, p - 1)) }} disabled={isFirst2} style={{ padding: '7px 18px', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: isFirst2 ? 'not-allowed' : 'pointer', background: isFirst2 ? '#E4EAF2' : '#1A365E', color: isFirst2 ? '#94A3B8' : '#fff' }}>◀ Prev</button>
+                <div style={{ flex: 1, textAlign: 'center', fontSize: 13, fontWeight: 800, color: '#1A365E' }}>Slide {slideIdx + 1} <span style={{ color: '#94A3B8', fontWeight: 400 }}>of {slideCount}</span></div>
+                <button onClick={() => { setPdfLoading(true); setSlideIdx(p => Math.min(slideCount - 1, p + 1)) }} disabled={isLast2} style={{ padding: '7px 18px', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: isLast2 ? 'not-allowed' : 'pointer', background: isLast2 ? '#E4EAF2' : '#1A365E', color: isLast2 ? '#94A3B8' : '#fff' }}>Next ▶</button>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      // Google Slides: custom slide-by-slide navigation
+      // SLIDE_H uses 16:9 ratio at a standard 960px reference width → 540px
+      const SLIDE_H = 540
+      const embedUrl = `https://docs.google.com/presentation/d/${slideId}/embed?rm=minimal&start=false&loop=false&delayms=99999`
       const pct = Math.round(slideIdx / Math.max(1, slideCount - 1) * 100)
       const isFirst = slideIdx === 0
       const isLast = slideIdx === slideCount - 1

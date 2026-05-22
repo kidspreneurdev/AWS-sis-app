@@ -14,15 +14,6 @@ function getLessonTimerKey(studentId: string, lessonId: string) {
   return `sp_learning_started_${studentId}_${lessonId}`
 }
 
-function getEmbedUrl(url: string): string {
-  if (url.includes('docs.google.com/presentation')) {
-    const base = url.replace(/\/pub(\?.*)?$/, '').replace(/\/edit(\?.*)?$/, '').replace(/\/embed(\?.*)?$/, '')
-    return `${base}/embed?start=false&loop=false&rm=minimal`
-  }
-  const driveMatch = url.match(/\/file\/d\/([^/]+)/)
-  if (driveMatch) return `https://drive.google.com/file/d/${driveMatch[1]}/preview`
-  return url.includes('#') ? url : `${url}#toolbar=0`
-}
 
 function lessonElapsedMs(studentId: string | undefined, lessonId: string, openedAtMap: Record<string, number>) {
   const startedAt = studentId ? openedAtMap[lessonId] : undefined

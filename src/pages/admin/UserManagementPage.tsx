@@ -124,7 +124,7 @@ function StaffModal({ user, campuses, allStudents, onClose, onSave }: {
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20, backdropFilter: 'blur(4px)' }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 480, overflow: 'hidden', boxShadow: '0 24px 60px rgba(0,0,0,.3)' }}>
         <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '18px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>{isEdit ? 'Edit User' : 'Add Staff User'}</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>{isEdit ? 'Edit User' : 'Add User'}</div>
           <button onClick={onClose} style={{ background: 'rgba(255,255,255,.15)', border: 'none', color: '#fff', width: 28, height: 28, borderRadius: 7, fontSize: 14, cursor: 'pointer' }}>✕</button>
         </div>
         <div style={{ padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -378,7 +378,7 @@ export function UserManagementPage() {
         <div style={{ display: 'flex', gap: 8 }}>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" autoComplete="off" spellCheck={false} style={{ padding: '7px 12px', borderRadius: 8, border: '1px solid #E4EAF2', fontSize: 12, color: '#1A365E', outline: 'none', fontFamily: 'inherit', width: 200 }} />
           {tab === 'staff' && (
-            <button onClick={() => setStaffModal({ open: true, user: null })} style={{ padding: '9px 18px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>+ Add Staff User</button>
+            <button onClick={() => setStaffModal({ open: true, user: null })} style={{ padding: '9px 18px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>+ Add User</button>
           )}
         </div>
       </div>

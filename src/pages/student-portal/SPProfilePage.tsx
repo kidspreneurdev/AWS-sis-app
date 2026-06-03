@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
+import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 20 }
 
 export function SPProfilePage() {
   const { session } = useStudentPortal()
+  const { readOnly } = usePortalReadOnly()
   const [oldPw, setOldPw] = useState('')
   const [newPw, setNewPw] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
@@ -74,8 +76,8 @@ export function SPProfilePage() {
         </div>
       </div>
 
-      {/* Change password */}
-      <div style={card}>
+      {/* Change password — hidden for parent view-only mode */}
+      {!readOnly && <div style={card}>
         <div style={{ fontSize: 14, fontWeight: 700, color: '#1A365E', marginBottom: 14 }}>Change Portal Password</div>
         <form onSubmit={changePassword} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div><label style={lbl}>Current Password</label><input type="password" value={oldPw} onChange={e => setOldPw(e.target.value)} style={inp} /></div>
@@ -90,7 +92,7 @@ export function SPProfilePage() {
             </button>
           </div>
         </form>
-      </div>
+      </div>}
     </div>
   )
 }

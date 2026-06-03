@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
+import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 20 }
 const STATUS_META: Record<string, { bg: string; tc: string }> = {
@@ -46,6 +47,7 @@ function Modal({ onClose, onSave }: { onClose: () => void; onSave: (f: typeof EM
 
 export function SPGoalsPage() {
   const { session } = useStudentPortal()
+  const { readOnly } = usePortalReadOnly()
   const [goals, setGoals] = useState<Goal[]>([])
   const [modal, setModal] = useState(false)
 
@@ -70,7 +72,7 @@ export function SPGoalsPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <div><h1 style={{ fontSize: 22, fontWeight: 800, color: '#1A365E', margin: 0 }}>Goals & Reflections</h1><p style={{ fontSize: 13, color: '#7A92B0', margin: '4px 0 0' }}>Track your personal and academic goals</p></div>
-        <button onClick={() => setModal(true)} style={{ padding: '9px 18px', borderRadius: 8, border: 'none', background: '#D61F31', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>+ New Goal</button>
+        {!readOnly && <button onClick={() => setModal(true)} style={{ padding: '9px 18px', borderRadius: 8, border: 'none', background: '#D61F31', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>+ New Goal</button>}
       </div>
 
       <div style={{ display: 'flex', gap: 12 }}>
@@ -91,7 +93,7 @@ export function SPGoalsPage() {
                 <span style={{ padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: sm.bg, color: sm.tc }}>{g.status}</span>
                 <div style={{ display: 'flex', gap: 6 }}>
                   {g.deadline && <span style={{ fontSize: 11, color: '#7A92B0' }}>Due {new Date(g.deadline).toLocaleDateString()}</span>}
-                  {g.status !== 'Complete' && <button onClick={() => updateStatus(g.id, 'Complete')} style={{ fontSize: 11, color: '#10B981', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Mark done</button>}
+                  {g.status !== 'Complete' && !readOnly && <button onClick={() => updateStatus(g.id, 'Complete')} style={{ fontSize: 11, color: '#10B981', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Mark done</button>}
                 </div>
               </div>
               <p style={{ fontSize: 14, fontWeight: 600, color: '#1A365E', lineHeight: 1.5, margin: '0 0 8px' }}>{g.goal}</p>

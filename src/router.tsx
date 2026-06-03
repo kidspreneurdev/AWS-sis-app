@@ -65,6 +65,11 @@ import { PTTrackPage } from '@/pages/pt/PTTrackPage'
 import { PTEvaluatePage } from '@/pages/pt/PTEvaluatePage'
 import { PTReportsPage } from '@/pages/pt/PTReportsPage'
 
+// ─── Parent Portal ───────────────────────────────────────────────────────────
+import { ParentPortalLoginPage } from '@/pages/parent-portal/ParentPortalLoginPage'
+import { PPCommunicationsPage } from '@/pages/parent-portal/PPCommunicationsPage'
+import { ParentPortalLayout } from '@/components/layout/ParentPortalLayout'
+
 // ─── Student Portal ───────────────────────────────────────────────────────────
 import { StudentPortalLoginPage } from '@/pages/student-portal/StudentPortalLoginPage'
 import { SPDashboardPage } from '@/pages/student-portal/SPDashboardPage'
@@ -97,6 +102,30 @@ function Lazy({ children }: { children: React.ReactNode }) {
 export const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/login" replace /> },
   { path: '/login', element: <LoginPage /> },
+
+  // ─── Parent Portal ─────────────────────────────────────────────────────────
+  { path: '/parent/login', element: <ParentPortalLoginPage /> },
+  {
+    element: <ParentPortalLayout />,
+    children: [
+      { path: '/parent/dashboard',   element: <SPDashboardPage /> },
+      { path: '/parent/grades',      element: <SPGradesPage /> },
+      { path: '/parent/attendance',  element: <SPAttendancePage /> },
+      { path: '/parent/assignments', element: <SPAssignmentsPage /> },
+      { path: '/parent/learning',    element: <SPMyLearningPage /> },
+      { path: '/parent/project',     element: <SPProjectPage /> },
+      { path: '/parent/portfolio',   element: <SPPortfolioPage /> },
+      { path: '/parent/goals',       element: <SPGoalsPage /> },
+      { path: '/parent/skills',      element: <SPSkillsPage /> },
+      { path: '/parent/wellness',    element: <SPWellnessPage /> },
+      { path: '/parent/lab',         element: <SPInnovationLabPage /> },
+      { path: '/parent/rwlog',       element: <SPRealWorldLogPage /> },
+      { path: '/parent/documents',   element: <SPDocumentsPage /> },
+      { path: '/parent/badges',      element: <SPBadgesPage /> },
+      { path: '/parent/messages',    element: <PPCommunicationsPage /> },
+      { path: '/parent/profile',     element: <SPProfilePage /> },
+    ],
+  },
 
   // ─── Student Portal ────────────────────────────────────────────────────────
   {

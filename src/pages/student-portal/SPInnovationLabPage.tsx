@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
+import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
 
 const STATUSES = ['Ideation', 'Prototyping', 'Testing', 'Presenting', 'Complete']
 const EMPTY = { title: '', description: '', status: 'Ideation', notes: '' }
@@ -39,6 +40,7 @@ function Modal({ onClose, onSave }: { onClose: () => void; onSave: (f: typeof EM
 
 export function SPInnovationLabPage() {
   const { session } = useStudentPortal()
+  const { readOnly } = usePortalReadOnly()
   const [projects, setProjects] = useState<LabProject[]>([])
   const [modal, setModal] = useState(false)
 
@@ -61,7 +63,7 @@ export function SPInnovationLabPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <div><h1 style={{ fontSize: 22, fontWeight: 800, color: '#1A365E', margin: 0 }}>Innovation Lab</h1><p style={{ fontSize: 13, color: '#7A92B0', margin: '4px 0 0' }}>Track your innovation and prototype projects</p></div>
-        <button onClick={() => setModal(true)} style={{ padding: '9px 18px', borderRadius: 8, border: 'none', background: '#D61F31', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>+ New Project</button>
+        {!readOnly && <button onClick={() => setModal(true)} style={{ padding: '9px 18px', borderRadius: 8, border: 'none', background: '#D61F31', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>+ New Project</button>}
       </div>
 
       {/* Kanban-style view */}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
+import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 20 }
 const TYPES = ['Field Trip', 'Community Service', 'Industry Visit', 'Internship', 'Workshop', 'Conference', 'Research', 'Other']
@@ -45,6 +46,7 @@ function Modal({ onClose, onSave }: { onClose: () => void; onSave: (f: typeof EM
 
 export function SPRealWorldLogPage() {
   const { session } = useStudentPortal()
+  const { readOnly } = usePortalReadOnly()
   const [logs, setLogs] = useState<RWLog[]>([])
   const [modal, setModal] = useState(false)
 
@@ -67,7 +69,7 @@ export function SPRealWorldLogPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <div><h1 style={{ fontSize: 22, fontWeight: 800, color: '#1A365E', margin: 0 }}>Real-World Log</h1><p style={{ fontSize: 13, color: '#7A92B0', margin: '4px 0 0' }}>Record learning experiences beyond the classroom</p></div>
-        <button onClick={() => setModal(true)} style={{ padding: '9px 18px', borderRadius: 8, border: 'none', background: '#D61F31', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>+ Log Activity</button>
+        {!readOnly && <button onClick={() => setModal(true)} style={{ padding: '9px 18px', borderRadius: 8, border: 'none', background: '#D61F31', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>+ Log Activity</button>}
       </div>
 
       <div style={{ display: 'flex', gap: 14 }}>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
+import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
 
 const COMPETENCIES = {
   entrepreneurial: [
@@ -119,6 +120,7 @@ function ComparisonRadar({ teacher, self: selfS }: { teacher: Scores; self: Scor
 
 export function SPSkillsPage() {
   const { session } = useStudentPortal()
+  const { readOnly } = usePortalReadOnly()
   const [teacherScores, setTeacherScores] = useState<Scores>({})
   const [selfScores, setSelfScores] = useState<Scores>({})
   const [savedSelfScores, setSavedSelfScores] = useState<Scores | null>(null)
@@ -167,31 +169,33 @@ export function SPSkillsPage() {
             Rate yourself on each competency — your self-assessment will be compared against your teacher's evaluation.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-          {savedSelfScores !== null && (
+        {!readOnly && (
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            {savedSelfScores !== null && (
+              <button
+                onClick={() => { setSelfScores({}); setSavedSelfScores(null); setSaved(false) }}
+                style={{
+                  padding: '9px 16px', borderRadius: 8, border: '1.5px solid #E4EAF2',
+                  background: '#fff', color: '#1A365E', fontWeight: 600, fontSize: 13, cursor: 'pointer',
+                }}
+              >
+                ↺ Retake
+              </button>
+            )}
             <button
-              onClick={() => { setSelfScores({}); setSavedSelfScores(null); setSaved(false) }}
+              onClick={saveSelfScores}
+              disabled={saving}
               style={{
-                padding: '9px 16px', borderRadius: 8, border: '1.5px solid #E4EAF2',
-                background: '#fff', color: '#1A365E', fontWeight: 600, fontSize: 13, cursor: 'pointer',
+                padding: '9px 20px', borderRadius: 8, border: 'none',
+                background: saved ? '#10B981' : '#D61F31',
+                color: '#fff', fontWeight: 700, fontSize: 13, cursor: saving ? 'default' : 'pointer',
+                transition: 'background 0.2s',
               }}
             >
-              ↺ Retake
+              {saved ? '✓ Saved' : saving ? 'Saving…' : 'Save Self-Assessment'}
             </button>
-          )}
-          <button
-            onClick={saveSelfScores}
-            disabled={saving}
-            style={{
-              padding: '9px 20px', borderRadius: 8, border: 'none',
-              background: saved ? '#10B981' : '#D61F31',
-              color: '#fff', fontWeight: 700, fontSize: 13, cursor: saving ? 'default' : 'pointer',
-              transition: 'background 0.2s',
-            }}
-          >
-            {saved ? '✓ Saved' : saving ? 'Saving…' : 'Save Self-Assessment'}
-          </button>
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Scale legend */}
@@ -236,13 +240,17 @@ export function SPSkillsPage() {
                     {[1, 2, 3, 4, 5].map(lvl => (
                       <button
                         key={lvl}
-                        onClick={() => { setSaved(false); setSelfScores(p => ({ ...p, [c.key]: lvl })) }}
+                        onClick={() => { if (!readOnly) { setSaved(false); setSelfScores(p => ({ ...p, [c.key]: lvl })) } }}
+                        disabled={readOnly}
+                        title={readOnly ? 'View-only access' : undefined}
                         style={{
                           flex: 1, height: 32, borderRadius: 7, border: 'none',
                           background: lvl <= val ? COMP_COLORS[cat] : '#F0F4F8',
                           color: lvl <= val ? '#fff' : '#94A3B8',
-                          fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                          fontSize: 12, fontWeight: 700,
+                          cursor: readOnly ? 'not-allowed' : 'pointer',
                           transition: 'all 0.12s',
+                          opacity: readOnly ? 0.7 : 1,
                         }}
                       >
                         {lvl}

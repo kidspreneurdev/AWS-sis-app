@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { uploadFile } from '@/lib/uploadFile'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
+import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
 import { TYPE_ICONS, TYPE_COLORS, SUBJECT_COLORS, isActiveBool, type LMSCourse, type LMSContent, type LMSEnrolment, type LMSProgress, type LMSQuestion } from '@/pages/lms/lmsStore'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 14, border: '1px solid #E4EAF2', boxShadow: '0 1px 6px rgba(26,54,94,.06)' }
@@ -87,6 +88,7 @@ function MasteryQuiz({ item, prog, studentId, coursePassMark, onUpdate }: {
   coursePassMark: number
   onUpdate: (updates: Partial<LMSProgress>) => void
 }) {
+  const { readOnly } = usePortalReadOnly()
   const passMark = item.masteryPassMark ?? coursePassMark
   const maxRetakes = item.masteryRetakes ?? 999
   const timeLimitSecs = (item.masteryTimeLimit ?? 0) * 60
@@ -298,10 +300,11 @@ function MasteryQuiz({ item, prog, studentId, coursePassMark, onUpdate }: {
       </div>
       <button
         onClick={isLast || timedOut ? () => void submitQuiz(answers) : () => setQIdx((p) => p + 1)}
-        disabled={saving || (!timedOut && answers[qIdx] === undefined)}
-        style={{ width: '100%', padding: 11, background: saving ? '#94A3B8' : (answers[qIdx] !== undefined || timedOut) ? '#1A365E' : '#E4EAF2', color: (answers[qIdx] !== undefined || timedOut) ? '#fff' : '#94A3B8', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: (answers[qIdx] !== undefined || timedOut) ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}
+        disabled={readOnly || saving || (!timedOut && answers[qIdx] === undefined)}
+        title={readOnly ? 'View-only access' : undefined}
+        style={{ width: '100%', padding: 11, background: saving ? '#94A3B8' : (answers[qIdx] !== undefined || timedOut) ? '#1A365E' : '#E4EAF2', color: (answers[qIdx] !== undefined || timedOut) ? '#fff' : '#94A3B8', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: readOnly || (answers[qIdx] === undefined && !timedOut) ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: readOnly ? 0.5 : 1 }}
       >
-        {saving ? 'Saving…' : (isLast || timedOut) ? `Submit Mastery Test (${questions.length} question${questions.length !== 1 ? 's' : ''})` : 'Next Question →'}
+        {saving ? 'Saving…' : readOnly ? 'View-only access' : (isLast || timedOut) ? `Submit Mastery Test (${questions.length} question${questions.length !== 1 ? 's' : ''})` : 'Next Question →'}
       </button>
     </div>
   )
@@ -315,6 +318,7 @@ function AssignmentPanel({ item, prog, studentId, masteryPassed, onUpdate }: {
   masteryPassed: boolean
   onUpdate: (updates: Partial<LMSProgress>) => void
 }) {
+  const { readOnly } = usePortalReadOnly()
   const hasMastery = item.hasMastery === true || item.hasMastery === 'TRUE'
   const locked = hasMastery && !masteryPassed
   const maxScore = item.assignMaxScore ?? 100
@@ -443,10 +447,11 @@ function AssignmentPanel({ item, prog, studentId, masteryPassed, onUpdate }: {
               </div>
               <button
                 onClick={() => void submitAssignment()}
-                disabled={submitting || (!note.trim() && !file)}
-                style={{ padding: '9px 16px', background: (note.trim() || file) ? '#1A365E' : '#E4EAF2', color: (note.trim() || file) ? '#fff' : '#94A3B8', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: (note.trim() || file) ? 'pointer' : 'not-allowed', alignSelf: 'flex-end', fontFamily: 'inherit' }}
+                disabled={readOnly || submitting || (!note.trim() && !file)}
+                title={readOnly ? 'View-only access' : undefined}
+                style={{ padding: '9px 16px', background: (note.trim() || file) && !readOnly ? '#1A365E' : '#E4EAF2', color: (note.trim() || file) && !readOnly ? '#fff' : '#94A3B8', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: readOnly || (!note.trim() && !file) ? 'not-allowed' : 'pointer', alignSelf: 'flex-end', fontFamily: 'inherit', opacity: readOnly ? 0.5 : 1 }}
               >
-                {submitting ? '⏳ Uploading & Submitting…' : '📤 Submit Assignment'}
+                {submitting ? '⏳ Uploading & Submitting…' : readOnly ? '🔒 View-only access' : '📤 Submit Assignment'}
               </button>
             </div>
           </>
@@ -616,6 +621,7 @@ function LessonPreviewContent({
 
 export function SPMyLearningPage() {
   const { session } = useStudentPortal()
+  const { readOnly } = usePortalReadOnly()
   const [courses, setCourses] = useState<LMSCourse[]>([])
   const [content, setContent] = useState<LMSContent[]>([])
   const [progress, setProgress] = useState<LMSProgress[]>([])
@@ -1121,9 +1127,9 @@ export function SPMyLearningPage() {
                             <button onClick={() => openLesson(item)} style={{ padding: '5px 12px', background: '#1A365E', color: '#fff', borderRadius: 7, border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
                               {item.estimatedMins ? 'Start Lesson' : 'Open Lesson'}
                             </button>
-                            <button disabled={!done && !canMarkDone} onClick={() => void markComplete(item)} style={{ padding: '5px 12px', background: done ? '#DCFCE7' : canMarkDone ? '#F0F4FA' : '#F8FAFC', color: done ? '#059669' : canMarkDone ? '#5A7290' : '#94A3B8', border: `1px solid ${done ? '#86EFAC' : canMarkDone ? '#E4EAF2' : '#E5E7EB'}`, borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: done || canMarkDone ? 'pointer' : 'not-allowed', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                            {!readOnly && <button disabled={!done && !canMarkDone} onClick={() => void markComplete(item)} title={readOnly ? 'View-only access' : undefined} style={{ padding: '5px 12px', background: done ? '#DCFCE7' : canMarkDone ? '#F0F4FA' : '#F8FAFC', color: done ? '#059669' : canMarkDone ? '#5A7290' : '#94A3B8', border: `1px solid ${done ? '#86EFAC' : canMarkDone ? '#E4EAF2' : '#E5E7EB'}`, borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: done || canMarkDone ? 'pointer' : 'not-allowed', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
                               {done ? '✓ Done' : 'Mark done'}
-                            </button>
+                            </button>}
                           </div>
                         )
                       })}
@@ -1202,9 +1208,9 @@ export function SPMyLearningPage() {
                       ) : null}
                     </div>
                   </div>
-                  <button disabled={!done && !canMarkDone} onClick={() => void markComplete(activeLesson)} style={{ padding: '9px 16px', background: done ? '#DCFCE7' : canMarkDone ? '#1A365E' : '#E5E7EB', color: done ? '#059669' : canMarkDone ? '#fff' : '#94A3B8', border: `1px solid ${done ? '#86EFAC' : canMarkDone ? '#1A365E' : '#E5E7EB'}`, borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: done || canMarkDone ? 'pointer' : 'not-allowed', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                  {!readOnly && <button disabled={!done && !canMarkDone} onClick={() => void markComplete(activeLesson)} title={readOnly ? 'View-only access' : undefined} style={{ padding: '9px 16px', background: done ? '#DCFCE7' : canMarkDone ? '#1A365E' : '#E5E7EB', color: done ? '#059669' : canMarkDone ? '#fff' : '#94A3B8', border: `1px solid ${done ? '#86EFAC' : canMarkDone ? '#1A365E' : '#E5E7EB'}`, borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: done || canMarkDone ? 'pointer' : 'not-allowed', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
                     {done ? '✓ Done' : 'Mark done'}
-                  </button>
+                  </button>}
                 </div>
               )
             })()}

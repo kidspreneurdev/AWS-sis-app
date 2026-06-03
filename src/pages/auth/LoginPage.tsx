@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { formatStudentGrade } from '@/types/student'
 
-type LoginTab = 'staff' | 'student'
+type LoginTab = 'staff' | 'student' | 'parent'
 
 const shell: React.CSSProperties = {
   display: 'flex',
@@ -70,6 +70,11 @@ export function LoginPage({ initialTab = 'staff' }: { initialTab?: LoginTab }) {
   const [staffError, setStaffError] = useState<string | null>(null)
   const [staffLoading, setStaffLoading] = useState(false)
 
+  const [parentEmail, setParentEmail] = useState('')
+  const [parentPassword, setParentPassword] = useState('')
+  const [parentError, setParentError] = useState<string | null>(null)
+  const [parentLoading, setParentLoading] = useState(false)
+
   const [studentId, setStudentId] = useState('')
   const [studentPassword, setStudentPassword] = useState('')
   const [studentError, setStudentError] = useState('')
@@ -89,6 +94,35 @@ export function LoginPage({ initialTab = 'staff' }: { initialTab?: LoginTab }) {
     }
 
     navigate('/dashboard')
+  }
+
+  async function handleParentLogin(e: React.FormEvent) {
+    e.preventDefault()
+    setParentError(null)
+    setParentLoading(true)
+
+    const { data, error } = await supabase.auth.signInWithPassword({ email: parentEmail, password: parentPassword })
+
+    if (error || !data.user) {
+      setParentError(error?.message ?? 'Login failed.')
+      setParentLoading(false)
+      return
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', data.user.id)
+      .single()
+
+    if (!profile || (profile as Record<string, unknown>).role !== 'parent') {
+      await supabase.auth.signOut()
+      setParentError('This account does not have parent access.')
+      setParentLoading(false)
+      return
+    }
+
+    navigate('/parent/dashboard')
   }
 
   async function handleStudentLogin(e: React.FormEvent) {
@@ -149,6 +183,7 @@ export function LoginPage({ initialTab = 'staff' }: { initialTab?: LoginTab }) {
     setTab(nextTab)
     setStaffError(null)
     setStudentError('')
+    setParentError(null)
   }
 
   return (
@@ -166,45 +201,78 @@ export function LoginPage({ initialTab = 'staff' }: { initialTab?: LoginTab }) {
         <div style={{ fontSize: 12, color: '#7A92B0', marginBottom: 20 }}>American World School · K-12 Admissions &amp; Enrollment</div>
 
         <div style={{ display: 'flex', gap: 0, borderRadius: 10, overflow: 'hidden', border: '1.5px solid #E4EAF2', marginBottom: 18 }}>
-          <button
-            type="button"
-            onClick={() => switchTab('staff')}
-            style={{
-              flex: 1,
-              padding: 9,
-              border: 'none',
-              fontSize: 12,
-              fontWeight: 700,
-              cursor: 'pointer',
-              background: tab === 'staff' ? '#1A365E' : '#F7F9FC',
-              color: tab === 'staff' ? '#fff' : '#7A92B0',
-              fontFamily: 'Poppins, sans-serif',
-              transition: 'background 160ms cubic-bezier(0.23, 1, 0.32, 1), color 160ms cubic-bezier(0.23, 1, 0.32, 1), transform 120ms cubic-bezier(0.23, 1, 0.32, 1)',
-            }}
-          >
-            👤 Staff / Admin
-          </button>
-          <button
-            type="button"
-            onClick={() => switchTab('student')}
-            style={{
-              flex: 1,
-              padding: 9,
-              border: 'none',
-              fontSize: 12,
-              fontWeight: 700,
-              cursor: 'pointer',
-              background: tab === 'student' ? '#1A365E' : '#F7F9FC',
-              color: tab === 'student' ? '#fff' : '#7A92B0',
-              fontFamily: 'Poppins, sans-serif',
-              transition: 'background 160ms cubic-bezier(0.23, 1, 0.32, 1), color 160ms cubic-bezier(0.23, 1, 0.32, 1), transform 120ms cubic-bezier(0.23, 1, 0.32, 1)',
-            }}
-          >
-            🎓 Student
-          </button>
+          {([
+            { key: 'staff',  label: '👤 Staff',  activeColor: '#1A365E' },
+            { key: 'student',label: '🎓 Student', activeColor: '#1A365E' },
+            { key: 'parent', label: '👨‍👩‍👧 Parent', activeColor: '#6B21A8' },
+          ] as const).map(t => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => switchTab(t.key)}
+              style={{
+                flex: 1, padding: 9, border: 'none', fontSize: 11, fontWeight: 700,
+                cursor: 'pointer',
+                background: tab === t.key ? t.activeColor : '#F7F9FC',
+                color: tab === t.key ? '#fff' : '#7A92B0',
+                fontFamily: 'Poppins, sans-serif',
+                transition: 'background 160ms, color 160ms',
+              }}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
 
-        {tab === 'staff' ? (
+        {tab === 'parent' ? (
+          <form onSubmit={handleParentLogin}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 13 }}>
+              <label htmlFor="pp-login-email" style={labelStyle}>Email Address</label>
+              <input
+                id="pp-login-email"
+                type="email"
+                placeholder="parent@email.com"
+                autoComplete="username"
+                value={parentEmail}
+                onChange={(e) => setParentEmail(e.target.value)}
+                style={inputStyle}
+                required
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 13 }}>
+              <label htmlFor="pp-login-pass" style={labelStyle}>Password</label>
+              <input
+                id="pp-login-pass"
+                type="password"
+                placeholder="Enter your password"
+                autoComplete="current-password"
+                value={parentPassword}
+                onChange={(e) => setParentPassword(e.target.value)}
+                style={inputStyle}
+                required
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={parentLoading}
+              style={{
+                width: '100%', padding: 13, border: 'none', borderRadius: 11,
+                fontSize: 14, fontWeight: 700, marginTop: 6,
+                background: parentLoading ? '#C0C0C0' : '#6B21A8',
+                color: '#fff',
+                cursor: parentLoading ? 'not-allowed' : 'pointer',
+                fontFamily: 'Poppins, sans-serif',
+                transition: 'background 160ms',
+              }}
+            >
+              {parentLoading ? 'Signing in…' : 'Sign In to Parent Portal'}
+            </button>
+            {parentError && <div style={errorStyle}>{parentError}</div>}
+            <div style={{ fontSize: 11, color: '#7A92B0', textAlign: 'center', marginTop: 10 }}>
+              Don&apos;t have an account? Contact your school admin to set one up.
+            </div>
+          </form>
+        ) : tab === 'staff' ? (
           <form onSubmit={handleStaffLogin}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 13 }}>
               <label htmlFor="login-user" style={labelStyle}>Username</label>

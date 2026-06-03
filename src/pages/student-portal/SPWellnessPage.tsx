@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
+import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 20 }
 
@@ -17,6 +18,7 @@ interface WellnessLog { id: string; date: string; mood: number; category: string
 
 export function SPWellnessPage() {
   const { session } = useStudentPortal()
+  const { readOnly } = usePortalReadOnly()
   const [logs, setLogs] = useState<WellnessLog[]>([])
   const [mood, setMood] = useState(3)
   const [category, setCategory] = useState('Mental Wellbeing')
@@ -61,7 +63,12 @@ export function SPWellnessPage() {
       )}
 
       {/* Check-in */}
-      <div style={card}>
+      {readOnly && (
+        <div style={{ background: '#FAF5FF', border: '1px solid #DDD6FE', borderRadius: 10, padding: '10px 16px', fontSize: 12, color: '#6D28D9', fontWeight: 600 }}>
+          👁️ View-only access — check-in not available
+        </div>
+      )}
+      <div style={{ ...card, opacity: readOnly ? 0.6 : 1, pointerEvents: readOnly ? 'none' : 'auto' }}>
         <div style={{ fontSize: 14, fontWeight: 700, color: '#1A365E', marginBottom: 14 }}>Today's Check-In</div>
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: '#7A92B0', marginBottom: 8 }}>How are you feeling?</div>

@@ -1,7 +1,8 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
-const ROLES = ['admin', 'staff', 'teacher', 'principal', 'partner', 'coach', 'viewer']
+const ROLES = ['admin', 'staff', 'teacher', 'principal', 'partner', 'coach', 'viewer', 'parent']
 const ROLE_COLORS: Record<string, { bg: string; tc: string }> = {
   admin:     { bg: '#EEF3FF', tc: '#1A365E' },
   staff:     { bg: '#F0FFF4', tc: '#0E6B3B' },
@@ -29,9 +30,10 @@ interface Student {
 }
 
 // ─── Add / Edit Staff Modal ────────────────────────────────────────────────────
-function StaffModal({ user, campuses, onClose, onSave }: {
+function StaffModal({ user, campuses, allStudents, onClose, onSave }: {
   user: UserProfile | null
   campuses: string[]
+  allStudents: { id: string; fullName: string; studentId: string; grade: string }[]
   onClose: () => void
   onSave: () => void
 }) {
@@ -42,6 +44,7 @@ function StaffModal({ user, campuses, onClose, onSave }: {
   const [email, setEmail] = useState(user?.email ?? '')
   const [password, setPassword] = useState('')
   const [active, setActive] = useState(user?.active !== false)
+  const [linkedStudentIds, setLinkedStudentIds] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
 
@@ -52,81 +55,64 @@ function StaffModal({ user, campuses, onClose, onSave }: {
       if (password.length < 8) { setErr('Password must be at least 8 characters.'); return }
     }
     setSaving(true)
+
     if (isEdit && user) {
-      const { data: sessionData } = await supabase.auth.getSession()
-      const accessToken = sessionData.session?.access_token
-
-      if (!accessToken) {
-        setErr('Your session has expired. Please sign in again and retry.')
-        setSaving(false)
-        return
-      }
-
-      const response = await fetch('/api/admin/update-user', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          userId: user.id,
-          fullName,
-          role,
-          campus: campus || null,
-          active,
-        }),
-      })
-
-      const payload = await response.json().catch(() => null) as { error?: string } | null
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          setErr('Admin API not found. Use the deployed app or run via Vercel dev so /api/admin/update-user is available.')
-          setSaving(false)
-          return
-        }
-
-        setErr(payload?.error ?? 'Failed to update account.')
-        setSaving(false)
-        return
+      // Edit: update profile row directly — no admin auth needed for profile fields
+      if (supabaseAdmin) {
+        const { error } = await supabaseAdmin.from('profiles').update({ full_name: fullName, role, campus: campus || null, active }).eq('id', user.id)
+        if (error) { setErr(error.message); setSaving(false); return }
+      } else {
+        // Fall back to API route (Vercel deployment)
+        const { data: sessionData } = await supabase.auth.getSession()
+        const accessToken = sessionData.session?.access_token
+        if (!accessToken) { setErr('Your session has expired. Please sign in again and retry.'); setSaving(false); return }
+        const response = await fetch('/api/admin/update-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify({ userId: user.id, fullName, role, campus: campus || null, active }),
+        })
+        const payload = await response.json().catch(() => null) as { error?: string } | null
+        if (!response.ok) { setErr(payload?.error ?? 'Failed to update account.'); setSaving(false); return }
       }
     } else {
-      const { data: sessionData } = await supabase.auth.getSession()
-      const accessToken = sessionData.session?.access_token
-
-      if (!accessToken) {
-        setErr('Your session has expired. Please sign in again and retry.')
-        setSaving(false)
-        return
-      }
-
-      const response = await fetch('/api/admin/create-user', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          email: email.trim(),
+      // Create: use supabaseAdmin directly if available (local dev), otherwise API route (Vercel)
+      let newUserId: string | undefined
+      if (supabaseAdmin) {
+        const { data: { user: newUser }, error } = await supabaseAdmin.auth.admin.createUser({
+          email: email.trim().toLowerCase(),
           password,
-          fullName,
+          email_confirm: true,
+        })
+        if (error || !newUser) { setErr(error?.message ?? 'Failed to create account.'); setSaving(false); return }
+        const { error: profErr } = await supabaseAdmin.from('profiles').upsert({
+          id: newUser.id,
+          email: email.trim().toLowerCase(),
+          full_name: fullName,
           role,
           campus: campus || null,
-        }),
-      })
+          active: true,
+        }, { onConflict: 'id' })
+        if (profErr) { setErr(profErr.message); setSaving(false); return }
+        newUserId = newUser.id
+      } else {
+        const { data: sessionData } = await supabase.auth.getSession()
+        const accessToken = sessionData.session?.access_token
+        if (!accessToken) { setErr('Your session has expired. Please sign in again and retry.'); setSaving(false); return }
+        const response = await fetch('/api/admin/create-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify({ email: email.trim(), password, fullName, role, campus: campus || null }),
+        })
+        const payload = await response.json().catch(() => null) as { error?: string; user?: { id: string } } | null
+        if (!response.ok) { setErr(payload?.error ?? 'Failed to create account.'); setSaving(false); return }
+        newUserId = payload?.user?.id
+      }
 
-      const payload = await response.json().catch(() => null) as { error?: string } | null
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          setErr('Admin API not found. In Vercel, set the project Root Directory to awsc-sis-app and redeploy.')
-          setSaving(false)
-          return
-        }
-
-        setErr(payload?.error ?? 'Failed to create account.')
-        setSaving(false)
-        return
+      // Link students for parent accounts
+      if (role === 'parent' && linkedStudentIds.length > 0 && newUserId && supabaseAdmin) {
+        await supabaseAdmin.from('parent_students').insert(
+          linkedStudentIds.map(sid => ({ parent_id: newUserId, student_id: sid }))
+        )
       }
     }
     setSaving(false)
@@ -177,10 +163,35 @@ function StaffModal({ user, campuses, onClose, onSave }: {
               </div>
             )}
           </div>
+          {/* Linked students — shown when role = parent and creating a new account */}
+          {role === 'parent' && !isEdit && (
+            <div>
+              <label style={lbl}>Linked Children</label>
+              <div style={{ border: '1.5px solid #E4EAF2', borderRadius: 8, maxHeight: 160, overflowY: 'auto', background: '#F7F9FC' }}>
+                {allStudents.length === 0
+                  ? <div style={{ padding: '10px 14px', fontSize: 12, color: '#7A92B0' }}>No students found.</div>
+                  : allStudents.map(s => {
+                    const checked = linkedStudentIds.includes(s.id)
+                    return (
+                      <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #E4EAF2' }}>
+                        <input type="checkbox" checked={checked} onChange={() => setLinkedStudentIds(prev => checked ? prev.filter(id => id !== s.id) : [...prev, s.id])} />
+                        <span style={{ fontSize: 12, color: '#1A365E', fontWeight: 600 }}>{s.fullName}</span>
+                        <span style={{ fontSize: 10, color: '#7A92B0' }}>{s.studentId}{s.grade ? ` · ${s.grade}` : ''}</span>
+                      </label>
+                    )
+                  })}
+              </div>
+              {linkedStudentIds.length > 0 && (
+                <div style={{ fontSize: 10, color: '#6B21A8', fontWeight: 600, marginTop: 4 }}>
+                  {linkedStudentIds.length} child{linkedStudentIds.length !== 1 ? 'ren' : ''} selected
+                </div>
+              )}
+            </div>
+          )}
           {err && <div style={{ fontSize: 11, color: '#D61F31', fontWeight: 600 }}>{err}</div>}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 8, borderTop: '1px solid #E4EAF2' }}>
             <button onClick={onClose} style={{ padding: '8px 18px', border: '1.5px solid #E4EAF2', background: '#fff', color: '#3D5475', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-            <button onClick={() => void save()} disabled={saving} style={{ padding: '8px 22px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>{saving ? 'Saving…' : isEdit ? 'Save Changes' : '✓ Create Account'}</button>
+            <button onClick={() => void save()} disabled={saving} style={{ padding: '8px 22px', background: role === 'parent' ? '#6B21A8' : '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>{saving ? 'Saving…' : isEdit ? 'Save Changes' : '✓ Create Account'}</button>
           </div>
         </div>
       </div>
@@ -503,6 +514,7 @@ export function UserManagementPage() {
         <StaffModal
           user={staffModal.user}
           campuses={campuses}
+          allStudents={students.map(s => ({ id: s.id, fullName: s.fullName, studentId: s.studentId, grade: s.grade }))}
           onClose={() => setStaffModal({ open: false, user: null })}
           onSave={() => void load()}
         />

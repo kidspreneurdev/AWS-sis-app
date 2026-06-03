@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
+import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
+import { useParentPortal } from '@/contexts/ParentPortalContext'
 
 const card: React.CSSProperties = {
   background: '#fff',
@@ -133,6 +135,8 @@ function todayLabel() {
 
 export function SPDashboardPage() {
   const { session } = useStudentPortal()
+  const { readOnly } = usePortalReadOnly()
+  const parentPortal = useParentPortal()
   const navigate = useNavigate()
 
   const [assignments, setAssignments] = useState<Assignment[]>([])
@@ -229,7 +233,9 @@ export function SPDashboardPage() {
   }, [studentSession])
 
   const greeting = getGreeting()
-  const firstName = session?.fullName.split(' ')[0] ?? 'Student'
+  const firstName = readOnly
+    ? (parentPortal.session?.parentName.split(' ')[0] ?? 'Parent')
+    : (session?.fullName.split(' ')[0] ?? 'Student')
   const gradeLevel = parseGradeLevel(session?.grade ?? '')
   const isHS = gradeLevel !== null && gradeLevel >= 9
   const avgGrade = grades.length ? grades.reduce((sum, row) => sum + row.grade, 0) / grades.length : null
@@ -292,11 +298,20 @@ export function SPDashboardPage() {
             Student Portal · 2025-2026
           </div>
           <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', marginBottom: 4 }}>
-            {greeting}, {firstName}! 👋
+            {greeting}, {firstName}! {readOnly ? '👨‍👩‍👧' : '👋'}
           </div>
-          <div style={{ fontSize: 12, color: 'rgba(255,255,255,.5)' }}>
-            {session?.grade || ''}{session?.campus ? ` · ${session.campus}` : ''} · Student ID: {session?.studentId || '—'}
-          </div>
+          {readOnly ? (
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,.5)' }}>
+              Viewing <strong style={{ color: 'rgba(255,255,255,.8)' }}>{session?.fullName}</strong>
+              {session?.grade ? ` · Grade ${session.grade}` : ''}
+              {session?.campus ? ` · ${session.campus}` : ''}
+              {` · ID: ${session?.studentId || '—'}`}
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,.5)' }}>
+              {session?.grade || ''}{session?.campus ? ` · ${session.campus}` : ''} · Student ID: {session?.studentId || '—'}
+            </div>
+          )}
           <div style={{ marginTop: 12, padding: '8px 12px', background: 'rgba(250,198,0,.1)', borderRadius: 8, borderLeft: `3px solid ${SP_GOLD}` }}>
             <div style={{ fontSize: 11, color: SP_GOLD, fontStyle: 'italic' }}>
               "{motivations[new Date().getDay() % motivations.length]}"

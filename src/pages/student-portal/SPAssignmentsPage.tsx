@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { uploadFile, downloadUrl } from '@/lib/uploadFile'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
+import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
 
 const card: React.CSSProperties = {
   background: '#fff',
@@ -73,6 +74,7 @@ function displayScore(score: number | null, maxScore: number | null) {
 
 export function SPAssignmentsPage() {
   const { session } = useStudentPortal()
+  const { readOnly } = usePortalReadOnly()
   const [assignments, setAssignments] = useState<AssignmentRow[]>([])
   const [submissions, setSubmissions] = useState<SubmissionRow[]>([])
   const [submittingId, setSubmittingId] = useState<string | null>(null)
@@ -271,7 +273,7 @@ export function SPAssignmentsPage() {
     const score = displayScore(submission?.score ?? null, assignment.maxScore)
     const note = formState[assignment.id]?.note ?? ''
     const pendingFile = pendingFiles[assignment.id] ?? null
-    const canSubmit = !['Turned In', 'Resubmitted'].includes(assignment.rawStatus) || assignment.rawStatus === 'Resubmit'
+    const canSubmit = !readOnly && (!['Turned In', 'Resubmitted'].includes(assignment.rawStatus) || assignment.rawStatus === 'Resubmit')
 
     return (
       <div key={assignment.id} style={{ ...card, padding: 0, overflow: 'hidden', borderLeft: `4px solid ${meta.border}` }}>

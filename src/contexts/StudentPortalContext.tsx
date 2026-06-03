@@ -20,7 +20,7 @@ interface StudentPortalContextType {
   logout: () => Promise<void>
 }
 
-const StudentPortalContext = createContext<StudentPortalContextType | null>(null)
+export const StudentPortalContext = createContext<StudentPortalContextType | null>(null)
 
 function mapStudentSession(row: Record<string, unknown>): StudentSession {
   return {

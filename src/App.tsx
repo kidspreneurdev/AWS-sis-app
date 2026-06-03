@@ -4,6 +4,7 @@ import { useAuthListener } from '@/hooks/useAuth'
 import { router } from '@/router'
 import { ToastContainer } from '@/components/ui/ToastContainer'
 import { StudentPortalProvider } from '@/contexts/StudentPortalContext'
+import { ParentPortalProvider } from '@/contexts/ParentPortalContext'
 import { hasSupabaseEnv, supabaseConfigError } from '@/lib/supabase'
 
 function AuthBridge() {
@@ -66,7 +67,9 @@ export default function App() {
     <TooltipProvider>
       <AuthBridge />
       <StudentPortalProvider>
-        <RouterProvider router={router} />
+        <ParentPortalProvider>
+          <RouterProvider router={router} />
+        </ParentPortalProvider>
       </StudentPortalProvider>
       <ToastContainer />
     </TooltipProvider>

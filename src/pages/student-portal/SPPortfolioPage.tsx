@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { uploadFile, downloadUrl } from '@/lib/uploadFile'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
+import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 20 }
 const CATEGORIES = ['Academic', 'Creative', 'Community', 'Innovation', 'Leadership', 'Personal', 'Other']
@@ -64,6 +65,7 @@ function Modal({ studentId, onClose, onSave }: { studentId: string; onClose: () 
 
 export function SPPortfolioPage() {
   const { session } = useStudentPortal()
+  const { readOnly } = usePortalReadOnly()
   const [items, setItems] = useState<PortfolioItem[]>([])
   const [modal, setModal] = useState(false)
 
@@ -90,7 +92,7 @@ export function SPPortfolioPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <div><h1 style={{ fontSize: 22, fontWeight: 800, color: '#1A365E', margin: 0 }}>Portfolio</h1><p style={{ fontSize: 13, color: '#7A92B0', margin: '4px 0 0' }}>Showcase your best work and achievements</p></div>
-        <button onClick={() => setModal(true)} style={{ padding: '9px 18px', borderRadius: 8, border: 'none', background: '#D61F31', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>+ Add Item</button>
+        {!readOnly && <button onClick={() => setModal(true)} style={{ padding: '9px 18px', borderRadius: 8, border: 'none', background: '#D61F31', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>+ Add Item</button>}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }}>
         {items.map(item => {
@@ -101,7 +103,7 @@ export function SPPortfolioPage() {
                 <span style={{ padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: cm.bg, color: cm.tc }}>{item.category}</span>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <span style={{ fontSize: 11, color: '#7A92B0' }}>{new Date(item.created_at).toLocaleDateString()}</span>
-                  <button onClick={() => deleteItem(item.id)} style={{ background: 'none', border: 'none', color: '#D61F31', fontSize: 12, cursor: 'pointer' }}>✕</button>
+                  {!readOnly && <button onClick={() => deleteItem(item.id)} style={{ background: 'none', border: 'none', color: '#D61F31', fontSize: 12, cursor: 'pointer' }}>✕</button>}
                 </div>
               </div>
               <div style={{ fontSize: 15, fontWeight: 700, color: '#1A365E', marginBottom: 6 }}>{item.title}</div>

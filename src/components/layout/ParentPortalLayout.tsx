@@ -19,6 +19,7 @@ const PP_NAV = [
   { id: 'pp_docs',     icon: '📄', label: 'Documents',          to: '/parent/documents' },
   { id: 'pp_badges',   icon: '🏅', label: 'Badges',             to: '/parent/badges' },
   { id: 'pp_msgs',     icon: '💬', label: 'Messages',           to: '/parent/messages' },
+  { id: 'pp_requests', icon: '📬', label: 'Requests',           to: '/parent/requests' },
   { id: 'pp_profile',  icon: '👤', label: 'Profile',            to: '/parent/profile' },
 ]
 

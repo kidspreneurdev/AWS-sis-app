@@ -20,11 +20,11 @@ function renderTranscriptText(value: unknown) {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const GRADE_PTS: Record<string, number | null> = {
-  'A*':4.0,'A+':4.0,'A':4.0,'A-':3.7,'B+':3.3,'B':3.0,'B-':2.7,
-  'C+':2.3,'C':2.0,'C-':1.7,'D+':1.3,'D':1.0,'D-':0.7,'F':0.0,
+  'A':4.0,'B':3.0,'B-':2.5,'C':2.0,'D':1.0,'F':0.0,
   'P':null,'W':null,'I':null,'IP':null,
 }
-const GRADE_OPTS = ['A*','A+','A','A-','B+','B','B-','C+','C','C-','D+','D','D-','F','P','W','I','IP']
+// B- is only valid for STD courses (GCSE 9-1 transfer learners)
+const GRADE_OPTS = ['A','B','B-','C','D','F','P','W','I','IP']
 
 const COURSE_TYPES = ['STD','HON','AP','IB','DE','EC','CR'] as const
 type CourseType = typeof COURSE_TYPES[number]
@@ -174,6 +174,7 @@ interface TransferCredit {
   origGrade: string
   creditsAwarded: number
   area: string
+  gradeLevel: string
   sourceSchool: string
   sourceLocation: string
   accreditation: string
@@ -223,6 +224,7 @@ function rowToTransfer(r: Record<string,unknown>): TransferCredit {
     origGrade: (r.orig_grade as string) ?? '',
     creditsAwarded: Number(r.credits_awarded ?? 1),
     area: (r.area as string) ?? '',
+    gradeLevel: (r.grade_level as string) ?? '',
     sourceSchool: (r.source_school as string) ?? '',
     sourceLocation: (r.source_location as string) ?? '',
     accreditation: (r.accreditation as string) ?? '',
@@ -246,8 +248,9 @@ function rowToCatalog(r: Record<string,unknown>): CatalogCourse {
 // ─── GPA helpers ─────────────────────────────────────────────────────────────
 function getBasePts(grade: string) { const v = GRADE_PTS[grade]; return (v === undefined) ? null : v }
 function getWeightedPts(grade: string, type: CourseType): number | null {
+  if (grade === 'B-' && type !== 'STD' && type !== 'CR') return null
   const base = getBasePts(grade); if (base === null) return null
-  if (base <= 1.0) return base
+  if (base === 0) return 0
   return Math.round((base + (TYPE_WEIGHT[type]||0)) * 100) / 100
 }
 function calcGPA(courses: CourseRecord[]): number {
@@ -390,7 +393,7 @@ function emptyCourseDraft(studentId: string): CourseRecord {
   return { _id: crypto.randomUUID(), studentId, code:'', title:'', type:'STD', area:'Language Arts', year:'2025-2026', semester:'Full Year', gradeLevel:'Grade 9', creditsAttempted:1, creditsEarned:1, grade:'', courseStatus:'In Progress', apScore:null, instructor:'', section:'', notes:'' }
 }
 function emptyTransferDraft(studentId: string): TransferCredit {
-  return { _id: crypto.randomUUID(), studentId, kind:'DE', origTitle:'', origGrade:'', creditsAwarded:1, area:'Language Arts', sourceSchool:'', sourceLocation:'', accreditation:'', notes:'', status:'Pending' }
+  return { _id: crypto.randomUUID(), studentId, kind:'DE', origTitle:'', origGrade:'', creditsAwarded:1, area:'Language Arts', gradeLevel:'', sourceSchool:'', sourceLocation:'', accreditation:'', notes:'', status:'Pending' }
 }
 
 // ─── Course Modal ─────────────────────────────────────────────────────────────
@@ -518,6 +521,14 @@ function TransferModal({ draft, onChange, onSave, onClose }: {
                 {SUBJECT_AREAS.map(a => <option key={a}>{a}</option>)}
               </select></div>
           </div>
+          {draft.kind === 'DE' && (
+            <div><label style={{ fontSize:11, fontWeight:700, color:'#3D5475', display:'block', marginBottom:4 }}>Grade Level <span style={{ color:'#D61F31' }}>*</span></label>
+              <select style={sel} value={draft.gradeLevel} onChange={e => set('gradeLevel', e.target.value)}>
+                <option value="">— Select Grade Level —</option>
+                {GRADE_LEVELS.map(g => <option key={g}>{g}</option>)}
+              </select>
+            </div>
+          )}
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
             <div><label style={{ fontSize:11, fontWeight:700, color:'#3D5475', display:'block', marginBottom:4 }}>Source School</label>
               <input style={inp} value={draft.sourceSchool} onChange={e => set('sourceSchool', e.target.value)} /></div>
@@ -763,6 +774,7 @@ export function GradesHSPage() {
       orig_grade: transferModal.origGrade,
       credits_awarded: transferModal.creditsAwarded,
       area: transferModal.area,
+      grade_level: transferModal.gradeLevel || null,
       source_school: transferModal.sourceSchool,
       source_location: transferModal.sourceLocation,
       accreditation: transferModal.accreditation,
@@ -799,101 +811,232 @@ export function GradesHSPage() {
 
   function exportTranscriptPDF() {
     if (!student) return
-    const win = window.open('', '_blank', 'width=900,height=780,scrollbars=yes,resizable=yes')
+    const win = window.open('', '_blank', 'width=960,height=820,scrollbars=yes,resizable=yes')
     if (!win) { alert('Please allow pop-ups for this site to use the print feature.'); return }
     const h = (s: unknown) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    const hn = (s: unknown) => h(s).replace(/(\d[\d.,]*)/g, `<span class="num">$1</span>`)
-    const byYear: Record<string, CourseRecord[]> = {}
-    studentCourses.forEach(c => { const y = c.year || 'Unknown'; if (!byYear[y]) byYear[y] = []; byYear[y].push(c) })
-    const approvedTr = studentTransfers.filter(t => t.status === 'Approved')
-    const apCourses  = studentCourses.filter(c => (c.type === 'AP' || c.type === 'IB') && c.apScore)
-    const uw = calcGPA(studentCourses), wt = calcWeightedGPA(studentCourses), uc = calcUCGPA(studentCourses)
-    const gc = getGradCredits(studentCourses, studentTransfers)
-    const dist = getDistinction(wt, studentCourses)
-    const issueDate = new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' })
-    const totCr = Math.round((gc.total || 0) * 10) / 10
 
-    let courseRows = ''
-    Object.keys(byYear).sort().forEach(yr => {
-      const yc = byYear[yr]
-      const yrU = calcGPA(yc), yrW = calcWeightedGPA(yc)
-      courseRows += `<div style="margin-bottom:14px"><div style="background:#1A365E;color:#fff;padding:5px 12px;font-size:12px;font-weight:700;border-radius:4px;margin-bottom:6px">${hn(yr)}<span style="float:right;font-weight:400;font-size:11px">GPA — Unweighted: ${hn(yrU.toFixed(2))}&nbsp;&nbsp;Weighted: ${hn(yrW.toFixed(2))}</span></div>`
-      courseRows += `<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:#F7F9FC"><th style="padding:5px 8px;text-align:left;border:1px solid #E4EAF2">Course</th><th style="padding:5px 8px;border:1px solid #E4EAF2">Type</th><th style="padding:5px 8px;border:1px solid #E4EAF2">A–G</th><th style="padding:5px 8px;border:1px solid #E4EAF2">Sem</th><th style="padding:5px 8px;border:1px solid #E4EAF2">Cr</th><th style="padding:5px 8px;border:1px solid #E4EAF2">Grade</th><th style="padding:5px 8px;border:1px solid #E4EAF2">Pts</th></tr></thead><tbody>`
-      yc.forEach(cr => {
-        const wp = getWeightedPts(cr.grade, cr.type)
-        courseRows += `<tr><td style="padding:5px 8px;border:1px solid #E4EAF2">${hn(cr.title)}</td><td style="padding:5px 8px;border:1px solid #E4EAF2;text-align:center;font-size:9px">${h(cr.type)}</td><td style="padding:5px 8px;border:1px solid #E4EAF2;font-size:9px">${hn(cr.area)}</td><td style="padding:5px 8px;border:1px solid #E4EAF2;text-align:center;font-size:9px">${hn(cr.semester)}</td><td style="padding:5px 8px;border:1px solid #E4EAF2;text-align:center;font-weight:700">${hn(cr.creditsEarned)}</td><td style="padding:5px 8px;border:1px solid #E4EAF2;text-align:center;font-weight:800">${hn(cr.grade || '—')}</td><td style="padding:5px 8px;border:1px solid #E4EAF2;text-align:center">${wp !== null ? hn(wp.toFixed(1)) : '—'}</td></tr>`
+    const gradedCourses = studentCourses.filter(c =>
+      c.grade && !['','IP','W','I'].includes(c.grade)
+    )
+    const deTransferIds = new Set<string>()
+    const deTransferRecords: CourseRecord[] = studentTransfers
+      .filter(t => t.status === 'Approved' && t.kind === 'DE' && t.gradeLevel && t.origGrade && !['','IP','W','I'].includes(t.origGrade))
+      .map(t => {
+        deTransferIds.add(t._id)
+        return {
+          _id: t._id, studentId: t.studentId, code: 'DE', title: t.origTitle,
+          type: 'DE' as CourseType, area: t.area, year: '', semester: '',
+          gradeLevel: t.gradeLevel, creditsAttempted: t.creditsAwarded,
+          creditsEarned: t.creditsAwarded, grade: t.origGrade,
+          courseStatus: 'Completed' as CourseStatus, apScore: null,
+          instructor: '', section: '', notes: '',
+        }
       })
-      courseRows += '</tbody></table></div>'
+    const allGradedCourses = [...gradedCourses, ...deTransferRecords]
+    const tGPA = (courses: CourseRecord[]) => {
+      let tot = 0, pts = 0
+      courses.forEach(x => { const wp = getWeightedPts(x.grade, x.type); if (wp === null) return; const cr = x.creditsEarned || 0; if (!cr) return; tot += cr; pts += wp * cr })
+      return tot ? Math.round(pts / tot * 100) / 100 : 0
+    }
+    const uw = tGPA(allGradedCourses)
+    const totCr = Math.round(allGradedCourses.reduce((s, c) => s + (c.creditsEarned || 0), 0) * 10) / 10
+
+    const gradeLevelOrder = ['Grade 9','Grade 10','Grade 11','Grade 12']
+    const gradeGroups = gradeLevelOrder
+      .map(gl => ({ gl, courses: allGradedCourses.filter(c => c.gradeLevel === gl) }))
+      .filter(g => g.courses.length > 0)
+
+    let allSoFarPDF: CourseRecord[] = []
+    const cumulativeByGradePDF: Record<string,number> = {}
+    gradeGroups.forEach(({ gl, courses }) => {
+      allSoFarPDF = [...allSoFarPDF, ...courses]
+      cumulativeByGradePDF[gl] = tGPA(allSoFarPDF)
     })
 
-    let trRows = ''
-    if (approvedTr.length) {
-      trRows = `<div style="margin-bottom:14px"><div style="background:#F5A623;color:#fff;padding:5px 12px;font-size:12px;font-weight:700;border-radius:4px;margin-bottom:6px">TRANSFER CREDITS</div><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:#FFF6E0"><th style="padding:5px 8px;text-align:left;border:1px solid #E4EAF2">Course</th><th style="padding:5px 8px;border:1px solid #E4EAF2">Source Institution</th><th style="padding:5px 8px;border:1px solid #E4EAF2">Original Grade</th><th style="padding:5px 8px;border:1px solid #E4EAF2">Credits</th><th style="padding:5px 8px;border:1px solid #E4EAF2">A–G</th></tr></thead><tbody>`
-      approvedTr.forEach(t => { trRows += `<tr><td style="padding:5px 8px;border:1px solid #E4EAF2">${hn(t.origTitle)} <span style="font-size:9px;color:#F5A623">TRANSFER</span></td><td style="padding:5px 8px;border:1px solid #E4EAF2;font-size:10px">${hn(t.sourceSchool || '—')}</td><td style="padding:5px 8px;border:1px solid #E4EAF2;text-align:center;font-weight:800">${hn(t.origGrade || '—')}</td><td style="padding:5px 8px;border:1px solid #E4EAF2;text-align:center;font-weight:700">${hn(t.creditsAwarded)}</td><td style="padding:5px 8px;border:1px solid #E4EAF2;font-size:9px">${hn(t.area)}</td></tr>` })
-      trRows += '</tbody></table></div>'
-    }
+    const dobDisplay = student.dob
+      ? new Date(student.dob + 'T00:00:00').toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})
+      : '—'
+    const gradYear = academicYear.split(/[–\-—]/)[1]?.trim() || String(new Date().getFullYear())
+    const issueDate = new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})
+    const gridCols = gradeGroups.length <= 1 ? '1fr' : gradeGroups.length === 2 ? '1fr 1fr' : '1fr 1fr'
 
-    let apRows = ''
-    if (apCourses.length) {
-      apRows = `<div style="margin-bottom:14px"><div style="background:#7040CC;color:#fff;padding:5px 12px;font-size:12px;font-weight:700;border-radius:4px;margin-bottom:6px">AP / IB EXAM SCORES</div><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:#F3EEFF"><th style="padding:5px 8px;text-align:left;border:1px solid #E4EAF2">Exam</th><th style="padding:5px 8px;border:1px solid #E4EAF2">Score</th><th style="padding:5px 8px;border:1px solid #E4EAF2">College Credit Eligible</th></tr></thead><tbody>`
-      apCourses.forEach(c => { const sc = c.apScore!; apRows += `<tr><td style="padding:5px 8px;border:1px solid #E4EAF2">${hn(c.title)}</td><td style="padding:5px 8px;border:1px solid #E4EAF2;text-align:center;font-weight:800;color:${sc >= 3 ? '#1DBD6A' : '#D61F31'}">${hn(sc)}</td><td style="padding:5px 8px;border:1px solid #E4EAF2;font-size:10px">${sc >= 3 ? '✓ Eligible (score <span class="num">3</span>+)' : '✗ Score below <span class="num">3</span>'}</td></tr>` })
-      apRows += '</tbody></table></div>'
-    }
+    const gradeTablesHtml = gradeGroups.map(({ gl, courses: gc2 }, idx) => {
+      const gradeGPA = tGPA(gc2)
+      const cgpa = cumulativeByGradePDF[gl]
+      const gradeCredits = Math.round(gc2.reduce((s,c) => s + c.creditsEarned, 0) * 10) / 10
+      const rows = gc2.map(c => {
+        const wp = getWeightedPts(c.grade, c.type)
+        const sym = (c.type==='AP'||c.type==='IB') ? ' &bull;' : c.type==='HON' ? ' &#10003;' : (c.type==='DE'||c.type==='EC') ? ' &#9733;' : ''
+        const ind = deTransferIds.has(c._id) ? '(1)' : '(2)'
+        return `<tr>
+          <td style="padding:3px 5px;font-size:9pt;border-bottom:1px solid #eee"><span style="color:#999;font-size:7.5pt">${ind} </span>${h(c.title)}${sym}</td>
+          <td style="text-align:center;padding:3px 5px;font-size:9pt;border-bottom:1px solid #eee">${h(String(c.creditsEarned))}</td>
+          <td style="text-align:center;padding:3px 5px;font-size:9pt;font-weight:700;border-bottom:1px solid #eee">${h(c.grade||'—')}</td>
+          <td style="text-align:center;padding:3px 5px;font-size:9pt;border-bottom:1px solid #eee">${wp!==null?wp.toFixed(2):'—'}</td>
+        </tr>`
+      }).join('')
+      return `<div style="border-right:${idx<gradeGroups.length-1?'1px solid #ccc':'none'};padding:10px 12px">
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="border-bottom:1.5px solid #000">
+              <th style="text-align:left;font-weight:700;padding:3px 5px;font-size:10pt">${h(gl)}</th>
+              <th style="text-align:center;font-weight:700;padding:3px 5px;font-size:9.5pt">Credit</th>
+              <th style="text-align:center;font-weight:700;padding:3px 5px;font-size:9.5pt">Grade</th>
+              <th style="text-align:center;font-weight:700;padding:3px 5px;font-size:9.5pt">GPA</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+          <tfoot>
+            <tr style="border-top:1.5px solid #000">
+              <td colspan="4" style="padding:4px 5px;font-size:9pt;font-weight:700">
+                CGPA: ${h(cgpa.toFixed(2))}&nbsp;&nbsp;&nbsp;Total Credits: ${h(String(gradeCredits))}&nbsp;&nbsp;&nbsp;GPA: ${h(gradeGPA.toFixed(2))}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>`
+    }).join('')
 
-    const doc = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Transcript — ${h(student.name)}</title>
-<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Georgia,serif;font-size:12px;color:#1A365E;background:#fff;max-width:780px;margin:0 auto;padding:32px 36px}.num{font-family:${TRANSCRIPT_NUMERAL_FONT};font-variant-numeric:lining-nums tabular-nums}.toolbar{display:flex;gap:10px;margin-bottom:20px;align-items:center}@media print{.toolbar{display:none!important}@page{size:A4;margin:18mm 16mm}}</style>
-</head><body>
+    const doc = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Official Transcript — ${h(student.name)}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700;900&display=swap" rel="stylesheet"/>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Poppins',Arial,sans-serif;font-size:10pt;color:#000;background:#f0f0f0}
+  .page{background:#fff;max-width:780px;margin:0 auto;border:1px solid #ccc}
+  .toolbar{display:flex;gap:10px;padding:10px 14px;background:#f5f5f5;border-bottom:1px solid #ddd;align-items:center;max-width:780px;margin:0 auto}
+  @media print{.toolbar{display:none!important}body{background:#fff}.page{border:none;max-width:100%}@page{size:A4;margin:12mm 14mm}.page-break{page-break-before:always}}
+</style></head><body>
 <div class="toolbar">
-  <button onclick="window.print()" style="padding:9px 22px;background:#1A365E;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer">🖨️ Print / Save as PDF</button>
-  <button onclick="window.close()" style="padding:9px 18px;background:#F5F7FA;color:#3D5475;border:1.5px solid #E4EAF2;border-radius:7px;font-size:13px;cursor:pointer">✕ Close</button>
-  <span style="margin-left:auto;font-size:11px;color:#7A92B0">Tip: In print dialog → Save as PDF · enable Background graphics</span>
+  <button onclick="window.print()" style="padding:8px 20px;background:#1A365E;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">🖨️ Print / Save as PDF</button>
+  <button onclick="window.close()" style="padding:8px 16px;background:#fff;color:#333;border:1px solid #ccc;border-radius:6px;font-size:12px;cursor:pointer">✕ Close</button>
+  <span style="margin-left:auto;font-size:10px;color:#999">Tip: Enable "Background graphics" in print dialog</span>
 </div>
-<div style="text-align:center;border-bottom:3px solid #1A365E;padding-bottom:16px;margin-bottom:16px">
-  <img src="/Logo_b.png" alt="American World School" style="height:70px;width:auto;object-fit:contain;margin-bottom:8px"/>
-  <div style="font-size:22px;font-weight:900;color:#1A365E;letter-spacing:1px">AMERICAN WORLD SCHOOL</div>
-  <div style="font-size:11px;color:#7A92B0;letter-spacing:2px;margin-top:2px">OFFICIAL ACADEMIC TRANSCRIPT</div>
-  <div style="font-size:11px;color:#3D5475;margin-top:4px"><span class="num">${graduationCreditsRequired}</span>-Credit Graduation Program · <span class="num">${h(academicYear)}</span></div>
-  <div style="font-size:11px;color:#D61F31;font-weight:700;margin-top:4px">CONFIDENTIAL — FERPA PROTECTED</div>
-</div>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;font-size:12px">
-  <div><strong>Student Name:</strong> ${hn(student.name)}</div>
-  <div><strong>Student ID:</strong> ${hn(student.studentId || '—')}</div>
-  <div><strong>Date of Birth:</strong> ${hn(student.dob || '—')}</div>
-  <div><strong>Grade:</strong> ${hn(student.grade)}</div>
-  <div><strong>Campus:</strong> ${hn(student.campus || '—')}</div>
-  <div><strong>Academic Year:</strong> ${hn(academicYear)}</div>
-  <div><strong>Counselor Notes:</strong> —</div>
-  <div><strong>Issue Date:</strong> ${hn(issueDate)}</div>
-</div>
-${courseRows}${trRows}${apRows}
-<div style="background:#F7F9FC;border:2px solid #1A365E;border-radius:8px;padding:14px;margin-bottom:16px">
-  <div style="font-size:12px;font-weight:700;color:#1A365E;margin-bottom:8px">CUMULATIVE GPA SUMMARY</div>
-  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:12px">
-    <div style="text-align:center"><div style="font-size:11px;color:#7A92B0">Unweighted GPA</div><div class="num" style="font-size:22px;font-weight:900;color:#1A365E">${uw.toFixed(2)}</div></div>
-    <div style="text-align:center"><div style="font-size:11px;color:#7A92B0">Weighted GPA</div><div class="num" style="font-size:22px;font-weight:900;color:#7040CC">${wt.toFixed(2)}</div></div>
-    <div style="text-align:center"><div style="font-size:11px;color:#7A92B0">Academic GPA</div><div class="num" style="font-size:22px;font-weight:900;color:#0EA5E9">${uc.toFixed(2)}</div></div>
+
+<!-- PAGE 1 -->
+<div class="page">
+  <!-- Header -->
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:14px 20px 12px;border-bottom:2px solid #000">
+    <div><img src="/Logo_b.png" alt="American World School" style="height:62px;width:auto;object-fit:contain"/></div>
+    <div style="text-align:right">
+      <div style="font-size:30pt;font-weight:700;letter-spacing:-1px;line-height:1;font-family:'Poppins',Arial,sans-serif">Official Transcript</div>
+      <div style="font-size:8.5pt;margin-top:5px;line-height:1.75">
+        <span><strong>Official School WASC ID:</strong> 7548950999</span><br/>
+        <span><strong>WASC Address:</strong> 533 Airport Boulevard, Suite 200, Burlingame, CA 94010-2009</span><br/>
+        <span><strong>Phone:</strong> +1 650 696-1060</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Student info -->
+  <div style="border-bottom:1px solid #ccc;padding:10px 20px">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0">
+      <div>
+        <div style="font-weight:700;font-size:10pt">Student Name:</div>
+        <div style="font-size:12pt;font-weight:700;margin-top:2px">${h(student.name)}</div>
+      </div>
+      <div>
+        <div style="font-size:10pt"><strong>Student ID:</strong> ${h(student.studentId||'—')}</div>
+        <div style="font-size:10pt;margin-top:4px"><strong>Grade:</strong> ${h(student.grade)}</div>
+        <div style="font-size:10pt;margin-top:4px"><strong>Graduation Date:</strong> June ${h(gradYear)}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:12pt;font-weight:700"><strong>Total Credits:</strong> ${h(String(totCr))}</div>
+        <div style="font-size:12pt;font-weight:700;margin-top:4px"><strong>Cumulative GPA:</strong> ${h(uw.toFixed(2))}</div>
+      </div>
+    </div>
+    <div style="margin-top:8px">
+      <div style="font-weight:700;font-size:10pt">Date of Birth:</div>
+      <div style="font-size:10pt;margin-top:2px">${h(dobDisplay)}</div>
+    </div>
+  </div>
+
+  <!-- Grade tables -->
+  <div style="display:grid;grid-template-columns:${gridCols};border-bottom:1px solid #ccc">
+    ${gradeTablesHtml}
+  </div>
+
+  <!-- End of transcript -->
+  <div style="padding:8px 20px;font-weight:700;font-size:10pt;border-bottom:1px solid #ccc">END OF TRANSCRIPT.</div>
+
+  <!-- WASC stamp + registrar -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;padding:14px 20px;gap:20px;border-bottom:1px solid #ccc">
+    <div>
+      <div style="height:54px;border-bottom:1px solid #000;margin-bottom:6px"></div>
+      <div style="font-size:10pt;font-weight:700">Registrar Name: Paul Montague</div>
+      <div style="font-size:10pt;margin-top:3px">Date Issued: ${h(issueDate)}</div>
+      <div style="display:flex;gap:8px;margin-top:18px;align-items:center">
+        <div style="border:1px solid #bbb;border-radius:3px;padding:3px 10px;font-size:8pt;font-weight:700;text-align:center">AI<span style="font-size:9pt">✦</span>ASC</div>
+        <div style="border:1px solid #bbb;border-radius:3px;padding:3px 10px;font-size:8pt;font-weight:700;background:#f9f9f9">⊙ WASC</div>
+        <div style="border:1px solid #bbb;border-radius:3px;padding:3px 10px;font-size:8pt;font-weight:700">NCPSA</div>
+      </div>
+    </div>
+    <div style="border:1.5px dashed #aaa;border-radius:4px;padding:12px 14px">
+      <div style="font-weight:700;font-size:11pt;text-align:center;margin-bottom:8px">WASC ACCREDITATION STAMP</div>
+      <div style="font-size:8.5pt;color:#555;line-height:1.65;margin-bottom:12px">Affix the official Western Association of Schools and Colleges physical accreditation stamp in this box before issuance. This transcript is not valid without the stamp.</div>
+      <div style="border:1px solid #bbb;height:72px;display:flex;align-items:center;justify-content:center">
+        <span style="color:#bbb;font-size:8pt">Official School WASC ID: 7548950999</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div style="padding:6px 20px;font-size:8pt;color:#555;text-align:center;background:#f9f9f9">
+    Address: No 3/171, Nehru Nagar, 1st Main Rd, Rajiv Gandhi Salai, Thiruvengadam Nagar, Perungudi, Chennai, Tamil Nadu 600041 &nbsp;|&nbsp; Phone: +91 82206 06367 &nbsp;|&nbsp; Email: admin@americanworldschool.org
   </div>
 </div>
-<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:10px">
-  <span><strong>Total Credits Earned:</strong> ${hn(totCr)} / <span class="num">${graduationCreditsRequired}</span> credits</span>
-  ${totCr >= graduationCreditsRequired ? '<span style="background:#1DBD6A;color:#fff;padding:4px 12px;border-radius:8px;font-weight:700">✓ GRADUATION REQUIREMENTS MET</span>' : ''}
-</div>
-${dist ? `<div style="text-align:center;padding:10px;background:#FAC60020;border:2px solid #FAC600;border-radius:8px;font-weight:800;color:#7A5100;margin-bottom:12px">🏆 Academic Distinction: ${h(dist.label)}</div>` : ''}
-<div style="border:2px dashed #B0C4DE;border-radius:10px;padding:16px;margin-bottom:16px;display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:center">
-  <div>
-    <div style="font-size:10px;font-weight:800;color:#1A365E;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px">🏛 WASC Accreditation Stamp</div>
-    <div style="font-size:10px;color:#7A92B0;line-height:1.6">Affix the official Western Association of Schools and Colleges physical accreditation stamp in the box to the right before issuance. This transcript is not valid without the stamp.</div>
+
+<!-- PAGE 2 -->
+<div class="page page-break" style="margin-top:24px">
+  <div style="padding:20px 24px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:20px">
+      <div>
+        <div style="font-weight:700;font-size:10.5pt;margin-bottom:8px">School (s)</div>
+        <div style="font-size:9.5pt">(1) — West Windsor-Plainsboro High School</div>
+        <div style="font-size:9.5pt;margin-top:2px">(2) — American World School</div>
+      </div>
+      <div>
+        <div style="font-weight:700;font-size:10.5pt;margin-bottom:8px">Key For Retakes</div>
+        <div style="font-size:9.5pt"><em>RP</em> — Replaced Because Retaken</div>
+        <div style="font-size:9.5pt;margin-top:2px"><em>RT</em> — Retake</div>
+      </div>
+    </div>
+    <div style="margin-bottom:20px">
+      <div style="font-weight:700;font-size:10.5pt;margin-bottom:8px">Legend for Weighted Courses</div>
+      <div style="font-size:9.5pt;display:flex;flex-direction:column;gap:4px">
+        <div>&bull; &nbsp; Advanced Placement</div>
+        <div>&#9733; &nbsp; College Courses</div>
+        <div>&#10003; &nbsp; Honors</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:9.5pt">
+        <div><strong>Semester Course = 0.5 credit</strong></div>
+        <div><strong>Year long course: 1.0 credit</strong></div>
+      </div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:9.5pt">
+      <thead>
+        <tr>
+          <th style="border:1px solid #ccc;padding:9px 14px;font-weight:700;background:#f5f5f5">Grade</th>
+          <th style="border:1px solid #ccc;padding:9px 14px;font-weight:700;background:#f5f5f5">Standard</th>
+          <th style="border:1px solid #ccc;padding:9px 14px;font-weight:700;background:#f5f5f5">Honors</th>
+          <th style="border:1px solid #ccc;padding:9px 14px;font-weight:700;background:#f5f5f5">Advanced Placement</th>
+          <th style="border:1px solid #ccc;padding:9px 14px;font-weight:700;background:#f5f5f5">College Courses</th>
+          <th style="border:1px solid #ccc;padding:9px 14px;font-weight:700;background:#f5f5f5">Percentage</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td style="border:1px solid #ccc;padding:9px 14px;text-align:center;font-weight:700">A</td><td style="border:1px solid #ccc;padding:9px 14px;text-align:center">4.00</td><td style="border:1px solid #ccc;padding:9px 14px;text-align:center">4.50</td><td style="border:1px solid #ccc;padding:9px 14px;text-align:center">5.00</td><td style="border:1px solid #ccc;padding:9px 14px;text-align:center">5.00</td><td style="border:1px solid #ccc;padding:9px 14px;text-align:center">90–100</td></tr>
+        <tr><td style="border:1px solid #ccc;padding:9px 14px;text-align:center;font-weight:700">B</td><td style="border:1px solid #ccc;padding:9px 14px;text-align:center">3.00</td><td style="border:1px solid #ccc;padding:9px 14px;text-align:center">3.50</td><td style="border:1px solid #ccc;padding:9px 14px;text-align:center">4.00</td><td style="border:1px solid #ccc;padding:9px 14px;text-align:center">4.00</td><td style="border:1px solid #ccc;padding:9px 14px;text-align:center">80–89</td></tr>
+        <tr><td style="border:1px solid #ccc;padding:9px 14px;text-align:center;font-weight:700">B-</td><td style="border:1px solid #ccc;padding:9px 14px;text-align:center">2.50</td><td colspan="3" style="border:1px solid #ccc;padding:9px 14px;text-align:center;font-size:9pt">N/A — Only for transfer learners coming from a 9-1 GCSE system</td><td style="border:1px solid #ccc;padding:9px 14px;text-align:center">—</td></tr>
+        <tr><td style="border:1px solid #ccc;padding:9px 14px;text-align:center;font-weight:700">C</td><td style="border:1px solid #ccc;padding:9px 14px;text-align:center">2.00</td><td style="border:1px solid #ccc;padding:9px 14px;text-align:center">2.50</td><td style="border:1px solid #ccc;padding:9px 14px;text-align:center">3.00</td><td style="border:1px solid #ccc;padding:9px 14px;text-align:center">3.00</td><td style="border:1px solid #ccc;padding:9px 14px;text-align:center">70–79</td></tr>
+        <tr><td style="border:1px solid #ccc;padding:9px 14px;text-align:center;font-weight:700">D</td><td style="border:1px solid #ccc;padding:9px 14px;text-align:center">1.00</td><td style="border:1px solid #ccc;padding:9px 14px;text-align:center">1.50</td><td style="border:1px solid #ccc;padding:9px 14px;text-align:center">2.00</td><td style="border:1px solid #ccc;padding:9px 14px;text-align:center">2.00</td><td style="border:1px solid #ccc;padding:9px 14px;text-align:center">60–69</td></tr>
+        <tr><td style="border:1px solid #ccc;padding:9px 14px;text-align:center;font-weight:700">F</td><td style="border:1px solid #ccc;padding:9px 14px;text-align:center">0</td><td style="border:1px solid #ccc;padding:9px 14px;text-align:center">0</td><td style="border:1px solid #ccc;padding:9px 14px;text-align:center">0</td><td style="border:1px solid #ccc;padding:9px 14px;text-align:center">0</td><td style="border:1px solid #ccc;padding:9px 14px;text-align:center">0–59</td></tr>
+        <tr><td style="border:1px solid #ccc;padding:9px 14px;text-align:center;font-weight:700">P</td><td colspan="5" style="border:1px solid #ccc;padding:9px 14px;text-align:center">Pass</td></tr>
+      </tbody>
+    </table>
   </div>
-  <div style="border:2px solid #B0C4DE;border-radius:8px;height:90px;display:flex;align-items:center;justify-content:center;background:#F7F9FC">
-    <div style="text-align:center;color:#B0C4DE;font-size:11px;font-weight:600">[ WASC STAMP HERE ]</div>
-  </div>
 </div>
-<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin-top:20px;border-top:2px solid #1A365E;padding-top:16px;font-size:11px">
-  <div style="text-align:center"><div style="height:30px;border-bottom:1px solid #1A365E;margin-bottom:4px"></div>Registrar Signature</div>
-  <div style="text-align:center"><div style="height:30px;border-bottom:1px solid #1A365E;margin-bottom:4px"></div>Principal / Head of School</div>
-  <div style="text-align:center"><div style="height:30px;border-bottom:1px solid #1A365E;margin-bottom:4px"></div>Issuance Date</div>
-</div>
-<div style="text-align:center;font-size:10px;color:#7A92B0;margin-top:10px">This document is an official academic record of American World School. Unauthorized alterations are a violation of federal law (FERPA).</div>
 </body></html>`
     win.document.write(doc)
     win.document.close()
@@ -2214,19 +2357,68 @@ ${deTotal > 0 ? `
 
   // ── TAB: TRANSCRIPT ───────────────────────────────────────────────────────
   function renderTranscript() {
-    const uw   = calcGPA(studentCourses)
-    const wt   = calcWeightedGPA(studentCourses)
-    const uc   = calcUCGPA(studentCourses)
-    const gc   = getGradCredits(studentCourses, studentTransfers)
-    const dist = getDistinction(wt, studentCourses)
-    const totCr = Math.round((gc.total || 0) * 10) / 10
-    const byYear = SCHOOL_YEARS.filter(y => studentCourses.some(c => c.year === y))
-    const approvedTransfers = studentTransfers.filter(t => t.status === 'Approved')
-    const apScores = studentCourses.filter(c => (c.type === 'AP' || c.type === 'IB') && c.apScore)
+    const gradedCourses = studentCourses.filter(c =>
+      c.grade && !['','IP','W','I'].includes(c.grade)
+    )
+    const rtDeTransferIds = new Set<string>()
+    const deTransferRecordsRT: CourseRecord[] = studentTransfers
+      .filter(t => t.status === 'Approved' && t.kind === 'DE' && t.gradeLevel && t.origGrade && !['','IP','W','I'].includes(t.origGrade))
+      .map(t => {
+        rtDeTransferIds.add(t._id)
+        return {
+          _id: t._id, studentId: t.studentId, code: 'DE', title: t.origTitle,
+          type: 'DE' as CourseType, area: t.area, year: '', semester: '',
+          gradeLevel: t.gradeLevel, creditsAttempted: t.creditsAwarded,
+          creditsEarned: t.creditsAwarded, grade: t.origGrade,
+          courseStatus: 'Completed' as CourseStatus, apScore: null,
+          instructor: '', section: '', notes: '',
+        }
+      })
+    const allGradedCourses = [...gradedCourses, ...deTransferRecordsRT]
+    const tGPA = (courses: CourseRecord[]) => {
+      let tot = 0, pts = 0
+      courses.forEach(x => { const wp = getWeightedPts(x.grade, x.type); if (wp === null) return; const cr = x.creditsEarned || 0; if (!cr) return; tot += cr; pts += wp * cr })
+      return tot ? Math.round(pts / tot * 100) / 100 : 0
+    }
+    const uw = tGPA(allGradedCourses)
+    const totCr = Math.round(allGradedCourses.reduce((s, c) => s + (c.creditsEarned || 0), 0) * 10) / 10
     const issueDate = new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' })
+    const gradYear = academicYear.split(/[–\-—]/)[1]?.trim() || String(new Date().getFullYear())
+    const dobDisplay = student?.dob
+      ? new Date(student.dob + 'T00:00:00').toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' })
+      : '—'
 
-    const cellStyle: React.CSSProperties = { padding:'5px 8px', border:'1px solid #E4EAF2', fontSize:11, color:'#1A365E', verticalAlign:'middle' }
-    const hdrCell: React.CSSProperties   = { padding:'5px 8px', border:'1px solid #E4EAF2', fontSize:10, fontWeight:700, color:'#7A92B0', textAlign:'left', background:'#F7F9FC' }
+    const gradeLevelOrder = ['Grade 9','Grade 10','Grade 11','Grade 12']
+    const gradeGroups = gradeLevelOrder
+      .map(gl => ({ gl, courses: allGradedCourses.filter(c => c.gradeLevel === gl) }))
+      .filter(g => g.courses.length > 0)
+
+    let allSoFar: CourseRecord[] = []
+    const cumulativeByGrade: Record<string, number> = {}
+    gradeGroups.forEach(({ gl, courses }) => {
+      allSoFar = [...allSoFar, ...courses]
+      cumulativeByGrade[gl] = tGPA(allSoFar)
+    })
+
+    const docWrapper: React.CSSProperties = {
+      background: '#fff',
+      border: '1px solid #ccc',
+      width: '210mm',
+      minHeight: '297mm',
+      margin: '0 auto',
+      padding: '12mm 16mm',
+      fontFamily: 'Poppins, Arial, sans-serif',
+      fontSize: 10,
+      color: '#000',
+      boxShadow: '0 4px 24px rgba(0,0,0,0.12)',
+      boxSizing: 'border-box',
+      display: 'flex',
+      flexDirection: 'column',
+      position: 'relative',
+      overflow: 'hidden',
+    }
+    const thin = '1px solid #ccc'
+    const bgPattern = <img src="/bgpattern.png" alt="" aria-hidden="true" style={{ position:'absolute', top:0, right:'15%', width:'100%', height:'auto', opacity:0.5, pointerEvents:'none', userSelect:'none' }} />
 
     return (
       <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
@@ -2238,197 +2430,204 @@ ${deTotal > 0 ? `
           </button>
         </div>
 
-        {/* Transcript body */}
-        <div ref={printRef} style={{ background:'#fff', border:'2px solid #1A365E', borderRadius:12, padding:30, maxWidth:760, margin:'0 auto', width:'100%', fontFamily:'Georgia, serif' }}>
+        {/* Transcript document */}
+        <div ref={printRef} style={docWrapper}>
 
-          {/* Header — centered, exactly like HTML */}
-          <div style={{ textAlign:'center', borderBottom:'3px solid #1A365E', paddingBottom:16, marginBottom:16 }}>
-            <img src="/Logo_b.png" alt="American World School" style={{ height:70, width:'auto', objectFit:'contain', marginBottom:8, display:'block', margin:'0 auto 8px' }} />
-            <div style={{ fontSize:22, fontWeight:900, color:'#1A365E', letterSpacing:1 }}>AMERICAN WORLD SCHOOL</div>
-            <div style={{ fontSize:11, color:'#7A92B0', letterSpacing:2, marginTop:2 }}>OFFICIAL ACADEMIC TRANSCRIPT</div>
-            <div style={{ fontSize:11, color:'#3D5475', marginTop:4 }}>{renderTranscriptText(`${graduationCreditsRequired}-Credit Graduation Program · ${academicYear}`)}</div>
-            <div style={{ fontSize:11, color:'#D61F31', fontWeight:700, marginTop:4 }}>CONFIDENTIAL — FERPA PROTECTED</div>
-          </div>
+          {/* Background pattern */}
+          {bgPattern}
 
-          {/* Student info — 2-column grid with bold labels */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:16, fontSize:12 }}>
-            {[
-              ['Student Name',    student?.name || '—'],
-              ['Student ID',      student?.studentId || '—'],
-              ['Date of Birth',   student?.dob || '—'],
-              ['Grade',           student?.grade || '—'],
-              ['Campus',          student?.campus || '—'],
-              ['Academic Year',   academicYear],
-              ['Counselor Notes', '—'],
-              ['Issue Date',      issueDate],
-            ].map(([l, v]) => (
-              <div key={l} style={{ fontSize:12 }}>
-                <strong>{l}:</strong> {renderTranscriptText(v)}
+          {/* Header */}
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', padding:'0 0 12px', borderBottom:'2px solid #000' }}>
+            <div style={{ display:'flex', alignItems:'center' }}>
+              <img src="/Logo_b.png" alt="American World School" style={{ height:62, width:'auto', objectFit:'contain' }} />
+            </div>
+            <div style={{ textAlign:'left' }}>
+              <div style={{ fontSize:36, fontWeight:700, letterSpacing:-1, lineHeight:1, fontFamily:'Poppins, Arial, sans-serif' }}>Official Transcript</div>
+              <div style={{ fontSize:7, marginTop:5, lineHeight:1.75, textAlign:'left' }}>
+                <div><strong>Official School WASC ID:</strong> 7548950999</div>
+                <div><strong>WASC Address:</strong> 533 Airport Boulevard, Suite 200, Burlingame, CA 94010-2009</div>
+                <div><strong>Phone:</strong> +1 650 696-1060</div>
               </div>
-            ))}
+            </div>
           </div>
 
-          {/* Course history by year */}
-          {byYear.map(y => {
-            const yc  = studentCourses.filter(c => c.year === y)
-            const yrU = calcGPA(yc), yrW = calcWeightedGPA(yc)
-            return (
-              <div key={y} style={{ marginBottom:14 }}>
-                <div style={{ background:'#1A365E', color:'#fff', padding:'5px 12px', fontSize:12, fontWeight:700, borderRadius:4, marginBottom:6, display:'flex', justifyContent:'space-between' }}>
-                  <span>{renderTranscriptText(y)}</span>
-                  <span style={{ fontWeight:400, fontSize:11 }}>GPA — Unweighted: {renderTranscriptText(yrU.toFixed(2))} &nbsp; Weighted: {renderTranscriptText(yrW.toFixed(2))}</span>
-                </div>
-                <table style={{ width:'100%', borderCollapse:'collapse', fontSize:11 }}>
-                  <thead>
-                    <tr>
-                      <th style={{ ...hdrCell, textAlign:'left' }}>Course</th>
-                      <th style={hdrCell}>Type</th>
-                      <th style={hdrCell}>A–G</th>
-                      <th style={hdrCell}>Sem</th>
-                      <th style={{ ...hdrCell, textAlign:'center' }}>Cr</th>
-                      <th style={{ ...hdrCell, textAlign:'center' }}>Grade</th>
-                      <th style={{ ...hdrCell, textAlign:'center' }}>Pts</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {yc.map(c => {
-                      const wp = getWeightedPts(c.grade, c.type)
-                      return (
-                        <tr key={c._id}>
-                          <td style={cellStyle}>
-                            {renderTranscriptText(c.title)}
-                            {c.type !== 'STD' && <span style={{ fontSize:9, fontWeight:800, color:TYPE_COLOR[c.type], marginLeft:4 }}>{c.type}</span>}
-                          </td>
-                          <td style={{ ...cellStyle, textAlign:'center', fontSize:9 }}>{c.type}</td>
-                          <td style={{ ...cellStyle, fontSize:9 }}>{renderTranscriptText(c.area)}</td>
-                          <td style={{ ...cellStyle, textAlign:'center', fontSize:9 }}>{renderTranscriptText(c.semester)}</td>
-                          <td style={{ ...cellStyle, textAlign:'center', fontWeight:700 }}>{renderTranscriptText(c.creditsEarned)}</td>
-                          <td style={{ ...cellStyle, textAlign:'center', fontWeight:800 }}>{renderTranscriptText(c.grade || '—')}</td>
-                          <td style={{ ...cellStyle, textAlign:'center' }}>{wp !== null ? renderTranscriptText(wp.toFixed(1)) : '—'}</td>
+          {/* Student info */}
+          <div style={{ borderBottom:thin, padding:'18px 0' }}>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gridTemplateRows:'repeat(3, 24px)', rowGap:6, alignItems:'center' }}>
+              {/* Row 1: labels + Student ID + Total Credits */}
+              <div style={{ gridColumn:1, gridRow:1, fontWeight:700, fontSize:10 }}>Student Name:</div>
+              <div style={{ gridColumn:2, gridRow:1, fontSize:10 }}><strong>Student ID:</strong> {student?.studentId || '—'}</div>
+              <div style={{ gridColumn:3, gridRow:1, fontSize:10, textAlign:'right' }}><strong>Total Credits:</strong> {totCr}</div>
+              {/* Row 2: student name value + Grade */}
+              <div style={{ gridColumn:1, gridRow:2, fontSize:13, fontWeight:700 }}>{student?.name || '—'}</div>
+              <div style={{ gridColumn:2, gridRow:2, fontSize:10 }}><strong>Grade:</strong> {student?.grade || '—'}</div>
+              {/* Row 3: Date of Birth + Graduation Date + Cumulative GPA */}
+              <div style={{ gridColumn:1, gridRow:3, fontSize:10 }}><strong>Date of Birth:</strong> {dobDisplay}</div>
+              <div style={{ gridColumn:2, gridRow:3, fontSize:10 }}><strong>Graduation Date:</strong> June {gradYear}</div>
+              <div style={{ gridColumn:3, gridRow:2, fontSize:10, textAlign:'right' }}><strong>Cumulative GPA:</strong> {uw.toFixed(2)}</div>
+            </div>
+          </div>
+
+          {/* Grade level tables side by side */}
+          {gradeGroups.length > 0 ? (
+            <div style={{ display:'grid', gridTemplateColumns: gradeGroups.length <= 1 ? '1fr' : '1fr 1fr' }}>
+              {gradeGroups.map(({ gl, courses: gc2 }, idx) => {
+                const gradeGPA = tGPA(gc2)
+                const cgpa = cumulativeByGrade[gl]
+                const gradeCredits = Math.round(gc2.reduce((s,c) => s + c.creditsEarned, 0) * 10) / 10
+                return (
+                  <div key={gl} style={{ padding:'10px 12px' }}>
+                    <table style={{ width:'100%', borderCollapse:'collapse' }}>
+                      <thead>
+                        <tr style={{ borderBottom:'1.5px solid #000' }}>
+                          <th style={{ textAlign:'left', fontWeight:700, padding:'3px 5px', fontSize:10 }}>{gl}</th>
+                          <th style={{ textAlign:'center', fontWeight:700, padding:'3px 5px', fontSize:9.5, whiteSpace:'nowrap' }}>Credit</th>
+                          <th style={{ textAlign:'center', fontWeight:700, padding:'3px 5px', fontSize:9.5 }}>Grade</th>
+                          <th style={{ textAlign:'center', fontWeight:700, padding:'3px 5px', fontSize:9.5 }}>GPA</th>
                         </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )
-          })}
+                      </thead>
+                      <tbody>
+                        {gc2.map(c => {
+                          const wp = getWeightedPts(c.grade, c.type)
+                          const sym = (c.type === 'AP' || c.type === 'IB') ? ' ●' : c.type === 'HON' ? ' ✓' : (c.type === 'DE' || c.type === 'EC') ? ' ★' : ''
+                          const ind = rtDeTransferIds.has(c._id) ? '(1)' : '(2)'
+                          return (
+                            <tr key={c._id} style={{ borderBottom:'0.5px solid #eee' }}>
+                              <td style={{ padding:'3px 5px', fontSize:9.5 }}>
+                                <span style={{ color:'#999', fontSize:8 }}>{ind} </span>
+                                {c.title}{sym && <span style={{ fontSize:8 }}>{sym}</span>}
+                              </td>
+                              <td style={{ textAlign:'center', padding:'3px 5px', fontSize:9.5 }}>{c.creditsEarned}</td>
+                              <td style={{ textAlign:'center', padding:'3px 5px', fontSize:9.5, fontWeight:700 }}>{c.grade || '—'}</td>
+                              <td style={{ textAlign:'center', padding:'3px 5px', fontSize:9.5 }}>{wp !== null ? wp.toFixed(2) : '—'}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                      <tfoot>
+                        <tr style={{ borderTop:'1.5px solid #000' }}>
+                          <td colSpan={4} style={{ padding:'4px 5px', fontSize:9, fontWeight:700 }}>
+                            CGPA: {cgpa.toFixed(2)}&nbsp;&nbsp;&nbsp;Total Credits: {gradeCredits}&nbsp;&nbsp;&nbsp;GPA: {gradeGPA.toFixed(2)}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                    {idx === gradeGroups.length - 1 && (
+                      <div style={{ padding:'6px 5px', fontWeight:700, fontSize:10 }}>END OF TRANSCRIPT.</div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <div style={{ padding:'16px 0', fontSize:11, color:'#888', fontStyle:'italic' }}>No completed courses to display.</div>
+          )}
 
-          {/* Transfer credits */}
-          {approvedTransfers.length > 0 && (
-            <div style={{ marginBottom:14 }}>
-              <div style={{ background:'#F5A623', color:'#fff', padding:'5px 12px', fontSize:12, fontWeight:700, borderRadius:4, marginBottom:6 }}>TRANSFER CREDITS</div>
-              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:11 }}>
-                <thead>
-                  <tr style={{ background:'#FFF6E0' }}>
-                    <th style={{ ...hdrCell, textAlign:'left' }}>Course</th>
-                    <th style={hdrCell}>Source Institution</th>
-                    <th style={{ ...hdrCell, textAlign:'center' }}>Original Grade</th>
-                    <th style={{ ...hdrCell, textAlign:'center' }}>Credits</th>
-                    <th style={hdrCell}>A–G</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {approvedTransfers.map(t => (
-                    <tr key={t._id}>
-                      <td style={cellStyle}>{renderTranscriptText(t.origTitle)} <span style={{ fontSize:9, color:'#F5A623' }}>TRANSFER</span></td>
-                      <td style={{ ...cellStyle, fontSize:10 }}>{renderTranscriptText(t.sourceSchool || '—')}</td>
-                      <td style={{ ...cellStyle, textAlign:'center', fontWeight:800 }}>{renderTranscriptText(t.origGrade || '—')}</td>
-                      <td style={{ ...cellStyle, textAlign:'center', fontWeight:700 }}>{renderTranscriptText(t.creditsAwarded)}</td>
-                      <td style={{ ...cellStyle, fontSize:9 }}>{renderTranscriptText(t.area)}</td>
-                    </tr>
+          {/* Bottom block — always pinned above footer */}
+          <div style={{ marginTop:'auto' }}>
+            {/* WASC stamp + registrar */}
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', padding:'14px 0', gap:20, borderBottom:thin }}>
+              <div style={{ alignSelf:'end' }}>
+                <div style={{ display:'inline-block', marginBottom:6 }}>
+                  <img src="/Paul_sign.png" alt="Registrar Signature" style={{ height:44, width:'auto', objectFit:'contain', display:'block', marginBottom:4 }} />
+                  <div style={{ borderBottom:'1px solid #000', width: 182 }} />
+                </div>
+                <div style={{ fontSize:13, fontWeight:700 }}>Registrar Name: Paul Montague</div>
+                <div style={{ fontSize:13, marginTop:3 }}>Date Issued: {issueDate}</div>
+                <div style={{ display:'flex', gap:10, marginTop:18, alignItems:'center' }}>
+                  <img src="/AIAASC.png" alt="AIAASC" style={{ height:35, width:80, objectFit:'contain', position:'relative', top:2, left:0 }} />
+                  <img src="/WASC.png"   alt="WASC"   style={{ height:100, width:105, objectFit:'contain', position:'relative', top:1, left:0 }} />
+                  <img src="/NCPSA.png"  alt="NCPSA"  style={{ height:40, width:110, objectFit:'contain', position:'relative', top:0, left:0 }} />
+                </div>
+              </div>
+              <div style={{ border:'1.5px dashed #aaa', borderRadius:16, padding:'12px 14px', minHeight:380, display:'flex', flexDirection:'column' }}>
+                <div style={{ fontWeight:700, fontSize:11, textAlign:'center', marginBottom:8 }}>WASC ACCREDITATION STAMP</div>
+                <div style={{ fontSize:9.5, color:'#555', lineHeight:1.65, marginBottom:12, textAlign:'center' }}>
+                  Affix the official Western Association of Schools and Colleges physical accreditation stamp in this box before issuance. This transcript is not valid without the stamp.
+                </div>
+                <div style={{ border:'1px solid #bbb', borderRadius:16, flex:1, display:'flex', alignItems:'flex-end', justifyContent:'center', padding:'10px', minHeight:120, background:'#F0F0F0' }}>
+                  <span style={{ color:'#bbb', fontSize:8.5 }}>Official School WASC ID: 7548950999</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding:'6px 0', fontSize:7, color:'#000', textAlign:'center', background:'#fff', borderTop:'1px solid #000', whiteSpace:'nowrap' }}>
+              <strong>Address:</strong> No 3/171, Nehru Nagar, 1st Main Rd, Rajiv Gandhi Salai, Thiruvengadam Nagar, Perungudi, Chennai, Tamil Nadu 600041 &nbsp;|&nbsp; <strong>Phone:</strong> +91 82206 06367 &nbsp;|&nbsp; <strong>Email:</strong> admin@americanworldschool.org
+            </div>
+          </div>
+
+        </div>
+
+        {/* Page 2 — Grading scale (visible below on screen, separate page on print) */}
+        <div style={{ ...docWrapper, marginTop:16 }}>
+          {bgPattern}
+          <div style={{ padding:'16px', border:'1px solid #000', background:'#F5F5F5', borderRadius:4, marginBottom:16 }}>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:24, marginBottom:20 }}>
+              <div>
+                <div style={{ fontWeight:700, fontSize:10.5, marginBottom:8 }}>School (s)</div>
+                <div style={{ fontSize:9.5 }}>(1) — West Windsor-Plainsboro High School</div>
+                <div style={{ fontSize:9.5, marginTop:2 }}>(2) — American World School</div>
+              </div>
+              <div>
+                <div style={{ fontWeight:700, fontSize:10.5, marginBottom:8 }}>Key For Retakes</div>
+                <div style={{ fontSize:9.5 }}><em>RP</em> — Replaced Because Retaken</div>
+                <div style={{ fontSize:9.5, marginTop:2 }}><em>RT</em> — Retake</div>
+              </div>
+            </div>
+            <div style={{ marginBottom:0 }}>
+              <div style={{ fontWeight:700, fontSize:10.5, marginBottom:8 }}>Legend for Weighted Courses</div>
+              <div style={{ fontSize:9.5, display:'flex', flexDirection:'column', gap:4 }}>
+                <div>● &nbsp; Advanced Placement</div>
+                <div>★ &nbsp; College Courses</div>
+                <div>✓ &nbsp; Honors</div>
+              </div>
+              <div style={{ display:'flex', gap:24, marginTop:10, fontSize:9.5 }}>
+                <div><strong>Semester Course = 0.5 credit</strong></div>
+                <div><strong>Year long course: 1.0 credit</strong></div>
+              </div>
+            </div>
+          </div>
+          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:9.5 }}>
+              <thead>
+                <tr>
+                  {['Grade','Standard','Honors','Advanced Placement','College Courses','Percentage'].map(h2 => (
+                    <th key={h2} style={{ border:thin, padding:'9px 14px', fontWeight:700, background:'#f5f5f5' }}>{h2}</th>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* AP / IB scores */}
-          {apScores.length > 0 && (
-            <div style={{ marginBottom:14 }}>
-              <div style={{ background:'#7040CC', color:'#fff', padding:'5px 12px', fontSize:12, fontWeight:700, borderRadius:4, marginBottom:6 }}>AP / IB EXAM SCORES</div>
-              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:11 }}>
-                <thead>
-                  <tr style={{ background:'#F3EEFF' }}>
-                    <th style={{ ...hdrCell, textAlign:'left' }}>Exam</th>
-                    <th style={{ ...hdrCell, textAlign:'center' }}>Score</th>
-                    <th style={hdrCell}>College Credit Eligible</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  ['A',   '4.00','4.50','5.00','5.00','90–100'],
+                  ['B',   '3.00','3.50','4.00','4.00','80–89'],
+                ].map(([g,...vals]) => (
+                  <tr key={g}>
+                    <td style={{ border:thin, padding:'9px 14px', textAlign:'center', fontWeight:700 }}>{g}</td>
+                    {vals.map((v,i) => <td key={i} style={{ border:thin, padding:'9px 14px', textAlign:'center' }}>{v}</td>)}
                   </tr>
-                </thead>
-                <tbody>
-                  {apScores.map(c => {
-                    const sc = c.apScore!
-                    return (
-                      <tr key={c._id}>
-                        <td style={cellStyle}>{renderTranscriptText(c.title)}</td>
-                        <td style={{ ...cellStyle, textAlign:'center', fontWeight:800, color: sc >= 3 ? '#1DBD6A' : '#D61F31' }}>{renderTranscriptText(sc)}</td>
-                        <td style={{ ...cellStyle, fontSize:10 }}>{renderTranscriptText(sc >= 3 ? '✓ Eligible (score 3+)' : '✗ Score below 3')}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* GPA Summary box */}
-          <div style={{ background:'#F7F9FC', border:'2px solid #1A365E', borderRadius:8, padding:14, marginBottom:16 }}>
-            <div style={{ fontSize:12, fontWeight:700, color:'#1A365E', marginBottom:8 }}>CUMULATIVE GPA SUMMARY</div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, fontSize:12 }}>
-              <div style={{ textAlign:'center' }}>
-                <div style={{ fontSize:11, color:'#7A92B0' }}>Unweighted GPA</div>
-                <div style={{ ...transcriptNumStyle, fontSize:22, fontWeight:900, color:'#1A365E' }}>{uw.toFixed(2)}</div>
-              </div>
-              <div style={{ textAlign:'center' }}>
-                <div style={{ fontSize:11, color:'#7A92B0' }}>Weighted GPA</div>
-                <div style={{ ...transcriptNumStyle, fontSize:22, fontWeight:900, color:'#7040CC' }}>{wt.toFixed(2)}</div>
-              </div>
-              <div style={{ textAlign:'center' }}>
-                <div style={{ fontSize:11, color:'#7A92B0' }}>Academic GPA</div>
-                <div style={{ ...transcriptNumStyle, fontSize:22, fontWeight:900, color:'#0EA5E9' }}>{uc.toFixed(2)}</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Credits + graduation badge */}
-          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', fontSize:12, marginBottom:10 }}>
-            <span><strong>Total Credits Earned:</strong> {renderTranscriptText(`${totCr} / ${graduationCreditsRequired} credits`)}</span>
-            {totCr >= graduationCreditsRequired && <span style={{ background:'#1DBD6A', color:'#fff', padding:'4px 12px', borderRadius:8, fontWeight:700 }}>✓ GRADUATION REQUIREMENTS MET</span>}
-          </div>
-
-          {/* Distinction */}
-          {dist && (
-            <div style={{ textAlign:'center', padding:10, background:'#FAC60020', border:'2px solid #FAC600', borderRadius:8, fontWeight:800, color:'#7A5100', marginBottom:12 }}>
-              🏆 Academic Distinction: {dist.label}
-            </div>
-          )}
-
-          {/* WASC stamp — 2-col grid */}
-          <div style={{ border:'2px dashed #B0C4DE', borderRadius:10, padding:16, marginBottom:16, display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, alignItems:'center' }}>
-            <div>
-              <div style={{ fontSize:10, fontWeight:800, color:'#1A365E', textTransform:'uppercase', letterSpacing:1.5, marginBottom:6 }}>🏛 WASC Accreditation Stamp</div>
-              <div style={{ fontSize:10, color:'#7A92B0', lineHeight:1.6 }}>Affix the official Western Association of Schools and Colleges physical accreditation stamp in the box to the right before issuance. This transcript is not valid without the stamp.</div>
-            </div>
-            <div style={{ border:'2px solid #B0C4DE', borderRadius:8, height:90, display:'flex', alignItems:'center', justifyContent:'center', background:'#F7F9FC' }}>
-              <div style={{ textAlign:'center', color:'#B0C4DE', fontSize:11, fontWeight:600 }}>[ WASC STAMP HERE ]</div>
-            </div>
-          </div>
-
-          {/* Signatures */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:20, marginTop:20, borderTop:'2px solid #1A365E', paddingTop:16, fontSize:11 }}>
-            {['Registrar Signature','Principal / Head of School','Issuance Date'].map(l => (
-              <div key={l} style={{ textAlign:'center' }}>
-                <div style={{ height:30, borderBottom:'1px solid #1A365E', marginBottom:4 }} />
-                {l}
-              </div>
-            ))}
-          </div>
-
-          {/* Footer */}
-          <div style={{ textAlign:'center', fontSize:10, color:'#7A92B0', marginTop:10 }}>
-            This document is an official academic record of American World School. Unauthorized alterations are a violation of federal law (FERPA).
-          </div>
-
+                ))}
+                <tr>
+                  <td style={{ border:thin, padding:'9px 14px', textAlign:'center', fontWeight:700 }}>B-</td>
+                  <td style={{ border:thin, padding:'9px 14px', textAlign:'center' }}>2.50</td>
+                  <td colSpan={3} style={{ border:thin, padding:'9px 14px', textAlign:'center', fontSize:9 }}>N/A — Only for transfer learners coming from a 9-1 GCSE system</td>
+                  <td style={{ border:thin, padding:'9px 14px', textAlign:'center' }}>—</td>
+                </tr>
+                {[
+                  ['C',   '2.00','2.50','3.00','3.00','70–79'],
+                  ['D',   '1.00','1.50','2.00','2.00','60–69'],
+                  ['F',   '0',   '0',   '0',   '0',   '0–59'],
+                ].map(([g,...vals]) => (
+                  <tr key={g}>
+                    <td style={{ border:thin, padding:'9px 14px', textAlign:'center', fontWeight:700 }}>{g}</td>
+                    {vals.map((v,i) => <td key={i} style={{ border:thin, padding:'9px 14px', textAlign:'center' }}>{v}</td>)}
+                  </tr>
+                ))}
+                <tr>
+                  <td style={{ border:thin, padding:'9px 14px', textAlign:'center', fontWeight:700 }}>P</td>
+                  <td colSpan={5} style={{ border:thin, padding:'9px 14px', textAlign:'center' }}>Pass</td>
+                </tr>
+              </tbody>
+            </table>
         </div>
       </div>
     )

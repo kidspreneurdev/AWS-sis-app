@@ -34,6 +34,7 @@ import { AuditLogPage } from '@/pages/admin/AuditLogPage'
 import { SettingsAnalyticsPage } from '@/pages/admin/SettingsAnalyticsPage'
 import { UserManagementPage } from '@/pages/admin/UserManagementPage'
 import { StaffDirectoryPage } from '@/pages/admin/StaffDirectoryPage'
+import { AdminRequestsPage } from '@/pages/admin/AdminRequestsPage'
 
 // ─── Calendar & Teaching/Planning ─────────────────────────────────────────────
 import { CalendarPage } from '@/pages/academic/CalendarPage'
@@ -68,6 +69,7 @@ import { PTReportsPage } from '@/pages/pt/PTReportsPage'
 // ─── Parent Portal ───────────────────────────────────────────────────────────
 import { ParentPortalLoginPage } from '@/pages/parent-portal/ParentPortalLoginPage'
 import { PPCommunicationsPage } from '@/pages/parent-portal/PPCommunicationsPage'
+import { PPRequestsPage } from '@/pages/parent-portal/PPRequestsPage'
 import { ParentPortalLayout } from '@/components/layout/ParentPortalLayout'
 
 // ─── Student Portal ───────────────────────────────────────────────────────────
@@ -123,6 +125,7 @@ export const router = createBrowserRouter([
       { path: '/parent/documents',   element: <SPDocumentsPage /> },
       { path: '/parent/badges',      element: <SPBadgesPage /> },
       { path: '/parent/messages',    element: <PPCommunicationsPage /> },
+      { path: '/parent/requests',    element: <PPRequestsPage /> },
       { path: '/parent/profile',     element: <SPProfilePage /> },
     ],
   },
@@ -231,6 +234,7 @@ export const router = createBrowserRouter([
         { path: '/admin/audit', element: <Lazy><AuditLogPage /></Lazy> },
         { path: '/admin/users', element: <Lazy><UserManagementPage /></Lazy> },
         { path: '/admin/staff', element: <Lazy><StaffDirectoryPage /></Lazy> },
+        { path: '/admin/requests', element: <Lazy><AdminRequestsPage /></Lazy> },
       ],
     }],
   },

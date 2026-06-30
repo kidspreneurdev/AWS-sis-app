@@ -20,7 +20,7 @@ import {
   Settings, Bell, Shield, Briefcase, LogOut, UserPlus,
   BarChart, Clock, Target, FileCheck, StickyNote, Printer,
   PlusSquare, Activity, CheckSquare, FileBarChart, Telescope, Flag,
-  Library, BookMarked, BookCopy, UserCog, BarChart3, LayoutList,
+  Library, BookMarked, BookCopy, UserCog, BarChart3, LayoutList, Inbox,
 } from 'lucide-react'
 import { PageHeaderProvider, useSetActionsTarget } from '@/contexts/PageHeaderContext'
 
@@ -126,8 +126,15 @@ const NAV: NavGroup[] = [
           { title: 'Gradebook', icon: BarChart3, to: '/lms/gradebook' },
           { title: 'Section Details', icon: LayoutList, to: '/lms/section' },
           { title: 'Progress Reports', icon: TrendingUp, to: '/lms/progress' },
+          { title: 'K5 Lessons', icon: GraduationCap, to: '/lms/k5-lessons' },
         ],
       },
+    ],
+  },
+  {
+    label: 'Parent Portal',
+    items: [
+      { title: 'Requests', icon: Inbox, to: '/admin/requests' },
     ],
   },
   {

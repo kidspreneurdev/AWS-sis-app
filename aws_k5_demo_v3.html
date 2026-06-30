@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AWS K-5 Learning Portal — Family Demo</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#F0F4F8;min-height:100vh;padding:14px}
+.app{max-width:920px;margin:0 auto}
+.screen{display:none}
+.screen.on{display:block}
+
+/* NAV */
+.nav{background:#1A365E;border-radius:14px;padding:10px 18px;display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.nav-logo{height:34px;width:auto;object-fit:contain}
+.nav-badge{background:#D61F31;color:#fff;font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px}
+.nav-restart{background:rgba(255,255,255,.12);color:#fff;border:none;border-radius:20px;padding:5px 14px;font-size:11px;font-weight:700;cursor:pointer}
+
+/* STEP BAR */
+.stepbar{display:flex;gap:3px;margin-bottom:10px}
+.seg{flex:1;height:4px;border-radius:2px;background:#CBD5E1;transition:background .3s}
+.seg.lit{background:#D61F31}
+.seg.cur{background:#FAC600}
+
+/* LAYOUT */
+.split{display:grid;grid-template-columns:155px 1fr;gap:12px}
+.sidebar{background:#1A365E;border-radius:14px;padding:10px}
+.sb-av{width:48px;height:48px;border-radius:50%;background:#FAC600;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:#1A365E;margin:0 auto 6px}
+.sb-nm{font-size:11px;font-weight:700;color:#fff;text-align:center}
+.sb-gr{font-size:9px;color:rgba(255,255,255,.45);text-align:center;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,.1)}
+.sbi{padding:7px 10px;border-radius:8px;font-size:11px;color:rgba(255,255,255,.5);cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .15s;margin-bottom:2px;font-weight:600}
+.sbi:hover{background:rgba(255,255,255,.08);color:#fff}
+.sbi.on{background:rgba(214,31,49,.25);color:#fff;border-left:3px solid #D61F31;padding-left:7px}
+
+/* CARDS */
+.card{background:#fff;border:1.5px solid #E2E8F0;border-radius:14px;padding:16px;margin-bottom:12px}
+.pg{font-size:15px;font-weight:800;color:#1A365E;margin-bottom:12px}
+
+/* STATS */
+.sg{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
+.sc{background:#F8FAFC;border:1.5px solid #E2E8F0;border-radius:12px;padding:14px;text-align:center}
+.sv{font-size:24px;font-weight:800;margin-bottom:2px}
+.sl{font-size:9px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.5px}
+
+/* LESSON ROWS */
+.lc{display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:12px;border:1.5px solid #E2E8F0;background:#fff;cursor:pointer;margin-bottom:8px;transition:all .15s}
+.lc:hover{border-color:#1A365E;background:#EFF6FF}
+.li{width:44px;height:44px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.lt{font-size:13px;font-weight:700;color:#1A365E}
+.ls{font-size:10px;color:#64748B;margin-top:2px}
+.pbar{background:#E2E8F0;border-radius:4px;height:6px;overflow:hidden;margin-top:5px}
+.pf{height:100%;border-radius:4px}
+
+/* PILLS */
+.pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700}
+.pb{background:#DBEAFE;color:#1E40AF}
+.pg2{background:#DCFCE7;color:#166534}
+.pa{background:#FEF3C7;color:#92400E}
+.pp{background:#EDE9FE;color:#5B21B6}
+.pr{background:#FEE2E2;color:#991B1B}
+.pn{background:#1A365E;color:#fff}
+
+/* BUTTONS */
+.btn{border:none;border-radius:10px;padding:10px 22px;font-size:13px;font-weight:700;cursor:pointer;transition:all .15s}
+.btn-navy{background:#1A365E;color:#fff}.btn-navy:hover{background:#0F2240}
+.btn-red{background:#D61F31;color:#fff}.btn-red:hover{background:#B01526}
+.btn-gold{background:#FAC600;color:#1A365E}.btn-gold:hover{background:#EFB800}
+.btn-gray{background:#F1F5F9;color:#1A365E}.btn-gray:hover{background:#E2E8F0}
+.btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+
+/* SLIDE PLAYER */
+.slide-outer{border-radius:16px;overflow:hidden;margin-bottom:10px;border:2px solid #E2E8F0}
+.slide-vp{aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;padding:28px 36px;text-align:center;position:relative}
+.slide-inner{width:100%;max-width:600px;pointer-events:none}
+.slide-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;opacity:.65}
+.slide-ttl{font-size:22px;font-weight:800;line-height:1.25;margin-bottom:12px}
+.slide-body{font-size:13px;line-height:1.7;opacity:.88;max-width:480px;margin:0 auto}
+.slide-visual{display:flex;justify-content:center;gap:10px;margin:14px 0;flex-wrap:wrap}
+.sv-card{border-radius:12px;padding:14px 10px;text-align:center;min-width:76px}
+.sv-ico{font-size:30px;margin-bottom:5px;line-height:1}
+.sv-lbl{font-size:11px;font-weight:700}
+.sv-sub{font-size:9px;opacity:.7;margin-top:2px}
+.slide-nav{background:#F8FAFC;padding:10px 14px;display:flex;align-items:center;gap:10px;border-top:1.5px solid #E2E8F0}
+.snav-btn{background:#1A365E;color:#fff;border:none;border-radius:8px;padding:7px 18px;font-size:12px;font-weight:700;cursor:pointer}
+.snav-btn:disabled{background:#CBD5E1;color:#94A3B8;cursor:not-allowed}
+.sdots{display:flex;gap:5px;align-items:center;flex:1;justify-content:center;flex-wrap:wrap}
+.sdot{height:6px;border-radius:3px;cursor:pointer;transition:all .25s;background:#CBD5E1;width:6px}
+.sdot.done{background:#1A365E}
+.sdot.cur{background:#FAC600;width:18px}
+.slide-pct{font-size:11px;font-weight:700;color:#1A365E;white-space:nowrap}
+
+/* QUIZ */
+.quiz-wrap{background:#FFF9EC;border-radius:14px;padding:18px;border:2px solid #FAC600;margin-bottom:12px}
+.qhdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.qtitle{font-size:14px;font-weight:800;color:#1A365E}
+.qstars{background:#FEF3C7;color:#92400E;font-size:12px;font-weight:800;padding:4px 14px;border-radius:20px;border:1.5px solid #FAC600}
+.qdots{display:flex;gap:6px;margin-bottom:14px}
+.qdot{width:11px;height:11px;border-radius:50%;background:#E2E8F0;transition:all .3s}
+.qdot.done{background:#16A34A}
+.qdot.cur{background:#FAC600;transform:scale(1.35)}
+.qbox{background:#fff;border-radius:12px;padding:18px;border:1.5px solid #E2E8F0}
+.qemoji{font-size:40px;text-align:center;margin-bottom:10px}
+.qtext{font-size:15px;font-weight:700;color:#1A365E;margin-bottom:14px;line-height:1.5;text-align:center}
+.qgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.qopt{padding:13px 10px;border-radius:12px;border:2px solid #E2E8F0;background:#fff;font-size:12px;font-weight:700;cursor:pointer;text-align:center;color:#1A365E;transition:all .15s;line-height:1.4;width:100%}
+.qopt:hover{border-color:#1A365E;background:#EFF6FF}
+.qopt.ok{border-color:#16A34A;background:#DCFCE7;color:#166534}
+.qopt.ng{border-color:#DC2626;background:#FEE2E2;color:#991B1B}
+.qopt.rev{border-color:#16A34A;background:#DCFCE7;color:#166534}
+.qfb{border-radius:12px;padding:12px 14px;font-size:12px;font-weight:600;line-height:1.6;margin-top:12px}
+.qfb.ok{background:#DCFCE7;color:#166534;border:1.5px solid #A7F3D0}
+.qfb.ng{background:#FEE2E2;color:#991B1B;border:1.5px solid #FECACA}
+
+/* CERT */
+.cert-wrap{background:#1A365E;border-radius:16px;overflow:hidden;margin-bottom:14px}
+.cert-bar{background:#D61F31;padding:8px 18px;display:flex;align-items:center;gap:8px}
+.cert-body{padding:22px;text-align:center}
+.cert-seal{width:68px;height:68px;border-radius:50%;background:#FAC600;display:flex;align-items:center;justify-content:center;font-size:32px;margin:0 auto 12px;border:3px solid rgba(255,255,255,.25)}
+.cert-for{font-size:11px;color:rgba(255,255,255,.5);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+.cert-name{font-size:20px;font-weight:800;color:#FAC600;margin-bottom:4px}
+.cert-course{font-size:12px;color:rgba(255,255,255,.65);margin-bottom:14px;line-height:1.5}
+.cert-stats{display:flex;justify-content:center;gap:22px;margin-bottom:14px}
+.cstat-v{font-size:20px;font-weight:800;color:#FAC600}
+.cstat-l{font-size:9px;color:rgba(255,255,255,.4);margin-top:2px}
+.cert-dl{background:#FAC600;color:#1A365E;border:none;border-radius:10px;padding:9px 22px;font-size:12px;font-weight:800;cursor:pointer}
+
+/* BADGES */
+.badge-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+.badge{background:#FEF3C7;border-radius:12px;padding:14px 8px;text-align:center;border:2px solid #FAC600}
+.badge-ico{font-size:28px;margin-bottom:4px}
+.badge-nm{font-size:10px;font-weight:700;color:#92400E;line-height:1.4}
+.badge-lock{background:#F1F5F9;border:2px dashed #CBD5E1}
+.badge-lock .badge-nm{color:#94A3B8}
+
+/* COMPLETE */
+.complete{background:#1A365E;border-radius:16px;padding:24px;text-align:center;margin-bottom:14px}
+.complete-ico{font-size:52px;margin-bottom:12px}
+.complete-h{font-size:22px;font-weight:800;color:#FAC600;margin-bottom:8px}
+.complete-p{font-size:12px;color:rgba(255,255,255,.72);margin-bottom:18px;line-height:1.6}
+.cert-unlock{display:inline-flex;align-items:center;gap:12px;background:rgba(250,198,0,.15);border:2px solid #FAC600;border-radius:14px;padding:12px 22px}
+
+/* HERO */
+.hero{background:#1A365E;border-radius:16px;padding:28px;text-align:center;margin-bottom:14px}
+.hero-logo{height:50px;width:auto;object-fit:contain;margin-bottom:16px}
+.hero-h{font-size:24px;font-weight:800;color:#FAC600;margin-bottom:8px}
+.hero-p{font-size:13px;color:rgba(255,255,255,.72);line-height:1.7;max-width:440px;margin:0 auto 20px}
+.hero-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:22px}
+.hg{background:rgba(255,255,255,.08);border-radius:10px;padding:12px 6px;text-align:center}
+.hg-i{font-size:22px;margin-bottom:5px}
+.hg-l{font-size:10px;font-weight:700;color:#fff}
+.hg-s{font-size:9px;color:rgba(255,255,255,.45);margin-top:2px}
+</style>
+</head>
+<body>
+<div class="app">
+
+<nav class="nav">
+  <img class="nav-logo" id="navLogo" alt="American World School">
+  <div style="display:flex;align-items:center;gap:10px">
+    <span class="nav-badge">K–5 Learning Portal</span>
+    <span style="font-size:10px;color:rgba(255,255,255,.35)">Family Demo · 2025–26</span>
+    <button class="nav-restart" onclick="go(0)">↺ Restart</button>
+  </div>
+</nav>
+
+<div class="stepbar" id="stepbar"></div>
+
+<!-- ══ 0: WELCOME ══ -->
+<div class="screen on" id="sc0">
+  <div class="hero">
+    <img class="hero-logo" id="heroLogo" alt="AWS">
+    <div class="hero-h">Welcome to AWS K–5 Learning!</div>
+    <div class="hero-p">See exactly how your child learns at American World School — from colourful slide lessons to earning real certificates. Takes about 4 minutes.</div>
+    <div class="hero-grid">
+      <div class="hg"><div class="hg-i">📖</div><div class="hg-l">6-slide lessons</div><div class="hg-s">Fun pictures & cards</div></div>
+      <div class="hg"><div class="hg-i">🎮</div><div class="hg-l">Interactive quiz</div><div class="hg-s">Answer & earn stars</div></div>
+      <div class="hg"><div class="hg-i">⭐</div><div class="hg-l">Stars & badges</div><div class="hg-s">Real achievements</div></div>
+      <div class="hg"><div class="hg-i">📜</div><div class="hg-l">Certificates</div><div class="hg-s">Download & print</div></div>
+    </div>
+    <button class="btn btn-gold" style="font-size:15px;padding:13px 30px" onclick="go(1)">Start the tour →</button>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+    <div class="card" style="text-align:center"><div style="font-size:26px;margin-bottom:6px">🏫</div><div style="font-size:12px;font-weight:700;color:#1A365E">WASC Accredited</div><div style="font-size:11px;color:#64748B;margin-top:4px;line-height:1.5">American curriculum, internationally recognised</div></div>
+    <div class="card" style="text-align:center"><div style="font-size:26px;margin-bottom:6px">👩‍🏫</div><div style="font-size:12px;font-weight:700;color:#1A365E">Teacher designed</div><div style="font-size:11px;color:#64748B;margin-top:4px;line-height:1.5">Every lesson built and reviewed by AWS teachers</div></div>
+    <div class="card" style="text-align:center"><div style="font-size:26px;margin-bottom:6px">📊</div><div style="font-size:12px;font-weight:700;color:#1A365E">Family visibility</div><div style="font-size:11px;color:#64748B;margin-top:4px;line-height:1.5">Parents see grades, attendance and progress live</div></div>
+  </div>
+</div>
+
+<!-- ══ 1: DASHBOARD ══ -->
+<div class="screen" id="sc1">
+  <div class="split">
+    <div class="sidebar">
+      <div class="sb-av">A</div>
+      <div class="sb-nm">Aarav Sharma</div>
+      <div class="sb-gr">Grade 2 · Main Campus</div>
+      <div class="sbi on" onclick="go(1)">🏠 My Home</div>
+      <div class="sbi" onclick="go(2)">📚 My Lessons</div>
+      <div class="sbi" onclick="go(3)">🌱 Start lesson</div>
+      <div class="sbi" onclick="go(8)">⭐ My Stars</div>
+      <div class="sbi" onclick="go(9)">📊 My Grades</div>
+      <div class="sbi" onclick="go(10)">📅 Attendance</div>
+      <div class="sbi" onclick="go(11)">🏆 Certificates</div>
+      <div class="sbi" onclick="go(12)">🎨 Portfolio</div>
+    </div>
+    <div>
+      <div class="pg">Good morning, Aarav! 🌟</div>
+      <div class="sg">
+        <div class="sc"><div class="sv" style="color:#FAC600">12 ⭐</div><div class="sl">Stars earned</div></div>
+        <div class="sc"><div class="sv" style="color:#16A34A">3</div><div class="sl">Lessons done</div></div>
+        <div class="sc"><div class="sv" style="color:#1A365E">95%</div><div class="sl">Attendance</div></div>
+      </div>
+      <div class="card">
+        <div style="font-size:13px;font-weight:700;color:#1A365E;margin-bottom:10px">Continue learning ▶</div>
+        <div class="lc" onclick="go(3)">
+          <div class="li" style="background:#DBEAFE">🌱</div>
+          <div style="flex:1"><div class="lt">How plants grow</div><div class="ls">Science · 6 slides + 4 questions</div><div class="pbar"><div class="pf" style="width:0%;background:#378ADD"></div></div></div>
+          <span class="pill pa">New!</span>
+        </div>
+        <div class="lc">
+          <div class="li" style="background:#DCFCE7">🔢</div>
+          <div style="flex:1"><div class="lt">Counting to 100</div><div class="ls">Maths · Completed ✓</div><div class="pbar"><div class="pf" style="width:100%;background:#16A34A"></div></div></div>
+          <span class="pill pg2">Done ✓</span>
+        </div>
+        <div class="lc">
+          <div class="li" style="background:#EDE9FE">📖</div>
+          <div style="flex:1"><div class="lt">The brave rabbit</div><div class="ls">English · Completed ✓</div><div class="pbar"><div class="pf" style="width:100%;background:#7C3AED"></div></div></div>
+          <span class="pill pp">Done ✓</span>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-red" onclick="go(3)">Start today's lesson →</button>
+        <button class="btn btn-navy" onclick="go(8)">See my stars ⭐</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 2: MY LESSONS ══ -->
+<div class="screen" id="sc2">
+  <div class="split">
+    <div class="sidebar">
+      <div class="sb-av">A</div><div class="sb-nm">Aarav Sharma</div><div class="sb-gr">Grade 2 · Main Campus</div>
+      <div class="sbi" onclick="go(1)">🏠 My Home</div>
+      <div class="sbi on" onclick="go(2)">📚 My Lessons</div>
+      <div class="sbi" onclick="go(3)">🌱 Start lesson</div>
+      <div class="sbi" onclick="go(8)">⭐ My Stars</div>
+      <div class="sbi" onclick="go(9)">📊 My Grades</div>
+      <div class="sbi" onclick="go(10)">📅 Attendance</div>
+      <div class="sbi" onclick="go(11)">🏆 Certificates</div>
+      <div class="sbi" onclick="go(12)">🎨 Portfolio</div>
+    </div>
+    <div>
+      <div class="pg">All my lessons 📚</div>
+      <div class="card">
+        <div style="font-size:10px;font-weight:700;color:#D61F31;text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">🌿 Science</div>
+        <div class="lc" onclick="go(3)"><div class="li" style="background:#DBEAFE">🌱</div><div style="flex:1"><div class="lt">How plants grow</div><div class="ls">6 slides · 4 questions · 12 min</div><div class="pbar"><div class="pf" style="width:0%;background:#378ADD"></div></div></div><span class="pill pa">New!</span></div>
+        <div class="lc"><div class="li" style="background:#E0F2FE">💧</div><div style="flex:1"><div class="lt">The water cycle</div><div class="ls">6 slides · 4 questions · 12 min</div></div><span class="pill pb">Coming soon</span></div>
+        <div class="lc"><div class="li" style="background:#DCFCE7">🐛</div><div style="flex:1"><div class="lt">Butterflies & metamorphosis</div><div class="ls">6 slides · 5 questions · 14 min</div></div><span class="pill pb">Coming soon</span></div>
+      </div>
+      <div class="card">
+        <div style="font-size:10px;font-weight:700;color:#D61F31;text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">🔢 Maths</div>
+        <div class="lc"><div class="li" style="background:#DCFCE7">🔢</div><div style="flex:1"><div class="lt">Counting to 100</div><div class="ls">5 slides · 5 questions · Completed</div><div class="pbar"><div class="pf" style="width:100%;background:#16A34A"></div></div></div><span class="pill pg2">Done ✓</span></div>
+        <div class="lc"><div class="li" style="background:#FEF3C7">➕</div><div style="flex:1"><div class="lt">Adding numbers up to 20</div><div class="ls">6 slides · 4 questions · 10 min</div></div><span class="pill pb">Coming soon</span></div>
+      </div>
+      <div class="card">
+        <div style="font-size:10px;font-weight:700;color:#D61F31;text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">📖 English</div>
+        <div class="lc"><div class="li" style="background:#EDE9FE">📖</div><div style="flex:1"><div class="lt">The brave rabbit</div><div class="ls">6 slides · 3 questions · Completed</div><div class="pbar"><div class="pf" style="width:100%;background:#7C3AED"></div></div></div><span class="pill pp">Done ✓</span></div>
+        <div class="lc"><div class="li" style="background:#FBEAF0">✏️</div><div style="flex:1"><div class="lt">My first sentences</div><div class="ls">5 slides · 4 questions · 10 min</div></div><span class="pill pb">Coming soon</span></div>
+      </div>
+      <button class="btn btn-red" onclick="go(3)">Start: How plants grow →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 3: LESSON SLIDES ══ -->
+<div class="screen" id="sc3">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+    <button class="btn btn-gray" style="padding:6px 12px;font-size:11px" onclick="go(2)">← Back</button>
+    <div style="flex:1;font-size:13px;font-weight:700;color:#1A365E">🌱 How plants grow — Science · Grade 2</div>
+    <span class="pill pn" id="slideCounter" style="font-size:10px">Slide 1 / 6</span>
+  </div>
+  <div class="slide-outer">
+    <div class="slide-vp" id="slideVp" style="background:#1A365E">
+      <div class="slide-inner" id="slideInner"></div>
+    </div>
+    <div class="slide-nav">
+      <button class="snav-btn" id="slidePrev" onclick="changeSlide(-1)" disabled>◀ Prev</button>
+      <div class="sdots" id="slideDots"></div>
+      <div class="slide-pct" id="slidePct">0%</div>
+      <button class="snav-btn" id="slideNext" onclick="changeSlide(1)">Next ▶</button>
+    </div>
+  </div>
+  <div id="slideFooter"></div>
+</div>
+
+<!-- ══ 4: QUIZ ══ -->
+<div class="screen" id="sc4">
+  <div class="quiz-wrap">
+    <div class="qhdr">
+      <div class="qtitle">🌿 Quiz: How plants grow</div>
+      <div class="qstars" id="qStarBadge">⭐ 0 / 4</div>
+    </div>
+    <div class="qdots" id="qDots"></div>
+    <div id="qArea"></div>
+    <div id="qFb" style="display:none"></div>
+    <div id="qNextWrap" style="display:none;margin-top:12px">
+      <button class="btn btn-red" id="qNextBtn" onclick="nextQ()">Next question →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 5: COMPLETE ══ -->
+<div class="screen" id="sc5">
+  <div class="complete">
+    <div class="complete-ico">🎉</div>
+    <div class="complete-h">Amazing work, Aarav!</div>
+    <div class="complete-p" id="completeMsg">You finished the lesson and earned stars!</div>
+    <div class="cert-unlock">
+      <span style="font-size:28px">📜</span>
+      <div style="text-align:left">
+        <div style="font-size:10px;color:rgba(255,255,255,.5);margin-bottom:2px">New certificate unlocked</div>
+        <div style="font-size:14px;font-weight:800;color:#FAC600">Plant Scientist ⭐</div>
+      </div>
+    </div>
+  </div>
+  <div class="badge-grid">
+    <div class="badge"><div class="badge-ico">🌱</div><div class="badge-nm">Plant Scientist</div></div>
+    <div class="badge"><div class="badge-ico">⭐</div><div class="badge-nm">Star Learner</div></div>
+    <div class="badge"><div class="badge-ico">🔬</div><div class="badge-nm">Curious Mind</div></div>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-gold" onclick="go(11)">See my certificate 📜</button>
+    <button class="btn btn-navy" onclick="go(1)">Back to home 🏠</button>
+  </div>
+</div>
+
+<!-- ══ 6-7: SIDEBAR SCREENS (Stars, Grades, Attendance, Certs, Portfolio) ══ -->
+<!-- Stars = sc6, Grades = sc7, Attendance = sc8, Certs = sc9, Portfolio = sc10 -->
+<!-- Reuse sidebar macro inline -->
+
+<!-- 8: STARS (accessible via sidebar as sc8) -->
+<div class="screen" id="sc8">
+  <div class="split">
+    <div class="sidebar">
+      <div class="sb-av">A</div><div class="sb-nm">Aarav Sharma</div><div class="sb-gr">Grade 2 · Main Campus</div>
+      <div class="sbi" onclick="go(1)">🏠 My Home</div>
+      <div class="sbi" onclick="go(2)">📚 My Lessons</div>
+      <div class="sbi" onclick="go(3)">🌱 Start lesson</div>
+      <div class="sbi on" onclick="go(8)">⭐ My Stars</div>
+      <div class="sbi" onclick="go(9)">📊 My Grades</div>
+      <div class="sbi" onclick="go(10)">📅 Attendance</div>
+      <div class="sbi" onclick="go(11)">🏆 Certificates</div>
+      <div class="sbi" onclick="go(12)">🎨 Portfolio</div>
+    </div>
+    <div>
+      <div class="pg">My stars ⭐</div>
+      <div class="sg">
+        <div class="sc"><div class="sv" style="color:#FAC600">12 ⭐</div><div class="sl">Total stars</div></div>
+        <div class="sc"><div class="sv" style="color:#1A365E">3</div><div class="sl">Lessons done</div></div>
+        <div class="sc"><div class="sv" style="color:#D61F31">Gold</div><div class="sl">Level</div></div>
+      </div>
+      <div class="card">
+        <div style="font-size:13px;font-weight:700;color:#1A365E;margin-bottom:12px">My badges</div>
+        <div class="badge-grid">
+          <div class="badge"><div class="badge-ico">🔢</div><div class="badge-nm">Maths Wizard</div></div>
+          <div class="badge"><div class="badge-ico">📖</div><div class="badge-nm">Book Worm</div></div>
+          <div class="badge"><div class="badge-ico">🌟</div><div class="badge-nm">Super Star</div></div>
+          <div class="badge badge-lock"><div class="badge-ico">🌱</div><div class="badge-nm">Plant Scientist<br><small style="font-weight:400">Finish plant lesson</small></div></div>
+          <div class="badge badge-lock"><div class="badge-ico">🔬</div><div class="badge-nm">Curious Mind<br><small style="font-weight:400">Do 5 lessons</small></div></div>
+          <div class="badge badge-lock"><div class="badge-ico">🏅</div><div class="badge-nm">Champion<br><small style="font-weight:400">Score 100% twice</small></div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div style="font-size:13px;font-weight:700;color:#1A365E;margin-bottom:10px">Recent stars</div>
+        <div style="display:flex;flex-direction:column;gap:7px">
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:#FEF3C7;border-radius:8px"><span>⭐⭐⭐⭐⭐</span><div style="flex:1;font-size:12px;font-weight:700;color:#92400E">5 stars — Counting to 100</div><span style="font-size:10px;color:#B45309">Today</span></div>
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:#FEF3C7;border-radius:8px"><span>⭐⭐⭐</span><div style="flex:1;font-size:12px;font-weight:700;color:#92400E">3 stars — The brave rabbit</div><span style="font-size:10px;color:#B45309">Yesterday</span></div>
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:#FEF3C7;border-radius:8px"><span>⭐⭐⭐⭐</span><div style="flex:1;font-size:12px;font-weight:700;color:#92400E">4 stars — Colours &amp; shapes</div><span style="font-size:10px;color:#B45309">2 days ago</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 9: GRADES -->
+<div class="screen" id="sc9">
+  <div class="split">
+    <div class="sidebar">
+      <div class="sb-av">A</div><div class="sb-nm">Aarav Sharma</div><div class="sb-gr">Grade 2 · Main Campus</div>
+      <div class="sbi" onclick="go(1)">🏠 My Home</div>
+      <div class="sbi" onclick="go(2)">📚 My Lessons</div>
+      <div class="sbi" onclick="go(3)">🌱 Start lesson</div>
+      <div class="sbi" onclick="go(8)">⭐ My Stars</div>
+      <div class="sbi on" onclick="go(9)">📊 My Grades</div>
+      <div class="sbi" onclick="go(10)">📅 Attendance</div>
+      <div class="sbi" onclick="go(11)">🏆 Certificates</div>
+      <div class="sbi" onclick="go(12)">🎨 Portfolio</div>
+    </div>
+    <div>
+      <div class="pg">My grades 📊</div>
+      <div class="card">
+        <div style="font-size:11px;font-weight:700;color:#D61F31;margin-bottom:12px">Term 2 · 2025–2026</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;border:1.5px solid #E2E8F0"><div style="width:10px;height:10px;border-radius:50%;background:#FAC600;flex-shrink:0"></div><div style="flex:1;font-size:13px;font-weight:700;color:#1A365E">Maths</div><div style="text-align:right"><div style="font-size:20px;font-weight:800;color:#16A34A">A</div><div style="font-size:10px;color:#64748B">96%</div></div></div>
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;border:1.5px solid #E2E8F0"><div style="width:10px;height:10px;border-radius:50%;background:#1A365E;flex-shrink:0"></div><div style="flex:1;font-size:13px;font-weight:700;color:#1A365E">English</div><div style="text-align:right"><div style="font-size:20px;font-weight:800;color:#16A34A">A</div><div style="font-size:10px;color:#64748B">94%</div></div></div>
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;border:1.5px solid #E2E8F0"><div style="width:10px;height:10px;border-radius:50%;background:#16A34A;flex-shrink:0"></div><div style="flex:1;font-size:13px;font-weight:700;color:#1A365E">Science</div><div style="text-align:right"><div style="font-size:20px;font-weight:800;color:#16A34A">A−</div><div style="font-size:10px;color:#64748B">91%</div></div></div>
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;border:1.5px solid #E2E8F0"><div style="width:10px;height:10px;border-radius:50%;background:#7C3AED;flex-shrink:0"></div><div style="flex:1;font-size:13px;font-weight:700;color:#1A365E">Art &amp; Music</div><div style="text-align:right"><div style="font-size:20px;font-weight:800;color:#1E40AF">B+</div><div style="font-size:10px;color:#64748B">87%</div></div></div>
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;border:1.5px solid #E2E8F0"><div style="width:10px;height:10px;border-radius:50%;background:#D61F31;flex-shrink:0"></div><div style="flex:1;font-size:13px;font-weight:700;color:#1A365E">PE</div><div style="text-align:right"><div style="font-size:20px;font-weight:800;color:#16A34A">A+</div><div style="font-size:10px;color:#64748B">98%</div></div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div style="font-size:13px;font-weight:700;color:#1A365E;margin-bottom:10px">Teacher notes 💬</div>
+        <div style="padding:10px 12px;background:#DBEAFE;border-radius:10px;margin-bottom:8px"><div style="font-size:10px;font-weight:700;color:#1E40AF;margin-bottom:3px">Ms. Anitha — Class Teacher</div><div style="font-size:12px;color:#1E3A5F;line-height:1.6">"Aarav is a joy in class! He asks wonderful questions and always helps his friends."</div></div>
+        <div style="padding:10px 12px;background:#DCFCE7;border-radius:10px"><div style="font-size:10px;font-weight:700;color:#166534;margin-bottom:3px">Mr. Ravi — Science</div><div style="font-size:12px;color:#14532D;line-height:1.6">"Excellent observation skills. Aarav noticed our classroom plant was drooping before I did!"</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 10: ATTENDANCE -->
+<div class="screen" id="sc10">
+  <div class="split">
+    <div class="sidebar">
+      <div class="sb-av">A</div><div class="sb-nm">Aarav Sharma</div><div class="sb-gr">Grade 2 · Main Campus</div>
+      <div class="sbi" onclick="go(1)">🏠 My Home</div>
+      <div class="sbi" onclick="go(2)">📚 My Lessons</div>
+      <div class="sbi" onclick="go(3)">🌱 Start lesson</div>
+      <div class="sbi" onclick="go(8)">⭐ My Stars</div>
+      <div class="sbi" onclick="go(9)">📊 My Grades</div>
+      <div class="sbi on" onclick="go(10)">📅 Attendance</div>
+      <div class="sbi" onclick="go(11)">🏆 Certificates</div>
+      <div class="sbi" onclick="go(12)">🎨 Portfolio</div>
+    </div>
+    <div>
+      <div class="pg">Attendance 📅</div>
+      <div class="sg">
+        <div class="sc"><div class="sv" style="color:#16A34A">95%</div><div class="sl">Present rate</div></div>
+        <div class="sc"><div class="sv" style="color:#1A365E">76</div><div class="sl">Days present</div></div>
+        <div class="sc"><div class="sv" style="color:#D61F31">4</div><div class="sl">Days absent</div></div>
+      </div>
+      <div class="card">
+        <div style="font-size:13px;font-weight:700;color:#1A365E;margin-bottom:10px">March 2026</div>
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center;margin-bottom:6px">
+          <div style="font-size:9px;font-weight:700;color:#64748B">M</div><div style="font-size:9px;font-weight:700;color:#64748B">T</div><div style="font-size:9px;font-weight:700;color:#64748B">W</div><div style="font-size:9px;font-weight:700;color:#64748B">T</div><div style="font-size:9px;font-weight:700;color:#64748B">F</div><div style="font-size:9px;font-weight:700;color:#64748B">Sa</div><div style="font-size:9px;font-weight:700;color:#64748B">Su</div>
+        </div>
+        <div id="attGrid"></div>
+        <div style="display:flex;gap:14px;margin-top:8px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:5px"><div style="width:12px;height:12px;border-radius:3px;background:#DCFCE7;border:1px solid #16A34A"></div><span style="font-size:10px;color:#64748B">Present</span></div>
+          <div style="display:flex;align-items:center;gap:5px"><div style="width:12px;height:12px;border-radius:3px;background:#FEE2E2;border:1px solid #DC2626"></div><span style="font-size:10px;color:#64748B">Absent</span></div>
+          <div style="display:flex;align-items:center;gap:5px"><div style="width:12px;height:12px;border-radius:3px;background:#F1F5F9;border:1px solid #CBD5E1"></div><span style="font-size:10px;color:#64748B">Weekend</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div style="font-size:13px;font-weight:700;color:#1A365E;margin-bottom:8px">Recent record</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:#DCFCE7;border-radius:8px;font-size:12px;font-weight:600;color:#166534">✅ 26 Mar — Present</div>
+          <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:#DCFCE7;border-radius:8px;font-size:12px;font-weight:600;color:#166534">✅ 25 Mar — Present</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:#FEE2E2;border-radius:8px;font-size:12px;font-weight:600;color:#991B1B"><span>❌ 24 Mar — Absent</span><span style="font-size:10px">Medical</span></div>
+          <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:#DCFCE7;border-radius:8px;font-size:12px;font-weight:600;color:#166534">✅ 21 Mar — Present</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 11: CERTIFICATES -->
+<div class="screen" id="sc11">
+  <div class="split">
+    <div class="sidebar">
+      <div class="sb-av">A</div><div class="sb-nm">Aarav Sharma</div><div class="sb-gr">Grade 2 · Main Campus</div>
+      <div class="sbi" onclick="go(1)">🏠 My Home</div>
+      <div class="sbi" onclick="go(2)">📚 My Lessons</div>
+      <div class="sbi" onclick="go(3)">🌱 Start lesson</div>
+      <div class="sbi" onclick="go(8)">⭐ My Stars</div>
+      <div class="sbi" onclick="go(9)">📊 My Grades</div>
+      <div class="sbi" onclick="go(10)">📅 Attendance</div>
+      <div class="sbi on" onclick="go(11)">🏆 Certificates</div>
+      <div class="sbi" onclick="go(12)">🎨 Portfolio</div>
+    </div>
+    <div>
+      <div class="pg">My certificates 🏆</div>
+      <div class="cert-wrap">
+        <div class="cert-bar">
+          <img id="certLogo" style="height:26px;width:auto;object-fit:contain" alt="AWS">
+          <span style="font-size:11px;font-weight:700;color:#fff">American World School</span>
+        </div>
+        <div class="cert-body">
+          <div class="cert-seal">📜</div>
+          <div class="cert-for">Certificate of Achievement</div>
+          <div class="cert-name">Aarav Sharma</div>
+          <div class="cert-course">successfully completed <strong style="color:#FAC600">Counting to 100</strong> with a perfect score</div>
+          <div class="cert-stats">
+            <div><div class="cstat-v">100%</div><div class="cstat-l">Score</div></div>
+            <div><div class="cstat-v">⭐⭐⭐⭐⭐</div><div class="cstat-l">Stars earned</div></div>
+            <div><div class="cstat-v">20 Mar</div><div class="cstat-l">Date</div></div>
+          </div>
+          <div style="font-size:9px;color:rgba(255,255,255,.25);margin-bottom:14px;font-style:italic">WASC Accredited · American World School · Grade 2 · 2025–26</div>
+          <button class="cert-dl">📥 Download certificate</button>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="card" style="text-align:center"><div style="font-size:24px;margin-bottom:5px">📖</div><div style="font-size:12px;font-weight:700;color:#1A365E">Story Champion</div><div style="font-size:10px;color:#64748B;margin-top:2px">The brave rabbit · 22 Mar</div><div style="margin-top:8px"><span class="pill pg2">Earned ✓</span></div></div>
+        <div class="card" style="text-align:center;border:1.5px dashed #FAC600;cursor:pointer" onclick="go(3)"><div style="font-size:24px;margin-bottom:5px">🌱</div><div style="font-size:12px;font-weight:700;color:#1A365E">Plant Scientist</div><div style="font-size:10px;color:#64748B;margin-top:2px">Complete "How plants grow"</div><div style="margin-top:8px"><span class="pill pa">In progress →</span></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 12: PORTFOLIO -->
+<div class="screen" id="sc12">
+  <div class="split">
+    <div class="sidebar">
+      <div class="sb-av">A</div><div class="sb-nm">Aarav Sharma</div><div class="sb-gr">Grade 2 · Main Campus</div>
+      <div class="sbi" onclick="go(1)">🏠 My Home</div>
+      <div class="sbi" onclick="go(2)">📚 My Lessons</div>
+      <div class="sbi" onclick="go(3)">🌱 Start lesson</div>
+      <div class="sbi" onclick="go(8)">⭐ My Stars</div>
+      <div class="sbi" onclick="go(9)">📊 My Grades</div>
+      <div class="sbi" onclick="go(10)">📅 Attendance</div>
+      <div class="sbi" onclick="go(11)">🏆 Certificates</div>
+      <div class="sbi on" onclick="go(12)">🎨 Portfolio</div>
+    </div>
+    <div>
+      <div class="pg">My portfolio 🎨</div>
+      <div class="card" style="display:flex;align-items:center;gap:14px;margin-bottom:12px">
+        <div style="width:52px;height:52px;border-radius:50%;background:#FAC600;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:#1A365E;flex-shrink:0">A</div>
+        <div><div style="font-size:15px;font-weight:800;color:#1A365E">Aarav Sharma</div><div style="font-size:11px;color:#64748B;margin-top:2px">Grade 2 · Main Campus · Class of 2031</div><div style="margin-top:7px;display:flex;gap:6px;flex-wrap:wrap"><span class="pill pa">Star learner</span><span class="pill pb">Science fan</span><span class="pill pg2">Curious</span></div></div>
+      </div>
+      <div class="sg">
+        <div class="sc" style="text-align:center"><div style="font-size:20px;margin-bottom:4px">📜</div><div class="sv" style="color:#B45309;font-size:20px">2</div><div class="sl">Certificates</div></div>
+        <div class="sc" style="text-align:center"><div style="font-size:20px;margin-bottom:4px">⭐</div><div class="sv" style="color:#B45309;font-size:20px">12</div><div class="sl">Stars</div></div>
+        <div class="sc" style="text-align:center"><div style="font-size:20px;margin-bottom:4px">🏅</div><div class="sv" style="color:#B45309;font-size:20px">3</div><div class="sl">Badges</div></div>
+      </div>
+      <div class="card">
+        <div style="font-size:13px;font-weight:700;color:#1A365E;margin-bottom:10px">My best work ✨</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;border:1.5px solid #E2E8F0"><div style="width:36px;height:36px;border-radius:8px;background:#DCFCE7;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🌳</div><div style="flex:1"><div style="font-size:12px;font-weight:700;color:#1A365E">My plant drawing</div><div style="font-size:10px;color:#64748B">Science · 22 Mar 2026</div></div><span class="pill pg2">A+</span></div>
+          <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;border:1.5px solid #E2E8F0"><div style="width:36px;height:36px;border-radius:8px;background:#FEF3C7;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🔢</div><div style="flex:1"><div style="font-size:12px;font-weight:700;color:#1A365E">Number patterns worksheet</div><div style="font-size:10px;color:#64748B">Maths · 15 Mar 2026</div></div><span class="pill pa">100%</span></div>
+          <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;border:1.5px solid #E2E8F0"><div style="width:36px;height:36px;border-radius:8px;background:#EDE9FE;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📝</div><div style="flex:1"><div style="font-size:12px;font-weight:700;color:#1A365E">Story: The brave rabbit</div><div style="font-size:10px;color:#64748B">English · 10 Mar 2026</div></div><span class="pill pp">A</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<script>
+var LOGO = "data:image/png;base64,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";
+function setLogos(){['navLogo','heroLogo','certLogo'].forEach(function(id){var el=document.getElementById(id);if(el)el.src=LOGO;});}
+
+var cur=0, slideIdx=0, allViewed=false, qIdx=0, qStars=0, qAnswered=false;
+
+var SLIDES=[
+  {bg:'#1A365E',type:'intro',title:'How plants grow',body:'Plants are living things — just like you! Let\'s find out what they need to grow big and strong.',emoji:'🌱'},
+  {bg:'#FFFBEF',type:'four',title:'Plants need FOUR things!',label:'What do plants need?',items:[{e:'☀️',l:'Sunlight',bg:'#FEF3C7',tc:'#92400E'},{e:'💧',l:'Water',bg:'#DBEAFE',tc:'#1E40AF'},{e:'🌍',l:'Soil',bg:'#DCFCE7',tc:'#166534'},{e:'💨',l:'Air',bg:'#E0F2FE',tc:'#0369A1'}]},
+  {bg:'#0F2240',type:'journey',title:'From seed to tree!',label:'The plant journey',steps:['🌰 Seed','💧 Watered','🌿 Sprout','🌿 Seedling','🌳 Full tree']},
+  {bg:'#166534',type:'parts',title:'Parts of a plant!',label:'Every part has a job',items:[{e:'🌸',l:'Flower',s:'Makes seeds'},{e:'🍃',l:'Leaves',s:'Catch sunlight'},{e:'🪵',l:'Stem',s:'Carries water'},{e:'🌱',l:'Roots',s:'Drink from soil'}]},
+  {bg:'#1E40AF',type:'give',title:'Plants give us SO much!',label:'Thank you, plants!',items:[{e:'🍅',l:'Food'},{e:'💨',l:'Clean air'},{e:'🌳',l:'Shade'},{e:'💊',l:'Medicine'},{e:'🌸',l:'Beauty'},{e:'🪵',l:'Wood'}]},
+  {bg:'#5B21B6',type:'ready',title:'Ready for the quiz? 🎉',body:'You\'ve seen all 6 slides — amazing! Answer 4 questions to earn your stars and unlock your certificate.'},
+];
+
+var QUESTIONS=[
+  {q:'What do plants need to grow?',e:'🌿',opts:['Only water 💧','Sunlight, water, soil & air ☀️','Just soil 🌍','Only sunlight ☀️'],ok:1,fb:'Plants need ALL FOUR things: sunlight ☀️, water 💧, soil 🌍 and air 💨. Without even one, they cannot grow!'},
+  {q:'Where does a plant start its life?',e:'🌰',opts:['In a glass of water','From a seed in the soil 🌱','High up in a tree','From the clouds ☁️'],ok:1,fb:'Every plant begins as a tiny seed in soil! Water and warmth wake it up and it slowly pushes toward the sunlight.'},
+  {q:'Which part drinks water from the soil?',e:'🌻',opts:['The flower 🌸','The leaves 🍃','The stem 🪵','The roots 🌱'],ok:3,fb:'The roots! They are underground drinking machines — they soak up water and nutrients for the whole plant.'},
+  {q:'What happens with NO sunlight?',e:'😟',opts:['Grows super fast!','Turns bright red','Cannot make food and dies 🥀','Nothing happens'],ok:2,fb:'Plants use sunlight to make food through photosynthesis. No sunlight = no food = very sad plant! 🥀'},
+];
+
+var ATT=[null,null,null,null,null,'W','W','P','P','P','P','P','W','W','P','A','P','P','P','W','W','P','P','P','P','P','W','W','P','P','P'];
+
+function go(n){
+  var prev=document.getElementById('sc'+cur);
+  if(prev) prev.classList.remove('on');
+  cur=n;
+  var next=document.getElementById('sc'+n);
+  if(!next){console.warn('No screen sc'+n);return;}
+  next.classList.add('on');
+  updateStepBar();
+  updateSidebar();
+  if(n===3){slideIdx=0;allViewed=false;renderSlide();}
+  if(n===4){qIdx=0;qStars=0;qAnswered=false;renderQ();}
+  if(n===10)renderAtt();
+  try{window.scrollTo(0,0);}catch(e){}
+}
+
+function updateStepBar(){
+  var segs=['Welcome','Dashboard','Lessons','Lesson','Quiz','Done!'];
+  var progress=[0,1,2,3,3,4,5].indexOf([0,1,2,3,4,5].indexOf(cur))<0?0:cur;
+  var lit=cur>=5?6:cur>=4?5:cur>=3?4:cur>=2?3:cur>=1?2:cur>=1?1:0;
+  var h='';
+  for(var i=0;i<6;i++) h+='<div class="seg'+(i<lit?' lit':i===lit?' cur':'')+'"></div>';
+  document.getElementById('stepbar').innerHTML=h;
+}
+
+function updateSidebar(){
+  document.querySelectorAll('.sbi').forEach(function(el){
+    el.classList.remove('on');
+    var t=el.textContent.trim();
+    if(cur===1&&t.includes('Home'))el.classList.add('on');
+    else if(cur===2&&t.includes('Lessons'))el.classList.add('on');
+    else if((cur===3||cur===4||cur===5)&&t.includes('lesson'))el.classList.add('on');
+    else if(cur===8&&t.includes('Stars'))el.classList.add('on');
+    else if(cur===9&&t.includes('Grades'))el.classList.add('on');
+    else if(cur===10&&t.includes('Attendance'))el.classList.add('on');
+    else if(cur===11&&t.includes('Certificates'))el.classList.add('on');
+    else if(cur===12&&t.includes('Portfolio'))el.classList.add('on');
+  });
+}
+
+function renderSlide(){
+  var s=SLIDES[slideIdx];
+  var isLast=slideIdx===SLIDES.length-1;
+  var pct=Math.round(slideIdx/(SLIDES.length-1)*100);
+
+  // Viewport background
+  var vp=document.getElementById('slideVp');
+  vp.style.background=s.bg;
+
+  // Content
+  var inner='';
+  if(s.type==='intro'){
+    inner='<div style="font-size:56px;margin-bottom:16px;line-height:1">'+s.emoji+'</div>'
+      +'<div class="slide-ttl" style="color:#FAC600;font-size:28px">'+s.title+'</div>'
+      +'<div class="slide-body" style="color:rgba(255,255,255,.85)">'+s.body+'</div>';
+  } else if(s.type==='four'){
+    inner='<div class="slide-lbl" style="color:#B45309">'+s.label+'</div>'
+      +'<div class="slide-ttl" style="color:#1A365E">'+s.title+'</div>'
+      +'<div class="slide-visual">';
+    s.items.forEach(function(it){inner+='<div class="sv-card" style="background:'+it.bg+'"><div class="sv-ico">'+it.e+'</div><div class="sv-lbl" style="color:'+it.tc+'">'+it.l+'</div></div>';});
+    inner+='</div><div class="slide-body" style="color:#475569">Plants need ALL four to survive — missing even one makes the plant sick!</div>';
+  } else if(s.type==='journey'){
+    inner='<div class="slide-lbl" style="color:#1FD6C4">'+s.label+'</div>'
+      +'<div class="slide-ttl" style="color:#FAC600">'+s.title+'</div>'
+      +'<div style="display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;margin-bottom:14px">';
+    s.steps.forEach(function(st,i){
+      inner+='<div style="background:rgba(255,255,255,.12);border-radius:10px;padding:10px 12px;font-size:12px;font-weight:700;color:#fff">'+st+'</div>';
+      if(i<s.steps.length-1)inner+='<span style="color:rgba(255,255,255,.4);font-size:18px">→</span>';
+    });
+    inner+='</div><div class="slide-body" style="color:rgba(255,255,255,.8)">Every plant starts as a tiny seed hidden underground. With water, warmth and time, it grows into something amazing!</div>';
+  } else if(s.type==='parts'){
+    inner='<div class="slide-lbl" style="color:#FAC600">'+s.label+'</div>'
+      +'<div class="slide-ttl" style="color:#fff">'+s.title+'</div>'
+      +'<div class="slide-visual">';
+    s.items.forEach(function(it){inner+='<div class="sv-card" style="background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2)"><div class="sv-ico">'+it.e+'</div><div class="sv-lbl" style="color:#FAC600">'+it.l+'</div><div class="sv-sub" style="color:rgba(255,255,255,.65)">'+it.s+'</div></div>';});
+    inner+='</div><div class="slide-body" style="color:rgba(255,255,255,.75)">Each part works together to keep the plant alive and growing!</div>';
+  } else if(s.type==='give'){
+    inner='<div class="slide-lbl" style="color:#FAC600">'+s.label+'</div>'
+      +'<div class="slide-ttl" style="color:#fff">'+s.title+'</div>'
+      +'<div class="slide-visual">';
+    s.items.forEach(function(it){inner+='<div class="sv-card" style="background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.15);min-width:70px"><div class="sv-ico">'+it.e+'</div><div class="sv-lbl" style="color:#FAC600;font-size:10px">'+it.l+'</div></div>';});
+    inner+='</div><div class="slide-body" style="color:rgba(255,255,255,.8)">We need plants to survive! They give us food, clean air, shade, medicine and so much more.</div>';
+  } else if(s.type==='ready'){
+    inner='<div style="font-size:50px;margin-bottom:14px;line-height:1">🏆</div>'
+      +'<div class="slide-ttl" style="color:#FAC600">'+s.title+'</div>'
+      +'<div class="slide-body" style="color:rgba(255,255,255,.85);margin-bottom:16px">'+s.body+'</div>'
+      +'<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">'
+      +'<div style="background:rgba(255,255,255,.1);border-radius:10px;padding:8px 14px;font-size:12px;color:rgba(255,255,255,.8)">4 questions</div>'
+      +'<div style="background:rgba(255,255,255,.1);border-radius:10px;padding:8px 14px;font-size:12px;color:rgba(255,255,255,.8)">Win up to ⭐⭐⭐⭐</div>'
+      +'</div>';
+  }
+  document.getElementById('slideInner').innerHTML=inner;
+  document.getElementById('slideCounter').textContent='Slide '+(slideIdx+1)+' / '+SLIDES.length;
+  document.getElementById('slidePct').textContent=pct+'%';
+  document.getElementById('slidePrev').disabled=slideIdx===0;
+  document.getElementById('slideNext').disabled=isLast;
+
+  // Dots
+  var dots='';
+  SLIDES.forEach(function(_,i){
+    var cls=i<slideIdx?'done':i===slideIdx?'cur':'';
+    dots+='<div class="sdot '+cls+'" onclick="jumpSlide('+i+')"></div>';
+  });
+  document.getElementById('slideDots').innerHTML=dots;
+
+  // Footer
+  document.getElementById('slideFooter').innerHTML=isLast
+    ?'<div class="btn-row"><button class="btn btn-red" onclick="go(4)">Start quiz! 🎮</button><button class="btn btn-gray" onclick="changeSlide(-1)">← Review slides</button></div>'
+    :'<div style="text-align:right;margin-top:6px"><span style="font-size:11px;color:#94A3B8">View all 6 slides — then take the quiz!</span></div>';
+}
+
+function changeSlide(d){slideIdx=Math.max(0,Math.min(SLIDES.length-1,slideIdx+d));if(slideIdx===SLIDES.length-1)allViewed=true;renderSlide();}
+function jumpSlide(i){slideIdx=i;if(i===SLIDES.length-1)allViewed=true;renderSlide();}
+
+function renderQ(){
+  var q=QUESTIONS[qIdx];
+  var dots='';
+  QUESTIONS.forEach(function(_,i){dots+='<div class="qdot'+(i<qIdx?' done':i===qIdx?' cur':'')+'" style="width:11px;height:11px"></div>';});
+  document.getElementById('qDots').innerHTML=dots;
+  document.getElementById('qStarBadge').textContent='⭐ '+qStars+' / 4';
+  var opts='';
+  q.opts.forEach(function(o,i){opts+='<button class="qopt" onclick="ansQ('+i+')">'+o+'</button>';});
+  document.getElementById('qArea').innerHTML='<div class="qbox"><div class="qemoji">'+q.e+'</div><div class="qtext">'+q.q+'</div><div class="qgrid">'+opts+'</div></div>';
+  document.getElementById('qFb').style.display='none';
+  document.getElementById('qNextWrap').style.display='none';
+  qAnswered=false;
+}
+
+function ansQ(i){
+  if(qAnswered)return; qAnswered=true;
+  var q=QUESTIONS[qIdx];
+  var correct=i===q.ok;
+  if(correct)qStars++;
+  document.querySelectorAll('.qopt').forEach(function(b,idx){
+    b.onclick=null;
+    if(idx===q.ok)b.className='qopt rev';
+    else if(idx===i&&i!==q.ok)b.className='qopt ng';
+  });
+  document.getElementById('qStarBadge').textContent='⭐ '+qStars+' / 4';
+  var fb=document.getElementById('qFb');
+  fb.innerHTML='<div class="qfb '+(correct?'ok':'ng')+'">'+(correct?'🌟 <strong>Correct!</strong> ':'🤔 <strong>Not quite! </strong>')+q.fb+'</div>';
+  fb.style.display='block';
+  document.getElementById('qNextWrap').style.display='block';
+  document.getElementById('qNextBtn').textContent=qIdx<QUESTIONS.length-1?'Next question →':'See my results! 🎉';
+}
+
+function nextQ(){
+  qIdx++;
+  if(qIdx>=QUESTIONS.length){
+    var stars='';for(var i=0;i<qStars;i++)stars+='⭐';
+    document.getElementById('completeMsg').textContent='You finished "How plants grow" and earned '+qStars+' stars! '+stars+' You have unlocked the Plant Scientist certificate!';
+    go(5);
+    return;
+  }
+  renderQ();
+}
+
+function renderAtt(){
+  var h='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">';
+  for(var i=0;i<31;i++){
+    var d=ATT[i];
+    var bg=d==='P'?'#DCFCE7':d==='A'?'#FEE2E2':'#F1F5F9';
+    var col=d==='P'?'#166534':d==='A'?'#991B1B':'#CBD5E1';
+    h+='<div style="aspect-ratio:1;border-radius:5px;background:'+bg+';display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:'+col+'">'+(i>0?i:'')+'</div>';
+  }
+  h+='</div>';
+  var el=document.getElementById('attGrid');
+  if(el)el.innerHTML=h;
+}
+
+setLogos();
+go(0);
+</script>
+</body>
+</html>

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
+import { toLegacyStudentGradeValue } from '@/types/student'
+import { K5BadgesPage } from '@/pages/student-portal/K5BadgesPage'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 20 }
 
@@ -12,6 +14,9 @@ interface BadgeAward { id: string; name: string; description: string; criteria: 
 export function SPBadgesPage() {
   const { session } = useStudentPortal()
   const [badges, setBadges] = useState<BadgeAward[]>([])
+
+  const gradeNum = toLegacyStudentGradeValue(session?.grade ?? '')
+  if (gradeNum !== null && gradeNum <= 5) return <K5BadgesPage />
 
   useEffect(() => {
     if (!session) return

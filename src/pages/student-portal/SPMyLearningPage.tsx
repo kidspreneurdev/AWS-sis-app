@@ -4,6 +4,8 @@ import { uploadFile } from '@/lib/uploadFile'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
 import { TYPE_ICONS, TYPE_COLORS, SUBJECT_COLORS, isActiveBool, type LMSCourse, type LMSContent, type LMSEnrolment, type LMSProgress, type LMSQuestion } from '@/pages/lms/lmsStore'
+import { toLegacyStudentGradeValue } from '@/types/student'
+import { K5MyLearningPage } from '@/pages/student-portal/K5MyLearningPage'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 14, border: '1px solid #E4EAF2', boxShadow: '0 1px 6px rgba(26,54,94,.06)' }
 const emptyState: React.CSSProperties = { padding: '16px 18px', borderRadius: 10, background: '#F8FAFC', border: '1px dashed #D7E0EA', fontSize: 12, color: '#7A92B0' }
@@ -633,6 +635,9 @@ export function SPMyLearningPage() {
   const [activeLessonId, setActiveLessonId] = useState<string | null>(null)
   const [openedAtMap, setOpenedAtMap] = useState<Record<string, number>>({})
   const [, setTimerNow] = useState(Date.now())
+
+  const gradeNum = toLegacyStudentGradeValue(session?.grade ?? '')
+  if (!readOnly && gradeNum !== null && gradeNum <= 5) return <K5MyLearningPage />
 
   useEffect(() => {
     if (!session) return

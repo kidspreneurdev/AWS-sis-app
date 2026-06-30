@@ -58,6 +58,7 @@ import { ATReportsPage } from '@/pages/at/ATReportsPage'
 
 // ─── Learning Management System (LMS) ────────────────────────────────────────
 import { LMSPage } from '@/pages/lms/LMSPage'
+import { K5LessonsAdminPage } from '@/pages/lms/K5LessonsAdminPage'
 
 // ─── Projects Tracker (PT) ────────────────────────────────────────────────────
 import { PTDashboardPage } from '@/pages/pt/PTDashboardPage'
@@ -89,6 +90,7 @@ import { SPRealWorldLogPage } from '@/pages/student-portal/SPRealWorldLogPage'
 import { SPFeesPage } from '@/pages/student-portal/SPFeesPage'
 import { SPDocumentsPage } from '@/pages/student-portal/SPDocumentsPage'
 import { SPBadgesPage } from '@/pages/student-portal/SPBadgesPage'
+import { K5CertificatesPage } from '@/pages/student-portal/K5CertificatesPage'
 import { SPProfilePage } from '@/pages/student-portal/SPProfilePage'
 
 function PageLoader() {
@@ -153,6 +155,7 @@ export const router = createBrowserRouter([
       { path: '/portal/fees', element: <SPFeesPage /> },
       { path: '/portal/documents', element: <SPDocumentsPage /> },
       { path: '/portal/badges', element: <SPBadgesPage /> },
+      { path: '/portal/k5-certificates', element: <K5CertificatesPage /> },
       { path: '/portal/profile', element: <SPProfilePage /> },
     ],
   },
@@ -226,6 +229,7 @@ export const router = createBrowserRouter([
         { path: '/lms/section', element: <Lazy><LMSPage /></Lazy> },
         { path: '/lms/progress', element: <Lazy><LMSPage /></Lazy> },
         { path: '/lms/student', element: <Lazy><LMSPage /></Lazy> },
+        { path: '/lms/k5-lessons', element: <Lazy><K5LessonsAdminPage /></Lazy> },
 
         // Settings
         { path: '/admin/alerts', element: <Lazy><AlertsPage /></Lazy> },

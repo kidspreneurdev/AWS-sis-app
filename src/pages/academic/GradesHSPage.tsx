@@ -3,20 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
 
-const TRANSCRIPT_NUMERAL_FONT = 'Cambria, "Times New Roman", serif'
-const transcriptNumStyle: React.CSSProperties = {
-  fontFamily: TRANSCRIPT_NUMERAL_FONT,
-  fontVariantNumeric: 'lining-nums tabular-nums',
-}
 
-function renderTranscriptText(value: unknown) {
-  return String(value ?? '')
-    .split(/(\d[\d.,]*)/g)
-    .filter(Boolean)
-    .map((part, idx) => /\d/.test(part)
-      ? <span key={`${part}-${idx}`} style={transcriptNumStyle}>{part}</span>
-      : part)
-}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const GRADE_PTS: Record<string, number | null> = {
@@ -563,6 +550,231 @@ function Avatar({ name, size = 30 }: { name: string; size?: number }) {
   return <div style={{ width:size, height:size, borderRadius:'50%', background:'linear-gradient(135deg,#1A365E,#2D5A8E)', color:'#fff', fontSize:size*0.35, fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>{initials}</div>
 }
 
+// ─── Bulk Add Course Modal ────────────────────────────────────────────────────
+interface BulkAddDraft {
+  targetMode: 'grade' | 'students'
+  targetGrade: string
+  selectedStudentIds: string[]
+  code: string
+  title: string
+  type: CourseType
+  area: string
+  year: string
+  semester: string
+  gradeLevel: string
+  creditsAttempted: number
+  creditsEarned: number
+  grade: string
+  courseStatus: CourseStatus
+  instructor: string
+  section: string
+  notes: string
+}
+
+function emptyBulkDraft(): BulkAddDraft {
+  return {
+    targetMode: 'grade',
+    targetGrade: 'Grade 9',
+    selectedStudentIds: [],
+    code: '', title: '', type: 'STD', area: 'Language Arts',
+    year: '2025-2026', semester: 'Full Year', gradeLevel: 'Grade 9',
+    creditsAttempted: 1, creditsEarned: 1, grade: '',
+    courseStatus: 'In Progress', instructor: '', section: '', notes: '',
+  }
+}
+
+function BulkAddCourseModal({ draft, students, catalog, onChange, onSave, onClose }: {
+  draft: BulkAddDraft
+  students: Student[]
+  catalog: CatalogCourse[]
+  onChange: (d: BulkAddDraft) => void
+  onSave: () => Promise<void>
+  onClose: () => void
+}) {
+  const [saving, setSaving] = useState(false)
+
+  function set<K extends keyof BulkAddDraft>(k: K, v: BulkAddDraft[K]) { onChange({ ...draft, [k]: v }) }
+
+  function quickFill(code: string) {
+    const c = catalog.find(x => x.code === code); if (!c) return
+    onChange({ ...draft, code: c.code, title: c.title, type: c.type as CourseType, area: c.area, creditsAttempted: c.credits, creditsEarned: c.credits })
+  }
+
+  function toggleStudent(id: string) {
+    const ids = draft.selectedStudentIds
+    set('selectedStudentIds', ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id])
+  }
+
+  const targetStudents = draft.targetMode === 'grade'
+    ? students.filter(s => `Grade ${s.grade}` === draft.targetGrade)
+    : students.filter(s => draft.selectedStudentIds.includes(s.id))
+
+  async function handleSave() {
+    setSaving(true)
+    await onSave()
+    setSaving(false)
+  }
+
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:1200, background:'rgba(10,25,50,.6)', display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div style={{ background:'#fff', borderRadius:14, width:'100%', maxWidth:720, maxHeight:'92vh', display:'flex', flexDirection:'column', overflow:'hidden', boxShadow:'0 24px 70px rgba(0,0,0,.35)' }}>
+        {/* Header */}
+        <div style={{ background:'linear-gradient(135deg,#0F2240,#1A365E)', padding:'16px 22px', display:'flex', justifyContent:'space-between', alignItems:'center', flexShrink:0 }}>
+          <div>
+            <div style={{ fontSize:16, fontWeight:800, color:'#fff' }}>Bulk Add Course</div>
+            <div style={{ fontSize:12, color:'rgba(255,255,255,0.65)', marginTop:2 }}>Assign a course to multiple students at once</div>
+          </div>
+          <button onClick={onClose} style={{ background:'rgba(255,255,255,.12)', border:'none', color:'#fff', borderRadius:7, width:30, height:30, cursor:'pointer', fontSize:17, display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
+        </div>
+
+        <div style={{ flex:1, overflowY:'auto', padding:20, display:'flex', flexDirection:'column', gap:14 }}>
+
+          {/* ── Target selection ── */}
+          <div style={{ background:'#F7F9FC', border:'1px solid #E4EAF2', borderRadius:10, padding:14 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:'#3D5475', textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:10 }}>Who should receive this course?</div>
+            <div style={{ display:'flex', gap:8, marginBottom:12 }}>
+              {(['grade','students'] as const).map(mode => (
+                <button key={mode} onClick={() => set('targetMode', mode)}
+                  style={{ flex:1, padding:'9px 12px', borderRadius:8, border:`2px solid ${draft.targetMode === mode ? '#D61F31' : '#E4EAF2'}`, background:draft.targetMode === mode ? '#FFF0F1' : '#fff', color:draft.targetMode === mode ? '#D61F31' : '#7A92B0', fontWeight:700, fontSize:13, cursor:'pointer', transition:'all 0.15s' }}>
+                  {mode === 'grade' ? '📋 Entire Grade Level' : '👤 Select Students'}
+                </button>
+              ))}
+            </div>
+
+            {draft.targetMode === 'grade' ? (
+              <div>
+                <label style={{ fontSize:11, fontWeight:700, color:'#3D5475', display:'block', marginBottom:5 }}>Grade Level</label>
+                <select style={sel} value={draft.targetGrade} onChange={e => set('targetGrade', e.target.value)}>
+                  {GRADE_LEVELS.map(g => <option key={g}>{g}</option>)}
+                </select>
+                <div style={{ marginTop:8, fontSize:12, color:'#7A92B0' }}>
+                  {targetStudents.length > 0
+                    ? <span style={{ color:'#059669', fontWeight:600 }}>{targetStudents.length} student{targetStudents.length !== 1 ? 's' : ''} in {draft.targetGrade}: {targetStudents.map(s => s.name).join(', ')}</span>
+                    : <span style={{ color:'#D61F31' }}>No enrolled students found for {draft.targetGrade}</span>}
+                </div>
+              </div>
+            ) : (
+              <div>
+                <label style={{ fontSize:11, fontWeight:700, color:'#3D5475', display:'block', marginBottom:5 }}>Select Students</label>
+                <div style={{ maxHeight:160, overflowY:'auto', border:'1px solid #E4EAF2', borderRadius:8, background:'#fff' }}>
+                  {students.length === 0 && <div style={{ padding:14, fontSize:12, color:'#7A92B0' }}>No students loaded.</div>}
+                  {students.map(s => {
+                    const checked = draft.selectedStudentIds.includes(s.id)
+                    return (
+                      <div key={s.id} onClick={() => toggleStudent(s.id)}
+                        style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 12px', cursor:'pointer', background:checked ? '#F0F6FF' : 'transparent', borderBottom:'1px solid #F0F4F8', transition:'background 0.1s' }}>
+                        <div style={{ width:16, height:16, borderRadius:4, border:`2px solid ${checked ? '#1A365E' : '#CBD5E1'}`, background:checked ? '#1A365E' : '#fff', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                          {checked && <span style={{ color:'#fff', fontSize:10, lineHeight:1 }}>✓</span>}
+                        </div>
+                        <span style={{ fontSize:13, color:'#1A365E', fontWeight:checked ? 600 : 400 }}>{s.name}</span>
+                        <span style={{ fontSize:11, color:'#7A92B0', marginLeft:'auto' }}>Gr {s.grade}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+                {draft.selectedStudentIds.length > 0 && (
+                  <div style={{ marginTop:6, fontSize:12, color:'#059669', fontWeight:600 }}>
+                    {draft.selectedStudentIds.length} student{draft.selectedStudentIds.length !== 1 ? 's' : ''} selected
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ── Course details ── */}
+          <div style={{ background:'#F7F9FC', border:'1px solid #E4EAF2', borderRadius:10, padding:14, display:'flex', flexDirection:'column', gap:11 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:'#3D5475', textTransform:'uppercase', letterSpacing:'0.07em' }}>Course Details</div>
+
+            <div>
+              <label style={{ fontSize:11, fontWeight:700, color:'#3D5475', display:'block', marginBottom:4 }}>Quick Fill from Catalog</label>
+              <select style={sel} value="" onChange={e => quickFill(e.target.value)}>
+                <option value="">— Select course to auto-fill —</option>
+                {catalog.map(c => <option key={c.code} value={c.code}>{c.code} — {c.title} ({c.type})</option>)}
+              </select>
+            </div>
+
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+              <div><label style={{ fontSize:11, fontWeight:700, color:'#3D5475', display:'block', marginBottom:4 }}>Course Code</label>
+                <input style={inp} value={draft.code} onChange={e => set('code', e.target.value)} placeholder="e.g. ELA9" /></div>
+              <div><label style={{ fontSize:11, fontWeight:700, color:'#3D5475', display:'block', marginBottom:4 }}>Course Title</label>
+                <input style={inp} value={draft.title} onChange={e => set('title', e.target.value)} placeholder="e.g. English 9" /></div>
+            </div>
+
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10 }}>
+              <div><label style={{ fontSize:11, fontWeight:700, color:'#3D5475', display:'block', marginBottom:4 }}>Type</label>
+                <select style={sel} value={draft.type} onChange={e => set('type', e.target.value as CourseType)}>
+                  {COURSE_TYPES.map(t => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
+                </select></div>
+              <div><label style={{ fontSize:11, fontWeight:700, color:'#3D5475', display:'block', marginBottom:4 }}>Subject Area</label>
+                <select style={sel} value={draft.area} onChange={e => set('area', e.target.value)}>
+                  {SUBJECT_AREAS.map(a => <option key={a}>{a}</option>)}
+                </select></div>
+              <div><label style={{ fontSize:11, fontWeight:700, color:'#3D5475', display:'block', marginBottom:4 }}>School Year</label>
+                <select style={sel} value={draft.year} onChange={e => set('year', e.target.value)}>
+                  {SCHOOL_YEARS.map(y => <option key={y}>{y}</option>)}
+                </select></div>
+            </div>
+
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10 }}>
+              <div><label style={{ fontSize:11, fontWeight:700, color:'#3D5475', display:'block', marginBottom:4 }}>Duration</label>
+                <select style={sel} value={draft.semester} onChange={e => set('semester', e.target.value)}>
+                  {DURATION_OPTS.map(d => <option key={d}>{d}</option>)}
+                </select></div>
+              <div><label style={{ fontSize:11, fontWeight:700, color:'#3D5475', display:'block', marginBottom:4 }}>Grade Level (Record)</label>
+                <select style={sel} value={draft.gradeLevel} onChange={e => set('gradeLevel', e.target.value)}>
+                  {GRADE_LEVELS.map(g => <option key={g}>{g}</option>)}
+                </select></div>
+              <div><label style={{ fontSize:11, fontWeight:700, color:'#3D5475', display:'block', marginBottom:4 }}>Status</label>
+                <select style={sel} value={draft.courseStatus} onChange={e => set('courseStatus', e.target.value as CourseStatus)}>
+                  {COURSE_STATUS.map(s => <option key={s}>{s}</option>)}
+                </select></div>
+            </div>
+
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10 }}>
+              <div><label style={{ fontSize:11, fontWeight:700, color:'#3D5475', display:'block', marginBottom:4 }}>Cr. Attempted</label>
+                <input type="number" min={0} max={8} step={0.5} style={inp} value={draft.creditsAttempted} onChange={e => set('creditsAttempted', parseFloat(e.target.value)||0)} /></div>
+              <div><label style={{ fontSize:11, fontWeight:700, color:'#3D5475', display:'block', marginBottom:4 }}>Cr. Earned</label>
+                <input type="number" min={0} max={8} step={0.5} style={inp} value={draft.creditsEarned} onChange={e => set('creditsEarned', parseFloat(e.target.value)||0)} /></div>
+              <div><label style={{ fontSize:11, fontWeight:700, color:'#3D5475', display:'block', marginBottom:4 }}>Initial Grade</label>
+                <select style={sel} value={draft.grade} onChange={e => set('grade', e.target.value)}>
+                  <option value="">—</option>
+                  {GRADE_OPTS.map(g => <option key={g}>{g}</option>)}
+                </select></div>
+            </div>
+
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+              <div><label style={{ fontSize:11, fontWeight:700, color:'#3D5475', display:'block', marginBottom:4 }}>Instructor</label>
+                <input style={inp} value={draft.instructor} onChange={e => set('instructor', e.target.value)} /></div>
+              <div><label style={{ fontSize:11, fontWeight:700, color:'#3D5475', display:'block', marginBottom:4 }}>Section</label>
+                <input style={inp} value={draft.section} onChange={e => set('section', e.target.value)} /></div>
+            </div>
+
+            <div><label style={{ fontSize:11, fontWeight:700, color:'#3D5475', display:'block', marginBottom:4 }}>Notes</label>
+              <textarea style={{ ...inp, minHeight:52, resize:'vertical' }} value={draft.notes} onChange={e => set('notes', e.target.value)} /></div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ borderTop:'1px solid #E4EAF2', padding:'14px 22px', display:'flex', justifyContent:'space-between', alignItems:'center', background:'#F7F9FC', flexShrink:0 }}>
+          <div style={{ fontSize:12, color:'#7A92B0' }}>
+            {targetStudents.length > 0
+              ? <span>Will add to <strong style={{ color:'#1A365E' }}>{targetStudents.length}</strong> student{targetStudents.length !== 1 ? 's' : ''}</span>
+              : <span style={{ color:'#D61F31' }}>No students selected</span>}
+          </div>
+          <div style={{ display:'flex', gap:8 }}>
+            <button onClick={onClose} style={{ padding:'8px 18px', borderRadius:8, border:'1px solid #E4EAF2', background:'#fff', color:'#1A365E', fontWeight:600, fontSize:13, cursor:'pointer' }}>Cancel</button>
+            <button onClick={handleSave} disabled={saving || targetStudents.length === 0 || !draft.title.trim()}
+              style={{ padding:'8px 24px', borderRadius:8, border:'none', background: (saving || targetStudents.length === 0 || !draft.title.trim()) ? '#E4EAF2' : '#D61F31', color: (saving || targetStudents.length === 0 || !draft.title.trim()) ? '#7A92B0' : '#fff', fontWeight:700, fontSize:13, cursor: (saving || targetStudents.length === 0 || !draft.title.trim()) ? 'not-allowed' : 'pointer', transition:'all 0.15s' }}>
+              {saving ? 'Saving…' : `Add to ${targetStudents.length} Student${targetStudents.length !== 1 ? 's' : ''}`}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 type Tab = 'overview'|'studentov'|'courses'|'gpa'|'graduation'|'skills'|'transfer'|'transcript'|'catalog'
 const TABS: {id:Tab; label:string; icon:string}[] = [
@@ -591,6 +803,7 @@ export function GradesHSPage() {
   const [transferModal, setTransferModal] = useState<TransferCredit|null>(null)
   const [catalogDraft, setCatalogDraft] = useState<CatalogCourse|null>(null)
   const [gradBreakdownKey, setGradBreakdownKey] = useState<string | null>(null)
+  const [bulkAddDraft, setBulkAddDraft] = useState<BulkAddDraft|null>(null)
   const [academicYear, setAcademicYear] = useState('2025–2026')
   const [graduationCreditsRequired, setGraduationCreditsRequired] = useState(24)
   const printRef = useRef<HTMLDivElement>(null)
@@ -799,6 +1012,56 @@ export function GradesHSPage() {
   async function approveTransfer(id: string) {
     await supabase.from('transfer_credits').update({ status: 'Approved' }).eq('id', id)
     setTransfers(prev => prev.map(t => t._id === id ? { ...t, status: 'Approved' as const } : t))
+  }
+
+  async function saveBulkAdd() {
+    if (!bulkAddDraft) return
+    const targetStudentIds = bulkAddDraft.targetMode === 'grade'
+      ? students.filter(s => `Grade ${s.grade}` === bulkAddDraft.targetGrade).map(s => s.id)
+      : bulkAddDraft.selectedStudentIds
+    if (!targetStudentIds.length || !bulkAddDraft.title.trim()) return
+    const newRecords: CourseRecord[] = targetStudentIds.map(sid => ({
+      _id: crypto.randomUUID(),
+      studentId: sid,
+      code: bulkAddDraft.code,
+      title: bulkAddDraft.title,
+      type: bulkAddDraft.type,
+      area: bulkAddDraft.area,
+      year: bulkAddDraft.year,
+      semester: bulkAddDraft.semester,
+      gradeLevel: bulkAddDraft.gradeLevel,
+      creditsAttempted: bulkAddDraft.creditsAttempted,
+      creditsEarned: bulkAddDraft.creditsEarned,
+      grade: bulkAddDraft.grade,
+      courseStatus: bulkAddDraft.courseStatus,
+      apScore: null,
+      instructor: bulkAddDraft.instructor,
+      section: bulkAddDraft.section,
+      notes: bulkAddDraft.notes,
+    }))
+    const payload = newRecords.map(r => ({
+      id: r._id,
+      student_id: r.studentId,
+      catalog_code: r.code || null,
+      title: r.title,
+      type: r.type,
+      area: r.area,
+      academic_year: r.year,
+      term: r.semester,
+      grade_level: r.gradeLevel,
+      credits: r.creditsAttempted,
+      credits_earned: r.creditsEarned,
+      grade_letter: r.grade,
+      course_status: r.courseStatus,
+      ap_score: null,
+      instructor: r.instructor,
+      section: r.section,
+      notes: r.notes,
+    }))
+    const { error } = await supabase.from('courses').insert(payload)
+    if (error) { alert('Bulk save failed: ' + error.message); return }
+    setCourses(prev => [...prev, ...newRecords])
+    setBulkAddDraft(null)
   }
 
   async function updateSkill(key: string, val: number) {
@@ -1070,6 +1333,13 @@ export function GradesHSPage() {
     const trCount  = transfers.length
     return (
       <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+        {/* Action row */}
+        <div style={{ display:'flex', justifyContent:'flex-end' }}>
+          <button onClick={() => setBulkAddDraft(emptyBulkDraft())}
+            style={{ padding:'8px 18px', borderRadius:8, border:'none', background:'#1A365E', color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:7 }}>
+            <span style={{ fontSize:15 }}>+</span> Bulk Add Course
+          </button>
+        </div>
         {/* 4 class-wide stat cards */}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12 }}>
           {[
@@ -2765,6 +3035,7 @@ ${deTotal > 0 ? `
       {/* Modals */}
       {courseModal && <CourseModal draft={courseModal} catalog={catalog} onChange={setCourseModal} onSave={saveCourseModal} onClose={() => setCourseModal(null)} />}
       {transferModal && <TransferModal draft={transferModal} onChange={setTransferModal} onSave={saveTransferModal} onClose={() => setTransferModal(null)} />}
+      {bulkAddDraft && <BulkAddCourseModal draft={bulkAddDraft} students={students} catalog={catalog} onChange={setBulkAddDraft} onSave={saveBulkAdd} onClose={() => setBulkAddDraft(null)} />}
       {selectedGradReq && gradBreakdown && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', display:'grid', placeItems:'center', zIndex:9999, padding:16 }} onClick={() => setGradBreakdownKey(null)}>
           <div style={{ width:'min(860px,96vw)', maxHeight:'86vh', overflow:'auto', background:'#fff', borderRadius:14, border:'1px solid #E4EAF2', boxShadow:'0 20px 40px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>

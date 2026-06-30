@@ -126,6 +126,7 @@ const NAV: NavGroup[] = [
           { title: 'Gradebook', icon: BarChart3, to: '/lms/gradebook' },
           { title: 'Section Details', icon: LayoutList, to: '/lms/section' },
           { title: 'Progress Reports', icon: TrendingUp, to: '/lms/progress' },
+          { title: 'K5 Lessons', icon: GraduationCap, to: '/lms/k5-lessons' },
         ],
       },
     ],

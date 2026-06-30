@@ -141,6 +141,7 @@ export function AttendancePage() {
   const [date, setDate] = useState(todayStr())
   const [cohortDate, setCohortDate] = useState(todayStr())
   const [selectedCohort, setSelectedCohort] = useState<string>('')
+  const [selectedGrade, setSelectedGrade] = useState<string>('')
   const [notes, setNotes] = useState<Record<string, string>>({})
 
   useEffect(() => {
@@ -177,6 +178,21 @@ export function AttendancePage() {
     students.forEach(s => { if (s.cohort) set.add(s.cohort) })
     return Array.from(set).sort()
   }, [students])
+
+  const grades = useMemo(() => {
+    const set = new Set<string>()
+    students.forEach(s => { if (s.grade) set.add(s.grade) })
+    return Array.from(set).sort((a, b) => {
+      const numA = parseInt(a), numB = parseInt(b)
+      if (!isNaN(numA) && !isNaN(numB)) return numA - numB
+      return a.localeCompare(b)
+    })
+  }, [students])
+
+  const filteredStudents = useMemo(
+    () => selectedGrade ? students.filter(s => s.grade === selectedGrade) : students,
+    [students, selectedGrade]
+  )
 
   useEffect(() => {
     if (!selectedCohort && cohorts.length > 0) setSelectedCohort(cohorts[0])
@@ -253,10 +269,11 @@ export function AttendancePage() {
 
   const today = todayStr()
   const selectedDate = tab === 'cohort' ? cohortDate : date
-  const enrolled = students.length
-  const presentToday = records.filter(r => r.date === selectedDate && (r.status === 'P' || r.status === 'R' || r.status === 'E')).length
-  const absentToday = records.filter(r => r.date === selectedDate && r.status === 'A').length
-  const chronicAbsent = students.filter(s => {
+  const filteredIds = new Set(filteredStudents.map(s => s.id))
+  const enrolled = filteredStudents.length
+  const presentToday = records.filter(r => filteredIds.has(r.student_id) && r.date === selectedDate && (r.status === 'P' || r.status === 'R' || r.status === 'E')).length
+  const absentToday = records.filter(r => filteredIds.has(r.student_id) && r.date === selectedDate && r.status === 'A').length
+  const chronicAbsent = filteredStudents.filter(s => {
     const r = rate30(records, s.id, today)
     return r !== null && r < 90
   }).length
@@ -274,9 +291,26 @@ export function AttendancePage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <div>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1A365E', margin: 0 }}>Attendance</h1>
-        <p style={{ fontSize: 13, color: '#7A92B0', margin: '4px 0 0' }}>Track daily student attendance</p>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1A365E', margin: 0 }}>Attendance</h1>
+          <p style={{ fontSize: 13, color: '#7A92B0', margin: '4px 0 0' }}>Track daily student attendance</p>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Grade</span>
+          <select
+            value={selectedGrade}
+            onChange={e => setSelectedGrade(e.target.value)}
+            style={{
+              padding: '7px 12px', borderRadius: 8, border: '1px solid #E4EAF2',
+              fontSize: 13, color: '#1A365E', background: '#fff',
+              fontWeight: selectedGrade ? 600 : 400,
+            }}
+          >
+            <option value="">All Grades</option>
+            {grades.map(g => <option key={g} value={g}>{g}</option>)}
+          </select>
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
@@ -300,7 +334,7 @@ export function AttendancePage() {
         <div style={{ padding: 20 }}>
           {tab === 'daily' && (
             <DailyTab
-              students={students}
+              students={filteredStudents}
               records={records}
               date={date}
               setDate={setDate}
@@ -315,7 +349,7 @@ export function AttendancePage() {
           )}
           {tab === 'cohort' && (
             <CohortTab
-              students={students}
+              students={filteredStudents}
               records={records}
               cohorts={cohorts}
               selectedCohort={selectedCohort}
@@ -332,7 +366,7 @@ export function AttendancePage() {
             />
           )}
           {tab === 'monthly' && (
-            <MonthlyTab students={students} records={records} />
+            <MonthlyTab students={filteredStudents} records={records} />
           )}
         </div>
       </div>

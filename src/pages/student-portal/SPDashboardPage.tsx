@@ -4,6 +4,8 @@ import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
 import { useParentPortal } from '@/contexts/ParentPortalContext'
+import { toLegacyStudentGradeValue } from '@/types/student'
+import { K5DashboardPage } from '@/pages/student-portal/K5DashboardPage'
 
 const card: React.CSSProperties = {
   background: '#fff',
@@ -149,6 +151,8 @@ export function SPDashboardPage() {
   const [coachReport, setCoachReport] = useState<CoachReportRow | null>(null)
 
   if (!session) return null
+  const gradeNum = toLegacyStudentGradeValue(session.grade)
+  if (!readOnly && gradeNum !== null && gradeNum <= 5) return <K5DashboardPage />
   const studentSession = session
 
   useEffect(() => {

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
+import { toLegacyStudentGradeValue } from '@/types/student'
+import { K5GradesPage } from '@/pages/student-portal/K5GradesPage'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 20 }
 
@@ -243,6 +245,9 @@ export function SPGradesPage() {
   const [configLoaded, setConfigLoaded] = useState(false)
 
   if (!session) return null
+
+  const gradeNum = toLegacyStudentGradeValue(session.grade)
+  if (gradeNum !== null && gradeNum <= 5) return <K5GradesPage />
 
   const studentName = session.fullName
   const studentPortalId = session.studentId

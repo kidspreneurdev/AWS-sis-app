@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
+import { toLegacyStudentGradeValue } from '@/types/student'
+import { K5AttendancePage } from '@/pages/student-portal/K5AttendancePage'
 
 const card: React.CSSProperties = {
   background: '#fff',
@@ -49,6 +51,9 @@ function attendanceColor(rate: number) {
 export function SPAttendancePage() {
   const { session } = useStudentPortal()
   const [records, setRecords] = useState<AttRecord[]>([])
+
+  const gradeNum = toLegacyStudentGradeValue(session?.grade ?? '')
+  if (gradeNum !== null && gradeNum <= 5) return <K5AttendancePage />
 
   useEffect(() => {
     if (!session) return

@@ -19,7 +19,6 @@ export type Database = {
       transfer_credits: { Row: TransferCredit; Insert: TransferCreditInsert; Update: Partial<TransferCreditInsert> }
       ec_de_credits: { Row: ECDECredit; Insert: ECDEInsert; Update: Partial<ECDEInsert> }
       graduation_requirements: { Row: GraduationRequirement; Insert: GraduationRequirementInsert; Update: Partial<GraduationRequirementInsert> }
-      graduation_requirement_courses: { Row: GraduationRequirementCourse; Insert: GraduationRequirementCourseInsert; Update: Partial<GraduationRequirementCourseInsert> }
       graduation_distinctions: { Row: GraduationDistinction; Insert: GraduationDistinctionInsert; Update: Partial<GraduationDistinctionInsert> }
       tpms: { Row: TPMSEntry; Insert: TPMSInsert; Update: Partial<TPMSInsert> }
       at_assignments: { Row: Assignment; Insert: AssignmentInsert; Update: Partial<AssignmentInsert> }
@@ -302,18 +301,9 @@ export interface GraduationRequirement {
   area: string
   required_credits: number
   icon: string | null
-  mandatory_note: string | null
   sort_order: number
 }
 export type GraduationRequirementInsert = Omit<GraduationRequirement, 'id'>
-
-export interface GraduationRequirementCourse {
-  id: string
-  requirement_id: string
-  course_title: string
-  sort_order: number
-}
-export type GraduationRequirementCourseInsert = Omit<GraduationRequirementCourse, 'id'>
 
 export interface GraduationDistinction {
   id: string

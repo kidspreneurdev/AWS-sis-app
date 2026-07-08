@@ -115,15 +115,7 @@ create table graduation_requirements (
   area             text not null,
   required_credits numeric(4,2) not null,
   icon             text,
-  mandatory_note   text,
   sort_order       integer not null default 0
-);
-
-create table graduation_requirement_courses (
-  id             uuid primary key default uuid_generate_v4(),
-  requirement_id uuid not null references graduation_requirements(id) on delete cascade,
-  course_title   text not null,
-  sort_order     integer not null default 0
 );
 
 create table graduation_distinctions (

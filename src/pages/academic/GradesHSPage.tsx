@@ -40,24 +40,18 @@ const GRADE_LEVELS = ['Grade 9','Grade 10','Grade 11','Grade 12']
 const SCHOOL_YEARS = ['2022-2023','2023-2024','2024-2025','2025-2026','2026-2027']
 
 const GRAD_REQS = [
-  {key:'ELA', label:'Language Arts', required:4, area:'Language Arts', color:'#2563EB', icon:'📖', category:'core',
-   mandatory:['Language Arts 9','Language Arts 10','Language Arts 11','Language Arts 12'],
-   mandatoryNote:'LA 9, 10, 11, 12 all required'},
-  {key:'MATH',label:'Mathematics',   required:4, area:'Mathematics',   color:'#7C3AED', icon:'🔢', category:'core',
-   mandatory:['Algebra 1','Geometry'],
-   mandatoryNote:'Algebra 1 & Geometry required'},
-  {key:'SCI', label:'Science',       required:3, area:'Science',       color:'#059669', icon:'🔬', category:'core',
-   mandatory:['Biology'],
-   mandatoryNote:'Biology required'},
-  {key:'SS',  label:'Social Studies',required:3, area:'Social Studies',color:'#D97706', icon:'🌍', category:'core',
-   mandatory:['World History','US History','American Government'],
-   mandatoryNote:'World History, US History & American Government required'},
-  {key:'ARTS',label:'Fine Arts',     required:1, area:'Fine Arts',     color:'#DB2777', icon:'🎨', category:'elective', mandatory:[],mandatoryNote:'Art, Music, Theatre or equivalent'},
-  {key:'PE',  label:'PE or Health',  required:1, area:'PE or Health',  color:'#16A34A', icon:'🏃', category:'elective', mandatory:[],mandatoryNote:'PE or Health'},
-  {key:'ELEC',label:'Free Electives',required:8, area:'Electives',     color:'#6B7280', icon:'⭐', category:'elective', mandatory:[],mandatoryNote:'Any discipline'},
+  {key:'ELA', label:'Language Arts', required:4, area:'Language Arts', color:'#2563EB', icon:'📖', category:'core'},
+  {key:'MATH',label:'Mathematics',   required:4, area:'Mathematics',   color:'#7C3AED', icon:'🔢', category:'core'},
+  {key:'SCI', label:'Science',       required:3, area:'Science',       color:'#059669', icon:'🔬', category:'core'},
+  {key:'SS',  label:'Social Studies',required:3, area:'Social Studies',color:'#D97706', icon:'🌍', category:'core'},
+  {key:'ARTS',label:'Fine Arts',     required:1, area:'Fine Arts',     color:'#DB2777', icon:'🎨', category:'elective'},
+  {key:'PE',  label:'PE or Health',  required:1, area:'PE or Health',  color:'#16A34A', icon:'🏃', category:'elective'},
+  {key:'ELEC',label:'Free Electives',required:8, area:'Electives',     color:'#6B7280', icon:'⭐', category:'elective'},
 ]
 type GradReq = (typeof GRAD_REQS)[number]
 const TOTAL_CREDITS = 24
+const AWS_RESIDENCY_PCT = 0.25
+const AWS_RESIDENCY_CREDITS = TOTAL_CREDITS * AWS_RESIDENCY_PCT
 
 const DE_CORE_AREAS = ['Language Arts','Mathematics','Science','Social Studies']
 function deHsToCollege(hsCredits: number, area: string) {
@@ -212,7 +206,7 @@ function rowToTransfer(r: Record<string,unknown>): TransferCredit {
     creditsAwarded: Number(r.credits_awarded ?? 1),
     area: (r.area as string) ?? '',
     gradeLevel: (r.grade_level as string) ?? '',
-    sourceSchool: (r.source_school as string) ?? '',
+    sourceSchool: ((r.source_school as string) ?? '').trim(),
     sourceLocation: (r.source_location as string) ?? '',
     accreditation: (r.accreditation as string) ?? '',
     notes: (r.notes as string) ?? '',
@@ -240,7 +234,7 @@ function getWeightedPts(grade: string, type: CourseType): number | null {
   if (base === 0) return 0
   return Math.round((base + (TYPE_WEIGHT[type]||0)) * 100) / 100
 }
-function calcGPA(courses: CourseRecord[]): number {
+function calcGPA(courses: CourseRecord[], transfers: TransferCredit[] = []): number {
   let tot = 0, pts = 0
   courses.forEach(c => {
     if (c.courseStatus !== 'Completed') return
@@ -248,9 +242,15 @@ function calcGPA(courses: CourseRecord[]): number {
     const cr = c.creditsEarned || 0; if (!cr) return
     tot += cr; pts += bp * cr
   })
+  transfers.forEach(t => {
+    if (t.status !== 'Approved') return
+    const bp = getBasePts(t.origGrade); if (bp === null) return
+    const cr = t.creditsAwarded || 0; if (!cr) return
+    tot += cr; pts += bp * cr
+  })
   return tot ? Math.round(pts/tot*100)/100 : 0
 }
-function calcWeightedGPA(courses: CourseRecord[]): number {
+function calcWeightedGPA(courses: CourseRecord[], transfers: TransferCredit[] = []): number {
   let tot = 0, pts = 0
   courses.forEach(c => {
     if (c.courseStatus !== 'Completed') return
@@ -258,14 +258,20 @@ function calcWeightedGPA(courses: CourseRecord[]): number {
     const cr = c.creditsEarned || 0; if (!cr) return
     tot += cr; pts += wp * cr
   })
+  transfers.forEach(t => {
+    if (t.status !== 'Approved') return
+    const wp = getWeightedPts(t.origGrade, t.kind === 'DE' ? 'DE' : 'STD'); if (wp === null) return
+    const cr = t.creditsAwarded || 0; if (!cr) return
+    tot += cr; pts += wp * cr
+  })
   return tot ? Math.round(pts/tot*100)/100 : 0
 }
-function calcUCGPA(courses: CourseRecord[]): number {
+function calcUCGPA(courses: CourseRecord[], transfers: TransferCredit[] = []): number {
   const core = ['Language Arts','Mathematics','Science','Social Studies']
-  return calcWeightedGPA(courses.filter(c => core.includes(c.area)))
+  return calcWeightedGPA(courses.filter(c => core.includes(c.area)), transfers.filter(t => core.includes(t.area)))
 }
 function getGradCredits(courses: CourseRecord[], transfers: TransferCredit[]) {
-  const result: Record<string, number> = { total: 0, deCredits: 0, deCollegeCredits: 0, pendingTotal: 0 }
+  const result: Record<string, number> = { total: 0, deCredits: 0, deCollegeCredits: 0, pendingTotal: 0, awsCredits: 0, transferCredits: 0 }
   GRAD_REQS.forEach(r => { result[r.key] = 0; result[r.key+'_pending'] = 0 })
   const transCourses = transfers.filter(t => t.status === 'Approved').map(t => ({
     area: t.area || 'Electives', creditsEarned: t.creditsAwarded, grade: 'TR', type: 'TR' as CourseType, _transfer: true
@@ -284,6 +290,7 @@ function getGradCredits(courses: CourseRecord[], transfers: TransferCredit[]) {
     }
     if (!e) return
     result.total += e
+    result.awsCredits += e
     if (c.type === 'DE' || c.type === 'EC') {
       result.deCredits += e
       result.deCollegeCredits += deHsToCollege(e, c.area)
@@ -295,6 +302,7 @@ function getGradCredits(courses: CourseRecord[], transfers: TransferCredit[]) {
   transCourses.forEach(c => {
     const e = c.creditsEarned || 0; if (!e) return
     result.total += e
+    result.transferCredits += e
     let matched = false
     GRAD_REQS.forEach(r => { if (c.area === r.area) { result[r.key] += e; matched = true } })
     if (!matched) result['ELEC'] += e
@@ -508,14 +516,12 @@ function TransferModal({ draft, onChange, onSave, onClose }: {
                 {SUBJECT_AREAS.map(a => <option key={a}>{a}</option>)}
               </select></div>
           </div>
-          {draft.kind === 'DE' && (
-            <div><label style={{ fontSize:11, fontWeight:700, color:'#3D5475', display:'block', marginBottom:4 }}>Grade Level <span style={{ color:'#D61F31' }}>*</span></label>
-              <select style={sel} value={draft.gradeLevel} onChange={e => set('gradeLevel', e.target.value)}>
-                <option value="">— Select Grade Level —</option>
-                {GRADE_LEVELS.map(g => <option key={g}>{g}</option>)}
-              </select>
-            </div>
-          )}
+          <div><label style={{ fontSize:11, fontWeight:700, color:'#3D5475', display:'block', marginBottom:4 }}>Grade Level <span style={{ color:'#D61F31' }}>*</span></label>
+            <select style={sel} value={draft.gradeLevel} onChange={e => set('gradeLevel', e.target.value)}>
+              <option value="">— Select Grade Level —</option>
+              {GRADE_LEVELS.map(g => <option key={g}>{g}</option>)}
+            </select>
+          </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
             <div><label style={{ fontSize:11, fontWeight:700, color:'#3D5475', display:'block', marginBottom:4 }}>Source School</label>
               <input style={inp} value={draft.sourceSchool} onChange={e => set('sourceSchool', e.target.value)} /></div>
@@ -806,6 +812,9 @@ export function GradesHSPage() {
   const [bulkAddDraft, setBulkAddDraft] = useState<BulkAddDraft|null>(null)
   const [academicYear, setAcademicYear] = useState('2025–2026')
   const [graduationCreditsRequired, setGraduationCreditsRequired] = useState(24)
+  const [transcriptGrades, setTranscriptGrades] = useState<string[]>([...GRADE_LEVELS])
+  const [transcriptGradeMenuOpen, setTranscriptGradeMenuOpen] = useState(false)
+  const [dataAlertDismissedFor, setDataAlertDismissedFor] = useState<string | null>(null)
   const printRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -860,6 +869,21 @@ export function GradesHSPage() {
   const student = students.find(s => s.id === selectedId)
   const studentCourses = useMemo(() => courses.filter(c => c.studentId === selectedId), [courses, selectedId])
   const studentTransfers = useMemo(() => transfers.filter(t => t.studentId === selectedId), [transfers, selectedId])
+  // Flags data that silently drops out of GPA/credit math — e.g. a grade-level value ("9") typed into the grade field instead of a letter grade
+  const dataIssues = useMemo(() => {
+    const issues: string[] = []
+    const badTransfers = studentTransfers.filter(t => t.status === 'Approved' && t.origGrade && GRADE_PTS[t.origGrade] === undefined)
+    if (badTransfers.length > 0) {
+      const vals = Array.from(new Set(badTransfers.map(t => t.origGrade)))
+      issues.push(`${badTransfers.length} transfer credit${badTransfers.length===1?'':'s'} ${badTransfers.length===1?'has':'have'} an unrecognized grade value (${vals.map(v=>`"${v}"`).join(', ')}) and ${badTransfers.length===1?'is':'are'} excluded from GPA calculations.`)
+    }
+    const badCourses = studentCourses.filter(c => c.courseStatus === 'Completed' && c.grade && GRADE_PTS[c.grade] === undefined)
+    if (badCourses.length > 0) {
+      const vals = Array.from(new Set(badCourses.map(c => c.grade)))
+      issues.push(`${badCourses.length} completed course${badCourses.length===1?'':'s'} ${badCourses.length===1?'has':'have'} an unrecognized grade value (${vals.map(v=>`"${v}"`).join(', ')}) and ${badCourses.length===1?'is':'are'} excluded from GPA calculations.`)
+    }
+    return issues
+  }, [studentCourses, studentTransfers])
   const selectedGradReq = useMemo<GradReq | null>(() => {
     if (!gradBreakdownKey) return null
     return GRAD_REQS.find(r => r.key === gradBreakdownKey) ?? null
@@ -988,7 +1012,7 @@ export function GradesHSPage() {
       credits_awarded: transferModal.creditsAwarded,
       area: transferModal.area,
       grade_level: transferModal.gradeLevel || null,
-      source_school: transferModal.sourceSchool,
+      source_school: transferModal.sourceSchool.trim(),
       source_location: transferModal.sourceLocation,
       accreditation: transferModal.accreditation,
       notes: transferModal.notes,
@@ -1081,21 +1105,29 @@ export function GradesHSPage() {
     const gradedCourses = studentCourses.filter(c =>
       c.grade && !['','IP','W','I'].includes(c.grade)
     )
-    const deTransferIds = new Set<string>()
+    const deTransferSchoolById = new Map<string, string>()
     const deTransferRecords: CourseRecord[] = studentTransfers
-      .filter(t => t.status === 'Approved' && t.kind === 'DE' && t.gradeLevel && t.origGrade && !['','IP','W','I'].includes(t.origGrade))
+      .filter(t => t.status === 'Approved' && t.gradeLevel && t.origGrade && !['','IP','W','I'].includes(t.origGrade))
       .map(t => {
-        deTransferIds.add(t._id)
+        deTransferSchoolById.set(t._id, t.sourceSchool || 'Other School')
         return {
-          _id: t._id, studentId: t.studentId, code: 'DE', title: t.origTitle,
-          type: 'DE' as CourseType, area: t.area, year: '', semester: '',
+          _id: t._id, studentId: t.studentId, code: t.kind, title: t.origTitle,
+          type: (t.kind === 'DE' ? 'DE' : 'STD') as CourseType, area: t.area, year: '', semester: '',
           gradeLevel: t.gradeLevel, creditsAttempted: t.creditsAwarded,
           creditsEarned: t.creditsAwarded, grade: t.origGrade,
           courseStatus: 'Completed' as CourseStatus, apScore: null,
           instructor: '', section: '', notes: '',
         }
       })
-    const allGradedCourses = [...gradedCourses, ...deTransferRecords]
+    const allGradedCourses = [...gradedCourses, ...deTransferRecords].filter(c => transcriptGrades.includes(c.gradeLevel))
+    const HOME_SCHOOL = 'American World School'
+    const includedDeIds = new Set(allGradedCourses.filter(c => deTransferSchoolById.has(c._id)).map(c => c._id))
+    const transcriptSchools = [HOME_SCHOOL, ...new Set(Array.from(includedDeIds).map(id => deTransferSchoolById.get(id)!).filter(Boolean))]
+    const schoolNumberOf = (name: string) => transcriptSchools.indexOf(name) + 1
+    const homeSchoolNum = schoolNumberOf(HOME_SCHOOL)
+    const schoolsListHtml = transcriptSchools
+      .map((s, i) => `<div style="font-size:9.5pt;${i > 0 ? 'margin-top:2px;' : ''}">(${i + 1}) — ${h(s)}</div>`)
+      .join('')
     const tGPA = (courses: CourseRecord[]) => {
       let tot = 0, pts = 0
       courses.forEach(x => { const wp = getWeightedPts(x.grade, x.type); if (wp === null) return; const cr = x.creditsEarned || 0; if (!cr) return; tot += cr; pts += wp * cr })
@@ -1104,7 +1136,7 @@ export function GradesHSPage() {
     const uw = tGPA(allGradedCourses)
     const totCr = Math.round(allGradedCourses.reduce((s, c) => s + (c.creditsEarned || 0), 0) * 10) / 10
 
-    const gradeLevelOrder = ['Grade 9','Grade 10','Grade 11','Grade 12']
+    const gradeLevelOrder = GRADE_LEVELS.filter(g => transcriptGrades.includes(g))
     const gradeGroups = gradeLevelOrder
       .map(gl => ({ gl, courses: allGradedCourses.filter(c => c.gradeLevel === gl) }))
       .filter(g => g.courses.length > 0)
@@ -1130,7 +1162,7 @@ export function GradesHSPage() {
       const rows = gc2.map(c => {
         const wp = getWeightedPts(c.grade, c.type)
         const sym = (c.type==='AP'||c.type==='IB') ? ' &bull;' : c.type==='HON' ? ' &#10003;' : (c.type==='DE'||c.type==='EC') ? ' &#9733;' : ''
-        const ind = deTransferIds.has(c._id) ? '(1)' : '(2)'
+        const ind = `(${deTransferSchoolById.has(c._id) ? schoolNumberOf(deTransferSchoolById.get(c._id)!) : homeSchoolNum})`
         return `<tr>
           <td style="padding:3px 5px;font-size:9pt;border-bottom:1px solid #eee"><span style="color:#999;font-size:7.5pt">${ind} </span>${h(c.title)}${sym}</td>
           <td style="text-align:center;padding:3px 5px;font-size:9pt;border-bottom:1px solid #eee">${h(String(c.creditsEarned))}</td>
@@ -1151,8 +1183,19 @@ export function GradesHSPage() {
           <tbody>${rows}</tbody>
           <tfoot>
             <tr style="border-top:1.5px solid #000">
-              <td colspan="4" style="padding:4px 5px;font-size:9pt;font-weight:700">
-                CGPA: ${h(cgpa.toFixed(2))}&nbsp;&nbsp;&nbsp;Total Credits: ${h(String(gradeCredits))}&nbsp;&nbsp;&nbsp;GPA: ${h(gradeGPA.toFixed(2))}
+              <td style="text-align:left;padding:4px 5px;font-size:9pt;font-weight:700;white-space:nowrap">CGPA: ${h(cgpa.toFixed(2))}</td>
+              <td style="text-align:center;padding:4px 5px;font-size:9pt;font-weight:700;white-space:nowrap;position:relative">
+                <span style="position:relative;display:inline-block">
+                  <span style="position:absolute;right:100%;padding-right:4px;white-space:nowrap">Total Credits:</span>
+                  ${h(String(gradeCredits))}
+                </span>
+              </td>
+              <td style="padding:4px 5px"></td>
+              <td style="text-align:center;padding:4px 5px;font-size:9pt;font-weight:700;white-space:nowrap;position:relative">
+                <span style="position:relative;display:inline-block">
+                  <span style="position:absolute;right:100%;padding-right:4px;white-space:nowrap">GPA:</span>
+                  ${h(gradeGPA.toFixed(2))}
+                </span>
               </td>
             </tr>
           </tfoot>
@@ -1256,8 +1299,7 @@ export function GradesHSPage() {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:20px">
       <div>
         <div style="font-weight:700;font-size:10.5pt;margin-bottom:8px">School (s)</div>
-        <div style="font-size:9.5pt">(1) — West Windsor-Plainsboro High School</div>
-        <div style="font-size:9.5pt;margin-top:2px">(2) — American World School</div>
+        ${schoolsListHtml}
       </div>
       <div>
         <div style="font-weight:700;font-size:10.5pt;margin-bottom:8px">Key For Retakes</div>
@@ -1310,7 +1352,7 @@ export function GradesHSPage() {
     return students.map(s => {
       const c = courses.filter(x => x.studentId === s.id)
       const t = transfers.filter(x => x.studentId === s.id)
-      const uw = calcGPA(c); const wt = calcWeightedGPA(c); const uc = calcUCGPA(c)
+      const uw = calcGPA(c, t); const wt = calcWeightedGPA(c, t); const uc = calcUCGPA(c, t)
       const gc = getGradCredits(c, t)
       const dist = getDistinction(wt, c)
       return { ...s, uw, wt, uc, credits: gc.total, dist }
@@ -1410,9 +1452,9 @@ export function GradesHSPage() {
       </div>
     )
 
-    const uw   = calcGPA(studentCourses)
-    const wt   = calcWeightedGPA(studentCourses)
-    const uc   = calcUCGPA(studentCourses)
+    const uw   = calcGPA(studentCourses, studentTransfers)
+    const wt   = calcWeightedGPA(studentCourses, studentTransfers)
+    const uc   = calcUCGPA(studentCourses, studentTransfers)
     const gc   = getGradCredits(studentCourses, studentTransfers)
     const dist = getDistinction(wt, studentCourses)
     const uwCol = uw >= 3.5 ? '#1DBD6A' : uw >= 2.5 ? '#F5A623' : '#D61F31'
@@ -1894,22 +1936,30 @@ export function GradesHSPage() {
     distinctions:{name:string;desc:string;met:boolean;gold?:boolean;blue?:boolean}[];
     totalPending:number; credRemaining:number;
     deTotal:number; deCollegeTotal:number;
-    failedCourses:CourseRecord[]; mandatoryAlerts:{area:string;course:string;color:string}[];
+    failedCourses:CourseRecord[];
     expectedByNow:number; gc:Record<string,number>;
+    awsCredits:number; transferCreditsTotal:number; hasTransferCredits:boolean;
+    residencyMet:boolean; residencyRemaining:number;
   }) {
     const { totalEarned, pctDone, allMet, onPace, wgpa, ugpa, dist, distinctions,
             totalPending, credRemaining, deTotal, deCollegeTotal,
-            failedCourses, mandatoryAlerts, gc } = opts
+            failedCourses, gc, awsCredits, transferCreditsTotal, hasTransferCredits,
+            residencyMet, residencyRemaining } = opts
     const TOTAL_REQ = 24
     const issueDate = new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' })
-    const acYear = '2024–2025'
+    const acYear = academicYear
     const h = (s: unknown) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
 
-    // Course rows per area
-    function courseRows(area: string) {
-      const done = studentCourses.filter(c => (c.area || 'Electives') === area && c.grade !== 'F' && c.courseStatus === 'Completed')
-      const ip   = studentCourses.filter(c => (c.area || 'Electives') === area && ['In Progress','Assigned','Not Started'].includes(c.courseStatus))
-      const tr   = studentTransfers.filter(t => t.status === 'Approved' && (t.area || 'Electives') === area)
+    // Course rows per requirement — areas with no matching GRAD_REQS entry (e.g. World Language, Technology, Other) roll up into Free Electives, mirroring getGradCredits()
+    const getReqKeyFromArea = (area: string) => {
+      const match = GRAD_REQS.find(r => r.area === area)
+      return match ? match.key : 'ELEC'
+    }
+    function courseRows(reqKey: string) {
+      const belongs = (area: string) => getReqKeyFromArea(area || 'Electives') === reqKey
+      const done = studentCourses.filter(c => belongs(c.area) && c.grade !== 'F' && c.courseStatus === 'Completed')
+      const ip   = studentCourses.filter(c => belongs(c.area) && ['In Progress','Assigned','Not Started'].includes(c.courseStatus))
+      const tr   = studentTransfers.filter(t => t.status === 'Approved' && belongs(t.area))
       let rows = ''
       done.forEach(c => {
         rows += `<tr><td>${h(c.title)}</td><td style="text-align:center">${h(c.year)}</td><td style="text-align:center">${h(c.type)}</td><td style="text-align:center;font-weight:700">${h(c.grade)}</td><td style="text-align:center;font-weight:700">${parseFloat(String(c.creditsEarned))||0}</td></tr>`
@@ -1941,7 +1991,7 @@ export function GradesHSPage() {
     // Area sections
     let areaSections = ''
     GRAD_REQS.forEach(req => {
-      const rows = courseRows(req.area)
+      const rows = courseRows(req.key)
       if (!rows) return
       areaSections += `<div class="section-break"><h3 style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:#1A365E;border-bottom:1.5px solid #1A365E;padding-bottom:4px;margin:0 0 8px">${h(req.icon+' '+req.label)}</h3><table><thead><tr><th>Course Title</th><th>Year</th><th>Type</th><th>Grade</th><th>Credits</th></tr></thead><tbody>${rows}</tbody></table></div>`
     })
@@ -2001,6 +2051,7 @@ tr:nth-child(even) td{background:#F7F9FC}
 .alert-box{padding:10px 14px;border-radius:5px;margin-bottom:12px;font-size:11px}
 .alert-red{background:#FFF0F1;border-left:3px solid #D61F31}
 .alert-amber{background:#FFFBEA;border-left:3px solid #D97706}
+.alert-green{background:#F0FDF4;border-left:3px solid #1DBD6A}
 .sig-block{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-top:28px;padding-top:16px;border-top:2px solid #E4EAF2}
 .sig-line{border-bottom:1px solid #1A365E;height:32px;margin-bottom:5px}
 .sig-label{font-size:10px;color:#7A92B0}
@@ -2060,7 +2111,7 @@ tr:nth-child(even) td{background:#F7F9FC}
 </div>
 
 ${failedCourses.length ? `<div class="alert-box alert-red"><strong>❌ Failed Courses — No Credit Awarded, Must Repeat:</strong> ${failedCourses.map(c=>h(c.title)).join(', ')}</div>` : ''}
-${mandatoryAlerts.length ? `<div class="alert-box alert-amber"><strong>⚠️ Required Courses Not Yet Completed:</strong> ${mandatoryAlerts.map(a=>h(a.area+': '+a.course)).join(' · ')}</div>` : ''}
+${hasTransferCredits ? `<div class="alert-box ${residencyMet ? 'alert-green' : 'alert-amber'}"><strong>${residencyMet ? '✅' : '⚠️'} American World School Credit Requirement:</strong> ${awsCredits} of ${AWS_RESIDENCY_CREDITS} cr required at AWS (${transferCreditsTotal} cr from external transfer credit).${residencyMet ? ' This satisfies WASC (Western Association of Schools and Colleges) accreditation requirements.' : ` To satisfy WASC (Western Association of Schools and Colleges) accreditation requirements, a student must complete at least 25% of their credits with us — at least ${AWS_RESIDENCY_CREDITS} credits must be earned in our school. ${residencyRemaining} more AWS credit${residencyRemaining === 1 ? '' : 's'} needed.`}</div>` : ''}
 
 <div class="section-block">
   <h2>Credit Requirements Checklist</h2>
@@ -2128,8 +2179,8 @@ ${deTotal > 0 ? `
   // ── TAB: GRADUATION AUDIT ─────────────────────────────────────────────────
   function renderGraduation() {
     const gc = getGradCredits(studentCourses, studentTransfers)
-    const wt  = calcWeightedGPA(studentCourses)
-    const uw  = calcGPA(studentCourses)
+    const wt  = calcWeightedGPA(studentCourses, studentTransfers)
+    const uw  = calcGPA(studentCourses, studentTransfers)
     const apCourses = studentCourses.filter(c => c.type === 'AP' || c.type === 'IB')
     const deCourses = studentCourses.filter(c => c.type === 'DE' || c.type === 'EC')
     const approvedTrans = studentTransfers.filter(t => t.status === 'Approved')
@@ -2154,18 +2205,14 @@ ${deTotal > 0 ? `
 
     const failedCourses = studentCourses.filter(c => c.grade === 'F')
 
-    const earnedTitles = studentCourses.filter(c => (parseFloat(String(c.creditsEarned)) || 0) > 0 && c.grade !== 'F').map(c => c.title)
-    const mandatoryAlerts: {area:string; course:string; color:string}[] = []
-    GRAD_REQS.forEach(req => {
-      if (!req.mandatory?.length) return
-      req.mandatory.forEach(m => {
-        const satisfied = earnedTitles.some(t => t.toLowerCase().includes(m.toLowerCase()))
-        if (!satisfied) mandatoryAlerts.push({ area: req.label, course: m, color: req.color })
-      })
-    })
-
     const totalPending = Math.round((gc.pendingTotal || 0) * 10) / 10
     const credRemaining = Math.max(0, TOTAL_CREDITS - totalEarned)
+
+    const awsCredits = Math.round((gc.awsCredits || 0) * 10) / 10
+    const transferCreditsTotal = Math.round((gc.transferCredits || 0) * 10) / 10
+    const hasTransferCredits = transferCreditsTotal > 0
+    const residencyMet = awsCredits >= AWS_RESIDENCY_CREDITS
+    const residencyRemaining = Math.max(0, Math.round((AWS_RESIDENCY_CREDITS - awsCredits) * 10) / 10)
 
     const heroBg = allMet
       ? 'linear-gradient(135deg,#E8FBF0,#D5F5E3)'
@@ -2204,7 +2251,7 @@ ${deTotal > 0 ? `
       <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
         {/* Print toolbar */}
         <div style={{ display:'flex', justifyContent:'flex-end' }}>
-          <button onClick={() => printGraduationAudit({ totalEarned, pctDone, allMet, onPace, wgpa: wt, ugpa: uw, dist, distinctions, totalPending, credRemaining, deTotal, deCollegeTotal, failedCourses, mandatoryAlerts, expectedByNow, gc })}
+          <button onClick={() => printGraduationAudit({ totalEarned, pctDone, allMet, onPace, wgpa: wt, ugpa: uw, dist, distinctions, totalPending, credRemaining, deTotal, deCollegeTotal, failedCourses, expectedByNow, gc, awsCredits, transferCreditsTotal, hasTransferCredits, residencyMet, residencyRemaining })}
             style={{ display:'flex', alignItems:'center', gap:7, padding:'8px 18px', background:'#1A365E', color:'#fff', border:'none', borderRadius:9, fontSize:12, fontWeight:700, cursor:'pointer', boxShadow:'0 2px 8px rgba(26,54,94,.2)' }}>
             🖨️ Print / Save PDF
           </button>
@@ -2255,17 +2302,30 @@ ${deTotal > 0 ? `
           </div>
         )}
 
-        {/* Alert: Missing mandatory courses */}
-        {mandatoryAlerts.length > 0 && (
-          <div style={{ ...card, padding:'14px 18px', borderLeft:'4px solid #D97706', background:'#FFFBEA' }}>
-            <div style={{ fontSize:12, fontWeight:800, color:'#92400E', marginBottom:6 }}>⚠️ Required Courses Not Yet Completed</div>
-            <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
-              {mandatoryAlerts.map((a, i) => (
-                <span key={i} style={{ background:a.color+'18', color:a.color, border:`1px solid ${a.color}44`, borderRadius:6, padding:'3px 10px', fontSize:11, fontWeight:700 }}>
-                  [{a.area}] {a.course}
-                </span>
-              ))}
+        {/* Section: American World School Credit Requirement */}
+        {hasTransferCredits && (
+          <div style={{ ...card, padding:'14px 18px', borderLeft:`4px solid ${residencyMet ? '#1DBD6A' : '#D97706'}`, background: residencyMet ? '#F0FDF4' : '#FFFBEA' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8, flexWrap:'wrap', gap:6 }}>
+              <div style={{ fontSize:12, fontWeight:800, color: residencyMet ? '#166534' : '#92400E' }}>
+                {residencyMet ? '✅' : '⚠️'} American World School Credit Requirement
+              </div>
+              <div style={{ fontSize:11, fontWeight:700, color:'#7A92B0' }}>{awsCredits} / {AWS_RESIDENCY_CREDITS} cr required at AWS</div>
             </div>
+            <div style={{ height:10, borderRadius:5, background:'#E4EAF2', overflow:'hidden' }}>
+              <div style={{ height:'100%', borderRadius:5, background: residencyMet ? '#1DBD6A' : '#D97706', width:`${Math.min(100, Math.round(awsCredits/AWS_RESIDENCY_CREDITS*100))}%`, transition:'width 0.3s' }} />
+            </div>
+            <div style={{ fontSize:11, color:'#3D5475', marginTop:8 }}>
+              <strong>{awsCredits} cr</strong> earned directly through American World School coursework · <strong>{transferCreditsTotal} cr</strong> from external transfer credit
+            </div>
+            {residencyMet ? (
+              <div style={{ fontSize:11, color:'#166534', marginTop:4 }}>
+                At least 25% of the 24-credit diploma ({AWS_RESIDENCY_CREDITS} credits) has been completed through American World School, satisfying WASC (Western Association of Schools and Colleges) accreditation requirements.
+              </div>
+            ) : (
+              <div style={{ fontSize:11, color:'#92400E', marginTop:4, fontWeight:600 }}>
+                To satisfy WASC (Western Association of Schools and Colleges) accreditation requirements, a student must complete at least 25% of their credits with us — at least {AWS_RESIDENCY_CREDITS} credits must be earned in our school. {residencyRemaining} more AWS credit{residencyRemaining === 1 ? '' : 's'} needed.
+              </div>
+            )}
           </div>
         )}
 
@@ -2358,7 +2418,6 @@ ${deTotal > 0 ? `
                           <div style={{ fontSize:10, color:'#7A92B0', marginTop:3 }}>
                             {earned} of {req.required} cr required{pending > 0 ? ` · ${pending} cr in progress` : ''}{remAfterPending > 0 ? ` · ${remAfterPending.toFixed(1)} cr still needed` : ''}
                           </div>
-                          {req.mandatoryNote && <div style={{ fontSize:10, color:'#7A92B0', marginTop:2 }}>📌 {req.mandatoryNote}</div>}
                           <div style={{ fontSize:10, color:'#3D5475', marginTop:3, fontWeight:700 }}>Click to view credit breakdown</div>
                         </div>
                       </div>
@@ -2630,21 +2689,26 @@ ${deTotal > 0 ? `
     const gradedCourses = studentCourses.filter(c =>
       c.grade && !['','IP','W','I'].includes(c.grade)
     )
-    const rtDeTransferIds = new Set<string>()
+    const rtDeTransferSchoolById = new Map<string, string>()
     const deTransferRecordsRT: CourseRecord[] = studentTransfers
-      .filter(t => t.status === 'Approved' && t.kind === 'DE' && t.gradeLevel && t.origGrade && !['','IP','W','I'].includes(t.origGrade))
+      .filter(t => t.status === 'Approved' && t.gradeLevel && t.origGrade && !['','IP','W','I'].includes(t.origGrade))
       .map(t => {
-        rtDeTransferIds.add(t._id)
+        rtDeTransferSchoolById.set(t._id, t.sourceSchool || 'Other School')
         return {
-          _id: t._id, studentId: t.studentId, code: 'DE', title: t.origTitle,
-          type: 'DE' as CourseType, area: t.area, year: '', semester: '',
+          _id: t._id, studentId: t.studentId, code: t.kind, title: t.origTitle,
+          type: (t.kind === 'DE' ? 'DE' : 'STD') as CourseType, area: t.area, year: '', semester: '',
           gradeLevel: t.gradeLevel, creditsAttempted: t.creditsAwarded,
           creditsEarned: t.creditsAwarded, grade: t.origGrade,
           courseStatus: 'Completed' as CourseStatus, apScore: null,
           instructor: '', section: '', notes: '',
         }
       })
-    const allGradedCourses = [...gradedCourses, ...deTransferRecordsRT]
+    const allGradedCourses = [...gradedCourses, ...deTransferRecordsRT].filter(c => transcriptGrades.includes(c.gradeLevel))
+    const RT_HOME_SCHOOL = 'American World School'
+    const rtIncludedDeIds = new Set(allGradedCourses.filter(c => rtDeTransferSchoolById.has(c._id)).map(c => c._id))
+    const rtTranscriptSchools = [RT_HOME_SCHOOL, ...new Set(Array.from(rtIncludedDeIds).map(id => rtDeTransferSchoolById.get(id)!).filter(Boolean))]
+    const rtSchoolNumberOf = (name: string) => rtTranscriptSchools.indexOf(name) + 1
+    const rtHomeSchoolNum = rtSchoolNumberOf(RT_HOME_SCHOOL)
     const tGPA = (courses: CourseRecord[]) => {
       let tot = 0, pts = 0
       courses.forEach(x => { const wp = getWeightedPts(x.grade, x.type); if (wp === null) return; const cr = x.creditsEarned || 0; if (!cr) return; tot += cr; pts += wp * cr })
@@ -2658,7 +2722,7 @@ ${deTotal > 0 ? `
       ? new Date(student.dob + 'T00:00:00').toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' })
       : '—'
 
-    const gradeLevelOrder = ['Grade 9','Grade 10','Grade 11','Grade 12']
+    const gradeLevelOrder = GRADE_LEVELS.filter(g => transcriptGrades.includes(g))
     const gradeGroups = gradeLevelOrder
       .map(gl => ({ gl, courses: allGradedCourses.filter(c => c.gradeLevel === gl) }))
       .filter(g => g.courses.length > 0)
@@ -2690,10 +2754,43 @@ ${deTotal > 0 ? `
     const thin = '1px solid #ccc'
     const bgPattern = <img src="/bgpattern.png" alt="" aria-hidden="true" style={{ position:'absolute', top:0, right:'15%', width:'100%', height:'auto', opacity:0.5, pointerEvents:'none', userSelect:'none' }} />
 
+    const toggleTranscriptGrade = (g: string) => {
+      setTranscriptGrades(prev => {
+        const next = prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g]
+        return next.length ? next : prev
+      })
+    }
+    const gradeMenuLabel = transcriptGrades.length === GRADE_LEVELS.length
+      ? 'All Grades'
+      : GRADE_LEVELS.filter(g => transcriptGrades.includes(g)).map(g => g.replace('Grade ', '')).join(', ')
+
     return (
       <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
         {/* Toolbar */}
         <div style={{ display:'flex', justifyContent:'flex-end', gap:8 }}>
+          <div style={{ position:'relative' }}>
+            <button onClick={() => setTranscriptGradeMenuOpen(o => !o)}
+              style={{ padding:'8px 16px', borderRadius:9, border:'1px solid #1A365E', background:'#fff', color:'#1A365E', fontSize:12, fontWeight:700, cursor:'pointer' }}>
+              🎓 Grades: {gradeMenuLabel} ▾
+            </button>
+            {transcriptGradeMenuOpen && (
+              <>
+                <div onClick={() => setTranscriptGradeMenuOpen(false)} style={{ position:'fixed', inset:0, zIndex:9 }} />
+                <div style={{ position:'absolute', top:'110%', right:0, background:'#fff', border:'1px solid #ccc', borderRadius:9, padding:10, boxShadow:'0 4px 18px rgba(0,0,0,.15)', zIndex:10, minWidth:170 }}>
+                  {GRADE_LEVELS.map(g => (
+                    <label key={g} style={{ display:'flex', alignItems:'center', gap:8, padding:'5px 6px', fontSize:12.5, cursor:'pointer', color:'#1A365E' }}>
+                      <input type="checkbox" checked={transcriptGrades.includes(g)} onChange={() => toggleTranscriptGrade(g)} />
+                      {g}
+                    </label>
+                  ))}
+                  <div style={{ display:'flex', gap:10, marginTop:6, paddingTop:6, borderTop:'1px solid #eee' }}>
+                    <button onClick={() => setTranscriptGrades([...GRADE_LEVELS])} style={{ border:'none', background:'none', color:'#1A365E', fontSize:11.5, fontWeight:700, cursor:'pointer', padding:0 }}>Select All</button>
+                    <button onClick={() => setTranscriptGrades([GRADE_LEVELS[0]])} style={{ border:'none', background:'none', color:'#7A92B0', fontSize:11.5, fontWeight:700, cursor:'pointer', padding:0 }}>Reset</button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
           <button onClick={exportTranscriptPDF}
             style={{ padding:'8px 18px', borderRadius:9, border:'none', background:'#1A365E', color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer', boxShadow:'0 2px 8px rgba(26,54,94,.2)' }}>
             🖨️ Print / Save as PDF
@@ -2760,7 +2857,7 @@ ${deTotal > 0 ? `
                         {gc2.map(c => {
                           const wp = getWeightedPts(c.grade, c.type)
                           const sym = (c.type === 'AP' || c.type === 'IB') ? ' ●' : c.type === 'HON' ? ' ✓' : (c.type === 'DE' || c.type === 'EC') ? ' ★' : ''
-                          const ind = rtDeTransferIds.has(c._id) ? '(1)' : '(2)'
+                          const ind = `(${rtDeTransferSchoolById.has(c._id) ? rtSchoolNumberOf(rtDeTransferSchoolById.get(c._id)!) : rtHomeSchoolNum})`
                           return (
                             <tr key={c._id} style={{ borderBottom:'0.5px solid #eee' }}>
                               <td style={{ padding:'3px 5px', fontSize:9.5 }}>
@@ -2776,8 +2873,19 @@ ${deTotal > 0 ? `
                       </tbody>
                       <tfoot>
                         <tr style={{ borderTop:'1.5px solid #000' }}>
-                          <td colSpan={4} style={{ padding:'4px 5px', fontSize:9, fontWeight:700 }}>
-                            CGPA: {cgpa.toFixed(2)}&nbsp;&nbsp;&nbsp;Total Credits: {gradeCredits}&nbsp;&nbsp;&nbsp;GPA: {gradeGPA.toFixed(2)}
+                          <td style={{ textAlign:'left', padding:'4px 5px', fontSize:9, fontWeight:700, whiteSpace:'nowrap' }}>CGPA: {cgpa.toFixed(2)}</td>
+                          <td style={{ textAlign:'center', padding:'4px 5px', fontSize:9, fontWeight:700, whiteSpace:'nowrap', position:'relative' }}>
+                            <span style={{ position:'relative', display:'inline-block' }}>
+                              <span style={{ position:'absolute', right:'100%', paddingRight:4, whiteSpace:'nowrap' }}>Total Credits:</span>
+                              {gradeCredits}
+                            </span>
+                          </td>
+                          <td style={{ padding:'4px 5px' }}></td>
+                          <td style={{ textAlign:'center', padding:'4px 5px', fontSize:9, fontWeight:700, whiteSpace:'nowrap', position:'relative' }}>
+                            <span style={{ position:'relative', display:'inline-block' }}>
+                              <span style={{ position:'absolute', right:'100%', paddingRight:4, whiteSpace:'nowrap' }}>GPA:</span>
+                              {gradeGPA.toFixed(2)}
+                            </span>
                           </td>
                         </tr>
                       </tfoot>
@@ -2836,8 +2944,9 @@ ${deTotal > 0 ? `
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:24, marginBottom:20 }}>
               <div>
                 <div style={{ fontWeight:700, fontSize:10.5, marginBottom:8 }}>School (s)</div>
-                <div style={{ fontSize:9.5 }}>(1) — West Windsor-Plainsboro High School</div>
-                <div style={{ fontSize:9.5, marginTop:2 }}>(2) — American World School</div>
+                {rtTranscriptSchools.map((s, i) => (
+                  <div key={s} style={{ fontSize:9.5, marginTop: i > 0 ? 2 : 0 }}>({i + 1}) — {s}</div>
+                ))}
               </div>
               <div>
                 <div style={{ fontWeight:700, fontSize:10.5, marginBottom:8 }}>Key For Retakes</div>
@@ -3003,9 +3112,9 @@ ${deTotal > 0 ? `
             <div style={{ fontSize:16, fontWeight:800, color:'#1A365E' }}>{student.name}</div>
             <div style={{ fontSize:12, color:'#7A92B0' }}>Grade {student.grade} · High School</div>
           </div>
-          {(() => { const wt = calcWeightedGPA(studentCourses); const dist = getDistinction(wt, studentCourses); return dist ? <span style={{ marginLeft:8, padding:'3px 12px', borderRadius:20, background:dist.bg, color:dist.col, fontSize:12, fontWeight:700 }}>🏅 {dist.label}</span> : null })()}
+          {(() => { const wt = calcWeightedGPA(studentCourses, studentTransfers); const dist = getDistinction(wt, studentCourses); return dist ? <span style={{ marginLeft:8, padding:'3px 12px', borderRadius:20, background:dist.bg, color:dist.col, fontSize:12, fontWeight:700 }}>🏅 {dist.label}</span> : null })()}
           <div style={{ marginLeft:'auto', display:'flex', gap:16, fontSize:13 }}>
-            {[{l:'Credits',v:(getGradCredits(studentCourses,studentTransfers).total).toFixed(1)+'/'+TOTAL_CREDITS},{l:'UW GPA',v:calcGPA(studentCourses)?calcGPA(studentCourses).toFixed(2):'—'},{l:'W GPA',v:calcWeightedGPA(studentCourses)?calcWeightedGPA(studentCourses).toFixed(2):'—'}].map(x => (
+            {[{l:'Credits',v:(getGradCredits(studentCourses,studentTransfers).total).toFixed(1)+'/'+TOTAL_CREDITS},{l:'UW GPA',v:calcGPA(studentCourses,studentTransfers)?calcGPA(studentCourses,studentTransfers).toFixed(2):'—'},{l:'W GPA',v:calcWeightedGPA(studentCourses,studentTransfers)?calcWeightedGPA(studentCourses,studentTransfers).toFixed(2):'—'}].map(x => (
               <div key={x.l} style={{ textAlign:'center' }}><div style={{ fontSize:10, fontWeight:700, color:'#7A92B0', textTransform:'uppercase', letterSpacing:'0.06em' }}>{x.l}</div><div style={{ fontSize:18, fontWeight:800, color:'#1A365E' }}>{x.v}</div></div>
             ))}
           </div>
@@ -3117,6 +3226,18 @@ ${deTotal > 0 ? `
               )}
             </div>
           </div>
+        </div>
+      )}
+      {student && dataIssues.length > 0 && dataAlertDismissedFor !== selectedId && (
+        <div style={{ position:'fixed', bottom:24, left:24, zIndex:9998, width:340, maxWidth:'calc(100vw - 48px)', background:'#FFFBEA', border:'1px solid #FDE68A', borderLeft:'4px solid #D97706', borderRadius:10, boxShadow:'0 8px 24px rgba(0,0,0,0.16)', padding:'12px 14px' }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:8 }}>
+            <div style={{ fontSize:12, fontWeight:800, color:'#92400E' }}>⚠️ Data Quality Alert</div>
+            <button onClick={() => setDataAlertDismissedFor(selectedId)} style={{ border:'none', background:'transparent', color:'#92400E', cursor:'pointer', fontSize:15, lineHeight:1, padding:0 }}>×</button>
+          </div>
+          <div style={{ marginTop:6, display:'flex', flexDirection:'column', gap:6, fontSize:11.5, color:'#3D5475' }}>
+            {dataIssues.map((msg, i) => <div key={i}>{msg}</div>)}
+          </div>
+          <button onClick={() => setTab('transfer')} style={{ marginTop:10, border:'1px solid #D97706', background:'#fff', color:'#92400E', borderRadius:6, padding:'5px 10px', fontSize:11, fontWeight:700, cursor:'pointer' }}>Review in Transfer & EC →</button>
         </div>
       )}
     </div></>

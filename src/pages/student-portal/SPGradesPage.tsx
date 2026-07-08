@@ -95,9 +95,7 @@ interface GraduationRequirement {
   area: string
   required_credits: number
   icon: string | null
-  mandatory_note: string | null
   sort_order: number
-  mandatory_courses: string[]
 }
 
 interface DistinctionRow {
@@ -166,7 +164,7 @@ function weightedPoints(letter: string | null, type: CourseType) {
   return Math.round((base + TYPE_WEIGHT[type]) * 100) / 100
 }
 
-function calcGPA(courses: CourseRow[]) {
+function calcGPA(courses: CourseRow[], transfers: TransferRow[] = []) {
   let credits = 0
   let points = 0
   courses.forEach((course) => {
@@ -175,10 +173,17 @@ function calcGPA(courses: CourseRow[]) {
     credits += course.credits || 0
     points += pts * (course.credits || 0)
   })
+  transfers.forEach((transfer) => {
+    if (transfer.status !== 'Approved') return
+    const pts = gradePoints(transfer.grade_letter)
+    if (pts === null) return
+    credits += transfer.credits || 0
+    points += pts * (transfer.credits || 0)
+  })
   return credits ? Math.round((points / credits) * 100) / 100 : 0
 }
 
-function calcWeightedGPA(courses: CourseRow[]) {
+function calcWeightedGPA(courses: CourseRow[], transfers: TransferRow[] = []) {
   let credits = 0
   let points = 0
   courses.forEach((course) => {
@@ -186,6 +191,13 @@ function calcWeightedGPA(courses: CourseRow[]) {
     if (pts === null) return
     credits += course.credits || 0
     points += pts * (course.credits || 0)
+  })
+  transfers.forEach((transfer) => {
+    if (transfer.status !== 'Approved') return
+    const pts = weightedPoints(transfer.grade_letter, (transfer.type as CourseType) ?? 'STD')
+    if (pts === null) return
+    credits += transfer.credits || 0
+    points += pts * (transfer.credits || 0)
   })
   return credits ? Math.round((points / credits) * 100) / 100 : 0
 }
@@ -266,7 +278,6 @@ export function SPGradesPage() {
       const [
         settingsRes,
         requirementsRes,
-        mandatoryCoursesRes,
         distinctionsRes,
         gradesRes,
         coursesRes,
@@ -276,8 +287,7 @@ export function SPGradesPage() {
         attendanceRes,
       ] = await Promise.all([
         supabase.from('settings').select('graduation_credits,associate_degree_credits_required').single(),
-        supabase.from('graduation_requirements').select('id,key,label,area,required_credits,icon,mandatory_note,sort_order').order('sort_order'),
-        supabase.from('graduation_requirement_courses').select('requirement_id,course_title,sort_order').order('sort_order'),
+        supabase.from('graduation_requirements').select('id,key,label,area,required_credits,icon,sort_order').order('sort_order'),
         supabase.from('graduation_distinctions').select('id,label,icon,color,weighted_gpa_required,sort_order').order('sort_order'),
         supabase.from('grades').select('*').eq('student_id', studentDbId),
         supabase.from('courses').select('*').eq('student_id', studentDbId).order('academic_year', { ascending: false }),
@@ -289,14 +299,6 @@ export function SPGradesPage() {
 
       setSettings((settingsRes.data as SettingsRow | null) ?? null)
 
-      const mandatoryMap = new Map<string, string[]>()
-      ;((mandatoryCoursesRes.data as Record<string, unknown>[] | null) ?? []).forEach((row) => {
-        const requirementId = row.requirement_id as string
-        const list = mandatoryMap.get(requirementId) ?? []
-        list.push((row.course_title as string) ?? '')
-        mandatoryMap.set(requirementId, list)
-      })
-
       setRequirements((((requirementsRes.data as Record<string, unknown>[] | null) ?? []).map((row) => ({
         id: row.id as string,
         key: (row.key as string) ?? '',
@@ -304,9 +306,7 @@ export function SPGradesPage() {
         area: (row.area as string) ?? '',
         required_credits: Number(row.required_credits ?? 0),
         icon: (row.icon as string) ?? null,
-        mandatory_note: (row.mandatory_note as string) ?? null,
         sort_order: Number(row.sort_order ?? 0),
-        mandatory_courses: mandatoryMap.get(row.id as string) ?? [],
       }))))
 
       setDistinctions((((distinctionsRes.data as Record<string, unknown>[] | null) ?? []).map((row) => ({
@@ -392,7 +392,7 @@ export function SPGradesPage() {
   const pendingTransfers = useMemo(() => transfers.filter((transfer) => !transfer.status || transfer.status === 'Pending'), [transfers])
 
   const creditState = useMemo(() => {
-    const result: Record<string, number> = { total: 0 }
+    const result: Record<string, number> = { total: 0, awsCredits: 0, transferCredits: 0 }
     requirements.forEach((req) => { result[req.key] = 0 })
 
     courses.forEach((course) => {
@@ -402,26 +402,29 @@ export function SPGradesPage() {
       const earned = course.credits_earned || 0
       if (!earned) return
       result.total += earned
+      result.awsCredits += earned
       const matched = requirements.find((req) => req.area === course.area)
       result[matched?.key ?? 'ELEC'] += earned
     })
 
     approvedTransfers.forEach((transfer) => {
       result.total += transfer.credits
+      result.transferCredits += transfer.credits
       const matched = requirements.find((req) => req.area === transfer.area)
       result[matched?.key ?? 'ELEC'] += transfer.credits
     })
 
     ecdeCredits.forEach((credit) => {
       result.total += credit.hs_credits
+      result.awsCredits += credit.hs_credits
       result.ELEC += credit.hs_credits
     })
 
     return result
   }, [approvedTransfers, courses, ecdeCredits, requirements])
 
-  const uwGpa = useMemo(() => calcGPA(courses), [courses])
-  const wGpa = useMemo(() => calcWeightedGPA(courses), [courses])
+  const uwGpa = useMemo(() => calcGPA(courses, transfers), [courses, transfers])
+  const wGpa = useMemo(() => calcWeightedGPA(courses, transfers), [courses, transfers])
   const graduationCreditsRequired = settings?.graduation_credits ?? 24
   const associateDegreeCreditsRequired = settings?.associate_degree_credits_required ?? 0
   const totalEarned = Math.round((creditState.total || 0) * 10) / 10
@@ -438,16 +441,16 @@ export function SPGradesPage() {
     () => courses.filter((course) => course.grade_letter === 'F'),
     [courses],
   )
-  const mandatoryAlerts = useMemo(
-    () => requirements.flatMap((req) => req.mandatory_courses
-      .filter((courseName) => !courses.some((course) => course.title.toLowerCase().includes(courseName.toLowerCase()) && course.grade_letter !== 'F'))
-      .map((courseName) => ({ requirement: req.label, course: courseName }))),
-    [courses, requirements],
-  )
   const transferTotal = useMemo(
     () => Math.round(approvedTransfers.reduce((sum, transfer) => sum + transfer.credits, 0) * 10) / 10,
     [approvedTransfers],
   )
+  const awsResidencyCredits = Math.round(graduationCreditsRequired * 0.25 * 10) / 10
+  const awsCreditsEarned = Math.round((creditState.awsCredits || 0) * 10) / 10
+  const transferCreditsEarned = Math.round((creditState.transferCredits || 0) * 10) / 10
+  const hasTransferCredits = transferCreditsEarned > 0
+  const residencyMet = awsCreditsEarned >= awsResidencyCredits
+  const residencyRemaining = Math.max(0, Math.round((awsResidencyCredits - awsCreditsEarned) * 10) / 10)
   const ecdeHsCredits = useMemo(
     () => Math.round(ecdeCredits.reduce((sum, credit) => sum + credit.hs_credits, 0) * 10) / 10,
     [ecdeCredits],
@@ -721,18 +724,29 @@ export function SPGradesPage() {
             </div>
           )}
 
-          {mandatoryAlerts.length > 0 && (
-            <div style={{ background: '#FEF3C7', borderLeft: '4px solid #D97706', borderRadius: 8, padding: '12px 16px' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#92400E', marginBottom: 6 }}>
-                ⚡ Mandatory Course{mandatoryAlerts.length > 1 ? 's' : ''} Not Yet Completed
+          {hasTransferCredits && (
+            <div style={{ background: residencyMet ? '#F0FDF4' : '#FEF3C7', borderLeft: `4px solid ${residencyMet ? SP_GREEN : '#D97706'}`, borderRadius: 8, padding: '12px 16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, flexWrap: 'wrap', gap: 6 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: residencyMet ? '#166534' : '#92400E' }}>
+                  {residencyMet ? '✅' : '⚠️'} American World School Residency Requirement
+                </div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#7A92B0' }}>{awsCreditsEarned} / {awsResidencyCredits} cr required at AWS</div>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {mandatoryAlerts.map((alert) => (
-                  <div key={`${alert.requirement}-${alert.course}`} style={{ fontSize: 11, color: '#92400E' }}>
-                    • {alert.course} (required for {alert.requirement})
-                  </div>
-                ))}
+              <div style={{ background: '#E4EAF2', borderRadius: 4, height: 8 }}>
+                <div style={{ background: residencyMet ? SP_GREEN : '#D97706', width: `${Math.min(100, Math.round((awsCreditsEarned / awsResidencyCredits) * 100))}%`, height: '100%', borderRadius: 4 }} />
               </div>
+              <div style={{ fontSize: 11, color: '#3D5475', marginTop: 8 }}>
+                <strong>{awsCreditsEarned} cr</strong> earned directly through American World School coursework · <strong>{transferCreditsEarned} cr</strong> from external transfer credit
+              </div>
+              {residencyMet ? (
+                <div style={{ fontSize: 11, color: '#166534', marginTop: 4 }}>
+                  At least 25% of the {graduationCreditsRequired}-credit diploma ({awsResidencyCredits} credits) has been completed through American World School — requirement met.
+                </div>
+              ) : (
+                <div style={{ fontSize: 11, color: '#92400E', marginTop: 4, fontWeight: 600 }}>
+                  At least {awsResidencyCredits} credits (25% of the {graduationCreditsRequired}-credit diploma) must be fulfilled with American World School coursework. {residencyRemaining} more AWS credit{residencyRemaining === 1 ? '' : 's'} needed.
+                </div>
+              )}
             </div>
           )}
 
@@ -788,7 +802,6 @@ export function SPGradesPage() {
                     <div style={{ background: '#E4EAF2', borderRadius: 4, height: 8 }}>
                       <div style={{ background: color, width: `${pct}%`, height: '100%', borderRadius: 4 }} />
                     </div>
-                    {req.mandatory_note && <div style={{ fontSize: 10, color: '#7A92B0', marginTop: 4 }}>{req.mandatory_note}</div>}
                   </div>
                 )
               })}

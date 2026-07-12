@@ -17,6 +17,29 @@ const DEV_PROFILE: Profile = {
   created_at: new Date().toISOString(),
 }
 
+// Standalone (non-hook) helpers so callers like the login form can await the
+// store being fully populated before navigating, instead of relying on the
+// onAuthStateChange listener firing on its own schedule (race condition).
+export async function syncAuthState(session: Session | null) {
+  const { setUser, setSession, setProfile, setLoading } = useAuthStore.getState()
+  setSession(session)
+  setUser(session?.user ?? null)
+
+  if (!session?.user) {
+    setProfile(null)
+    setLoading(false)
+    return
+  }
+
+  const { data } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', session.user.id)
+    .single()
+  setProfile(data as Profile | null)
+  setLoading(false)
+}
+
 export function useAuthListener() {
   const { setUser, setSession, setProfile, setLoading } = useAuthStore()
 
@@ -49,27 +72,4 @@ export function useAuthListener() {
 
     return () => subscription.unsubscribe()
   }, [setUser, setSession, setProfile, setLoading])
-
-  async function syncAuthState(session: Session | null) {
-    setSession(session)
-    setUser(session?.user ?? null)
-
-    if (!session?.user) {
-      setProfile(null)
-      setLoading(false)
-      return
-    }
-
-    await fetchProfile(session.user.id)
-  }
-
-  async function fetchProfile(userId: string) {
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single()
-    setProfile(data as Profile | null)
-    setLoading(false)
-  }
 }

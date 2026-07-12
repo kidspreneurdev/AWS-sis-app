@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
+import { useParentPortal } from '@/contexts/ParentPortalContext'
+import { syncAuthState } from '@/hooks/useAuth'
 import { formatStudentGrade } from '@/types/student'
 
 type LoginTab = 'staff' | 'student' | 'parent'
@@ -62,6 +64,7 @@ const errorStyle: React.CSSProperties = {
 export function LoginPage({ initialTab = 'staff' }: { initialTab?: LoginTab }) {
   const navigate = useNavigate()
   const { refreshSession } = useStudentPortal()
+  const { refreshSession: refreshParentSession } = useParentPortal()
 
   const [tab, setTab] = useState<LoginTab>(initialTab)
 
@@ -85,7 +88,7 @@ export function LoginPage({ initialTab = 'staff' }: { initialTab?: LoginTab }) {
     setStaffError(null)
     setStaffLoading(true)
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
     if (error) {
       setStaffError(error.message)
@@ -93,6 +96,10 @@ export function LoginPage({ initialTab = 'staff' }: { initialTab?: LoginTab }) {
       return
     }
 
+    // Wait for the global auth store to be populated before navigating, so
+    // the route guard doesn't bounce back to /login on the first attempt.
+    await syncAuthState(data.session)
+    setStaffLoading(false)
     navigate('/dashboard')
   }
 
@@ -122,6 +129,10 @@ export function LoginPage({ initialTab = 'staff' }: { initialTab?: LoginTab }) {
       return
     }
 
+    // Wait for ParentPortalContext.session to be populated before navigating,
+    // so the layout guard doesn't bounce back to /parent/login on the first attempt.
+    await refreshParentSession()
+    setParentLoading(false)
     navigate('/parent/dashboard')
   }
 
@@ -172,7 +183,9 @@ export function LoginPage({ initialTab = 'staff' }: { initialTab?: LoginTab }) {
       }
       try { sessionStorage.setItem('sp_session', JSON.stringify(sess)) } catch { /* ignore */ }
 
-      void refreshSession()
+      // Wait for StudentPortalContext.session to be populated before navigating,
+      // so the layout guard doesn't bounce back to /portal/login on the first attempt.
+      await refreshSession()
       navigate('/portal/dashboard')
     } finally {
       setStudentLoading(false)

@@ -14,11 +14,12 @@ interface QuizQuestion {
   q: string
   opts: [string, string, string, string]
   ok: number
-  fb: string
+  fbCorrect: string
+  fbIncorrect: string
 }
 
 const BLANK_QUESTION: QuizQuestion = {
-  q: '', opts: ['', '', '', ''], ok: 0, fb: '',
+  q: '', opts: ['', '', '', ''], ok: 0, fbCorrect: '', fbIncorrect: '',
 }
 
 interface FormState {
@@ -69,7 +70,8 @@ function lessonToQuestions(quiz: K5Lesson['quiz']): QuizQuestion[] {
     q:    q.q,
     opts: (q.opts.length === 4 ? q.opts : [...q.opts, '', '', '', ''].slice(0, 4)) as [string, string, string, string],
     ok:   q.ok,
-    fb:   q.fb ?? '',
+    fbCorrect:   q.fbCorrect ?? q.fb ?? '',
+    fbIncorrect: q.fbIncorrect ?? q.fb ?? '',
   }))
 }
 
@@ -191,7 +193,8 @@ export function K5LessonsAdminPage() {
       const q = form.questions[i]
       if (!q.q.trim())                      return setError(`Question ${i + 1}: question text is required`)
       if (q.opts.some(o => !o.trim()))      return setError(`Question ${i + 1}: all 4 options are required`)
-      if (!q.fb.trim())                     return setError(`Question ${i + 1}: feedback text is required`)
+      if (!q.fbCorrect.trim())               return setError(`Question ${i + 1}: feedback for a correct answer is required`)
+      if (!q.fbIncorrect.trim())             return setError(`Question ${i + 1}: feedback for an incorrect answer is required`)
     }
 
     setError(null)
@@ -467,9 +470,14 @@ export function K5LessonsAdminPage() {
                       </div>
 
                       {/* Feedback */}
+                      <div style={{ ...fieldWrap, marginBottom:10 }}>
+                        <label style={{ ...lbl, fontSize:10 }}>Feedback shown after answering correctly ✅ *</label>
+                        <input style={inp} value={q.fbCorrect} onChange={e => setForm(f => ({ ...f, questions: updateQuestion(f.questions, qi, 'fbCorrect', e.target.value) }))} placeholder="Great job! You found the answer right in the text." />
+                      </div>
+
                       <div style={fieldWrap}>
-                        <label style={{ ...lbl, fontSize:10 }}>Feedback shown after answering *</label>
-                        <input style={inp} value={q.fb} onChange={e => setForm(f => ({ ...f, questions: updateQuestion(f.questions, qi, 'fb', e.target.value) }))} placeholder="Great! Plants need sunlight, water, soil and air to grow." />
+                        <label style={{ ...lbl, fontSize:10 }}>Feedback shown after answering incorrectly ❌ *</label>
+                        <input style={inp} value={q.fbIncorrect} onChange={e => setForm(f => ({ ...f, questions: updateQuestion(f.questions, qi, 'fbIncorrect', e.target.value) }))} placeholder="Not quite — look back at the sentence for a clue." />
                       </div>
                     </div>
                   ))}

@@ -16,6 +16,7 @@ interface ParentPortalContextType {
   loading: boolean
   activeChild: StudentSession | null
   setActiveChildIndex: (i: number) => void
+  refreshSession: () => Promise<void>
   logout: () => Promise<void>
 }
 
@@ -93,7 +94,7 @@ export function ParentPortalProvider({ children }: { children: ReactNode }) {
   const activeChild = session?.children[session.activeChildIndex] ?? null
 
   return (
-    <ParentPortalContext.Provider value={{ session, loading, activeChild, setActiveChildIndex, logout }}>
+    <ParentPortalContext.Provider value={{ session, loading, activeChild, setActiveChildIndex, refreshSession: loadSession, logout }}>
       {children}
     </ParentPortalContext.Provider>
   )

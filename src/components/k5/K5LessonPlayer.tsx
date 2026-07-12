@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Document, Page, pdfjs } from 'react-pdf'
 import { supabase } from '@/lib/supabase'
 import 'react-pdf/dist/Page/AnnotationLayer.css'
@@ -143,8 +143,7 @@ function renderJsonSlide(slide: K5Slide, onStartQuiz: () => void) {
 
 // ─── PDF page viewer ──────────────────────────────────────────────────────────
 
-function PdfViewer({ url, page, onLoad }: { url: string; page: number; onLoad: (n: number) => void }) {
-  const pageWidth = Math.min(typeof window !== 'undefined' ? window.innerWidth - 32 : 760, 860)
+function PdfViewer({ url, page, width, onLoad, onPageLoad }: { url: string; page: number; width: number; onLoad: (n: number) => void; onPageLoad: (aspect: number) => void }) {
   return (
     <Document
       file={url}
@@ -162,9 +161,10 @@ function PdfViewer({ url, page, onLoad }: { url: string; page: number; onLoad: (
     >
       <Page
         pageNumber={page}
-        width={pageWidth}
+        width={width}
         renderTextLayer={false}
         renderAnnotationLayer={false}
+        onLoadSuccess={p => onPageLoad(p.width / p.height)}
       />
     </Document>
   )
@@ -190,6 +190,32 @@ export function K5LessonPlayer({ lesson, studentName, grade, onClose, onComplete
   const [slideIdx,    setSlideIdx]    = useState(0)
   const [numPages,    setNumPages]    = useState(0)
   const [allViewed,   setAllViewed]   = useState(!isPdf && lesson.slides.length <= 1)
+
+  // PDF sizing: fit the page to fill the available viewport space (like
+  // object-fit: contain) using the container's real dimensions and the PDF's
+  // actual aspect ratio, instead of a fixed width that left slides shrunk.
+  const pdfContainerRef = useRef<HTMLDivElement>(null)
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 })
+  const [pdfAspect, setPdfAspect] = useState(16 / 9)
+
+  useEffect(() => {
+    if (!isPdf) return
+    const el = pdfContainerRef.current
+    if (!el) return
+    const ro = new ResizeObserver(entries => {
+      const { width, height } = entries[0]?.contentRect ?? {}
+      if (width && height) setContainerSize({ width, height })
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [isPdf])
+
+  const PDF_PAD = 32
+  const pdfAvailW = Math.max(containerSize.width - PDF_PAD, 0)
+  const pdfAvailH = Math.max(containerSize.height - PDF_PAD, 0)
+  const pdfWidth  = pdfAvailW > 0 && pdfAvailH > 0
+    ? Math.min(pdfAvailW, pdfAvailH * pdfAspect)
+    : pdfAvailW
 
   // Quiz state
   const [mode,     setMode]     = useState<PlayerMode>('slides')
@@ -250,7 +276,7 @@ export function K5LessonPlayer({ lesson, studentName, grade, onClose, onComplete
   }
 
   const optionStyle = (i: number): React.CSSProperties => {
-    const base: React.CSSProperties = { padding:'14px 10px', borderRadius:14, border:'2.5px solid', fontSize:14, fontWeight:700, cursor: answered ? 'default' : 'pointer', textAlign:'center', lineHeight:1.4, fontFamily:'inherit', background:'#fff', color:NAVY, borderColor:'#CBD5E1' }
+    const base: React.CSSProperties = { padding:'28px 22px', borderRadius:20, border:'3px solid', fontSize:22, fontWeight:700, cursor: answered ? 'default' : 'pointer', textAlign:'center', lineHeight:1.4, fontFamily:'inherit', background:'#fff', color:NAVY, borderColor:'#CBD5E1' }
     if (!answered) return base
     if (i === q.ok) return { ...base, background:'#DCFCE7', borderColor:GREEN, color:'#166534' }
     if (i === selected) return { ...base, background:'#FEE2E2', borderColor:RED, color:'#991B1B' }
@@ -315,15 +341,17 @@ export function K5LessonPlayer({ lesson, studentName, grade, onClose, onComplete
 
         {/* Slide content */}
         {isPdf ? (
-          <div style={{ flex:1, background:'#F1F5F9', overflowY:'auto', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'flex-start', padding:'16px 0' }}>
+          <div ref={pdfContainerRef} style={{ flex:1, background:'#F1F5F9', overflow:'hidden', display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
             {pdfSignedUrl ? (
               <PdfViewer
                 url={pdfSignedUrl}
                 page={slideIdx + 1}
+                width={pdfWidth}
                 onLoad={n => {
                   setNumPages(n)
                   if (n <= 1) setAllViewed(true)
                 }}
+                onPageLoad={setPdfAspect}
               />
             ) : (
               <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%' }}>
@@ -363,26 +391,26 @@ export function K5LessonPlayer({ lesson, studentName, grade, onClose, onComplete
 
         {topBar(
           <>
-            <div style={{ flex:1, fontSize:13, fontWeight:700, color:'#fff' }}>Question {qIdx + 1} / {lesson.quiz.length}</div>
-            <div style={{ display:'flex', alignItems:'center', gap:6, background:'rgba(250,198,0,.18)', border:'1.5px solid rgba(250,198,0,.4)', borderRadius:20, padding:'4px 14px' }}>
-              <span style={{ fontSize:16 }}>⭐</span>
-              <span style={{ fontSize:13, fontWeight:800, color:GOLD }}>{stars} / {lesson.quiz.length}</span>
+            <div style={{ flex:1, fontSize:18, fontWeight:700, color:'#fff' }}>Question {qIdx + 1} / {lesson.quiz.length}</div>
+            <div style={{ display:'flex', alignItems:'center', gap:7, background:'rgba(250,198,0,.18)', border:'1.5px solid rgba(250,198,0,.4)', borderRadius:22, padding:'6px 18px' }}>
+              <span style={{ fontSize:20 }}>⭐</span>
+              <span style={{ fontSize:16, fontWeight:800, color:GOLD }}>{stars} / {lesson.quiz.length}</span>
             </div>
           </>
         )}
 
-        <div style={{ display:'flex', gap:6, padding:'10px 20px', background:'#fff', borderBottom:'1px solid #E2E8F0' }}>
+        <div style={{ display:'flex', gap:7, padding:'13px 28px', background:'#fff', borderBottom:'1px solid #E2E8F0' }}>
           {lesson.quiz.map((_, i) => (
-            <div key={i} style={{ flex:1, height:6, borderRadius:3, background: i < qIdx ? GREEN : i === qIdx ? GOLD : '#E2E8F0', transition:'background 300ms' }} />
+            <div key={i} style={{ flex:1, height:8, borderRadius:4, background: i < qIdx ? GREEN : i === qIdx ? GOLD : '#E2E8F0', transition:'background 300ms' }} />
           ))}
         </div>
 
-        <div style={{ flex:1, display:'flex', flexDirection:'column', padding:'24px 20px', gap:20, maxWidth:640, margin:'0 auto', width:'100%' }}>
-          <div style={{ background:'#fff', border:'2px solid #E2E8F0', borderRadius:20, padding:'28px 24px', textAlign:'center' }}>
-            <div style={{ fontSize:18, fontWeight:800, color:NAVY, lineHeight:1.4 }}>{q.q}</div>
+        <div style={{ flex:1, display:'flex', flexDirection:'column', padding:'48px 36px', gap:30, maxWidth:1080, margin:'0 auto', width:'100%' }}>
+          <div style={{ background:'#fff', border:'2px solid #E2E8F0', borderRadius:26, padding:'46px 40px', textAlign:'center' }}>
+            <div style={{ fontSize:30, fontWeight:800, color:NAVY, lineHeight:1.4 }}>{q.q}</div>
           </div>
 
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20 }}>
             {q.opts.map((opt, i) => (
               <button key={i} onClick={() => selectAnswer(i)} style={optionStyle(i)}>
                 {optionPrefix(i)}{opt}
@@ -391,16 +419,18 @@ export function K5LessonPlayer({ lesson, studentName, grade, onClose, onComplete
           </div>
 
           {answered && (
-            <div style={{ background: selected === q.ok ? '#DCFCE7' : '#FEE2E2', border:`2px solid ${selected === q.ok ? GREEN : RED}`, borderRadius:16, padding:'16px 20px' }}>
-              <div style={{ fontSize:15, fontWeight:800, color: selected === q.ok ? '#166534' : '#991B1B', marginBottom:6 }}>
+            <div style={{ background: selected === q.ok ? '#DCFCE7' : '#FEE2E2', border:`2px solid ${selected === q.ok ? GREEN : RED}`, borderRadius:22, padding:'26px 32px' }}>
+              <div style={{ fontSize:22, fontWeight:800, color: selected === q.ok ? '#166534' : '#991B1B', marginBottom:9 }}>
                 {selected === q.ok ? '⭐ Correct! Well done!' : '❌ Not quite!'}
               </div>
-              <div style={{ fontSize:13, color: selected === q.ok ? '#166534' : '#7F1D1D', lineHeight:1.6 }}>{q.fb}</div>
+              <div style={{ fontSize:18, color: selected === q.ok ? '#166534' : '#7F1D1D', lineHeight:1.6 }}>
+                {(selected === q.ok ? q.fbCorrect : q.fbIncorrect) ?? q.fb}
+              </div>
             </div>
           )}
 
           {answered && (
-            <button onClick={nextQuestion} style={{ padding:'14px', borderRadius:12, border:'none', background:NAVY, color:'#fff', fontSize:15, fontWeight:800, cursor:'pointer', fontFamily:'inherit' }}>
+            <button onClick={nextQuestion} style={{ padding:'22px', borderRadius:16, border:'none', background:NAVY, color:'#fff', fontSize:20, fontWeight:800, cursor:'pointer', fontFamily:'inherit' }}>
               {isLastQ ? 'See my results! 🎉' : 'Next question →'}
             </button>
           )}

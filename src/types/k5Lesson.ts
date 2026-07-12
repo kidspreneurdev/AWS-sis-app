@@ -44,7 +44,10 @@ export interface K5Question {
   e?: string
   opts: string[]
   ok: number
-  fb: string
+  /** @deprecated legacy single feedback field, kept for lessons saved before the correct/incorrect split */
+  fb?: string
+  fbCorrect?: string
+  fbIncorrect?: string
 }
 
 export interface K5Lesson {

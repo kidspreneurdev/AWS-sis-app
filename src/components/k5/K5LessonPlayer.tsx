@@ -218,12 +218,14 @@ export function K5LessonPlayer({ lesson, studentName, grade, onClose, onComplete
     : pdfAvailW
 
   // Quiz state
-  const [mode,     setMode]     = useState<PlayerMode>('slides')
-  const [qIdx,     setQIdx]     = useState(0)
-  const [selected, setSelected] = useState<number | null>(null)
-  const [answered, setAnswered] = useState(false)
-  const [stars,    setStars]    = useState(0)
-  const [saving,   setSaving]   = useState(false)
+  const MAX_ATTEMPTS = 3
+  const [mode,       setMode]       = useState<PlayerMode>('slides')
+  const [qIdx,       setQIdx]       = useState(0)
+  const [selected,   setSelected]   = useState<number | null>(null)
+  const [answered,   setAnswered]   = useState(false)
+  const [wrongTried, setWrongTried] = useState<Set<number>>(new Set())
+  const [stars,      setStars]      = useState(0)
+  const [saving,     setSaving]     = useState(false)
 
   // Derived — PDF uses 1-based page numbers
   const totalSlides   = isPdf ? numPages : lesson.slides.length
@@ -252,14 +254,21 @@ export function K5LessonPlayer({ lesson, studentName, grade, onClose, onComplete
     setQIdx(0)
     setSelected(null)
     setAnswered(false)
+    setWrongTried(new Set())
     setStars(0)
   }
 
   function selectAnswer(i: number) {
-    if (answered) return
+    if (answered || wrongTried.has(i)) return
     setSelected(i)
-    setAnswered(true)
-    if (i === q.ok) setStars(s => s + 1)
+    if (i === q.ok) {
+      setAnswered(true)
+      setStars(s => s + 1)
+      return
+    }
+    const tried = new Set(wrongTried).add(i)
+    setWrongTried(tried)
+    if (tried.size >= MAX_ATTEMPTS) setAnswered(true) // out of tries — reveal the answer
   }
 
   async function nextQuestion() {
@@ -272,18 +281,26 @@ export function K5LessonPlayer({ lesson, studentName, grade, onClose, onComplete
       setQIdx(i => i + 1)
       setSelected(null)
       setAnswered(false)
+      setWrongTried(new Set())
     }
   }
 
+  const attemptsLeft = MAX_ATTEMPTS - wrongTried.size
+
   const optionStyle = (i: number): React.CSSProperties => {
-    const base: React.CSSProperties = { padding:'28px 22px', borderRadius:20, border:'3px solid', fontSize:22, fontWeight:700, cursor: answered ? 'default' : 'pointer', textAlign:'center', lineHeight:1.4, fontFamily:'inherit', background:'#fff', color:NAVY, borderColor:'#CBD5E1' }
+    const locked = answered || wrongTried.has(i)
+    const base: React.CSSProperties = { padding:'28px 22px', borderRadius:20, border:'3px solid', fontSize:22, fontWeight:700, cursor: locked ? 'default' : 'pointer', textAlign:'center', lineHeight:1.4, fontFamily:'inherit', background:'#fff', color:NAVY, borderColor:'#CBD5E1' }
+    if (wrongTried.has(i)) return { ...base, background:'#FEE2E2', borderColor:RED, color:'#991B1B' }
     if (!answered) return base
     if (i === q.ok) return { ...base, background:'#DCFCE7', borderColor:GREEN, color:'#166534' }
-    if (i === selected) return { ...base, background:'#FEE2E2', borderColor:RED, color:'#991B1B' }
     return { ...base, background:'#F8FAFC', borderColor:'#E2E8F0', color:'#94A3B8' }
   }
 
-  const optionPrefix = (i: number) => !answered ? '' : i === q.ok ? '✓ ' : i === selected ? '✗ ' : ''
+  const optionPrefix = (i: number) => {
+    if (wrongTried.has(i)) return '✗ '
+    if (answered && i === q.ok) return '✓ '
+    return ''
+  }
   const completedDate = new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })
   const firstName = studentName.split(' ')[0]
 
@@ -418,10 +435,18 @@ export function K5LessonPlayer({ lesson, studentName, grade, onClose, onComplete
             ))}
           </div>
 
+          {!answered && wrongTried.size > 0 && (
+            <div style={{ background:'#FEF3C7', border:`2px solid ${GOLD}`, borderRadius:22, padding:'20px 28px', textAlign:'center' }}>
+              <div style={{ fontSize:19, fontWeight:800, color:'#92400E' }}>
+                Not quite — try again! {attemptsLeft} {attemptsLeft === 1 ? 'try' : 'tries'} left.
+              </div>
+            </div>
+          )}
+
           {answered && (
             <div style={{ background: selected === q.ok ? '#DCFCE7' : '#FEE2E2', border:`2px solid ${selected === q.ok ? GREEN : RED}`, borderRadius:22, padding:'26px 32px' }}>
               <div style={{ fontSize:22, fontWeight:800, color: selected === q.ok ? '#166534' : '#991B1B', marginBottom:9 }}>
-                {selected === q.ok ? '⭐ Correct! Well done!' : '❌ Not quite!'}
+                {selected === q.ok ? '⭐ Correct! Well done!' : `❌ Out of tries — the correct answer is highlighted above.`}
               </div>
               <div style={{ fontSize:18, color: selected === q.ok ? '#166534' : '#7F1D1D', lineHeight:1.6 }}>
                 {(selected === q.ok ? q.fbCorrect : q.fbIncorrect) ?? q.fb}

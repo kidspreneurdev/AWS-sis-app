@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
+import { K5CertificateFrame } from '@/components/k5/K5Certificate'
+import { downloadCertificateImage } from '@/lib/downloadCertificate'
 
 const NAVY = '#1A365E'
 const GOLD = '#FAC600'
@@ -16,10 +18,21 @@ interface CompletedLesson {
   badgeName:   string
 }
 
+function certProps(l: CompletedLesson) {
+  const scorePct = l.totalQ > 0 ? Math.round((l.starsEarned / l.totalQ) * 100) : 100
+  const dateStr  = l.completedAt
+    ? new Date(l.completedAt).toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })
+    : ''
+  return { scorePct, dateStr }
+}
+
 export function K5CertificatesPage() {
   const { session } = useStudentPortal()
   const [lessons,  setLessons]  = useState<CompletedLesson[]>([])
   const [loading,  setLoading]  = useState(true)
+  const [expanded, setExpanded] = useState<CompletedLesson | null>(null)
+  const [downloading, setDownloading] = useState(false)
+  const modalCertRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!session) return
@@ -66,7 +79,17 @@ export function K5CertificatesPage() {
   }, [session])
 
   const studentName = session?.fullName ?? ''
-  const grade       = session?.grade ?? ''
+
+  const handleDownload = async () => {
+    const node = modalCertRef.current
+    if (!node || !expanded || downloading) return
+    setDownloading(true)
+    try {
+      await downloadCertificateImage(node, `${studentName.replace(/\s+/g, '_')}-${expanded.title.replace(/\s+/g, '_')}-certificate.png`)
+    } finally {
+      setDownloading(false)
+    }
+  }
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:14, fontFamily:'Poppins, sans-serif' }}>
@@ -90,89 +113,72 @@ export function K5CertificatesPage() {
           </div>
         </div>
       ) : (
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:14 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:18 }}>
           {lessons.map(l => {
-            const scorePct = l.totalQ > 0 ? Math.round((l.starsEarned / l.totalQ) * 100) : 100
-            const dateStr  = l.completedAt
-              ? new Date(l.completedAt).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' })
-              : ''
-            const shortDate = l.completedAt
-              ? new Date(l.completedAt).toLocaleDateString('en-GB', { day:'numeric', month:'short' })
-              : ''
-            const isPerfect = l.starsEarned === l.totalQ
+            const { scorePct, dateStr } = certProps(l)
 
             return (
-              <div key={l.lessonId} style={{ borderRadius:16, overflow:'hidden', boxShadow:'0 4px 16px rgba(0,0,0,.12)' }}>
-
-                {/* Red header bar */}
-                <div style={{ background:RED, padding:'8px 18px', display:'flex', alignItems:'center', gap:8 }}>
-                  <img src="/Logo_w.png" alt="AWS" style={{ height:26, width:'auto', objectFit:'contain' }} />
-                  <span style={{ fontSize:11, fontWeight:700, color:'#fff' }}>American World School</span>
-                </div>
-
-                {/* Certificate body */}
-                <div style={{ background:NAVY, padding:'22px', textAlign:'center' }}>
-
-                  {/* Seal */}
-                  <div style={{ width:68, height:68, borderRadius:'50%', background:GOLD, display:'flex', alignItems:'center', justifyContent:'center', fontSize:32, margin:'0 auto 12px', border:'3px solid rgba(255,255,255,.25)' }}>
-                    📜
-                  </div>
-
-                  <div style={{ fontSize:11, color:'rgba(255,255,255,.5)', fontWeight:700, textTransform:'uppercase', letterSpacing:1, marginBottom:6 }}>
-                    Certificate of Achievement
-                  </div>
-                  <div style={{ fontSize:20, fontWeight:800, color:GOLD, marginBottom:4 }}>
-                    {studentName}
-                  </div>
-                  <div style={{ fontSize:12, color:'rgba(255,255,255,.65)', marginBottom:14, lineHeight:1.5 }}>
-                    successfully completed <strong style={{ color:GOLD }}>{l.title}</strong>
-                    {isPerfect ? ' with a perfect score' : ''}
-                  </div>
-
-                  {/* Stats */}
-                  <div style={{ display:'flex', justifyContent:'center', gap:22, marginBottom:14 }}>
-                    <div>
-                      <div style={{ fontSize:20, fontWeight:800, color:GOLD }}>{scorePct}%</div>
-                      <div style={{ fontSize:9, color:'rgba(255,255,255,.4)', marginTop:2 }}>Score</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize:20, fontWeight:800, color:GOLD }}>{'⭐'.repeat(Math.min(l.starsEarned, 5))}</div>
-                      <div style={{ fontSize:9, color:'rgba(255,255,255,.4)', marginTop:2 }}>Stars earned</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize:20, fontWeight:800, color:GOLD }}>{shortDate}</div>
-                      <div style={{ fontSize:9, color:'rgba(255,255,255,.4)', marginTop:2 }}>Date</div>
-                    </div>
-                  </div>
-
-                  <div style={{ fontSize:9, color:'rgba(255,255,255,.25)', marginBottom:14, fontStyle:'italic' }}>
-                    WASC Accredited · American World School · Grade {grade} · 2025–26
-                  </div>
-
-                  <button
-                    onClick={() => window.print()}
-                    style={{ background:GOLD, color:NAVY, border:'none', borderRadius:10, padding:'9px 22px', fontSize:12, fontWeight:800, cursor:'pointer', fontFamily:'inherit' }}
-                  >
-                    📥 Download certificate
-                  </button>
-                </div>
-
-                {/* Footer strip */}
-                {l.badgeName && (
-                  <div style={{ background:'rgba(250,198,0,.12)', borderTop:`1px solid ${GOLD}30`, padding:'10px 18px', display:'flex', alignItems:'center', gap:10 }}>
-                    <span style={{ fontSize:18 }}>🏅</span>
-                    <div>
-                      <div style={{ fontSize:10, color:'rgba(255,255,255,.4)', fontWeight:600 }}>Badge earned</div>
-                      <div style={{ fontSize:13, fontWeight:800, color:GOLD }}>{l.badgeName}</div>
-                    </div>
-                    <div style={{ marginLeft:'auto', fontSize:10, color:'rgba(255,255,255,.3)' }}>{dateStr}</div>
-                  </div>
-                )}
+              <div
+                key={l.lessonId}
+                onClick={() => setExpanded(l)}
+                style={{ maxWidth:420, margin:'0 auto', width:'100%', cursor:'pointer' }}
+              >
+                <K5CertificateFrame
+                  studentName={studentName}
+                  subject={l.subject}
+                  lessonTitle={l.title}
+                  scorePct={scorePct}
+                  starsEarned={l.starsEarned}
+                  date={dateStr}
+                  badgeName={l.badgeName}
+                />
               </div>
             )
           })}
         </div>
       )}
+
+      {/* ── Expanded certificate modal ── */}
+      {expanded && (() => {
+        const { scorePct, dateStr } = certProps(expanded)
+        return (
+          <div
+            onClick={() => setExpanded(null)}
+            style={{ position:'fixed', inset:0, zIndex:1000, background:'rgba(15,23,42,.72)', display:'flex', alignItems:'center', justifyContent:'center', padding:28 }}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{ width:'100%', maxWidth:900, background:'#fff', borderRadius:20, padding:24, position:'relative', boxShadow:'0 24px 64px rgba(0,0,0,.4)' }}
+            >
+              <button
+                onClick={() => setExpanded(null)}
+                style={{ position:'absolute', top:-14, right:-14, width:32, height:32, borderRadius:'50%', border:'none', background:'#d2d2d2ff', color:NAVY, fontSize:16, fontWeight:800, cursor:'pointer', zIndex:1 }}
+              >
+                ✕
+              </button>
+
+              <K5CertificateFrame
+                ref={modalCertRef}
+                studentName={studentName}
+                subject={expanded.subject}
+                lessonTitle={expanded.title}
+                scorePct={scorePct}
+                starsEarned={expanded.starsEarned}
+                date={dateStr}
+                badgeName={expanded.badgeName}
+              />
+
+              <button
+                onClick={handleDownload}
+                disabled={downloading}
+                style={{ width:'100%', marginTop:16, background:GOLD, color:NAVY, border:'none', borderRadius:10, padding:'12px 22px', fontSize:14, fontWeight:800, cursor: downloading ? 'default' : 'pointer', fontFamily:'inherit', opacity: downloading ? 0.7 : 1 }}
+              >
+                {downloading ? 'Preparing…' : '📥 Download certificate'}
+              </button>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }

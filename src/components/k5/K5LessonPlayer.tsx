@@ -7,6 +7,8 @@ import type {
   K5Lesson, K5Slide,
   IntroSlide, FourSlide, JourneySlide, PartsSlide, GiveSlide, ReadySlide,
 } from '@/types/k5Lesson'
+import { K5CertificateFrame } from './K5Certificate'
+import { downloadCertificateImage } from '@/lib/downloadCertificate'
 
 // @ts-ignore — Vite ?url import for pdfjs worker
 import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
@@ -172,7 +174,7 @@ function PdfViewer({ url, page, width, onLoad, onPageLoad }: { url: string; page
 
 // ─── Main player ──────────────────────────────────────────────────────────────
 
-export function K5LessonPlayer({ lesson, studentName, grade, onClose, onComplete }: Props) {
+export function K5LessonPlayer({ lesson, studentName, onClose, onComplete }: Props) {
   const isPdf = !!lesson.slidesFileUrl
 
   // Signed URL for the private-bucket PDF (generated once on mount)
@@ -226,6 +228,8 @@ export function K5LessonPlayer({ lesson, studentName, grade, onClose, onComplete
   const [wrongTried, setWrongTried] = useState<Set<number>>(new Set())
   const [stars,      setStars]      = useState(0)
   const [saving,     setSaving]     = useState(false)
+  const [downloading, setDownloading] = useState(false)
+  const certRef = useRef<HTMLDivElement>(null)
 
   // Derived — PDF uses 1-based page numbers
   const totalSlides   = isPdf ? numPages : lesson.slides.length
@@ -303,6 +307,16 @@ export function K5LessonPlayer({ lesson, studentName, grade, onClose, onComplete
   }
   const completedDate = new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })
   const firstName = studentName.split(' ')[0]
+
+  const handleDownloadCertificate = async () => {
+    if (!certRef.current || downloading) return
+    setDownloading(true)
+    try {
+      await downloadCertificateImage(certRef.current, `${studentName.replace(/\s+/g, '_')}-certificate.png`)
+    } finally {
+      setDownloading(false)
+    }
+  }
 
   // ── Top bar shared styles ───────────────────────────────────────────────────
   const topBar = (children: React.ReactNode) => (
@@ -490,60 +504,26 @@ export function K5LessonPlayer({ lesson, studentName, grade, onClose, onComplete
           </div>
         </div>
 
-        {/* ── Certificate card (sc11 style) ── */}
-        <div style={{ width:'100%', borderRadius:16, overflow:'hidden', boxShadow:'0 8px 32px rgba(0,0,0,.4)' }}>
+        {/* ── Certificate preview + download ── */}
+        <div style={{ width:'100%' }}>
+          <K5CertificateFrame
+            ref={certRef}
+            studentName={studentName}
+            subject={lesson.subject}
+            lessonTitle={lesson.title}
+            scorePct={scorePct}
+            starsEarned={stars}
+            date={completedDate}
+            badgeName={lesson.badgeName}
+          />
 
-          {/* Red header bar */}
-          <div style={{ background:'#D61F31', padding:'8px 18px', display:'flex', alignItems:'center', gap:8 }}>
-            <img src="/Logo_w.png" alt="AWS" style={{ height:26, width:'auto', objectFit:'contain' }} />
-            <span style={{ fontSize:11, fontWeight:700, color:'#fff' }}>American World School</span>
-          </div>
-
-          {/* Certificate body */}
-          <div style={{ background:NAVY, padding:'22px', textAlign:'center' }}>
-
-            {/* Seal */}
-            <div style={{ width:68, height:68, borderRadius:'50%', background:GOLD, display:'flex', alignItems:'center', justifyContent:'center', fontSize:32, margin:'0 auto 12px', border:'3px solid rgba(255,255,255,.25)' }}>
-              📜
-            </div>
-
-            <div style={{ fontSize:11, color:'rgba(255,255,255,.5)', fontWeight:700, textTransform:'uppercase', letterSpacing:1, marginBottom:6 }}>
-              Certificate of Achievement
-            </div>
-            <div style={{ fontSize:20, fontWeight:800, color:GOLD, marginBottom:4 }}>
-              {studentName}
-            </div>
-            <div style={{ fontSize:12, color:'rgba(255,255,255,.65)', marginBottom:14, lineHeight:1.5 }}>
-              successfully completed <strong style={{ color:GOLD }}>{lesson.title}</strong>{stars === lesson.quiz.length ? ' with a perfect score' : ''}
-            </div>
-
-            {/* Stats row */}
-            <div style={{ display:'flex', justifyContent:'center', gap:22, marginBottom:14 }}>
-              <div>
-                <div style={{ fontSize:20, fontWeight:800, color:GOLD }}>{scorePct}%</div>
-                <div style={{ fontSize:9, color:'rgba(255,255,255,.4)', marginTop:2 }}>Score</div>
-              </div>
-              <div>
-                <div style={{ fontSize:20, fontWeight:800, color:GOLD }}>{'⭐'.repeat(Math.min(stars, 5))}</div>
-                <div style={{ fontSize:9, color:'rgba(255,255,255,.4)', marginTop:2 }}>Stars earned</div>
-              </div>
-              <div>
-                <div style={{ fontSize:20, fontWeight:800, color:GOLD }}>{completedDate.split(' ').slice(0, 2).join(' ')}</div>
-                <div style={{ fontSize:9, color:'rgba(255,255,255,.4)', marginTop:2 }}>Date</div>
-              </div>
-            </div>
-
-            <div style={{ fontSize:9, color:'rgba(255,255,255,.25)', marginBottom:14, fontStyle:'italic' }}>
-              WASC Accredited · American World School · Grade {grade} · 2025–26
-            </div>
-
-            <button
-              onClick={() => window.print()}
-              style={{ background:GOLD, color:NAVY, border:'none', borderRadius:10, padding:'9px 22px', fontSize:12, fontWeight:800, cursor:'pointer', fontFamily:'inherit' }}
-            >
-              📥 Download certificate
-            </button>
-          </div>
+          <button
+            onClick={handleDownloadCertificate}
+            disabled={downloading}
+            style={{ width:'100%', marginTop:14, background:GOLD, color:NAVY, border:'none', borderRadius:10, padding:'12px 22px', fontSize:14, fontWeight:800, cursor: downloading ? 'default' : 'pointer', fontFamily:'inherit', opacity: downloading ? 0.7 : 1 }}
+          >
+            {downloading ? 'Preparing…' : '📥 Download certificate'}
+          </button>
         </div>
 
         {/* ── Actions ── */}

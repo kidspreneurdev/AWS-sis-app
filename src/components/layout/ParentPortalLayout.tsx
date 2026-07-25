@@ -49,6 +49,7 @@ export function ParentPortalLayout() {
     setSession: () => {},
     refreshSession: async () => activeChild,
     logout: async () => {},
+    getToken: () => null,
   }
 
   return (

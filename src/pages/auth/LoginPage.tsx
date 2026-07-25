@@ -4,7 +4,6 @@ import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { useParentPortal } from '@/contexts/ParentPortalContext'
 import { syncAuthState } from '@/hooks/useAuth'
-import { formatStudentGrade } from '@/types/student'
 
 type LoginTab = 'staff' | 'student' | 'parent'
 
@@ -148,40 +147,25 @@ export function LoginPage({ initialTab = 'staff' }: { initialTab?: LoginTab }) {
 
     try {
       const normalizedStudentId = studentId.trim().toUpperCase()
-      const { data, error: dbError } = await supabase
-        .from('students')
-        .select('id,first_name,last_name,student_id,grade,cohort,campus,email,portal_password')
-        .eq('student_id', normalizedStudentId)
-        .single()
 
-      if (dbError || !data) {
-        setStudentError('Student ID not found.')
+      // Password check happens server-side (api/student-portal/login.js), which also
+      // issues a signed session token — the portal_password value never reaches the client.
+      const res = await fetch('/api/student-portal/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId: normalizedStudentId, portalPassword: studentPassword }),
+      })
+      const body = await res.json().catch(() => ({}))
+
+      if (!res.ok) {
+        setStudentError(body.error || 'Incorrect student ID or password.')
         return
       }
 
-      const row = data as Record<string, unknown>
-
-      if (!row.portal_password) {
-        setStudentError('Portal access has not been set up for this account. Contact your administrator.')
-        return
-      }
-
-      if (row.portal_password !== studentPassword) {
-        setStudentError('Incorrect student ID or password.')
-        return
-      }
-
-      // Store session in sessionStorage — no Supabase auth needed for students
-      const sess = {
-        studentId: row.student_id as string,
-        fullName: `${row.first_name ?? ''} ${row.last_name ?? ''}`.trim(),
-        grade: formatStudentGrade(row.grade),
-        campus: (row.campus as string) ?? '',
-        cohort: (row.cohort as string) ?? '',
-        dbId: row.id as string,
-        email: (row.email as string) ?? '',
-      }
-      try { sessionStorage.setItem('sp_session', JSON.stringify(sess)) } catch { /* ignore */ }
+      try {
+        sessionStorage.setItem('sp_session', JSON.stringify(body.session))
+        sessionStorage.setItem('sp_token', body.token)
+      } catch { /* ignore */ }
 
       // Wait for StudentPortalContext.session to be populated before navigating,
       // so the layout guard doesn't bounce back to /portal/login on the first attempt.

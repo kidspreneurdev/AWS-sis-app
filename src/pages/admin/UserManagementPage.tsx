@@ -1,6 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
-import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 const ROLES = ['admin', 'staff', 'teacher', 'principal', 'partner', 'coach', 'viewer', 'parent']
 const ROLE_COLORS: Record<string, { bg: string; tc: string }> = {
@@ -56,64 +55,33 @@ function StaffModal({ user, campuses, allStudents, onClose, onSave }: {
     }
     setSaving(true)
 
+    const { data: sessionData } = await supabase.auth.getSession()
+    const accessToken = sessionData.session?.access_token
+    if (!accessToken) { setErr('Your session has expired. Please sign in again and retry.'); setSaving(false); return }
+
     if (isEdit && user) {
-      // Edit: update profile row directly — no admin auth needed for profile fields
-      if (supabaseAdmin) {
-        const { error } = await supabaseAdmin.from('profiles').update({ full_name: fullName, role, campus: campus || null, active }).eq('id', user.id)
-        if (error) { setErr(error.message); setSaving(false); return }
-      } else {
-        // Fall back to API route (Vercel deployment)
-        const { data: sessionData } = await supabase.auth.getSession()
-        const accessToken = sessionData.session?.access_token
-        if (!accessToken) { setErr('Your session has expired. Please sign in again and retry.'); setSaving(false); return }
-        const response = await fetch('/api/admin/update-user', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-          body: JSON.stringify({ userId: user.id, fullName, role, campus: campus || null, active }),
-        })
-        const payload = await response.json().catch(() => null) as { error?: string } | null
-        if (!response.ok) { setErr(payload?.error ?? 'Failed to update account.'); setSaving(false); return }
-      }
+      const response = await fetch('/api/admin/update-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ userId: user.id, fullName, role, campus: campus || null, active }),
+      })
+      const payload = await response.json().catch(() => null) as { error?: string } | null
+      if (!response.ok) { setErr(payload?.error ?? 'Failed to update account.'); setSaving(false); return }
     } else {
-      // Create: use supabaseAdmin directly if available (local dev), otherwise API route (Vercel)
-      let newUserId: string | undefined
-      if (supabaseAdmin) {
-        const { data: { user: newUser }, error } = await supabaseAdmin.auth.admin.createUser({
-          email: email.trim().toLowerCase(),
+      const response = await fetch('/api/admin/create-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({
+          email: email.trim(),
           password,
-          email_confirm: true,
-        })
-        if (error || !newUser) { setErr(error?.message ?? 'Failed to create account.'); setSaving(false); return }
-        const { error: profErr } = await supabaseAdmin.from('profiles').upsert({
-          id: newUser.id,
-          email: email.trim().toLowerCase(),
-          full_name: fullName,
+          fullName,
           role,
           campus: campus || null,
-          active: true,
-        }, { onConflict: 'id' })
-        if (profErr) { setErr(profErr.message); setSaving(false); return }
-        newUserId = newUser.id
-      } else {
-        const { data: sessionData } = await supabase.auth.getSession()
-        const accessToken = sessionData.session?.access_token
-        if (!accessToken) { setErr('Your session has expired. Please sign in again and retry.'); setSaving(false); return }
-        const response = await fetch('/api/admin/create-user', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-          body: JSON.stringify({ email: email.trim(), password, fullName, role, campus: campus || null }),
-        })
-        const payload = await response.json().catch(() => null) as { error?: string; user?: { id: string } } | null
-        if (!response.ok) { setErr(payload?.error ?? 'Failed to create account.'); setSaving(false); return }
-        newUserId = payload?.user?.id
-      }
-
-      // Link students for parent accounts
-      if (role === 'parent' && linkedStudentIds.length > 0 && newUserId && supabaseAdmin) {
-        await supabaseAdmin.from('parent_students').insert(
-          linkedStudentIds.map(sid => ({ parent_id: newUserId, student_id: sid }))
-        )
-      }
+          linkedStudentIds: role === 'parent' ? linkedStudentIds : undefined,
+        }),
+      })
+      const payload = await response.json().catch(() => null) as { error?: string; user?: { id: string } } | null
+      if (!response.ok) { setErr(payload?.error ?? 'Failed to create account.'); setSaving(false); return }
     }
     setSaving(false)
     onSave()

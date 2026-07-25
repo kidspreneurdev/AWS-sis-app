@@ -60,6 +60,11 @@ import { ATReportsPage } from '@/pages/at/ATReportsPage'
 import { LMSPage } from '@/pages/lms/LMSPage'
 import { K5LessonsAdminPage } from '@/pages/lms/K5LessonsAdminPage'
 
+// ─── MS/HS Gated Grading ──────────────────────────────────────────────────────
+import { MHSGradingPage } from '@/pages/mhs-grading/MHSGradingPage'
+import { MHSAdminConfigPage } from '@/pages/mhs-grading/MHSAdminConfigPage'
+import { MHSHonorRollPage } from '@/pages/mhs-grading/MHSHonorRollPage'
+
 // ─── Projects Tracker (PT) ────────────────────────────────────────────────────
 import { PTDashboardPage } from '@/pages/pt/PTDashboardPage'
 import { PTAssignPage } from '@/pages/pt/PTAssignPage'
@@ -92,6 +97,8 @@ import { SPDocumentsPage } from '@/pages/student-portal/SPDocumentsPage'
 import { SPBadgesPage } from '@/pages/student-portal/SPBadgesPage'
 import { K5CertificatesPage } from '@/pages/student-portal/K5CertificatesPage'
 import { SPProfilePage } from '@/pages/student-portal/SPProfilePage'
+import { MHSQuizPlayer } from '@/pages/student-portal/MHSQuizPlayer'
+import { MHSDiscussionThread } from '@/pages/student-portal/MHSDiscussionThread'
 
 function PageLoader() {
   return <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
@@ -157,6 +164,8 @@ export const router = createBrowserRouter([
       { path: '/portal/badges', element: <SPBadgesPage /> },
       { path: '/portal/k5-certificates', element: <K5CertificatesPage /> },
       { path: '/portal/profile', element: <SPProfilePage /> },
+      { path: '/portal/mhs-quiz', element: <MHSQuizPlayer /> },
+      { path: '/portal/mhs-discussion', element: <MHSDiscussionThread /> },
     ],
   },
 
@@ -230,6 +239,11 @@ export const router = createBrowserRouter([
         { path: '/lms/progress', element: <Lazy><LMSPage /></Lazy> },
         { path: '/lms/student', element: <Lazy><LMSPage /></Lazy> },
         { path: '/lms/k5-lessons', element: <Lazy><K5LessonsAdminPage /></Lazy> },
+
+        // MS/HS Gated Grading
+        { path: '/mhs/manage', element: <Lazy><MHSGradingPage /></Lazy> },
+        { path: '/mhs/config', element: <Lazy><MHSAdminConfigPage /></Lazy> },
+        { path: '/mhs/honor-roll', element: <Lazy><MHSHonorRollPage /></Lazy> },
 
         // Settings
         { path: '/admin/alerts', element: <Lazy><AlertsPage /></Lazy> },

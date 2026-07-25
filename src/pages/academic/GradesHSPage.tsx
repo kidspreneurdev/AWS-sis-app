@@ -2,6 +2,10 @@ import { useEffect, useState, useMemo, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
+import { MHSDiplomaProgress } from '@/pages/mhs-grading/MHSDiplomaProgress'
+import { MHSTrendChart } from '@/pages/mhs-grading/MHSTrendChart'
+import { MHSBadgesPanel } from '@/pages/mhs-grading/MHSBadgesPanel'
+import { MHSHonorRollStatus } from '@/pages/mhs-grading/MHSHonorRollStatus'
 
 
 
@@ -145,6 +149,9 @@ interface CourseRecord {
   instructor: string
   section: string
   notes: string
+  mhsMasteryPct: number | null
+  mhsHowPct: number | null
+  mhsGradeOverride: boolean
 }
 
 interface TransferCredit {
@@ -193,6 +200,9 @@ function rowToCourse(r: Record<string,unknown>): CourseRecord {
     instructor: (r.instructor as string) ?? '',
     section: (r.section as string) ?? '',
     notes: (r.notes as string) ?? '',
+    mhsMasteryPct: r.mhs_mastery_pct !== null && r.mhs_mastery_pct !== undefined ? Number(r.mhs_mastery_pct) : null,
+    mhsHowPct: r.mhs_how_pct !== null && r.mhs_how_pct !== undefined ? Number(r.mhs_how_pct) : null,
+    mhsGradeOverride: Boolean(r.mhs_grade_override),
   }
 }
 
@@ -225,6 +235,10 @@ function rowToCatalog(r: Record<string,unknown>): CatalogCourse {
     gradeLevel: (r.grade_level as string) ?? 'All',
   }
 }
+
+// Collapses case/internal-whitespace variants of a hand-typed school name (e.g. "Elite  Private School"
+// vs "elite private school") to the same dedup key — plain trim() only strips the ends, not this.
+function normSchoolName(s: string) { return s.trim().replace(/\s+/g, ' ').toLowerCase() }
 
 // ─── GPA helpers ─────────────────────────────────────────────────────────────
 function getBasePts(grade: string) { const v = GRADE_PTS[grade]; return (v === undefined) ? null : v }
@@ -385,7 +399,7 @@ const sel: React.CSSProperties = { ...inp }
 
 // ─── Empty course ─────────────────────────────────────────────────────────────
 function emptyCourseDraft(studentId: string): CourseRecord {
-  return { _id: crypto.randomUUID(), studentId, code:'', title:'', type:'STD', area:'Language Arts', year:'2025-2026', semester:'Full Year', gradeLevel:'Grade 9', creditsAttempted:1, creditsEarned:1, grade:'', courseStatus:'In Progress', apScore:null, instructor:'', section:'', notes:'' }
+  return { _id: crypto.randomUUID(), studentId, code:'', title:'', type:'STD', area:'Language Arts', year:'2025-2026', semester:'Full Year', gradeLevel:'Grade 9', creditsAttempted:1, creditsEarned:1, grade:'', courseStatus:'In Progress', apScore:null, instructor:'', section:'', notes:'', mhsMasteryPct:null, mhsHowPct:null, mhsGradeOverride:false }
 }
 function emptyTransferDraft(studentId: string): TransferCredit {
   return { _id: crypto.randomUUID(), studentId, kind:'DE', origTitle:'', origGrade:'', creditsAwarded:1, area:'Language Arts', gradeLevel:'', sourceSchool:'', sourceLocation:'', accreditation:'', notes:'', status:'Pending' }
@@ -782,7 +796,7 @@ function BulkAddCourseModal({ draft, students, catalog, onChange, onSave, onClos
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
-type Tab = 'overview'|'studentov'|'courses'|'gpa'|'graduation'|'skills'|'transfer'|'transcript'|'catalog'
+type Tab = 'overview'|'studentov'|'courses'|'gpa'|'graduation'|'skills'|'badges'|'transfer'|'transcript'|'catalog'
 const TABS: {id:Tab; label:string; icon:string}[] = [
   {id:'overview',   label:'Overview',        icon:'📊'},
   {id:'studentov',  label:'Student Overview',icon:'🎒'},
@@ -790,6 +804,7 @@ const TABS: {id:Tab; label:string; icon:string}[] = [
   {id:'gpa',        label:'GPA & Weighting', icon:'🎯'},
   {id:'graduation', label:'Graduation Audit',icon:'🎓'},
   {id:'skills',     label:'Skill Graph',     icon:'🧠'},
+  {id:'badges',     label:'Badges',          icon:'🏅'},
   {id:'transfer',   label:'Transfer & EC',   icon:'🏛️'},
   {id:'transcript', label:'Transcript',      icon:'📄'},
   {id:'catalog',    label:'Course Catalog',  icon:'⚙️'},
@@ -1062,6 +1077,9 @@ export function GradesHSPage() {
       instructor: bulkAddDraft.instructor,
       section: bulkAddDraft.section,
       notes: bulkAddDraft.notes,
+      mhsMasteryPct: null,
+      mhsHowPct: null,
+      mhsGradeOverride: false,
     }))
     const payload = newRecords.map(r => ({
       id: r._id,
@@ -1117,13 +1135,19 @@ export function GradesHSPage() {
           creditsEarned: t.creditsAwarded, grade: t.origGrade,
           courseStatus: 'Completed' as CourseStatus, apScore: null,
           instructor: '', section: '', notes: '',
+          mhsMasteryPct: null, mhsHowPct: null, mhsGradeOverride: false,
         }
       })
     const allGradedCourses = [...gradedCourses, ...deTransferRecords].filter(c => transcriptGrades.includes(c.gradeLevel))
     const HOME_SCHOOL = 'American World School'
     const includedDeIds = new Set(allGradedCourses.filter(c => deTransferSchoolById.has(c._id)).map(c => c._id))
-    const transcriptSchools = [HOME_SCHOOL, ...new Set(Array.from(includedDeIds).map(id => deTransferSchoolById.get(id)!).filter(Boolean))]
-    const schoolNumberOf = (name: string) => transcriptSchools.indexOf(name) + 1
+    const seenSchools = new Map<string, string>()
+    Array.from(includedDeIds).map(id => deTransferSchoolById.get(id)!).filter(Boolean).forEach(name => {
+      const key = normSchoolName(name)
+      if (!seenSchools.has(key)) seenSchools.set(key, name.trim().replace(/\s+/g, ' '))
+    })
+    const transcriptSchools = [HOME_SCHOOL, ...seenSchools.values()]
+    const schoolNumberOf = (name: string) => transcriptSchools.findIndex(s => normSchoolName(s) === normSchoolName(name)) + 1
     const homeSchoolNum = schoolNumberOf(HOME_SCHOOL)
     const schoolsListHtml = transcriptSchools
       .map((s, i) => `<div style="font-size:9.5pt;${i > 0 ? 'margin-top:2px;' : ''}">(${i + 1}) — ${h(s)}</div>`)
@@ -1584,7 +1608,16 @@ export function GradesHSPage() {
                     const bp = getBasePts(r.grade)
                     return (
                       <tr key={r._id}>
-                        <td style={td}><div style={{ fontWeight:600 }}>{r.title || '—'}</div>{r.code && <div style={{ fontSize:11, color:'#7A92B0' }}>{r.code}</div>}</td>
+                        <td style={td}>
+                          <div style={{ fontWeight:600 }}>{r.title || '—'}</div>
+                          {r.code && <div style={{ fontSize:11, color:'#7A92B0' }}>{r.code}</div>}
+                          {(r.mhsMasteryPct !== null || r.mhsHowPct !== null) && (
+                            <div style={{ fontSize:9, fontWeight:700, color:'#7A92B0', marginTop:2 }}>
+                              Mastery {r.mhsMasteryPct ?? '—'}% · HOW {r.mhsHowPct ?? '—'}%
+                              {r.mhsGradeOverride && <span style={{ color:'#D97706' }}> · overridden</span>}
+                            </div>
+                          )}
+                        </td>
                         <td style={{ ...td, textAlign:'center' }}>
                           <span style={{ padding:'2px 8px', borderRadius:6, background: TYPE_COLOR[r.type]+'22', color: TYPE_COLOR[r.type], fontSize:11, fontWeight:700 }}>{r.type}</span>
                         </td>
@@ -1832,7 +1865,15 @@ export function GradesHSPage() {
                     const gradeCol = bp !== null && bp !== undefined ? (bp >= 3.5 ? '#1DBD6A' : bp >= 2 ? '#F5A623' : '#D61F31') : '#7A92B0'
                     return (
                       <tr key={c._id} style={{ background: i%2===0 ? '#fff' : '#F7F9FC' }}>
-                        <td style={{ ...td, fontWeight:600, color:'#1A365E' }}>{c.title || '—'}</td>
+                        <td style={{ ...td, fontWeight:600, color:'#1A365E' }}>
+                          {c.title || '—'}
+                          {(c.mhsMasteryPct !== null || c.mhsHowPct !== null) && (
+                            <div style={{ fontSize:9, fontWeight:700, color:'#7A92B0', marginTop:2 }}>
+                              Mastery {c.mhsMasteryPct ?? '—'}% · HOW {c.mhsHowPct ?? '—'}%
+                              {c.mhsGradeOverride && <span style={{ color:'#D97706' }}> · overridden</span>}
+                            </div>
+                          )}
+                        </td>
                         <td style={{ ...td, color:'#7A92B0' }}>{c.year || '—'}</td>
                         <td style={td}><span style={{ fontSize:10, fontWeight:800, color: TYPE_COLOR[c.type] || '#1A365E' }}>{c.type}</span></td>
                         <td style={{ ...td, color:'#3D5475', fontWeight:700 }}>{cr}</td>
@@ -2290,6 +2331,8 @@ ${deTotal > 0 ? `
           </div>
         </div>
 
+        <MHSDiplomaProgress studentId={selectedId} />
+
         {/* Alert: Failed courses */}
         {failedCourses.length > 0 && (
           <div style={{ ...card, padding:'14px 18px', borderLeft:'4px solid #D61F31', background:'#FFF0F1' }}>
@@ -2579,6 +2622,8 @@ ${deTotal > 0 ? `
             ))}
           </div>
         </div>
+        <MHSTrendChart studentId={selectedId} />
+        <MHSHonorRollStatus studentId={selectedId} />
         {(Object.entries(COMPETENCIES) as [keyof typeof COMPETENCIES, typeof COMPETENCIES[keyof typeof COMPETENCIES]][]).map(([cat, comps]) => (
           <div key={cat} style={{ ...card, padding:20 }}>
             <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16 }}>
@@ -2701,13 +2746,19 @@ ${deTotal > 0 ? `
           creditsEarned: t.creditsAwarded, grade: t.origGrade,
           courseStatus: 'Completed' as CourseStatus, apScore: null,
           instructor: '', section: '', notes: '',
+          mhsMasteryPct: null, mhsHowPct: null, mhsGradeOverride: false,
         }
       })
     const allGradedCourses = [...gradedCourses, ...deTransferRecordsRT].filter(c => transcriptGrades.includes(c.gradeLevel))
     const RT_HOME_SCHOOL = 'American World School'
     const rtIncludedDeIds = new Set(allGradedCourses.filter(c => rtDeTransferSchoolById.has(c._id)).map(c => c._id))
-    const rtTranscriptSchools = [RT_HOME_SCHOOL, ...new Set(Array.from(rtIncludedDeIds).map(id => rtDeTransferSchoolById.get(id)!).filter(Boolean))]
-    const rtSchoolNumberOf = (name: string) => rtTranscriptSchools.indexOf(name) + 1
+    const rtSeenSchools = new Map<string, string>()
+    Array.from(rtIncludedDeIds).map(id => rtDeTransferSchoolById.get(id)!).filter(Boolean).forEach(name => {
+      const key = normSchoolName(name)
+      if (!rtSeenSchools.has(key)) rtSeenSchools.set(key, name.trim().replace(/\s+/g, ' '))
+    })
+    const rtTranscriptSchools = [RT_HOME_SCHOOL, ...rtSeenSchools.values()]
+    const rtSchoolNumberOf = (name: string) => rtTranscriptSchools.findIndex(s => normSchoolName(s) === normSchoolName(name)) + 1
     const rtHomeSchoolNum = rtSchoolNumberOf(RT_HOME_SCHOOL)
     const tGPA = (courses: CourseRecord[]) => {
       let tot = 0, pts = 0
@@ -3137,6 +3188,7 @@ ${deTotal > 0 ? `
         {tab === 'gpa'        && renderGPA()}
         {tab === 'graduation' && renderGraduation()}
         {tab === 'skills'     && renderSkillGraph()}
+        {tab === 'badges'     && <MHSBadgesPanel studentId={selectedId} />}
         {tab === 'transfer'   && renderTransfer()}
         {tab === 'transcript' && renderTranscript()}
         {tab === 'catalog'    && renderCatalog()}

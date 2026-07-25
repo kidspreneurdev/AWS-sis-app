@@ -21,6 +21,7 @@ import {
   BarChart, Clock, Target, FileCheck, StickyNote, Printer,
   PlusSquare, Activity, CheckSquare, FileBarChart, Telescope, Flag,
   Library, BookMarked, BookCopy, UserCog, BarChart3, LayoutList, Inbox,
+  ShieldCheck, ListChecks,
 } from 'lucide-react'
 import { PageHeaderProvider, useSetActionsTarget } from '@/contexts/PageHeaderContext'
 
@@ -127,6 +128,16 @@ const NAV: NavGroup[] = [
           { title: 'Section Details', icon: LayoutList, to: '/lms/section' },
           { title: 'Progress Reports', icon: TrendingUp, to: '/lms/progress' },
           { title: 'K5 Lessons', icon: GraduationCap, to: '/lms/k5-lessons' },
+        ],
+      },
+      {
+        id: 'mhs',
+        title: 'MS/HS Gated Grading',
+        icon: ShieldCheck,
+        items: [
+          { title: 'Manage Courses & Gates', icon: ListChecks, to: '/mhs/manage' },
+          { title: 'Weights & Thresholds', icon: Settings, to: '/mhs/config' },
+          { title: 'Honor Roll', icon: Award, to: '/mhs/honor-roll' },
         ],
       },
     ],

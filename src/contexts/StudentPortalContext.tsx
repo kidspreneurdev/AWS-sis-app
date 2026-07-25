@@ -18,6 +18,9 @@ interface StudentPortalContextType {
   setSession: (s: StudentSession | null) => void
   refreshSession: () => Promise<StudentSession | null>
   logout: () => Promise<void>
+  /** Signed token from api/student-portal/login.js — required for any grade-consequential
+   *  student-portal API call. Never trust a client-supplied studentId in its place. */
+  getToken: () => string | null
 }
 
 export const StudentPortalContext = createContext<StudentPortalContextType | null>(null)
@@ -51,8 +54,15 @@ export function StudentPortalProvider({ children }: { children: ReactNode }) {
   function setSession(s: StudentSession | null) {
     setSessionState(s)
     if (!s) {
-      try { sessionStorage.removeItem('sp_session') } catch { /* ignore */ }
+      try {
+        sessionStorage.removeItem('sp_session')
+        sessionStorage.removeItem('sp_token')
+      } catch { /* ignore */ }
     }
+  }
+
+  function getToken(): string | null {
+    try { return sessionStorage.getItem('sp_token') } catch { return null }
   }
 
   async function refreshSession() {
@@ -107,7 +117,10 @@ export function StudentPortalProvider({ children }: { children: ReactNode }) {
   }
 
   async function logout() {
-    try { sessionStorage.removeItem('sp_session') } catch { /* ignore */ }
+    try {
+      sessionStorage.removeItem('sp_session')
+      sessionStorage.removeItem('sp_token')
+    } catch { /* ignore */ }
     await supabase.auth.signOut()
     setSessionState(null)
   }
@@ -131,7 +144,7 @@ export function StudentPortalProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <StudentPortalContext.Provider value={{ session, loading, setSession, refreshSession, logout }}>
+    <StudentPortalContext.Provider value={{ session, loading, setSession, refreshSession, logout, getToken }}>
       {children}
     </StudentPortalContext.Provider>
   )

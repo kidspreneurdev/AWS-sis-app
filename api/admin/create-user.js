@@ -79,6 +79,7 @@ export default async function handler(req, res) {
     fullName,
     role,
     campus,
+    linkedStudentIds,
   } = req.body || {}
 
   if (typeof email !== 'string' || !email.trim()) {
@@ -127,6 +128,15 @@ export default async function handler(req, res) {
   if (profileError) {
     await adminClient.auth.admin.deleteUser(newUser.id)
     return json(res, 500, { error: getSchemaGuidance(profileError) || profileError.message || 'Failed to create profile.' })
+  }
+
+  if (safeRole === 'parent' && Array.isArray(linkedStudentIds) && linkedStudentIds.length > 0) {
+    const { error: linkError } = await adminClient
+      .from('parent_students')
+      .insert(linkedStudentIds.map((studentId) => ({ parent_id: newUser.id, student_id: studentId })))
+    if (linkError) {
+      return json(res, 500, { error: `Account created, but linking students failed: ${linkError.message}` })
+    }
   }
 
   return json(res, 200, {

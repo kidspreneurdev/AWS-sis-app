@@ -22,6 +22,18 @@ const btnPrimary: React.CSSProperties = { padding: '8px 16px', background: '#1A3
 const sectionLabel: React.CSSProperties = { fontSize: 10, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 8 }
 
 type ComponentTab = 'quiz' | 'notes' | 'discussion' | 'debate' | 'omr'
+type PrimaryTab = 'quiz' | 'notes' | 'share' | 'omr'
+
+const PRIMARY_TABS: { key: PrimaryTab; label: string }[] = [
+  { key: 'quiz', label: 'Quiz' },
+  { key: 'notes', label: 'Do it' },
+  { key: 'share', label: 'Share it' },
+  { key: 'omr', label: 'Prove it' },
+]
+
+function primaryTabFor(tab: ComponentTab): PrimaryTab {
+  return tab === 'discussion' || tab === 'debate' ? 'share' : tab
+}
 
 interface MhsCourse { id: string; title: string; catalog_code: string | null; academic_year: string; term: string | null }
 interface MhsLesson { id: string; title: string; quiz_gate_threshold_pct: number | null; quiz_max_attempts: number | null; quiz_questions: QuizQuestion[]; notes_due_at: string | null; omr_answer_key: string | null }
@@ -76,6 +88,7 @@ export function MHSGradingPage() {
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null)
   const [roster, setRoster] = useState<RosterRow[]>([])
   const [expandedStudentId, setExpandedStudentId] = useState<string | null>(null)
+  const [rosterStudentId, setRosterStudentId] = useState<string | null>(null)
   const [viewAnswersStudentId, setViewAnswersStudentId] = useState<string | null>(null)
   const [overrideStudentId, setOverrideStudentId] = useState<string | null>(null)
   const [componentTab, setComponentTab] = useState<ComponentTab>('quiz')
@@ -213,6 +226,15 @@ export function MHSGradingPage() {
   useEffect(() => {
     if (selectedCourseId) void loadRoster(selectedCourseId, selectedLessonId, componentTab)
   }, [selectedCourseId, selectedLessonId, componentTab, loadRoster])
+
+  useEffect(() => {
+    setRosterStudentId(null)
+  }, [selectedLessonId])
+
+  const visibleRoster = useMemo(
+    () => (rosterStudentId ? roster.filter((r) => r.studentId === rosterStudentId) : roster),
+    [roster, rosterStudentId]
+  )
 
   const selectedCourse = useMemo(() => courses.find((c) => c.id === selectedCourseId) ?? null, [courses, selectedCourseId])
   const selectedLesson = useMemo(() => lessons.find((l) => l.id === selectedLessonId) ?? null, [lessons, selectedLessonId])
@@ -363,15 +385,31 @@ export function MHSGradingPage() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              {(['quiz', 'notes', 'discussion', 'debate', 'omr'] as ComponentTab[]).map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setComponentTab(tab)}
-                  style={{ padding: '6px 14px', borderRadius: 8, border: `1.5px solid ${componentTab === tab ? '#1A365E' : '#E4EAF2'}`, background: componentTab === tab ? '#1A365E' : '#fff', color: componentTab === tab ? '#fff' : '#1A365E', fontSize: 12, fontWeight: 700, cursor: 'pointer', textTransform: tab === 'omr' ? 'uppercase' : 'capitalize' }}
-                >
-                  {tab}
-                </button>
-              ))}
+              {PRIMARY_TABS.map(({ key, label }) => {
+                const active = primaryTabFor(componentTab) === key
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setComponentTab(key === 'share' ? (componentTab === 'discussion' || componentTab === 'debate' ? componentTab : 'discussion') : key)}
+                    style={{ padding: '6px 14px', borderRadius: 8, border: `1.5px solid ${active ? '#1A365E' : '#E4EAF2'}`, background: active ? '#1A365E' : '#fff', color: active ? '#fff' : '#1A365E', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    {label}
+                  </button>
+                )
+              })}
+              {primaryTabFor(componentTab) === 'share' && (
+                <div style={{ display: 'flex', gap: 4, borderLeft: '1.5px solid #E4EAF2', paddingLeft: 8, marginLeft: 2 }}>
+                  {(['discussion', 'debate'] as ComponentTab[]).map((sub) => (
+                    <button
+                      key={sub}
+                      onClick={() => setComponentTab(sub)}
+                      style={{ padding: '4px 10px', borderRadius: 6, border: `1.5px solid ${componentTab === sub ? '#1A365E' : '#E4EAF2'}`, background: componentTab === sub ? '#EAF0FA' : '#fff', color: '#1A365E', fontSize: 11, fontWeight: 700, cursor: 'pointer', textTransform: 'capitalize' }}
+                    >
+                      {sub}
+                    </button>
+                  ))}
+                </div>
+              )}
               <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
                 {componentTab === 'discussion' && (
                   <button
@@ -400,10 +438,22 @@ export function MHSGradingPage() {
             {showDisputeQueue && <MHSDisputeQueue />}
             {showModerationPanel && componentTab === 'discussion' && selectedLesson && <MHSDiscussionModerationPanel lessonId={selectedLesson.id} />}
 
+            {selectedLesson && roster.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <label style={{ ...label, marginBottom: 0 }}>Student</label>
+                <select value={rosterStudentId ?? ''} onChange={(e) => setRosterStudentId(e.target.value || null)} style={{ ...input, width: 'auto', minWidth: 220 }}>
+                  <option value="">All students ({roster.length})</option>
+                  {roster.map((r) => (
+                    <option key={r.studentId} value={r.studentId}>{r.studentName}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {!selectedLesson ? (
               <div style={{ ...card, padding: 40, textAlign: 'center', color: '#7A92B0', fontSize: 12 }}>Select a lesson to see the roster and gate status.</div>
             ) : (
-              roster.map((row) => {
+              visibleRoster.map((row) => {
                 const statusMeta = row.component ? STATUS_META[row.component.status] : STATUS_META.not_started
                 return (
                   <div key={row.courseId} style={card}>

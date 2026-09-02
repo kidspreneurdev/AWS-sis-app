@@ -9,6 +9,12 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY
 const DISPUTABLE_COMPONENT_TYPES = ['debate', 'discussion', 'capstone']
 const DISPUTABLE_SUBJECT_TYPES = ['debate', 'discussion', 'how', 'capstone']
 
+// LMS Case Study Assignment (7-section revamp of the "+Lesson" assignment block) —
+// a separate, unrelated feature from the MHS Grading module above. Fixed rubric lives
+// in src/lib/lms/caseStudyRubric.ts; this list is duplicated here (small, stable) since
+// this file can't import from src/.
+const LMS_SCORE_COMPONENT_TYPES = ['notes', 'discussion', 'debate', 'omr', 'presentation']
+
 function json(res, status, body) {
   res.status(status).setHeader('Content-Type', 'application/json')
   res.send(JSON.stringify(body))
@@ -735,6 +741,203 @@ async function submitQuizAttempt(req, res, adminClient) {
   })
 }
 
+/** A lms_submissions row counts as this content's Presentation Upload unless its note
+ *  is tagged JSON metadata for something else (e.g. a mastery-quiz snapshot). */
+function isLmsPresentationRow(row) {
+  if (typeof row.note !== 'string') return true
+  const t = row.note.trim()
+  if (!t.startsWith('{')) return true
+  try {
+    const parsed = JSON.parse(t)
+    return !(parsed && typeof parsed === 'object' && 'kind' in parsed)
+  } catch {
+    return true
+  }
+}
+
+/** Bundles everything the student's Case Study panel needs for one lesson: the case
+ *  study document, this student's 5 category scores, the full discussion thread (all
+ *  students), this student's Presentation Upload submission, and this student's appeals. */
+async function lmsGetCaseStudy(req, res, adminClient) {
+  if (req.method !== 'GET') {
+    res.setHeader('Allow', 'GET')
+    return json(res, 405, { error: 'Method not allowed' })
+  }
+
+  const studentDbId = requireStudentToken(req, res, json)
+  if (!studentDbId) return
+
+  const contentId = req.query?.contentId
+  if (typeof contentId !== 'string' || !contentId) {
+    return json(res, 400, { error: 'contentId is required.' })
+  }
+
+  const { data: content, error: contentError } = await adminClient
+    .from('lms_content')
+    .select('id,title,extra')
+    .eq('id', contentId)
+    .single()
+  if (contentError || !content) return json(res, 404, { error: 'Lesson not found.' })
+
+  const extra = content.extra || {}
+
+  const [scRes, dpRes, subRes, apRes] = await Promise.all([
+    adminClient.from('lms_score_components').select('component_type,criteria_scores,subtotal,feedback,status').eq('content_id', contentId).eq('student_id', studentDbId),
+    adminClient.from('lms_discussion_posts').select('id,student_id,parent_post_id,body,created_at').eq('content_id', contentId).order('created_at', { ascending: true }),
+    adminClient.from('lms_submissions').select('note,link_url,submitted_at').eq('content_id', contentId).eq('student_id', studentDbId).order('submitted_at', { ascending: false }),
+    adminClient.from('lms_grade_appeals').select('id,component_type,message,status,admin_reply').eq('content_id', contentId).eq('student_id', studentDbId),
+  ])
+
+  const posts = dpRes.data ?? []
+  const posterIds = [...new Set(posts.map((p) => p.student_id))]
+  const { data: posterRows } = posterIds.length
+    ? await adminClient.from('students').select('id,first_name,last_name').in('id', posterIds)
+    : { data: [] }
+  const nameOf = (id) => {
+    const s = posterRows?.find((r) => r.id === id)
+    return s ? `${s.first_name ?? ''} ${s.last_name ?? ''}`.trim() : 'Classmate'
+  }
+
+  const presentationRow = (subRes.data ?? []).find(isLmsPresentationRow) ?? null
+
+  return json(res, 200, {
+    lesson: { id: content.id, title: content.title, caseStudyUrl: extra.caseStudyUrl ?? null },
+    scores: scRes.data ?? [],
+    discussion: {
+      myStudentId: studentDbId,
+      posts: posts.map((p) => ({
+        id: p.id,
+        studentId: p.student_id,
+        authorName: p.student_id === studentDbId ? 'You' : nameOf(p.student_id),
+        isMine: p.student_id === studentDbId,
+        body: p.body,
+        parentPostId: p.parent_post_id,
+        createdAt: p.created_at,
+      })),
+    },
+    presentation: presentationRow ? { note: presentationRow.note, linkUrl: presentationRow.link_url, submittedAt: presentationRow.submitted_at } : null,
+    appeals: (apRes.data ?? []).map((a) => ({ id: a.id, componentType: a.component_type, message: a.message, status: a.status, adminReply: a.admin_reply })),
+  })
+}
+
+async function lmsSubmitDiscussionPost(req, res, adminClient) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST')
+    return json(res, 405, { error: 'Method not allowed' })
+  }
+
+  const studentDbId = requireStudentToken(req, res, json)
+  if (!studentDbId) return
+
+  const { contentId, body, parentPostId } = req.body || {}
+  if (typeof contentId !== 'string' || !contentId) return json(res, 400, { error: 'contentId is required.' })
+  if (typeof body !== 'string' || !body.trim()) return json(res, 400, { error: 'Post body is required.' })
+
+  const { data: content, error: contentError } = await adminClient.from('lms_content').select('id').eq('id', contentId).single()
+  if (contentError || !content) return json(res, 404, { error: 'Lesson not found.' })
+
+  if (parentPostId) {
+    const { data: parent, error: parentError } = await adminClient.from('lms_discussion_posts').select('id').eq('id', parentPostId).eq('content_id', contentId).single()
+    if (parentError || !parent) return json(res, 404, { error: 'Post being replied to was not found.' })
+  }
+
+  const { data: post, error: insertError } = await adminClient
+    .from('lms_discussion_posts')
+    .insert({ content_id: contentId, student_id: studentDbId, parent_post_id: parentPostId || null, body: body.trim() })
+    .select('id,created_at')
+    .single()
+  if (insertError || !post) return json(res, 500, { error: 'Failed to submit post.' })
+
+  return json(res, 200, { postId: post.id, createdAt: post.created_at })
+}
+
+async function lmsSubmitPresentation(req, res, adminClient) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST')
+    return json(res, 405, { error: 'Method not allowed' })
+  }
+
+  const studentDbId = requireStudentToken(req, res, json)
+  if (!studentDbId) return
+
+  const { contentId, fileUrl, note } = req.body || {}
+  if (typeof contentId !== 'string' || !contentId) return json(res, 400, { error: 'contentId is required.' })
+  if (typeof fileUrl !== 'string' || !fileUrl.trim()) return json(res, 400, { error: 'fileUrl is required.' })
+
+  const { data: content, error: contentError } = await adminClient.from('lms_content').select('id,course_id').eq('id', contentId).single()
+  if (contentError || !content) return json(res, 404, { error: 'Lesson not found.' })
+
+  const { data: submission, error: insertError } = await adminClient
+    .from('lms_submissions')
+    .insert({
+      student_id: studentDbId,
+      course_id: content.course_id,
+      content_id: contentId,
+      note: typeof note === 'string' && note.trim() ? note.trim() : null,
+      link_url: fileUrl.trim(),
+      submitted_at: new Date().toISOString(),
+    })
+    .select('id,submitted_at')
+    .single()
+  if (insertError || !submission) return json(res, 500, { error: 'Failed to submit presentation.' })
+
+  return json(res, 200, { submissionId: submission.id, submittedAt: submission.submitted_at })
+}
+
+async function lmsFileAppeal(req, res, adminClient) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST')
+    return json(res, 405, { error: 'Method not allowed' })
+  }
+
+  const studentDbId = requireStudentToken(req, res, json)
+  if (!studentDbId) return
+
+  const { contentId, componentType, message } = req.body || {}
+  if (typeof contentId !== 'string' || !contentId) return json(res, 400, { error: 'contentId is required.' })
+  if (!LMS_SCORE_COMPONENT_TYPES.includes(componentType)) return json(res, 400, { error: 'Invalid component type.' })
+  if (typeof message !== 'string' || !message.trim()) return json(res, 400, { error: 'A message is required.' })
+
+  const { data: scoreComponent, error: scoreError } = await adminClient
+    .from('lms_score_components')
+    .select('id,status')
+    .eq('content_id', contentId)
+    .eq('student_id', studentDbId)
+    .eq('component_type', componentType)
+    .single()
+  if (scoreError || !scoreComponent || scoreComponent.status !== 'scored') {
+    return json(res, 409, { error: 'This item has not been scored yet.' })
+  }
+
+  // Block a second open appeal on the same item — mirrors fileGradeDispute's duplicate guard.
+  const { data: existingAppeals, error: existingError } = await adminClient
+    .from('lms_grade_appeals')
+    .select('id')
+    .eq('content_id', contentId)
+    .eq('student_id', studentDbId)
+    .eq('component_type', componentType)
+    .eq('status', 'open')
+    .limit(1)
+  if (existingError) return json(res, 500, { error: existingError.message })
+  if (existingAppeals && existingAppeals.length > 0) return json(res, 409, { error: 'An appeal is already open for this item.' })
+
+  const { data: appeal, error: insertError } = await adminClient
+    .from('lms_grade_appeals')
+    .insert({
+      content_id: contentId,
+      student_id: studentDbId,
+      component_type: componentType,
+      score_component_id: scoreComponent.id,
+      message: message.trim(),
+      status: 'open',
+    })
+    .select('id,status')
+    .single()
+  if (insertError || !appeal) return json(res, 500, { error: 'Failed to file appeal.' })
+
+  return json(res, 200, { appeal })
+}
+
 const ACTIONS = {
   login,
   'list-my-components': listMyComponents,
@@ -746,6 +949,10 @@ const ACTIONS = {
   'get-quiz': getQuiz,
   'submit-reflection': submitReflection,
   'submit-quiz-attempt': submitQuizAttempt,
+  'lms-get-case-study': lmsGetCaseStudy,
+  'lms-submit-discussion-post': lmsSubmitDiscussionPost,
+  'lms-submit-presentation': lmsSubmitPresentation,
+  'lms-file-appeal': lmsFileAppeal,
 }
 
 export default async function handler(req, res) {

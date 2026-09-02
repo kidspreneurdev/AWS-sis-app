@@ -196,6 +196,13 @@ export function MHSQuizPlayer() {
   )
 }
 
+const COMPONENT_TYPE_LABELS: Record<string, string> = {
+  notes: 'Do it',
+  discussion: 'Share it',
+  debate: 'Share it',
+  omr: 'Prove it',
+}
+
 function MyComponentRow({ component, onChanged }: { component: MyComponent; onChanged: () => void }) {
   const { getToken } = useStudentPortal()
   const [showForm, setShowForm] = useState<'reflection' | 'dispute' | null>(null)
@@ -245,7 +252,7 @@ function MyComponentRow({ component, onChanged }: { component: MyComponent; onCh
 
   return (
     <div style={{ padding: '10px 12px', marginBottom: 6, borderRadius: 8, border: '1.5px solid #E4EAF2', background: '#F7F9FC' }}>
-      <div style={{ fontSize: 12, fontWeight: 700, color: '#1A365E' }}>{component.lessonTitle} <span style={{ fontWeight: 400, color: '#7A92B0', textTransform: 'capitalize' }}>· {component.componentType}</span></div>
+      <div style={{ fontSize: 12, fontWeight: 700, color: '#1A365E' }}>{component.lessonTitle} <span style={{ fontWeight: 400, color: '#7A92B0' }}>· {COMPONENT_TYPE_LABELS[component.componentType] ?? component.componentType}</span></div>
       <div style={{ fontSize: 10, color: '#7A92B0', marginTop: 2 }}>
         {component.needsReview
           ? '4+ days late — your teacher will review this.'

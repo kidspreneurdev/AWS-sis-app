@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 
-const ROLES = ['admin', 'staff', 'teacher', 'principal', 'partner', 'coach', 'viewer', 'parent']
+const ROLES = ['admin', 'staff', 'teacher', 'principal', 'partner', 'coach', 'counselor', 'viewer', 'readonly', 'parent']
 const ROLE_COLORS: Record<string, { bg: string; tc: string }> = {
   admin:     { bg: '#EEF3FF', tc: '#1A365E' },
   staff:     { bg: '#F0FFF4', tc: '#0E6B3B' },
@@ -9,7 +9,10 @@ const ROLE_COLORS: Record<string, { bg: string; tc: string }> = {
   principal: { bg: '#FFF7ED', tc: '#C2500A' },
   partner:   { bg: '#FDF4FF', tc: '#7C3AED' },
   coach:     { bg: '#FFF7ED', tc: '#D97706' },
+  counselor: { bg: '#F0F9FF', tc: '#0369A1' },
   viewer:    { bg: '#F3F4F6', tc: '#7A92B0' },
+  readonly:  { bg: '#F3F4F6', tc: '#7A92B0' },
+  parent:    { bg: '#FAF5FF', tc: '#6B21A8' },
 }
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,.06)' }

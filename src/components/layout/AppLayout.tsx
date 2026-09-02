@@ -21,7 +21,7 @@ import {
   BarChart, Clock, Target, FileCheck, StickyNote, Printer,
   PlusSquare, Activity, CheckSquare, FileBarChart, Telescope, Flag,
   Library, BookMarked, BookCopy, UserCog, BarChart3, LayoutList, Inbox,
-  ShieldCheck, ListChecks,
+  ShieldCheck, ListChecks, Puzzle,
 } from 'lucide-react'
 import { PageHeaderProvider, useSetActionsTarget } from '@/contexts/PageHeaderContext'
 
@@ -120,11 +120,14 @@ const NAV: NavGroup[] = [
         title: 'Learning Management',
         icon: Library,
         items: [
+          { title: 'Overview', icon: BarChart2, to: '/lms/overview' },
           { title: 'Manage Courses', icon: LayoutList, to: '/lms/manage' },
+          { title: 'Manage Students', icon: Users, to: '/lms/students' },
           { title: 'Courses', icon: BookMarked, to: '/lms/courses' },
           { title: 'Content Library', icon: BookCopy, to: '/lms/content' },
           { title: 'Assign Courses', icon: UserCog, to: '/lms/assign' },
           { title: 'Gradebook', icon: BarChart3, to: '/lms/gradebook' },
+          { title: 'Curriculum', icon: Puzzle, to: '/lms/curriculum' },
           { title: 'Section Details', icon: LayoutList, to: '/lms/section' },
           { title: 'Progress Reports', icon: TrendingUp, to: '/lms/progress' },
           { title: 'K5 Lessons', icon: GraduationCap, to: '/lms/k5-lessons' },
@@ -414,7 +417,9 @@ export function AppLayout() {
   const navigate = useNavigate()
   const location = useLocation()
   const { profile, reset } = useAuthStore()
-  const isStaff = profile?.role === 'staff'
+  const isPartner = profile?.role === 'partner'
+  // Partner accounts get the same restricted permissions as staff.
+  const isStaff = profile?.role === 'staff' || isPartner
   const [academicYear, setAcademicYear] = useState('')
   const [openAccordions, setOpenAccordions] = useState<Set<string>>(() => {
     const open = new Set<string>()
@@ -448,11 +453,20 @@ export function AppLayout() {
     ? profile.full_name.split(' ').map(n => n[0]).join('').toUpperCase()
     : profile?.email?.[0]?.toUpperCase() ?? '?'
 
-  const visibleNav = isStaff
-    ? NAV.filter(group => group.label !== 'Settings')
-    : NAV
+  // Partner accounts don't get the Operations accordion modules.
+  const PARTNER_HIDDEN_ACCORDIONS = ['tpms', 'at', 'pt', 'lms', 'mhs']
+  const PARTNER_BLOCKED_PATHS = ['/tpms/', '/at/', '/pt/', '/lms/', '/mhs/']
+
+  const visibleNav = (isStaff ? NAV.filter(group => group.label !== 'Settings') : NAV)
+    .map(group => isPartner && group.accordion
+      ? { ...group, accordion: group.accordion.filter(acc => !PARTNER_HIDDEN_ACCORDIONS.includes(acc.id)) }
+      : group)
 
   if (isStaff && location.pathname.startsWith('/admin/')) {
+    return <Navigate to="/dashboard" replace />
+  }
+
+  if (isPartner && PARTNER_BLOCKED_PATHS.some(p => location.pathname.startsWith(p))) {
     return <Navigate to="/dashboard" replace />
   }
 

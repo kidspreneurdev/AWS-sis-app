@@ -1,19 +1,22 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef, Fragment } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { uploadFile, downloadUrl } from '@/lib/uploadFile'
 import { useCohorts } from '@/hooks/useCohorts'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
-import { RubricBuilder } from '@/components/shared/RubricBuilder'
+import { useCampuses } from '@/hooks/useCampuses'
+import { useAuthStore } from '@/store/auth.store'
+import { GRADES } from '@/types/student'
 import {
   loadLMS, saveLMS, loadLMSFromDB, deleteLMSCourse, deleteLMSContent, deleteLMSEnrolment,
   lmsId, fmtTime, hasMasteryBool, hasAssignBool, isActiveBool,
   lmsCompositeScore, lmsCourseComposite, gradeLabel,
   SUBJECT_COLORS, SUBJECTS, GRADE_LEVELS, TYPE_ICONS, TYPE_COLORS,
-  type LMSCourse, type LMSContent, type LMSEnrolment, type LMSProgress, type LMSStore
+  type LMSCourse, type LMSContent, type LMSEnrolment, type LMSProgress, type LMSStore, type LMSCourseGroup
 } from './lmsStore'
+import { CASE_STUDY_RUBRIC, SCORE_COMPONENT_TYPES, categorySubtotal, finalGrade, type ScoreComponentType } from '@/lib/lms/caseStudyRubric'
 
-interface Student { id: string; lastName: string; firstName: string; fullName: string; cohort: string; grade: string }
+interface Student { id: string; lastName: string; firstName: string; fullName: string; cohort: string; grade: string; studentId: string; campus: string; status: string }
 type LMSSubmissionRow = Record<string, unknown>
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 13, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)' }
@@ -24,22 +27,31 @@ const selectStyle: React.CSSProperties = { ...inputStyle }
 const taStyle: React.CSSProperties = { ...inputStyle, resize: 'vertical' as const }
 
 const TAB_PATHS: Record<string, string> = {
+  '/lms/overview': 'overview',
   '/lms/manage': 'manage',
+  '/lms/students': 'students',
   '/lms/courses': 'courses',
   '/lms/content': 'content',
   '/lms/assign': 'assign',
   '/lms/gradebook': 'gradebook',
+  '/lms/curriculum': 'curriculum',
+  '/lms/appeals': 'appeals',
   '/lms/section': 'section',
   '/lms/progress': 'progress',
   '/lms/student': 'student',
+  '/lms/student-section': 'student-section',
 }
 
 const TABS = [
+  { v: 'overview', path: '/lms/overview', l: '📊 Overview' },
   { v: 'manage', path: '/lms/manage', l: '📋 Manage' },
+  { v: 'students', path: '/lms/students', l: '👨‍🎓 Students' },
   { v: 'courses', path: '/lms/courses', l: '📘 Courses' },
   { v: 'content', path: '/lms/content', l: '📄 Content' },
   { v: 'assign', path: '/lms/assign', l: '👥 Assign' },
   { v: 'gradebook', path: '/lms/gradebook', l: '📊 Gradebook' },
+  { v: 'curriculum', path: '/lms/curriculum', l: '🧩 Curriculum' },
+  { v: 'appeals', path: '/lms/appeals', l: '🚩 Appeals' },
   { v: 'section', path: '/lms/section', l: '📋 Section' },
   { v: 'progress', path: '/lms/progress', l: '📈 Progress' },
 ]
@@ -131,11 +143,569 @@ function EnrolModal({ courses, students, cohorts, onSave, onClose }: EnrolModalP
   )
 }
 
+// ─── SECTION NOTES MODAL (shared faculty notes on a section) ────────────────
+interface SectionNote {
+  id: string
+  section_id: string
+  author_id: string | null
+  author_name: string | null
+  body: string
+  created_at: string
+}
+interface SectionNotesModalProps {
+  sectionId: string
+  sectionTitle: string
+  authorId?: string
+  authorName?: string
+  onClose: () => void
+}
+function SectionNotesModal({ sectionId, sectionTitle, authorId, authorName, onClose }: SectionNotesModalProps) {
+  const [notes, setNotes] = useState<SectionNote[]>([])
+  const [loading, setLoading] = useState(true)
+  const [draft, setDraft] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      setLoading(true)
+      const { data, error } = await supabase.from('lms_section_notes').select('*').eq('section_id', sectionId).order('created_at', { ascending: false })
+      if (!cancelled) {
+        if (!error && data) setNotes(data as SectionNote[])
+        setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [sectionId])
+
+  async function addNote() {
+    const body = draft.trim()
+    if (!body) return
+    setSaving(true)
+    const { data, error } = await supabase.from('lms_section_notes')
+      .insert({ section_id: sectionId, author_id: authorId ?? null, author_name: authorName ?? 'Unknown', body })
+      .select().single()
+    setSaving(false)
+    if (error) { alert('Could not save note: ' + error.message); return }
+    if (data) { setNotes(prev => [data as SectionNote, ...prev]); setDraft('') }
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, backdropFilter: 'blur(4px)' }} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 680, height: '85vh', maxHeight: 760, display: 'flex', flexDirection: 'column', boxShadow: '0 24px 60px rgba(0,0,0,.3)' }}>
+        <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '18px 24px', borderRadius: '18px 18px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>📝 Section Notes</div>
+            <div style={{ fontSize: 11, color: '#B9C7DC', marginTop: 2 }}>{sectionTitle}</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 16, cursor: 'pointer', fontFamily: 'inherit' }}>✕</button>
+        </div>
+        <div style={{ padding: '16px 24px', overflowY: 'auto', flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {loading ? (
+            <div style={{ textAlign: 'center', color: '#94A3B8', fontSize: 12, padding: '20px 0' }}>Loading notes…</div>
+          ) : notes.length === 0 ? (
+            <div style={{ textAlign: 'center', color: '#94A3B8', fontSize: 12, padding: '20px 0' }}>No notes yet. Leave one for other faculty.</div>
+          ) : notes.map(n => (
+            <div key={n.id} style={{ background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 10, padding: '10px 12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+                <span style={{ fontSize: 11, fontWeight: 800, color: '#1A365E' }}>{n.author_name || 'Unknown'}</span>
+                <span style={{ fontSize: 10, color: '#94A3B8', flexShrink: 0 }}>{new Date(n.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+              </div>
+              <div style={{ fontSize: 12, color: '#334155', whiteSpace: 'pre-wrap' }}>{n.body}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ padding: '14px 24px 20px', borderTop: '1px solid #E4EAF2', display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
+          <textarea value={draft} onChange={e => setDraft(e.target.value)} placeholder="Add a note for other faculty…" rows={4} style={{ ...taStyle, width: '100%', boxSizing: 'border-box', resize: 'vertical' }} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <button onClick={onClose} style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Close</button>
+            <button onClick={addNote} disabled={saving || !draft.trim()} style={{ padding: '9px 20px', background: saving || !draft.trim() ? '#B7C3D6' : '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: saving || !draft.trim() ? 'default' : 'pointer', fontFamily: 'inherit' }}>{saving ? 'Saving…' : 'Add Note'}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── STUDENT NOTES MODAL (faculty notes on one student within one section) ──
+interface StudentNote {
+  id: string
+  section_id: string
+  student_id: string
+  author_id: string | null
+  author_name: string | null
+  body: string
+  created_at: string
+}
+interface StudentNotesModalProps {
+  sectionId: string
+  studentId: string
+  studentName: string
+  courseTitle: string
+  authorId?: string
+  authorName?: string
+  onClose: () => void
+}
+function StudentNotesModal({ sectionId, studentId, studentName, courseTitle, authorId, authorName, onClose }: StudentNotesModalProps) {
+  const [notes, setNotes] = useState<StudentNote[]>([])
+  const [loading, setLoading] = useState(true)
+  const [draft, setDraft] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      setLoading(true)
+      const { data, error } = await supabase.from('lms_student_notes').select('*').eq('section_id', sectionId).eq('student_id', studentId).order('created_at', { ascending: false })
+      if (!cancelled) {
+        if (!error && data) setNotes(data as StudentNote[])
+        setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [sectionId, studentId])
+
+  async function addNote() {
+    const body = draft.trim()
+    if (!body) return
+    setSaving(true)
+    const { data, error } = await supabase.from('lms_student_notes')
+      .insert({ section_id: sectionId, student_id: studentId, author_id: authorId ?? null, author_name: authorName ?? 'Unknown', body })
+      .select().single()
+    setSaving(false)
+    if (error) { alert('Could not save note: ' + error.message); return }
+    if (data) { setNotes(prev => [data as StudentNote, ...prev]); setDraft('') }
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, backdropFilter: 'blur(4px)' }} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 680, height: '85vh', maxHeight: 760, display: 'flex', flexDirection: 'column', boxShadow: '0 24px 60px rgba(0,0,0,.3)' }}>
+        <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '18px 24px', borderRadius: '18px 18px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>📝 Student Notes</div>
+            <div style={{ fontSize: 11, color: '#B9C7DC', marginTop: 2 }}>{studentName} · {courseTitle}</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 16, cursor: 'pointer', fontFamily: 'inherit' }}>✕</button>
+        </div>
+        <div style={{ padding: '16px 24px', overflowY: 'auto', flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {loading ? (
+            <div style={{ textAlign: 'center', color: '#94A3B8', fontSize: 12, padding: '20px 0' }}>Loading notes…</div>
+          ) : notes.length === 0 ? (
+            <div style={{ textAlign: 'center', color: '#94A3B8', fontSize: 12, padding: '20px 0' }}>No notes yet for this student in this section.</div>
+          ) : notes.map(n => (
+            <div key={n.id} style={{ background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 10, padding: '10px 12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+                <span style={{ fontSize: 11, fontWeight: 800, color: '#1A365E' }}>{n.author_name || 'Unknown'}</span>
+                <span style={{ fontSize: 10, color: '#94A3B8', flexShrink: 0 }}>{new Date(n.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+              </div>
+              <div style={{ fontSize: 12, color: '#334155', whiteSpace: 'pre-wrap' }}>{n.body}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ padding: '14px 24px 20px', borderTop: '1px solid #E4EAF2', display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
+          <textarea value={draft} onChange={e => setDraft(e.target.value)} placeholder={`Add a note about ${studentName}…`} rows={4} style={{ ...taStyle, width: '100%', boxSizing: 'border-box', resize: 'vertical' }} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <button onClick={onClose} style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Close</button>
+            <button onClick={addNote} disabled={saving || !draft.trim()} style={{ padding: '9px 20px', background: saving || !draft.trim() ? '#B7C3D6' : '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: saving || !draft.trim() ? 'default' : 'pointer', fontFamily: 'inherit' }}>{saving ? 'Saving…' : 'Add Note'}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── STUDENT DIRECTORY (used by the New Section "Add Students" step) ─────────
+interface DirStudent { id: string; firstName: string; lastName: string; grade: string; studentId: string; campus: string }
+
+interface StudentDirectoryModalProps {
+  directoryStudents: DirStudent[]
+  campuses: string[]
+  initialSelectedIds: Set<string>
+  onDone: (ids: Set<string>) => void
+  onClose: () => void
+}
+function StudentDirectoryModal({ directoryStudents, campuses, initialSelectedIds, onDone, onClose }: StudentDirectoryModalProps) {
+  const [search, setSearch] = useState('')
+  const [locationFilter, setLocationFilter] = useState('')
+  const [gradeMinIdx, setGradeMinIdx] = useState(0)
+  const [gradeMaxIdx, setGradeMaxIdx] = useState(GRADES.length - 1)
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(initialSelectedIds))
+
+  const q = search.trim().toLowerCase()
+  const filtered = directoryStudents
+    .filter(s => !locationFilter || s.campus === locationFilter)
+    .filter(s => {
+      const idx = GRADES.indexOf(s.grade)
+      if (idx === -1) return true
+      return idx >= gradeMinIdx && idx <= gradeMaxIdx
+    })
+    .filter(s => !q || `${s.firstName} ${s.lastName}`.toLowerCase().includes(q) || s.studentId.toLowerCase().includes(q))
+    .sort((a, b) => sortDir === 'asc' ? a.lastName.localeCompare(b.lastName) : b.lastName.localeCompare(a.lastName))
+  const shown = filtered.slice(0, 50)
+  const allShownSelected = shown.length > 0 && shown.every(s => selectedIds.has(s.id))
+
+  function toggleAllShown() {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (allShownSelected) shown.forEach(s => next.delete(s.id))
+      else shown.forEach(s => next.add(s.id))
+      return next
+    })
+  }
+  function toggleOne(id: string) {
+    setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next })
+  }
+
+  const thStyle: React.CSSProperties = { fontSize: 10, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '.06em', textAlign: 'left', padding: '10px 12px' }
+  const tdStyle: React.CSSProperties = { fontSize: 12, color: '#1A365E', padding: '9px 12px' }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, backdropFilter: 'blur(4px)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 1100, height: '85vh', maxHeight: 820, boxShadow: '0 24px 60px rgba(0,0,0,.3)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid #E4EAF2' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 20 }}>🪪</span>
+              <span style={{ fontSize: 16, fontWeight: 900, color: '#1A365E', letterSpacing: '.03em' }}>STUDENT DIRECTORY</span>
+            </div>
+            <button onClick={onClose} title="Close" style={{ width: 34, height: 34, borderRadius: 8, border: '1.5px solid #1A365E', background: '#fff', cursor: 'pointer', fontSize: 14, color: '#1A365E', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr 1.3fr', gap: 20 }}>
+            <div>
+              <label style={{ fontSize: 10, fontWeight: 800, color: '#5A7290', textTransform: 'uppercase', letterSpacing: '.05em', display: 'block', marginBottom: 6 }}>Student Search:</label>
+              <div style={{ position: 'relative' }}>
+                <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94A3B8', fontSize: 13 }}>🔍</span>
+                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search for Students" style={{ ...inputStyle, paddingLeft: 32 }} />
+              </div>
+            </div>
+            <div>
+              <label style={{ fontSize: 10, fontWeight: 800, color: '#5A7290', textTransform: 'uppercase', letterSpacing: '.05em', display: 'block', marginBottom: 6 }}>Filter by Location:</label>
+              <select value={locationFilter} onChange={e => setLocationFilter(e.target.value)} style={selectStyle}>
+                <option value="">All Locations</option>
+                {campuses.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: 10, fontWeight: 800, color: '#5A7290', textTransform: 'uppercase', letterSpacing: '.05em', display: 'block', marginBottom: 6 }}>Grade Filter:</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <select value={gradeMinIdx} onChange={e => setGradeMinIdx(Math.min(Number(e.target.value), gradeMaxIdx))} style={{ ...selectStyle, flex: 1 }}>
+                  {GRADES.map((g, i) => <option key={g} value={i}>{g}</option>)}
+                </select>
+                <span style={{ color: '#94A3B8', fontSize: 12 }}>to</span>
+                <select value={gradeMaxIdx} onChange={e => setGradeMaxIdx(Math.max(Number(e.target.value), gradeMinIdx))} style={{ ...selectStyle, flex: 1 }}>
+                  {GRADES.map((g, i) => <option key={g} value={i}>{g}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ padding: '10px 24px 0', fontSize: 12, fontWeight: 700, color: '#5A7290' }}>Showing {shown.length} of {filtered.length} Students</div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: '8px 24px 0' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid #E4EAF2' }}>
+                <th style={{ ...thStyle, width: 34 }}><input type="checkbox" checked={allShownSelected} onChange={toggleAllShown} style={{ cursor: 'pointer' }} /></th>
+                <th style={thStyle}>
+                  <button onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0, display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '.06em' }}>
+                    Last Name {sortDir === 'asc' ? '▾' : '▴'}
+                  </button>
+                </th>
+                <th style={thStyle}>First Name</th>
+                <th style={thStyle}>Grade</th>
+                <th style={thStyle}>Student ID</th>
+                <th style={thStyle}>Start Date</th>
+                <th style={thStyle}>End Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {!shown.length ? (
+                <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40, color: '#94A3B8', fontSize: 13 }}>No students match these filters.</td></tr>
+              ) : shown.map((s, i) => (
+                <tr key={s.id} style={{ background: i % 2 === 0 ? '#fff' : '#FAFBFF', borderBottom: '1px solid #F0F4FA' }}>
+                  <td style={tdStyle}><input type="checkbox" checked={selectedIds.has(s.id)} onChange={() => toggleOne(s.id)} style={{ cursor: 'pointer' }} /></td>
+                  <td style={{ ...tdStyle, fontWeight: 700 }}>{s.lastName}</td>
+                  <td style={tdStyle}>{s.firstName}</td>
+                  <td style={tdStyle}>{s.grade || '—'}</td>
+                  <td style={tdStyle}>{s.studentId || '—'}</td>
+                  <td style={{ ...tdStyle, color: '#B7C3D6' }}>—</td>
+                  <td style={{ ...tdStyle, color: '#B7C3D6' }}>—</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '16px 24px', borderTop: '1px solid #E4EAF2' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ width: 26, height: 26, borderRadius: '50%', background: '#1A365E', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800 }}>{selectedIds.size}</span>
+            <span style={{ fontSize: 12, fontWeight: 800, color: '#5A7290', textTransform: 'uppercase', letterSpacing: '.03em' }}>Students Selected</span>
+          </div>
+          <button onClick={() => onDone(selectedIds)} style={{ padding: '12px 40px', background: '#0F766E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 800, letterSpacing: '.03em', cursor: 'pointer', fontFamily: 'inherit' }}>DONE</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── INSTRUCTOR DIRECTORY (used by the New Section "Section Details" step) ────
+interface DirStaff { id: string; firstName: string; lastName: string; role: string; email: string; campus: string }
+
+interface InstructorDirectoryModalProps {
+  staffList: DirStaff[]
+  campuses: string[]
+  initialSelectedIds: Set<string>
+  onDone: (ids: Set<string>) => void
+  onClose: () => void
+}
+function InstructorDirectoryModal({ staffList, campuses, initialSelectedIds, onDone, onClose }: InstructorDirectoryModalProps) {
+  const [search, setSearch] = useState('')
+  const [locationFilter, setLocationFilter] = useState('')
+  const [roleFilter, setRoleFilter] = useState('')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(initialSelectedIds))
+
+  const roles = [...new Set(staffList.map(s => s.role).filter(Boolean))].sort()
+  const q = search.trim().toLowerCase()
+  const filtered = staffList
+    .filter(s => !locationFilter || s.campus === locationFilter)
+    .filter(s => !roleFilter || s.role === roleFilter)
+    .filter(s => !q || `${s.firstName} ${s.lastName}`.toLowerCase().includes(q) || s.email.toLowerCase().includes(q))
+    .sort((a, b) => sortDir === 'asc' ? a.lastName.localeCompare(b.lastName) : b.lastName.localeCompare(a.lastName))
+  const shown = filtered.slice(0, 50)
+
+  function toggleOne(id: string) {
+    setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next })
+  }
+
+  const thStyle: React.CSSProperties = { fontSize: 10, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '.06em', textAlign: 'left', padding: '10px 12px' }
+  const tdStyle: React.CSSProperties = { fontSize: 12, color: '#1A365E', padding: '9px 12px' }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, backdropFilter: 'blur(4px)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 1100, height: '85vh', maxHeight: 820, boxShadow: '0 24px 60px rgba(0,0,0,.3)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid #E4EAF2' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 20 }}>🪪</span>
+              <span style={{ fontSize: 16, fontWeight: 900, color: '#1A365E', letterSpacing: '.03em' }}>INSTRUCTOR DIRECTORY</span>
+            </div>
+            <button onClick={onClose} title="Close" style={{ width: 34, height: 34, borderRadius: 8, border: '1.5px solid #1A365E', background: '#fff', cursor: 'pointer', fontSize: 14, color: '#1A365E', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr 1fr', gap: 20 }}>
+            <div>
+              <label style={{ fontSize: 10, fontWeight: 800, color: '#5A7290', textTransform: 'uppercase', letterSpacing: '.05em', display: 'block', marginBottom: 6 }}>Instructor Search:</label>
+              <div style={{ position: 'relative' }}>
+                <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94A3B8', fontSize: 13 }}>🔍</span>
+                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name" style={{ ...inputStyle, paddingLeft: 32 }} />
+              </div>
+            </div>
+            <div>
+              <label style={{ fontSize: 10, fontWeight: 800, color: '#5A7290', textTransform: 'uppercase', letterSpacing: '.05em', display: 'block', marginBottom: 6 }}>Filter by Location:</label>
+              <select value={locationFilter} onChange={e => setLocationFilter(e.target.value)} style={selectStyle}>
+                <option value="">All Locations</option>
+                {campuses.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: 10, fontWeight: 800, color: '#5A7290', textTransform: 'uppercase', letterSpacing: '.05em', display: 'block', marginBottom: 6 }}>Program Role</label>
+              <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)} style={selectStyle}>
+                <option value="">Any</option>
+                {roles.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ padding: '10px 24px 0', fontSize: 12, fontWeight: 700, color: '#5A7290' }}>Showing {shown.length} of {filtered.length} Instructors</div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: '8px 24px 0' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid #E4EAF2' }}>
+                <th style={{ ...thStyle, width: 34 }} />
+                <th style={thStyle}>
+                  <button onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0, display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '.06em' }}>
+                    Last Name {sortDir === 'asc' ? '▾' : '▴'}
+                  </button>
+                </th>
+                <th style={thStyle}>First Name</th>
+                <th style={thStyle}>User Name</th>
+                <th style={thStyle}>Program Role</th>
+              </tr>
+            </thead>
+            <tbody>
+              {!shown.length ? (
+                <tr><td colSpan={5} style={{ textAlign: 'center', padding: 40, color: '#94A3B8', fontSize: 13 }}>No instructors match these filters.</td></tr>
+              ) : shown.map((s, i) => (
+                <tr key={s.id} style={{ background: i % 2 === 0 ? '#fff' : '#FAFBFF', borderBottom: '1px solid #F0F4FA' }}>
+                  <td style={tdStyle}><input type="checkbox" checked={selectedIds.has(s.id)} onChange={() => toggleOne(s.id)} style={{ cursor: 'pointer' }} /></td>
+                  <td style={{ ...tdStyle, fontWeight: 700 }}>{s.lastName}</td>
+                  <td style={tdStyle}>{s.firstName}</td>
+                  <td style={tdStyle}>{s.email || '—'}</td>
+                  <td style={tdStyle}>{s.role || 'None'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '16px 24px', borderTop: '1px solid #E4EAF2' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ width: 26, height: 26, borderRadius: '50%', background: '#1A365E', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800 }}>{selectedIds.size}</span>
+            <span style={{ fontSize: 12, fontWeight: 800, color: '#5A7290', textTransform: 'uppercase', letterSpacing: '.03em' }}>Instructors Selected</span>
+          </div>
+          <button onClick={() => onDone(selectedIds)} style={{ padding: '12px 40px', background: '#0F766E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 800, letterSpacing: '.03em', cursor: 'pointer', fontFamily: 'inherit' }}>DONE</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── OVERVIEW HELPERS ──────────────────────────────────────────────────────────
+function rangeDates(days: number): string[] {
+  const now = new Date()
+  const out: string[] = []
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now)
+    d.setDate(now.getDate() - i)
+    out.push(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }))
+  }
+  return out
+}
+
+function rangeLabel(days: number): string {
+  const now = new Date()
+  const start = new Date(now)
+  start.setDate(now.getDate() - (days - 1))
+  const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  return `${fmt(start)} - ${fmt(now)}`
+}
+
+function KpiCard({ icon, iconBg, value, label }: { icon: string; iconBg: string; value: number | string; label: string }) {
+  return (
+    <div style={{ background: '#fff', borderRadius: 13, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', flex: 1, minWidth: 240, padding: 20, display: 'flex', alignItems: 'center', gap: 16 }}>
+      <div style={{ width: 56, height: 56, borderRadius: '50%', background: iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0 }}>{icon}</div>
+      <div>
+        <div style={{ fontSize: 26, fontWeight: 900, color: '#1A365E', lineHeight: 1.1 }}>{value}</div>
+        <div style={{ fontSize: 13, color: '#5A7290', fontWeight: 600, marginTop: 2 }}>{label}</div>
+      </div>
+    </div>
+  )
+}
+
+function TimeSeriesChart({ dates, series, unit }: { dates: string[]; series: { label: string; color: string; values: number[] }[]; unit?: 'hours' | 'count' }) {
+  const width = 900, height = 200, padL = 34, padR = 10, padT = 10, padB = 26
+  const innerW = width - padL - padR
+  const innerH = height - padT - padB
+  const maxVal = Math.max(1, ...series.flatMap(s => s.values))
+  const n = dates.length
+  const x = (i: number) => padL + (n > 1 ? (i / (n - 1)) * innerW : innerW / 2)
+  const y = (v: number) => padT + innerH - (v / maxVal) * innerH
+  const labelEvery = Math.max(1, Math.ceil(n / 7))
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ width: '100%', overflowX: 'auto' }}>
+        <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height, display: 'block' }} preserveAspectRatio="none">
+          <line x1={padL} y1={padT + innerH} x2={width - padR} y2={padT + innerH} stroke="#E4EAF2" strokeWidth={1} />
+          <text x={0} y={padT + innerH + 4} fontSize={11} fill="#7A92B0">{unit === 'hours' ? '0h' : '0'}</text>
+          {series.map(s => (
+            <polyline key={s.label} fill="none" stroke={s.color} strokeWidth={2}
+              points={s.values.map((v, i) => `${x(i)},${y(v)}`).join(' ')} />
+          ))}
+          {dates.map((d, i) => (
+            i % labelEvery === 0 ? <text key={i} x={x(i)} y={height - 6} fontSize={10} fill="#7A92B0" textAnchor="middle">{d}</text> : null
+          ))}
+        </svg>
+      </div>
+      {series.length > 1 && (
+        <div style={{ display: 'flex', gap: 20, justifyContent: 'center' }}>
+          {series.map(s => (
+            <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#5A7290', fontWeight: 700 }}>
+              <span style={{ width: 9, height: 9, borderRadius: '50%', background: s.color, display: 'inline-block' }} />
+              {s.label}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TopList({ items }: { items: { title: string; value: string }[] }) {
+  if (!items.length) return <div style={{ textAlign: 'center', color: '#94A3B8', fontSize: 13, padding: '48px 0' }}>No results found.</div>
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {items.map((it, i) => (
+        <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            <div style={{ width: 20, height: 20, borderRadius: 5, background: '#F0F4FA', color: '#5A7290', fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#1A365E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.title}</div>
+          </div>
+          <div style={{ fontSize: 12, fontWeight: 800, color: '#1A365E', flexShrink: 0 }}>{it.value}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ─── SELF-ENROLL CODE GENERATION ────────────────────────────────────────────
+function genSelfEnrollCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // no ambiguous 0/O/1/I
+  return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+}
+function genSelfEnrollPassword(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
+  return Array.from({ length: 10 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+}
+
+// ─── GRADE RANGE SLIDER (dual-thumb, used by Manage Students filters) ────────
+interface GradeRangeSliderProps {
+  min: number
+  max: number
+  value: [number, number]
+  onChange: (v: [number, number]) => void
+}
+function GradeRangeSlider({ min, max, value, onChange }: GradeRangeSliderProps) {
+  const [lo, hi] = value
+  const pctLo = ((lo - min) / (max - min)) * 100
+  const pctHi = ((hi - min) / (max - min)) * 100
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <span style={{ fontSize: 10, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap' }}>By Grade</span>
+      <div style={{ position: 'relative', width: 190, height: 26, flexShrink: 0 }}>
+        <style>{`
+          .ms-grade-range { position: absolute; top: 0; left: 0; width: 100%; height: 26px; margin: 0; background: transparent; pointer-events: none; appearance: none; -webkit-appearance: none; }
+          .ms-grade-range::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; pointer-events: auto; width: 22px; height: 22px; border-radius: 50%; background: #fff; border: 2px solid #1A365E; box-shadow: 0 1px 3px rgba(26,54,94,.3); cursor: pointer; margin-top: 0; }
+          .ms-grade-range::-moz-range-thumb { pointer-events: auto; width: 18px; height: 18px; border-radius: 50%; background: #fff; border: 2px solid #1A365E; box-shadow: 0 1px 3px rgba(26,54,94,.3); cursor: pointer; }
+          .ms-grade-range::-webkit-slider-runnable-track { background: transparent; }
+        `}</style>
+        <div style={{ position: 'absolute', top: 11, left: 0, right: 0, height: 4, borderRadius: 2, background: '#E4EAF2' }} />
+        <div style={{ position: 'absolute', top: 11, left: `${pctLo}%`, width: `${pctHi - pctLo}%`, height: 4, borderRadius: 2, background: '#1A365E' }} />
+        <input
+          type="range" className="ms-grade-range" min={min} max={max} value={lo}
+          onChange={e => onChange([Math.min(Number(e.target.value), hi), hi])}
+        />
+        <input
+          type="range" className="ms-grade-range" min={min} max={max} value={hi}
+          onChange={e => onChange([lo, Math.max(Number(e.target.value), lo)])}
+        />
+      </div>
+      <span style={{ fontSize: 11, fontWeight: 700, color: '#1A365E', whiteSpace: 'nowrap' }}>{GRADES[lo]}–{GRADES[hi]}</span>
+    </div>
+  )
+}
+
 export function LMSPage() {
   const cf = useCampusFilter()
+  const profile = useAuthStore(s => s.profile)
   const location = useLocation()
   const navigate = useNavigate()
-  const activeTab = TAB_PATHS[location.pathname] || 'manage'
+  const activeTab = TAB_PATHS[location.pathname] || 'overview'
   const query = new URLSearchParams(location.search)
   const studentDetailSid = query.get('sid') ?? ''
   const studentDetailCid = query.get('cid') ?? ''
@@ -143,35 +713,86 @@ export function LMSPage() {
   const [store, setStore] = useState<LMSStore>(loadLMS)
   const [students, setStudents] = useState<Student[]>([])
   const cohorts = useCohorts()
+  const campuses = useCampuses()
 
   // Per-tab UI state
   const [manageSearch, setManageSearch] = useState('')
   const [manageTabFilter, setManageTabFilter] = useState<'active' | 'inactive'>('active')
   const [manageTypeFilter, setManageTypeFilter] = useState('')
   const [manageExpanded, setManageExpanded] = useState<Record<string, boolean>>({})
+
+  // Manage Students tab state
+  const [msSearch, setMsSearch] = useState('')
+  const [msCourseFilter, setMsCourseFilter] = useState('')
+  const [msSectionFilter, setMsSectionFilter] = useState('')
+  const [msLocationFilter, setMsLocationFilter] = useState('')
+  const [msStatusFilter, setMsStatusFilter] = useState('')
+  const [msSort, setMsSort] = useState<'az' | 'za'>('az')
+  const [msGradeRange, setMsGradeRange] = useState<[number, number]>([1, GRADES.length - 1])
+  const [msVisibleCount, setMsVisibleCount] = useState(20)
+  const [msExpanded, setMsExpanded] = useState<Record<string, boolean>>({})
+  const [msSectionTab, setMsSectionTab] = useState<Record<string, 'active' | 'completed' | 'dropped'>>({})
+  const [studentSectionTab, setStudentSectionTab] = useState<'curriculum' | 'weekly'>('curriculum')
+  const [studentNotesTarget, setStudentNotesTarget] = useState<{ sid: string; cid: string; studentName: string; courseTitle: string } | null>(null)
   const [activeCourseId, setActiveCourseId] = useState('')
   const [gbCourseId, setGbCourseId] = useState('')
   const [gbSubjectFilter, setGbSubjectFilter] = useState('')
+  const [curriculumCourseId, setCurriculumCourseId] = useState('')
   const [sectionCourseId, setSectionCourseId] = useState('')
   const [sectionFilter, setSectionFilter] = useState('all')
-  const [sectionStudentTab, setSectionStudentTab] = useState<'gradebook' | 'curriculum'>('gradebook')
   const [progFilterCourse, setProgFilterCourse] = useState('')
+  const [usageRange, setUsageRange] = useState('7')
+  const [performanceRange, setPerformanceRange] = useState('7')
+  const [reportsMenuOpen, setReportsMenuOpen] = useState(false)
+  const reportsMenuRef = useRef<HTMLDivElement>(null)
+  const usageSectionRef = useRef<HTMLDivElement>(null)
+  const performanceSectionRef = useRef<HTMLDivElement>(null)
   const [showCourseModal, setShowCourseModal] = useState(false)
   const [editCourseIdx, setEditCourseIdx] = useState<number | null>(null)
+  const [newSectionGroupId, setNewSectionGroupId] = useState<string | null>(null)
+  const [showNewSectionFlow, setShowNewSectionFlow] = useState(false)
+  const [staffList, setStaffList] = useState<{ id: string; fullName: string; firstName: string; lastName: string; role: string; department: string; email: string; campus: string }[]>([])
+  const [selectedSectionIds, setSelectedSectionIds] = useState<Set<string>>(new Set())
+  const [sectionMenuOpenId, setSectionMenuOpenId] = useState<string | null>(null)
+  const sectionMenuRef = useRef<HTMLDivElement>(null)
+  const [notesSectionId, setNotesSectionId] = useState<string | null>(null)
+  const [curriculumExpanded, setCurriculumExpanded] = useState<Record<string, boolean>>({})
+  const [curriculumSettingsOpen, setCurriculumSettingsOpen] = useState(false)
+  const [curriculumMenuOpenId, setCurriculumMenuOpenId] = useState<string | null>(null)
+  const curriculumMenuRef = useRef<HTMLDivElement>(null)
   const [showLessonModal, setShowLessonModal] = useState(false)
   const [editLessonIdx, setEditLessonIdx] = useState<number | null>(null)
   const [prefillUnit, setPrefillUnit] = useState<string | null>(null)
   const [showEnrolModal, setShowEnrolModal] = useState(false)
   const [previewItem, setPreviewItem] = useState<LMSContent | null>(null)
-  const [scoreModal, setScoreModal] = useState<{ studentId: string; contentId: string; courseId: string; currentScore: string; lessonTitle: string; maxScore: number; instructions: string; submNote: string; submLink: string } | null>(null)
+  const [scoreModal, setScoreModal] = useState<{ studentId: string; studentName: string; contentId: string; courseId: string; lessonTitle: string; caseStudyUrl?: string } | null>(null)
   const [studentSubmissions, setStudentSubmissions] = useState<LMSSubmissionRow[]>([])
   const [studentSubmissionsLoading, setStudentSubmissionsLoading] = useState(false)
   const [allSubmissions, setAllSubmissions] = useState<LMSSubmissionRow[]>([])
+  interface AppealListRow { id: string; contentId: string; studentId: string; componentType: ScoreComponentType; message: string; status: 'open' | 'resolved'; adminReply: string | null; createdAt: string }
+  const [appeals, setAppeals] = useState<AppealListRow[]>([])
+  const [appealsLoading, setAppealsLoading] = useState(false)
+
+  const loadAppeals = useCallback(() => {
+    setAppealsLoading(true)
+    supabase.from('lms_grade_appeals').select('*').order('created_at', { ascending: false }).then(({ data, error }) => {
+      setAppealsLoading(false)
+      if (error) { console.error('lms_grade_appeals load error:', error); return }
+      setAppeals((data ?? []).map((r: Record<string, unknown>) => ({
+        id: r.id as string, contentId: r.content_id as string, studentId: r.student_id as string,
+        componentType: r.component_type as ScoreComponentType, message: r.message as string,
+        status: r.status as 'open' | 'resolved', adminReply: (r.admin_reply as string) ?? null,
+        createdAt: (r.created_at as string) ?? '',
+      })))
+    })
+  }, [])
 
   useEffect(() => { loadLMSFromDB().then(setStore) }, [])
 
+  useEffect(() => { if (activeTab === 'appeals') loadAppeals() }, [activeTab, loadAppeals])
+
   useEffect(() => {
-    let q = supabase.from('students').select('id,first_name,last_name,cohort,grade').eq('status', 'Enrolled').order('last_name')
+    let q = supabase.from('students').select('id,first_name,last_name,cohort,grade,student_id,campus,status').eq('status', 'Enrolled').order('last_name')
     if (cf) q = q.eq('campus', cf)
     q.then(({ data, error }) => {
       if (error) { console.error('LMS students load error:', error); return }
@@ -186,12 +807,38 @@ export function LMSPage() {
             lastName,
             cohort: (r.cohort as string) ?? '',
             grade: String(r.grade ?? ''),
+            studentId: (r.student_id as string) ?? '',
+            campus: (r.campus as string) ?? '',
+            status: (r.status as string) ?? '',
           }
         })
         setStudents(mapped)
       }
     })
   }, [cf])
+
+  useEffect(() => { setMsVisibleCount(20) }, [msSearch, msCourseFilter, msSectionFilter, msLocationFilter, msStatusFilter, msGradeRange])
+
+  useEffect(() => {
+    supabase.from('staff').select('id,first_name,last_name,role,department,email,campus,active').eq('active', true).order('last_name').then(({ data, error }) => {
+      if (error) { console.error('LMS staff load error:', error); return }
+      if (data) {
+        setStaffList(data.map((r: Record<string, unknown>) => {
+          const firstName = (r.first_name as string) ?? ''
+          const lastName = (r.last_name as string) ?? ''
+          return {
+            id: r.id as string,
+            fullName: `${firstName} ${lastName}`.trim() || 'Unknown',
+            firstName, lastName,
+            role: (r.role as string) ?? '',
+            department: (r.department as string) ?? '',
+            email: (r.email as string) ?? '',
+            campus: (r.campus as string) ?? '',
+          }
+        }))
+      }
+    })
+  }, [])
 
   useEffect(() => {
     if (activeTab !== 'student') return
@@ -226,11 +873,102 @@ export function LMSPage() {
     return () => { alive = false }
   }, [activeTab])
 
+  useEffect(() => {
+    if (!reportsMenuOpen) return
+    function onClick(e: MouseEvent) {
+      if (reportsMenuRef.current && !reportsMenuRef.current.contains(e.target as Node)) setReportsMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [reportsMenuOpen])
+
+  useEffect(() => {
+    if (!sectionMenuOpenId) return
+    function onClick(e: MouseEvent) {
+      if (sectionMenuRef.current && !sectionMenuRef.current.contains(e.target as Node)) setSectionMenuOpenId(null)
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [sectionMenuOpenId])
+
+  useEffect(() => {
+    if (!curriculumMenuOpenId) return
+    function onClick(e: MouseEvent) {
+      if (curriculumMenuRef.current && !curriculumMenuRef.current.contains(e.target as Node)) setCurriculumMenuOpenId(null)
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [curriculumMenuOpenId])
+
   const persist = useCallback(async (updated: LMSStore) => {
     setStore(updated)
     const err = await saveLMS(updated)
     if (err) alert('Save failed: ' + err)
   }, [])
+
+  function closeCourseModal() {
+    setShowCourseModal(false)
+    setNewSectionGroupId(null)
+  }
+
+  // ─── Shared per-student × per-course stat calc (Manage Students + student-section detail) ──
+  interface StuCourseStat {
+    course: LMSCourse
+    enrol: LMSEnrolment | undefined
+    pct: number
+    avgMastery: number | null
+    courseGrade: number | null
+    onTargetGrade: number
+    timeMins: number
+    compLessons: number
+    totalLessons: number
+    paceLabel: string
+    paceColor: string
+    bucket: 'active' | 'completed' | 'dropped'
+  }
+  function calcStudentCourseStats(sid: string, course: LMSCourse, enrol: LMSEnrolment | undefined): StuCourseStat {
+    const content = store.content.filter(x => x.courseId === course.id)
+    const myProg = store.progress.filter(p => p.courseId === course.id && p.studentId === sid)
+    const comp = myProg.filter(p => p.status === 'completed').length
+    const pct = content.length ? Math.round(comp / content.length * 100) : 0
+    const mastRows = myProg.filter(p => p.masteryScore != null && !isNaN(Number(p.masteryScore)))
+    const avgMastery = mastRows.length ? Math.round(mastRows.reduce((s, p) => s + Number(p.masteryScore), 0) / mastRows.length) : null
+    const timeMins = myProg.reduce((s, p) => s + (p.timeSpentMins || 0), 0)
+    const courseGrade = lmsCourseComposite(myProg, content, course.passMark || 80)
+    const onTargetGrade = enrol?.assignedAt && enrol?.dueDate
+      ? Math.min(100, Math.round((Date.now() - new Date(enrol.assignedAt).getTime()) / (new Date(enrol.dueDate).getTime() - new Date(enrol.assignedAt).getTime()) * 100))
+      : pct
+    const enrolActive = isActiveBool(enrol?.active)
+    const bucket: 'active' | 'completed' | 'dropped' = pct >= 100 ? 'completed' : (enrol && !enrolActive ? 'dropped' : 'active')
+    let paceLabel = '—', paceColor = '#94A3B8'
+    if (bucket === 'completed') { paceLabel = 'Completed'; paceColor = '#059669' }
+    else if (enrol?.assignedAt && enrol?.dueDate) {
+      const diff = pct - onTargetGrade
+      if (diff >= 15) { paceLabel = 'Ahead of Pace'; paceColor = '#059669' }
+      else if (diff >= 5) { paceLabel = 'On Pace'; paceColor = '#16A34A' }
+      else if (diff >= -10) { paceLabel = 'Slightly Off Pace'; paceColor = '#D97706' }
+      else { paceLabel = 'Off Pace'; paceColor = '#D61F31' }
+    }
+    return { course, enrol, pct, avgMastery, courseGrade, onTargetGrade, timeMins, compLessons: comp, totalLessons: content.length, paceLabel, paceColor, bucket }
+  }
+  // Mirrors the (pre-existing) direct grade comparison used by Manage Courses' sectionStats,
+  // so enrolment counts stay consistent between the two pages.
+  function getStudentCourseStats(student: Student): StuCourseStat[] {
+    const seen = new Set<string>()
+    const out: StuCourseStat[] = []
+    store.enrolments.forEach(en => {
+      let matches = false
+      if (en.targetType === 'student') matches = en.targetValue === student.id
+      else if (en.targetType === 'cohort') matches = en.targetValue === student.cohort
+      else if (en.targetType === 'grade') matches = en.targetValue === student.grade
+      if (!matches || seen.has(en.courseId)) return
+      const course = store.courses.find(c => c.id === en.courseId)
+      if (!course) return
+      seen.add(en.courseId)
+      out.push(calcStudentCourseStats(student.id, course, en))
+    })
+    return out
+  }
 
   function navTab(tab: string) {
     const t = TABS.find(x => x.v === tab)
@@ -384,7 +1122,7 @@ export function LMSPage() {
                           <span style={{ color: typeCol, fontWeight: 700 }}>{item.type}</span>
                           {item.estimatedMins && <span>⏱ {item.estimatedMins} min</span>}
                           {hasMasteryBool(item.hasMastery) && <span style={{ color: '#059669', fontWeight: 700 }}>✓ Mastery test</span>}
-                          {hasAssignBool(item.hasAssignment) && <span style={{ background: '#EEF3FF', color: '#1A365E', fontWeight: 700, fontSize: 9, padding: '2px 7px', borderRadius: 4, border: '1px solid #C7D9FF' }}>📋 Assignment{item.assignMaxScore ? ' · Max: ' + item.assignMaxScore : ''}{item.assignSubType ? ' · ' + item.assignSubType : ''}</span>}
+                          {hasAssignBool(item.hasAssignment) && <span style={{ background: '#EEF3FF', color: '#1A365E', fontWeight: 700, fontSize: 9, padding: '2px 7px', borderRadius: 4, border: '1px solid #C7D9FF' }}>📚 Case Study Assignment</span>}
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
@@ -532,8 +1270,230 @@ export function LMSPage() {
     )
   }
 
+  // ─── OVERVIEW TAB ───────────────────────────────────────────────────────────
+  function renderOverview() {
+    const activeCourses = store.courses.filter(co => co.status === 'Published')
+    let totalEnrollments = 0
+    const perCourse = activeCourses.map(co => {
+      const enrols = store.enrolments.filter(en => en.courseId === co.id && isActiveBool(en.active))
+      const enrolledIds = new Set<string>()
+      enrols.forEach(en => {
+        if (en.targetType === 'student') enrolledIds.add(en.targetValue)
+        else if (en.targetType === 'cohort') students.filter(s => s.cohort === en.targetValue).forEach(s => enrolledIds.add(s.id))
+        else if (en.targetType === 'grade') students.filter(s => s.grade === en.targetValue).forEach(s => enrolledIds.add(s.id))
+      })
+      totalEnrollments += enrolledIds.size
+      const courseProg = store.progress.filter(p => p.courseId === co.id)
+      const timeMins = courseProg.reduce((s, p) => s + (p.timeSpentMins || 0), 0)
+      const content = store.content.filter(x => x.courseId === co.id)
+      const creditsEarned = [...enrolledIds].reduce((sum, sid) => {
+        const myProg = courseProg.filter(p => p.studentId === sid)
+        const comp = myProg.filter(p => p.status === 'completed').length
+        const pct = content.length ? Math.round(comp / content.length * 100) : 0
+        return sum + (pct >= 100 ? (co.creditHours || 1) : 0)
+      }, 0)
+      return { course: co, timeMins, creditsEarned }
+    })
+    const activeSectionsCount = store.enrolments.filter(en => isActiveBool(en.active)).length
+    const totalTimeMins = perCourse.reduce((s, x) => s + x.timeMins, 0)
+    const totalCredits = perCourse.reduce((s, x) => s + x.creditsEarned, 0)
+    const topByTime = [...perCourse].filter(x => x.timeMins > 0).sort((a, b) => b.timeMins - a.timeMins).slice(0, 5)
+    const topByCredits = [...perCourse].filter(x => x.creditsEarned > 0).sort((a, b) => b.creditsEarned - a.creditsEarned).slice(0, 5)
+    const modulesCompleted = store.progress.filter(p => p.status === 'completed').length
+    const modulesMastered = store.progress.filter(p => p.masteryPassed === true).length
+
+    const usageDays = Number(usageRange)
+    const perfDays = Number(performanceRange)
+    const usageDates = rangeDates(usageDays)
+    const perfDates = rangeDates(perfDays)
+
+    return (
+      <div>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+          <div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: '#1A365E' }}>Courseware</div>
+            <div style={{ fontSize: 12, color: '#7A92B0', marginTop: 2, fontStyle: 'italic' }}>Data as of {new Date().toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' })}</div>
+          </div>
+          <div ref={reportsMenuRef} style={{ position: 'relative' }}>
+            <button onClick={() => setReportsMenuOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 16px', background: '#fff', border: '1.5px solid #D8E1EC', borderRadius: 9, fontSize: 12, fontWeight: 800, color: '#1A365E', cursor: 'pointer', fontFamily: 'inherit' }}>
+              📊 REPORTS <span style={{ fontSize: 9 }}>{reportsMenuOpen ? '▲' : '▼'}</span>
+            </button>
+            {reportsMenuOpen && (
+              <div style={{ position: 'absolute', right: 0, top: '110%', background: '#fff', border: '1px solid #E4EAF2', borderRadius: 10, boxShadow: '0 8px 24px rgba(26,54,94,0.14)', minWidth: 210, zIndex: 20, overflow: 'hidden' }}>
+                <button onClick={() => { setReportsMenuOpen(false); usageSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '11px 16px', background: 'none', border: 'none', fontSize: 12, fontWeight: 700, color: '#1A365E', cursor: 'pointer', fontFamily: 'inherit' }}>Program Usage</button>
+                <button onClick={() => { setReportsMenuOpen(false); performanceSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '11px 16px', background: 'none', border: 'none', fontSize: 12, fontWeight: 700, color: '#1A365E', cursor: 'pointer', fontFamily: 'inherit' }}>Program Performance</button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {renderNav()}
+
+        {/* KPI row */}
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 28 }}>
+          <KpiCard icon="📚" iconBg="#EEF1FB" value={activeCourses.length} label="Active Courses" />
+          <KpiCard icon="📝" iconBg="#E8F3FF" value={activeSectionsCount} label="Active Sections" />
+          <KpiCard icon="👥" iconBg="#FFF4E5" value={totalEnrollments} label="Active Enrollments" />
+        </div>
+
+        {/* Program Usage */}
+        <div ref={usageSectionRef} style={{ marginBottom: 28 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ fontSize: 18, fontWeight: 900, color: '#1A365E' }}>Program Usage</div>
+            <select value={usageRange} onChange={e => setUsageRange(e.target.value)} style={{ ...selectStyle, width: 132, flex: 'none' }}>
+              <option value="7">Last 7 Days</option>
+              <option value="14">Last 14 Days</option>
+              <option value="30">Last 30 Days</option>
+              <option value="90">Last 90 Days</option>
+            </select>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
+            <div style={{ ...card, padding: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 6 }}>
+                <div style={{ fontSize: 14, fontWeight: 800, color: '#1A365E' }}>Daily Time On Task</div>
+                <div style={{ fontSize: 11, color: '#7A92B0' }}>{rangeLabel(usageDays)}</div>
+              </div>
+              <TimeSeriesChart dates={usageDates} unit="hours" series={[{ label: 'Time on Task', color: '#2563EB', values: usageDates.map(() => 0) }]} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ ...card, padding: 20 }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: '#1A365E' }}>Total Time on Task</div>
+                <div style={{ fontSize: 11, color: '#7A92B0', marginTop: 2 }}>{rangeLabel(usageDays)}</div>
+                <div style={{ fontSize: 28, fontWeight: 900, color: '#2563EB', marginTop: 10 }}>{fmtTime(totalTimeMins)}</div>
+                <div style={{ fontSize: 11, color: '#7A92B0', marginTop: 4 }}>Daily Avg: {fmtTime(Math.round(totalTimeMins / usageDays))}</div>
+              </div>
+              <div style={{ ...card, padding: 20 }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: '#1A365E' }}>Top 5 Courses by Time on Task</div>
+                <div style={{ fontSize: 11, color: '#7A92B0', marginTop: 2, marginBottom: 14 }}>{rangeLabel(usageDays)}</div>
+                <TopList items={topByTime.map(x => ({ title: x.course.title, value: fmtTime(x.timeMins) }))} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Program Performance */}
+        <div ref={performanceSectionRef} style={{ marginBottom: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ fontSize: 18, fontWeight: 900, color: '#1A365E' }}>Program Performance</div>
+            <select value={performanceRange} onChange={e => setPerformanceRange(e.target.value)} style={{ ...selectStyle, width: 132, flex: 'none' }}>
+              <option value="7">Last 7 Days</option>
+              <option value="14">Last 14 Days</option>
+              <option value="30">Last 30 Days</option>
+              <option value="90">Last 90 Days</option>
+            </select>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
+            <div style={{ ...card, padding: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 6 }}>
+                <div style={{ fontSize: 14, fontWeight: 800, color: '#1A365E' }}>Daily Module Progress</div>
+                <div style={{ fontSize: 11, color: '#7A92B0' }}>{rangeLabel(perfDays)}</div>
+              </div>
+              <TimeSeriesChart dates={perfDates} unit="count" series={[
+                { label: 'Modules Completed', color: '#FBA76B', values: perfDates.map(() => 0) },
+                { label: 'Modules Mastered', color: '#D2601A', values: perfDates.map(() => 0) },
+              ]} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ ...card, padding: 20, display: 'flex', alignItems: 'center', gap: 14 }}>
+                <div style={{ width: 42, height: 42, borderRadius: '50%', border: '2.5px solid #1DBD6A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>🎖️</div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: '#1A365E' }}>Total Credits Earned</div>
+                  <div style={{ fontSize: 11, color: '#7A92B0', marginTop: 1 }}>{rangeLabel(perfDays)}</div>
+                </div>
+                <div style={{ fontSize: 28, fontWeight: 900, color: '#1DBD6A', marginLeft: 'auto' }}>{totalCredits}</div>
+              </div>
+              <div style={{ ...card, padding: 20 }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: '#1A365E' }}>Top 5 Courses by Credits Earned</div>
+                <div style={{ fontSize: 11, color: '#7A92B0', marginTop: 2, marginBottom: 14 }}>{rangeLabel(perfDays)}</div>
+                <TopList items={topByCredits.map(x => ({ title: x.course.title, value: String(x.creditsEarned) }))} />
+              </div>
+            </div>
+          </div>
+          <div style={{ fontSize: 10, color: '#B7C3D6', marginTop: 10 }}>
+            {modulesCompleted} modules completed · {modulesMastered} modules mastered to date (daily breakdown requires per-day activity tracking, coming in a later step)
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // ─── MANAGE TAB ─────────────────────────────────────────────────────────────
   function renderManage() {
+    interface CourseGroupRow { key: string; title: string; groupId: string | null; sections: LMSCourse[] }
+
+    function fmtDateShort(iso?: string | null): string {
+      if (!iso) return 'None'
+      const d = new Date(iso + 'T00:00:00')
+      if (isNaN(d.getTime())) return 'None'
+      return `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(-2)}`
+    }
+
+    function sectionStats(co: LMSCourse) {
+      const enrols = store.enrolments.filter(en => en.courseId === co.id && isActiveBool(en.active))
+      const enrolledIds = new Set<string>()
+      enrols.forEach(en => {
+        if (en.targetType === 'student') enrolledIds.add(en.targetValue)
+        else if (en.targetType === 'cohort') students.filter(s => s.cohort === en.targetValue).forEach(s => enrolledIds.add(s.id))
+        else if (en.targetType === 'grade') students.filter(s => s.grade === en.targetValue).forEach(s => enrolledIds.add(s.id))
+      })
+      const enrollCount = enrolledIds.size
+      const courseProg = store.progress.filter(p => p.courseId === co.id)
+      const timeMins = courseProg.reduce((s, p) => s + (p.timeSpentMins || 0), 0)
+      const content = store.content.filter(x => x.courseId === co.id)
+      const creditsEarned = [...enrolledIds].reduce((sum, sid) => {
+        const myProg = courseProg.filter(p => p.studentId === sid)
+        const comp = myProg.filter(p => p.status === 'completed').length
+        const pct = content.length ? Math.round(comp / content.length * 100) : 0
+        return sum + (pct >= 100 ? (co.creditHours || 1) : 0)
+      }, 0)
+      return { enrollCount, timeMins, creditsEarned }
+    }
+
+    function openNewSection(lockGroupId: string | null) {
+      setNewSectionGroupId(lockGroupId)
+      setShowNewSectionFlow(true)
+    }
+    function addSectionToGroupRow(g: CourseGroupRow) {
+      if (g.groupId) { openNewSection(g.groupId); return }
+      // Ungrouped standalone course — create a real Course using its current title, reassign it, then lock the new section to it
+      const newGroupId = crypto.randomUUID()
+      const newGroup: LMSCourseGroup = { id: newGroupId, title: g.title }
+      const courses = store.courses.map(c => c.id === g.sections[0].id ? { ...c, groupId: newGroupId } : c)
+      persist({ ...store, courses, courseGroups: [...store.courseGroups, newGroup] })
+      openNewSection(newGroupId)
+    }
+    function editSection(co: LMSCourse) {
+      setEditCourseIdx(store.courses.findIndex(c => c.id === co.id))
+      setNewSectionGroupId(null)
+      setShowNewSectionFlow(true)
+      setSectionMenuOpenId(null)
+    }
+    function duplicateSection(co: LMSCourse) {
+      const dup: LMSCourse = { ...co, id: lmsId(), title: co.title + ' (Copy)', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+      persist({ ...store, courses: [...store.courses, dup] })
+      setSectionMenuOpenId(null)
+    }
+    function toggleSectionActive(co: LMSCourse) {
+      const nextStatus = co.status === 'Published' ? 'Draft' : 'Published'
+      persist({ ...store, courses: store.courses.map(c => c.id === co.id ? { ...c, status: nextStatus } : c) })
+      setSectionMenuOpenId(null)
+    }
+    async function deleteSection(co: LMSCourse) {
+      if (!confirm(`Delete section "${co.title}"? This cannot be undone.`)) return
+      setSectionMenuOpenId(null)
+      await deleteLMSCourse(co.id)
+      setStore(prev => ({ ...prev, courses: prev.courses.filter(c => c.id !== co.id), content: prev.content.filter(x => x.courseId !== co.id) }))
+    }
+    function selectAllInGroup(g: CourseGroupRow) {
+      setSelectedSectionIds(prev => { const next = new Set(prev); g.sections.forEach(s => next.add(s.id)); return next })
+    }
+    function deselectAllInGroup(g: CourseGroupRow) {
+      setSelectedSectionIds(prev => { const next = new Set(prev); g.sections.forEach(s => next.delete(s.id)); return next })
+    }
+    function toggleSectionSelected(id: string) {
+      setSelectedSectionIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next })
+    }
+
     const allCourses = store.courses
     let filtered = allCourses.filter(co => manageTabFilter === 'active' ? co.status === 'Published' : co.status !== 'Published')
     if (manageSearch) {
@@ -542,6 +1502,23 @@ export function LMSPage() {
     }
     if (manageTypeFilter) filtered = filtered.filter(co => co.subject === manageTypeFilter)
     const subjects = [...new Set(allCourses.map(co => co.subject).filter(Boolean))]
+
+    const groupsMap = new Map<string, CourseGroupRow>()
+    filtered.forEach(co => {
+      const key = co.groupId || co.id
+      let g = groupsMap.get(key)
+      if (!g) {
+        const title = co.groupId ? (store.courseGroups.find(x => x.id === co.groupId)?.title || co.title) : co.title
+        g = { key, title, groupId: co.groupId ?? null, sections: [] }
+        groupsMap.set(key, g)
+      }
+      g.sections.push(co)
+    })
+    const groupRows = [...groupsMap.values()].sort((a, b) => a.title.localeCompare(b.title))
+
+    const actionBtnStyle: React.CSSProperties = { width: 30, height: 30, borderRadius: 7, border: '1px solid #E4EAF2', background: '#fff', cursor: 'pointer', fontSize: 14, fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center' }
+    const menuItemStyle: React.CSSProperties = { display: 'block', width: '100%', textAlign: 'left', padding: '10px 14px', background: 'none', border: 'none', fontSize: 12, fontWeight: 700, color: '#1A365E', cursor: 'pointer', fontFamily: 'inherit' }
+
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
@@ -552,12 +1529,12 @@ export function LMSPage() {
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <div style={{ position: 'relative' }}>
               <span style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: '#94A3B8', pointerEvents: 'none' }}>🔍</span>
-              <input value={manageSearch} onChange={e => setManageSearch(e.target.value)} placeholder="Search Courses or Sections..." style={{ ...iStyle, paddingLeft: 28, paddingRight: manageSearch ? 28 : 10, width: 240 }} />
+              <input value={manageSearch} onChange={e => setManageSearch(e.target.value)} placeholder="Search for Courses or Sections" style={{ ...iStyle, paddingLeft: 28, paddingRight: manageSearch ? 28 : 10, width: 240 }} />
               {manageSearch && (
                 <button onClick={() => setManageSearch('')} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#94A3B8', fontFamily: 'inherit' }}>✕</button>
               )}
             </div>
-            <button onClick={() => navTab('courses')} style={{ padding: '8px 16px', background: '#059669', color: '#fff', border: 'none', borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>⊕ NEW SECTION</button>
+            <button onClick={() => openNewSection(null)} style={{ padding: '8px 16px', background: '#059669', color: '#fff', border: 'none', borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>⊕ NEW SECTION</button>
           </div>
         </div>
         {renderNav()}
@@ -575,108 +1552,493 @@ export function LMSPage() {
             {subjects.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
-        <div style={{ background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 12, overflow: 'hidden' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 130px 130px 80px', padding: '8px 16px', borderBottom: '1px solid #E4EAF2', gap: 8 }}>
+        <div style={{ background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 130px 130px 150px', padding: '8px 16px', borderBottom: '1px solid #E4EAF2', gap: 8 }}>
             {['Course', 'Enrollments', 'Time on Task', 'Credits Earned', ''].map((h, i) => (
               <div key={i} style={{ fontSize: 10, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '.8px', textAlign: i > 0 ? 'center' : 'left' }}>{h}</div>
             ))}
           </div>
-          {!filtered.length ? (
+          {!groupRows.length ? (
             <div style={{ padding: 40, textAlign: 'center', color: '#94A3B8' }}>
               <div style={{ fontSize: 32, marginBottom: 10 }}>📋</div>
               <div style={{ fontSize: 13, fontWeight: 700, color: '#1A365E' }}>{manageSearch ? 'No courses match your search' : 'No ' + manageTabFilter + ' courses'}</div>
             </div>
-          ) : filtered.map((co, idx) => {
-            const enrols = store.enrolments.filter(en => en.courseId === co.id && isActiveBool(en.active))
-            const enrolledIds = new Set<string>()
-            enrols.forEach(en => {
-              if (en.targetType === 'student') enrolledIds.add(en.targetValue)
-              else if (en.targetType === 'cohort') students.filter(s => s.cohort === en.targetValue).forEach(s => enrolledIds.add(s.id))
-            })
-            const enrollCount = enrolledIds.size
-            const courseProg = store.progress.filter(p => p.courseId === co.id)
-            const totalTimeMins = courseProg.reduce((s, p) => s + (p.timeSpentMins || 0), 0)
-            const content = store.content.filter(x => x.courseId === co.id)
-            const creditsEarned = [...enrolledIds].reduce((sum, sid) => {
-              const myProg = courseProg.filter(p => p.studentId === sid)
-              const comp = myProg.filter(p => p.status === 'completed').length
-              const pct = content.length ? Math.round(comp / content.length * 100) : 0
-              return sum + (pct >= 100 ? (co.creditHours || 1) : 0)
-            }, 0)
-            const subjectCol = SUBJECT_COLORS[co.subject] || '#1A365E'
-            const isExpanded = !!manageExpanded[co.id]
+          ) : groupRows.map((g, idx) => {
+            const stats = g.sections.map(sectionStats)
+            const enrollCount = stats.reduce((s, x) => s + x.enrollCount, 0)
+            const totalTimeMins = stats.reduce((s, x) => s + x.timeMins, 0)
+            const creditsEarned = stats.reduce((s, x) => s + x.creditsEarned, 0)
+            const isExpanded = !!manageExpanded[g.key]
             const rowBg = idx % 2 === 0 ? '#fff' : '#FAFBFF'
-            const stuList = [...enrolledIds].map(sid => students.find(s => s.id === sid)).filter(Boolean) as Student[]
             return (
-              <div key={co.id} style={{ background: rowBg, borderBottom: '1px solid #F0F4FA' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 130px 130px 80px', padding: '12px 16px', gap: 8, alignItems: 'center' }}>
+              <div key={g.key} style={{ background: rowBg, borderBottom: '1px solid #F0F4FA' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 130px 130px 150px', padding: '12px 16px', gap: 8, alignItems: 'center' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <button onClick={() => setManageExpanded(prev => ({ ...prev, [co.id]: !prev[co.id] }))}
+                    <button onClick={() => setManageExpanded(prev => ({ ...prev, [g.key]: !prev[g.key] }))}
                       style={{ width: 24, height: 24, borderRadius: 5, border: '1px solid #E4EAF2', background: '#F7F9FC', cursor: 'pointer', fontSize: 11, color: '#5A7290', flexShrink: 0, fontFamily: 'inherit' }}>
                       {isExpanded ? '▼' : '▶'}
                     </button>
-                    <div style={{ width: 32, height: 32, borderRadius: 7, background: subjectCol + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><span style={{ fontSize: 16 }}>📘</span></div>
+                    <div style={{ width: 32, height: 32, borderRadius: 7, background: '#FFF4E5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><span style={{ fontSize: 16 }}>📘</span></div>
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: '#1A365E' }}>{co.title}</div>
-                      <div style={{ fontSize: 11, color: '#7A92B0' }}>{co.subject}{co.gradeLevel ? ' · ' + co.gradeLevel : ''} · <span style={{ background: '#EEF3FF', color: '#1A365E', fontWeight: 800, padding: '1px 7px', borderRadius: 10, fontSize: 10 }}>👥 {enrollCount} enrolled</span></div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#1A365E' }}>{g.title}</div>
+                      <div style={{ fontSize: 11, color: '#7A92B0' }}>{g.sections.length} Section{g.sections.length !== 1 ? 's' : ''}</div>
                     </div>
                   </div>
                   <div style={{ textAlign: 'center' }}>{enrollCount > 0 ? <div style={{ fontSize: 20, fontWeight: 900, color: '#1A365E' }}>{enrollCount}</div> : <div style={{ fontSize: 16, color: '#94A3B8' }}>—</div>}</div>
                   <div style={{ textAlign: 'center' }}>{totalTimeMins > 0 ? <div style={{ fontSize: 14, fontWeight: 700, color: '#1A365E' }}>{fmtTime(totalTimeMins)}</div> : <div style={{ fontSize: 16, color: '#94A3B8' }}>—</div>}</div>
-                  <div style={{ textAlign: 'center' }}>{enrollCount > 0 ? <><div style={{ fontSize: 20, fontWeight: 900, color: '#059669' }}>{creditsEarned}</div><div style={{ fontSize: 9, color: '#7A92B0' }}>of {co.creditHours || 1} cr per student</div></> : <div style={{ fontSize: 16, color: '#94A3B8' }}>—</div>}</div>
+                  <div style={{ textAlign: 'center' }}>{enrollCount > 0 ? <div style={{ fontSize: 20, fontWeight: 900, color: '#059669' }}>{creditsEarned}</div> : <div style={{ fontSize: 16, color: '#94A3B8' }}>—</div>}</div>
                   <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                    <button onClick={() => { setGbCourseId(co.id); setSectionCourseId(co.id); navTab('section') }}
-                      title="View Section" style={{ width: 30, height: 30, borderRadius: 7, border: '1px solid #E4EAF2', background: '#EEF3FF', cursor: 'pointer', fontSize: 14, fontFamily: 'inherit' }}>📊</button>
-                    <button onClick={() => { setActiveCourseId(co.id); navTab('content') }}
-                      title="Manage Content" style={{ width: 30, height: 30, borderRadius: 7, border: '1px solid #E4EAF2', background: '#F7F9FC', cursor: 'pointer', fontSize: 14, fontFamily: 'inherit' }}>📝</button>
+                    <button onClick={() => navigate('/lms/overview')} title="Reports" style={{ ...actionBtnStyle, background: '#EEF3FF' }}>📊</button>
+                    <button onClick={() => addSectionToGroupRow(g)} title="Add Section" style={{ ...actionBtnStyle, background: '#E8FBF0', color: '#059669' }}>📑➕</button>
                   </div>
                 </div>
                 {isExpanded && (
-                  <div style={{ background: '#F7F9FC', borderTop: '1px solid #E4EAF2', padding: '0 16px 12px 56px' }}>
-                    {!stuList.length ? (
-                      <div style={{ padding: '12px 0', fontSize: 12, color: '#94A3B8' }}>No students enrolled in this course.</div>
-                    ) : (
-                      <>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 110px 100px 80px', gap: 8, padding: '8px 0 6px 0', borderBottom: '1px solid #E4EAF2', marginBottom: 4 }}>
-                          {['Student', 'Progress', 'Time on Task', 'Avg Mastery', 'Credits'].map(hd => (
-                            <div key={hd} style={{ fontSize: 9, fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '.7px' }}>{hd}</div>
-                          ))}
-                        </div>
-                        {stuList.map(stu => {
-                          const sid = stu.id
-                          const myProg = store.progress.filter(p => p.courseId === co.id && p.studentId === sid)
-                          const comp = myProg.filter(p => p.status === 'completed').length
-                          const pct = content.length ? Math.round(comp / content.length * 100) : 0
-                          const mastRows = myProg.filter(p => p.masteryScore != null && !isNaN(Number(p.masteryScore)))
-                          const avgMastery = mastRows.length ? Math.round(mastRows.reduce((s, p) => s + Number(p.masteryScore), 0) / mastRows.length) : null
-                          const timeMins = myProg.reduce((s, p) => s + (p.timeSpentMins || 0), 0)
-                          const credEarned = pct >= 100 ? (co.creditHours || 1) : 0
-                          const pCol = pct >= 100 ? '#059669' : pct > 0 ? '#D97706' : '#94A3B8'
-                          const mCol = avgMastery !== null ? (avgMastery >= (co.passMark || 80) ? '#059669' : '#D61F31') : '#94A3B8'
-                          return (
-                            <div key={sid} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 110px 100px 80px', gap: 8, padding: '7px 0', borderBottom: '1px solid #F0F4FA', alignItems: 'center' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#1A365E', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, flexShrink: 0 }}>{(stu.firstName[0] || '?')}{(stu.lastName[0] || '?')}</div>
-                                <div style={{ fontSize: 11, fontWeight: 700, color: '#1A365E' }}>{stu.lastName}{stu.firstName ? ', ' + stu.firstName : ''}</div>
-                              </div>
+                  <div style={{ background: '#F7F9FC', borderTop: '1px solid #E4EAF2', padding: '10px 16px 14px 56px' }}>
+                    <div style={{ display: 'flex', gap: 12, marginBottom: 10 }}>
+                      <button onClick={() => selectAllInGroup(g)} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>Select All</button>
+                      <span style={{ color: '#D8E1EC' }}>|</span>
+                      <button onClick={() => deselectAllInGroup(g)} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>Deselect All</button>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                      {g.sections.map(co => {
+                        const st = sectionStats(co)
+                        return (
+                          <div key={co.id} style={{ display: 'grid', gridTemplateColumns: '1fr 110px 130px 130px 150px', gap: 8, padding: '10px 0', borderBottom: '1px solid #E9EEF5', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                              <input type="checkbox" checked={selectedSectionIds.has(co.id)} onChange={() => toggleSectionSelected(co.id)} style={{ marginTop: 3, cursor: 'pointer' }} />
                               <div>
-                                <div style={{ fontSize: 10, color: pCol, fontWeight: 700, marginBottom: 3 }}>{pct}%</div>
-                                <div style={{ height: 5, background: '#F0F4FA', borderRadius: 3, overflow: 'hidden' }}><div style={{ height: '100%', width: pct + '%', background: pCol, borderRadius: 3 }} /></div>
+                                <div onClick={() => { setGbCourseId(co.id); setSectionCourseId(co.id); navTab('section') }}
+                                  style={{ fontSize: 12, fontWeight: 700, color: '#2563EB', cursor: 'pointer' }}>{co.title}</div>
+                                <div style={{ fontSize: 10, color: '#7A92B0', marginTop: 2 }}>Start Date: {fmtDateShort(co.startDate)} - End Date: {fmtDateShort(co.endDate)}</div>
                               </div>
-                              <div style={{ fontSize: 11, fontWeight: 700, color: '#1A365E' }}>{fmtTime(timeMins)}</div>
-                              <div style={{ textAlign: 'center' }}>{avgMastery !== null ? <span style={{ fontSize: 12, fontWeight: 900, color: mCol }}>{avgMastery}%</span> : <span style={{ color: '#94A3B8', fontSize: 11 }}>—</span>}</div>
-                              <div style={{ textAlign: 'center', fontSize: 12, fontWeight: 900, color: credEarned > 0 ? '#059669' : '#94A3B8' }}>{credEarned}</div>
                             </div>
-                          )
-                        })}
-                      </>
-                    )}
+                            <div style={{ textAlign: 'center', fontSize: 13, fontWeight: 700, color: st.enrollCount > 0 ? '#1A365E' : '#94A3B8' }}>{st.enrollCount > 0 ? st.enrollCount : '—'}</div>
+                            <div style={{ textAlign: 'center', fontSize: 12, fontWeight: 700, color: st.timeMins > 0 ? '#1A365E' : '#94A3B8' }}>{st.timeMins > 0 ? fmtTime(st.timeMins) : '—'}</div>
+                            <div style={{ textAlign: 'center', fontSize: 13, fontWeight: 700, color: st.creditsEarned > 0 ? '#059669' : '#94A3B8' }}>{st.enrollCount > 0 ? st.creditsEarned : '—'}</div>
+                            <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', position: 'relative' }}>
+                              <button onClick={() => setNotesSectionId(co.id)}
+                                title="Section Notes" style={{ ...actionBtnStyle, background: '#EEF3FF' }}>📝</button>
+                              <button onClick={() => { setGbCourseId(co.id); navTab('gradebook') }}
+                                title="Gradebook" style={{ ...actionBtnStyle, background: '#FFF4E5' }}>🅰️➕</button>
+                              <button onClick={() => { setCurriculumCourseId(co.id); navTab('curriculum') }}
+                                title="View Curriculum" style={{ ...actionBtnStyle, background: '#F0F4FA' }}>🔍</button>
+                              <button onClick={() => setSectionMenuOpenId(prev => prev === co.id ? null : co.id)}
+                                title="More actions" style={{ ...actionBtnStyle, background: '#F7F9FC' }}>⋯</button>
+                              {sectionMenuOpenId === co.id && (
+                                <div ref={sectionMenuRef} style={{ position: 'absolute', right: 0, top: '110%', background: '#fff', border: '1px solid #E4EAF2', borderRadius: 10, boxShadow: '0 8px 24px rgba(26,54,94,0.14)', minWidth: 170, zIndex: 30, overflow: 'hidden' }}>
+                                  <button onClick={() => editSection(co)} style={menuItemStyle}>✏️ Edit Section</button>
+                                  <button onClick={() => duplicateSection(co)} style={menuItemStyle}>⧉ Duplicate</button>
+                                  <button onClick={() => toggleSectionActive(co)} style={menuItemStyle}>{co.status === 'Published' ? '⏸ Deactivate' : '▶ Activate'}</button>
+                                  <button onClick={() => deleteSection(co)} style={{ ...menuItemStyle, color: '#D61F31', borderTop: '1px solid #F0F4FA' }}>🗑 Delete</button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
             )
           })}
         </div>
+      </div>
+    )
+  }
+
+  // ─── MANAGE STUDENTS TAB ────────────────────────────────────────────────────
+  function renderManageStudents() {
+    interface CourseGroupRow { key: string; title: string; sections: LMSCourse[] }
+    const groupsMap = new Map<string, CourseGroupRow>()
+    store.courses.forEach(co => {
+      const key = co.groupId || co.id
+      let g = groupsMap.get(key)
+      if (!g) {
+        const title = co.groupId ? (store.courseGroups.find(x => x.id === co.groupId)?.title || co.title) : co.title
+        g = { key, title, sections: [] }
+        groupsMap.set(key, g)
+      }
+      g.sections.push(co)
+    })
+    const groupRows = [...groupsMap.values()].sort((a, b) => a.title.localeCompare(b.title))
+    const sectionOptions = msCourseFilter ? (groupsMap.get(msCourseFilter)?.sections ?? []) : store.courses
+
+    function resetFilters() {
+      setMsSearch(''); setMsCourseFilter(''); setMsSectionFilter(''); setMsLocationFilter('')
+      setMsStatusFilter(''); setMsSort('az'); setMsGradeRange([1, GRADES.length - 1])
+    }
+
+    const q = msSearch.trim().toLowerCase()
+    let filtered = students.filter(s => {
+      const idx = GRADES.indexOf(s.grade)
+      if (idx !== -1 && (idx < msGradeRange[0] || idx > msGradeRange[1])) return false
+      if (msLocationFilter && s.campus !== msLocationFilter) return false
+      if (q) {
+        const hay = [s.fullName, s.studentId, s.cohort, s.grade].join(' ').toLowerCase()
+        if (!hay.includes(q)) return false
+      }
+      if (msCourseFilter || msSectionFilter || msStatusFilter) {
+        const stats = getStudentCourseStats(s)
+        const match = stats.some(st =>
+          (!msCourseFilter || (st.course.groupId || st.course.id) === msCourseFilter) &&
+          (!msSectionFilter || st.course.id === msSectionFilter) &&
+          (!msStatusFilter || st.bucket === msStatusFilter)
+        )
+        if (!match) return false
+      }
+      return true
+    })
+    filtered = [...filtered].sort((a, b) => {
+      const cmp = (a.lastName + a.firstName).localeCompare(b.lastName + b.firstName)
+      return msSort === 'az' ? cmp : -cmp
+    })
+    const visible = filtered.slice(0, msVisibleCount)
+
+    const BUCKET_TABS: { k: 'active' | 'completed' | 'dropped'; l: string }[] = [
+      { k: 'active', l: 'Active Sections' }, { k: 'completed', l: 'Completed Sections' }, { k: 'dropped', l: 'Dropped Sections' },
+    ]
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: '#1A365E' }}>Manage Students</div>
+            <div style={{ fontSize: 11, color: '#7A92B0', marginTop: 2 }}>Data as of {new Date().toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' })}</div>
+          </div>
+          <div style={{ position: 'relative' }}>
+            <span style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: '#94A3B8', pointerEvents: 'none' }}>🔍</span>
+            <input value={msSearch} onChange={e => setMsSearch(e.target.value)} placeholder="Search students" style={{ ...iStyle, paddingLeft: 28, width: 220 }} />
+          </div>
+        </div>
+        {renderNav()}
+
+        <div style={{ ...card, padding: '12px 16px', marginTop: 14, marginBottom: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <select value={msCourseFilter} onChange={e => { setMsCourseFilter(e.target.value); setMsSectionFilter('') }} style={iStyle}>
+              <option value="">All Courses</option>
+              {groupRows.map(g => <option key={g.key} value={g.key}>{g.title}</option>)}
+            </select>
+            <select value={msSectionFilter} onChange={e => setMsSectionFilter(e.target.value)} style={iStyle}>
+              <option value="">All Sections</option>
+              {sectionOptions.map(co => <option key={co.id} value={co.id}>{co.title}</option>)}
+            </select>
+            <select value={msLocationFilter} onChange={e => setMsLocationFilter(e.target.value)} style={iStyle}>
+              <option value="">All Locations</option>
+              {campuses.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <select value={msStatusFilter} onChange={e => setMsStatusFilter(e.target.value)} style={iStyle}>
+              <option value="">All Statuses</option>
+              <option value="active">Active</option>
+              <option value="completed">Completed</option>
+              <option value="dropped">Dropped</option>
+            </select>
+            <button onClick={resetFilters} style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #E4EAF2', background: '#fff', color: '#1A365E', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Reset Filters</button>
+            <div style={{ marginLeft: 'auto' }}>
+              <select value={msSort} onChange={e => setMsSort(e.target.value as 'az' | 'za')} style={iStyle}>
+                <option value="az">Sort by name A-Z</option>
+                <option value="za">Sort by name Z-A</option>
+              </select>
+            </div>
+          </div>
+          <GradeRangeSlider min={1} max={GRADES.length - 1} value={msGradeRange} onChange={setMsGradeRange} />
+        </div>
+
+        <div style={{ fontSize: 12, color: '#7A92B0', marginBottom: 10 }}>Showing {visible.length} of {filtered.length} Students</div>
+
+        <div style={{ background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 12, overflow: 'hidden' }}>
+          {!visible.length ? (
+            <div style={{ padding: 40, textAlign: 'center', color: '#94A3B8' }}>
+              <div style={{ fontSize: 32, marginBottom: 10 }}>👨‍🎓</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#1A365E' }}>No students match your filters</div>
+            </div>
+          ) : visible.map((s, idx) => {
+            const stats = getStudentCourseStats(s).filter(st =>
+              (!msCourseFilter || (st.course.groupId || st.course.id) === msCourseFilter) &&
+              (!msSectionFilter || st.course.id === msSectionFilter)
+            )
+            const buckets = { active: stats.filter(x => x.bucket === 'active'), completed: stats.filter(x => x.bucket === 'completed'), dropped: stats.filter(x => x.bucket === 'dropped') }
+            const rowKey = s.id
+            const isExpanded = !!msExpanded[rowKey]
+            const subTab = msSectionTab[rowKey] ?? 'active'
+            const rowBg = idx % 2 === 0 ? '#fff' : '#FAFBFF'
+            return (
+              <div key={s.id} style={{ background: rowBg, borderBottom: '1px solid #F0F4FA' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', gap: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#EEF3FF', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 17 }}>👤</div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#1A365E' }}>{s.lastName}, {s.firstName}</div>
+                      <div style={{ fontSize: 11, color: '#7A92B0' }}>Grade {s.grade || '—'}{s.studentId ? ` • SIS ID: ${s.studentId}` : ''}</div>
+                    </div>
+                  </div>
+                  <button onClick={() => setMsExpanded(prev => ({ ...prev, [rowKey]: !prev[rowKey] }))}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 7, border: '1px solid #E4EAF2', background: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: '#1A365E', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                    {buckets.active.length} Active Section{buckets.active.length !== 1 ? 's' : ''} {isExpanded ? '▲' : '▼'}
+                  </button>
+                </div>
+                {isExpanded && (
+                  <div style={{ background: '#F7F9FC', borderTop: '1px solid #E4EAF2', padding: '10px 16px 14px 64px' }}>
+                    <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid #E4EAF2', marginBottom: 10 }}>
+                      {BUCKET_TABS.map(t => (
+                        <button key={t.k} onClick={() => setMsSectionTab(prev => ({ ...prev, [rowKey]: t.k }))}
+                          style={{ padding: '7px 14px', border: 'none', background: 'transparent', fontSize: 11, fontWeight: 700, cursor: 'pointer', color: subTab === t.k ? '#1A365E' : '#94A3B8', borderBottom: subTab === t.k ? '2px solid #1A365E' : '2px solid transparent', marginBottom: -2, fontFamily: 'inherit' }}>
+                          {t.l} ({buckets[t.k].length})
+                        </button>
+                      ))}
+                    </div>
+                    {!buckets[subTab].length ? (
+                      <div style={{ padding: '16px 0', textAlign: 'center', color: '#94A3B8', fontSize: 12 }}>No {subTab} sections.</div>
+                    ) : (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 110px 110px 110px 150px 100px', gap: 8, padding: '6px 0', fontSize: 9, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '.5px' }}>
+                        <div>Section</div><div style={{ textAlign: 'center' }}>On-Target</div><div style={{ textAlign: 'center' }}>Current</div><div style={{ textAlign: 'center' }}>Course Grade</div><div>Activities</div><div style={{ textAlign: 'center' }}>Time on Task</div>
+                      </div>
+                    )}
+                    {buckets[subTab].map(st => {
+                      const onTgtCol = st.onTargetGrade >= (st.course.passMark || 80) ? '#059669' : '#D61F31'
+                      const curCol = st.avgMastery !== null ? (st.avgMastery >= (st.course.passMark || 80) ? '#059669' : '#D61F31') : '#7A92B0'
+                      const courseCol = st.courseGrade !== null ? (st.courseGrade >= (st.course.passMark || 80) ? '#059669' : '#D61F31') : '#7A92B0'
+                      return (
+                        <div key={st.course.id} style={{ display: 'grid', gridTemplateColumns: '1.6fr 110px 110px 110px 150px 100px', gap: 8, padding: '9px 0', borderBottom: '1px solid #E9EEF5', alignItems: 'center' }}>
+                          <div onClick={() => navigate(`/lms/student-section?sid=${s.id}&cid=${st.course.id}`)} style={{ fontSize: 12, fontWeight: 700, color: '#2563EB', cursor: 'pointer' }}>{st.course.title}</div>
+                          <div style={{ textAlign: 'center', fontSize: 12, fontWeight: 700, color: onTgtCol }}>{st.bucket === 'active' && (st.enrol?.assignedAt && st.enrol?.dueDate) ? `${st.onTargetGrade}%` : '—'}</div>
+                          <div style={{ textAlign: 'center', fontSize: 12, fontWeight: 700, color: curCol }}>{st.avgMastery !== null ? `${st.avgMastery}%` : '—'}</div>
+                          <div style={{ textAlign: 'center', fontSize: 12, fontWeight: 700, color: courseCol }}>{st.courseGrade !== null ? `${st.courseGrade}%` : '—'}</div>
+                          <div>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: '#1A365E' }}>{st.compLessons}/{st.totalLessons} ({st.totalLessons ? Math.round(st.compLessons / st.totalLessons * 100) : 0}%)</div>
+                            <div style={{ height: 4, borderRadius: 2, background: '#E4EAF2', marginTop: 3, overflow: 'hidden' }}>
+                              <div style={{ height: '100%', width: `${st.totalLessons ? Math.round(st.compLessons / st.totalLessons * 100) : 0}%`, background: '#1A365E' }} />
+                            </div>
+                          </div>
+                          <div style={{ textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#1A365E' }}>{fmtTime(st.timeMins)}</div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+        {filtered.length > visible.length && (
+          <div style={{ textAlign: 'center', marginTop: 14 }}>
+            <button onClick={() => setMsVisibleCount(c => c + 20)} style={{ padding: '9px 20px', borderRadius: 9, border: '1px solid #E4EAF2', background: '#fff', color: '#1A365E', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Show 20 More</button>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ─── STUDENT-SECTION DETAIL TAB (reached from Manage Students) ─────────────
+  function renderStudentSectionDetail() {
+    const sid = studentDetailSid
+    const cid = studentDetailCid
+    const student = students.find(s => s.id === sid)
+    const course = store.courses.find(c => c.id === cid)
+    if (!sid || !cid || !student || !course) {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ fontSize: 16, fontWeight: 900, color: '#1A365E' }}>Student Section Detail</div>
+          {renderNav()}
+          <div style={{ textAlign: 'center', padding: 30, background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', color: '#94A3B8' }}>No student/section selected.</div>
+        </div>
+      )
+    }
+    const enrol = store.enrolments.find(en => en.courseId === cid && (
+      (en.targetType === 'student' && en.targetValue === sid) ||
+      (en.targetType === 'cohort' && en.targetValue === student.cohort) ||
+      (en.targetType === 'grade' && en.targetValue === student.grade)
+    ))
+    const stat = calcStudentCourseStats(sid, course, enrol)
+    const passMark = course.passMark || 80
+    const content = store.content.filter(x => x.courseId === course.id)
+    const myProg = store.progress.filter(p => p.courseId === course.id && p.studentId === sid)
+    const topLevel = content.filter(x => !x.unitTitle).sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    const unitTitles = [...new Set(content.filter(x => x.unitTitle).map(x => x.unitTitle as string))]
+    const units = unitTitles.map(t => {
+      const items = content.filter(x => x.unitTitle === t).sort((a, b) => (a.moduleOrder ?? 0) - (b.moduleOrder ?? 0) || (a.order ?? 0) - (b.order ?? 0))
+      return { title: t, unitOrder: items[0]?.unitOrder ?? 0, items }
+    }).sort((a, b) => a.unitOrder - b.unitOrder)
+
+    function isExpanded(key: string) { return curriculumExpanded[key] !== false }
+    function toggleExpanded(key: string) { setCurriculumExpanded(prev => ({ ...prev, [key]: !isExpanded(key) })) }
+    function expandAll() {
+      const next: Record<string, boolean> = {}
+      units.forEach(u => { next['unit:' + u.title] = true })
+      setCurriculumExpanded(next)
+    }
+    function collapseAll() {
+      const next: Record<string, boolean> = {}
+      units.forEach(u => { next['unit:' + u.title] = false })
+      setCurriculumExpanded(next)
+    }
+
+    const thStyle: React.CSSProperties = { fontSize: 9, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '.05em', padding: '8px 8px', textAlign: 'center' }
+    const statusIconStyle = (active?: boolean): React.CSSProperties => ({ width: 22, height: 22, borderRadius: 5, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, background: active ? '#1A365E' : '#F0F4FA', color: active ? '#fff' : '#C4D0DE' })
+
+    function renderResultRow(item: LMSContent, depth: number) {
+      const prog = myProg.find(p => p.contentId === item.id)
+      const compositeScore = lmsCompositeScore(prog, item, passMark)
+      const attempts = prog?.masteryAttempts ?? 0
+      const timeMins = prog?.timeSpentMins ?? 0
+      const scoreCol = compositeScore !== null ? (compositeScore >= passMark ? '#059669' : '#D61F31') : '#94A3B8'
+      const reviewKey = 'review:' + item.id
+      const reviewOpen = !!curriculumExpanded[reviewKey]
+      const hasResult = prog?.masteryScore != null || prog?.assignScore != null
+      return (
+        <Fragment key={item.id}>
+          <tr style={{ borderBottom: '1px solid #F0F4FA' }}>
+            <td style={{ padding: '8px 10px', paddingLeft: 12 + depth * 26 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 15, flexShrink: 0 }}>{TYPE_ICONS[item.type] || '📄'}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#1A365E' }}>{item.title || 'Untitled'}</span>
+              </div>
+            </td>
+            <td style={{ padding: '8px 8px', textAlign: 'center', fontSize: 11, color: '#5A7290' }}>{item.targetDate ? item.targetDate.slice(0, 10) : '—'}</td>
+            <td style={{ padding: '8px 4px', textAlign: 'center' }}><span style={statusIconStyle(item.locked)} title="Locked">🔒</span></td>
+            <td style={{ padding: '8px 4px', textAlign: 'center' }}><span style={statusIconStyle(item.hidden)} title="Hidden">🚫</span></td>
+            <td style={{ padding: '8px 4px', textAlign: 'center' }}><span style={statusIconStyle(item.excludedFromGrade)} title="Excluded from grade">📄</span></td>
+            <td style={{ padding: '8px 8px', textAlign: 'center', fontSize: 12, color: '#1A365E' }}>{attempts || '—'}</td>
+            <td style={{ padding: '8px 8px', textAlign: 'center', fontSize: 12, color: '#1A365E' }}>{timeMins ? fmtTime(timeMins) : '—'}</td>
+            <td style={{ padding: '8px 8px', textAlign: 'center', fontSize: 12, fontWeight: 700, color: scoreCol }}>{compositeScore !== null ? `${compositeScore}%` : '—'}</td>
+            <td style={{ padding: '8px 8px', textAlign: 'center' }}>
+              {hasResult ? (
+                <button onClick={() => setCurriculumExpanded(prev => ({ ...prev, [reviewKey]: !prev[reviewKey] }))} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: '#5A7290', fontFamily: 'inherit' }} title="Review">🔍</button>
+              ) : <span style={{ color: '#D8E1EC' }}>—</span>}
+            </td>
+          </tr>
+          {reviewOpen && hasResult && (
+            <tr style={{ borderBottom: '1px solid #F0F4FA', background: '#FAFBFF' }}>
+              <td colSpan={9} style={{ padding: '8px 10px 10px', paddingLeft: 12 + depth * 26 + 24 }}>
+                <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 11, color: '#3D5475' }}>
+                  <span>Status: <strong>{prog?.status}</strong></span>
+                  {prog?.masteryScore != null && <span>Mastery Score: <strong>{prog.masteryScore}%</strong>{prog.masteryPassed !== undefined && <> ({isActiveBool(prog.masteryPassed) ? 'Passed' : 'Not Passed'})</>}</span>}
+                  {prog?.assignScore != null && <span>Assignment Score: <strong>{prog.assignScore}%</strong>{prog.assignStatus ? ` (${prog.assignStatus})` : ''}</span>}
+                </div>
+              </td>
+            </tr>
+          )}
+        </Fragment>
+      )
+    }
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <button onClick={() => navTab('students')} style={{ alignSelf: 'flex-start', padding: '7px 14px', background: '#F0F4FA', color: '#1A365E', border: '1px solid #E4EAF2', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>← Back to Manage Students</button>
+        {renderNav()}
+
+        <div style={{ ...card, padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+          <div>
+            <div style={{ fontSize: 17, fontWeight: 900, color: '#1A365E' }}>{student.fullName}</div>
+            <div style={{ fontSize: 11, color: '#7A92B0', marginTop: 2 }}>Grade {student.grade || '—'} · {course.title}</div>
+          </div>
+          <div style={{ textAlign: 'right', fontSize: 11, color: '#7A92B0' }}>
+            <div>Start Date: <strong style={{ color: '#1A365E' }}>{enrol?.paceStartDate || '—'}</strong></div>
+            <div>End Date: <strong style={{ color: '#1A365E' }}>{enrol?.dueDate || '—'}</strong></div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {[
+            { l: 'Pacing Status', v: stat.paceLabel, c: stat.paceColor },
+            { l: 'On-Target Grade', v: (stat.bucket === 'active' && enrol?.assignedAt && enrol?.dueDate) ? `${stat.onTargetGrade}%` : '—', c: '#1A365E' },
+            { l: 'Current Grade', v: stat.avgMastery !== null ? `${stat.avgMastery}%` : '—', c: stat.avgMastery !== null && stat.avgMastery >= passMark ? '#059669' : '#1A365E' },
+            { l: 'Course Grade', v: stat.courseGrade !== null ? `${stat.courseGrade}%` : '—', c: stat.courseGrade !== null && stat.courseGrade >= passMark ? '#059669' : '#1A365E' },
+            { l: 'Activities Completed', v: `${stat.compLessons}/${stat.totalLessons} (${stat.totalLessons ? Math.round(stat.compLessons / stat.totalLessons * 100) : 0}%)`, c: '#1A365E' },
+            { l: 'Time on Task', v: fmtTime(stat.timeMins), c: '#1A365E' },
+          ].map(k => (
+            <div key={k.l} style={{ padding: '10px 14px', background: '#F7F9FC', borderRadius: 10, minWidth: 120, border: '1px solid #E4EAF2' }}>
+              <div style={{ fontSize: 9, color: '#7A92B0', fontWeight: 700, textTransform: 'uppercase' }}>{k.l}</div>
+              <div style={{ fontSize: 18, fontWeight: 900, color: k.c }}>{k.v}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={() => setStudentSectionTab('curriculum')}
+              style={{ padding: '9px 18px', borderRadius: 10, border: studentSectionTab === 'curriculum' ? 'none' : '1.5px solid #E4EAF2', background: studentSectionTab === 'curriculum' ? '#1A365E' : '#fff', color: studentSectionTab === 'curriculum' ? '#fff' : '#5A7290', fontSize: 11, fontWeight: 800, cursor: 'pointer', letterSpacing: '.5px', fontFamily: 'inherit' }}>Curriculum Details</button>
+            <button onClick={() => setStudentSectionTab('weekly')}
+              style={{ padding: '9px 18px', borderRadius: 10, border: studentSectionTab === 'weekly' ? 'none' : '1.5px solid #E4EAF2', background: studentSectionTab === 'weekly' ? '#1A365E' : '#fff', color: studentSectionTab === 'weekly' ? '#fff' : '#5A7290', fontSize: 11, fontWeight: 800, cursor: 'pointer', letterSpacing: '.5px', fontFamily: 'inherit' }}>Weekly Progress</button>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => setStudentNotesTarget({ sid, cid, studentName: student.fullName, courseTitle: course.title })}
+              style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #E4EAF2', background: '#fff', color: '#1A365E', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>📝 Add Notes</button>
+            <button onClick={() => window.print()} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #E4EAF2', background: '#fff', color: '#1A365E', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>🖨 Print</button>
+          </div>
+        </div>
+
+        {studentSectionTab === 'weekly' ? (
+          <div style={{ ...card, padding: 30, textAlign: 'center', color: '#94A3B8' }}>
+            <div style={{ fontSize: 26, marginBottom: 8 }}>📅</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#1A365E' }}>Weekly Progress isn't available yet</div>
+            <div style={{ fontSize: 11, color: '#7A92B0', marginTop: 4, maxWidth: 380, marginLeft: 'auto', marginRight: 'auto' }}>
+              Activity completion isn't currently tracked with a per-week timestamp, so a week-by-week breakdown can't be shown yet. Curriculum Details below reflects this student's current results.
+            </div>
+          </div>
+        ) : (
+          <>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <button onClick={expandAll} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 11, fontWeight: 800, letterSpacing: '.03em', cursor: 'pointer', fontFamily: 'inherit' }}>EXPAND ALL</button>
+              <span style={{ color: '#D8E1EC' }}>|</span>
+              <button onClick={collapseAll} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 11, fontWeight: 800, letterSpacing: '.03em', cursor: 'pointer', fontFamily: 'inherit' }}>COLLAPSE ALL</button>
+            </div>
+            <div style={{ border: '1px solid #E4EAF2', borderRadius: 12, overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #E4EAF2', background: '#F7F9FC' }}>
+                    <th rowSpan={2} style={{ ...thStyle, textAlign: 'left' }} />
+                    <th rowSpan={2} style={thStyle}>Target Date</th>
+                    <th colSpan={3} style={{ ...thStyle, borderBottom: '1px solid #E4EAF2' }}>Statuses</th>
+                    <th colSpan={4} style={{ ...thStyle, borderBottom: '1px solid #E4EAF2' }}>Results</th>
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid #E4EAF2', background: '#F7F9FC' }}>
+                    <th style={thStyle} title="Locked until prerequisite met">🔒</th>
+                    <th style={thStyle} title="Hidden from students">🚫</th>
+                    <th style={thStyle} title="Excluded from grade">📄</th>
+                    <th style={thStyle}>Attempts</th>
+                    <th style={thStyle}>Time</th>
+                    <th style={thStyle}>Score</th>
+                    <th style={thStyle}>Review</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr style={{ background: '#fff', borderBottom: '1px solid #E4EAF2' }}>
+                    <td style={{ padding: '10px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 16 }}>📘</span>
+                        <span style={{ fontSize: 13, fontWeight: 900, color: '#1A365E' }}>{course.title}</span>
+                      </div>
+                    </td>
+                    <td colSpan={8} />
+                  </tr>
+                  {!content.length ? (
+                    <tr><td colSpan={9} style={{ textAlign: 'center', padding: 40, color: '#94A3B8', fontSize: 13 }}>No curriculum content in this section yet.</td></tr>
+                  ) : (
+                    <>
+                      {topLevel.map(item => renderResultRow(item, 0))}
+                      {units.map(u => (
+                        <Fragment key={u.title}>
+                          <tr style={{ background: '#FAFBFF', borderBottom: '1px solid #F0F4FA' }}>
+                            <td style={{ padding: '8px 10px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <button onClick={() => toggleExpanded('unit:' + u.title)} style={{ width: 18, height: 18, border: '1px solid #E4EAF2', borderRadius: 4, background: '#fff', cursor: 'pointer', fontSize: 11, color: '#5A7290', padding: 0, lineHeight: 1 }}>{isExpanded('unit:' + u.title) ? '−' : '+'}</button>
+                                <span style={{ fontSize: 15 }}>📁</span>
+                                <span style={{ fontSize: 12, fontWeight: 800, color: '#1A365E' }}>{u.title}</span>
+                              </div>
+                            </td>
+                            <td colSpan={8} />
+                          </tr>
+                          {isExpanded('unit:' + u.title) && u.items.map(item => renderResultRow(item, 1))}
+                        </Fragment>
+                      ))}
+                    </>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
     )
   }
@@ -708,17 +2070,6 @@ export function LMSPage() {
     const passMark = course.passMark || 80
     const creditHours = course.creditHours || 1
     const enrol0 = enrolments[0] || {}
-    const parseSubmissionMeta = (noteVal: unknown): Record<string, unknown> | null => {
-      if (typeof noteVal !== 'string') return null
-      const t = noteVal.trim()
-      if (!t.startsWith('{') && !t.startsWith('[')) return null
-      try {
-        const parsed = JSON.parse(t)
-        return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null
-      } catch {
-        return null
-      }
-    }
     const getLessonSubmissions = (studentId: string, contentId: string) =>
       allSubmissions
         .filter(r => String(r.student_id ?? '') === studentId && String(r.content_id ?? '') === contentId)
@@ -727,11 +2078,6 @@ export function LMSPage() {
           const bd = new Date(String(b.submitted_at ?? b.created_at ?? 0)).getTime()
           return bd - ad
         })
-    const getAssignmentSubmission = (studentId: string, contentId: string) =>
-      getLessonSubmissions(studentId, contentId).find((row) => {
-        const meta = parseSubmissionMeta(row.note)
-        return !meta || meta.kind !== 'mastery_quiz'
-      })
 
     // Stats
     let ahead = 0, onP = 0, off = 0, done = 0, needsScoring = 0, atRisk = 0
@@ -797,16 +2143,11 @@ export function LMSPage() {
       const a = document.createElement('a'); a.href = url; a.download = 'Gradebook_' + (course.title || 'export').replace(/[^a-z0-9]/gi, '_') + '_' + new Date().toISOString().slice(0, 10) + '.csv'; a.click(); URL.revokeObjectURL(url)
     }
 
-    const openScoreModal = (studentId: string, contentId: string, currentScore: string, lessonTitle: string) => {
+    const openScoreModal = (studentId: string, studentName: string, contentId: string, lessonTitle: string) => {
       const lessonItem = store.content.find(x => x.id === contentId)
-      const progRec = store.progress.find(p => p.studentId === studentId && p.contentId === contentId)
-      const assignSub = getAssignmentSubmission(studentId, contentId)
       setScoreModal({
-        studentId, contentId, courseId: course.id, currentScore, lessonTitle,
-        maxScore: lessonItem?.assignMaxScore || 100,
-        instructions: lessonItem?.assignInstructions || '',
-        submNote: (assignSub?.note as string) || (((progRec as unknown) as Record<string, unknown>)?.assignNote as string) || '',
-        submLink: (assignSub?.link_url as string) || (((progRec as unknown) as Record<string, unknown>)?.assignLink as string) || '',
+        studentId, studentName, contentId, courseId: course.id, lessonTitle,
+        caseStudyUrl: lessonItem?.caseStudyUrl,
       })
     }
 
@@ -938,7 +2279,7 @@ export function LMSPage() {
                         const borderL = ci > 0 && content[ci - 1]?.unitTitle !== item.unitTitle ? '2px solid #D0D7E4' : '1px solid #F0F4FA'
                         const canOpenScore = ha && (effectiveStatus !== 'not_started' || hasSubmission)
                         return (
-                          <td key={item.id} onClick={canOpenScore ? (e) => { e.stopPropagation(); openScoreModal(sid, item.id, String(as_ ?? ''), item.title) } : undefined} style={{ padding: '5px 3px', textAlign: 'center', borderBottom: '1px solid #F0F4FA', borderLeft: borderL, width: 56, cursor: canOpenScore ? 'pointer' : 'default' }} title={ha ? 'Click to score assignment' : ''}>
+                          <td key={item.id} onClick={canOpenScore ? (e) => { e.stopPropagation(); openScoreModal(sid, `${s.lastName}, ${s.firstName}`, item.id, item.title) } : undefined} style={{ padding: '5px 3px', textAlign: 'center', borderBottom: '1px solid #F0F4FA', borderLeft: borderL, width: 56, cursor: canOpenScore ? 'pointer' : 'default' }} title={ha ? 'Click to score assignment' : ''}>
                             {effectiveStatus === 'not_started' ? <span style={{ color: '#D0D7E4', fontSize: 13 }}>—</span>
                               : effectiveStatus === 'in_progress' ? <div style={{ background: '#FEF3C7', borderRadius: 5, padding: '3px 4px', display: 'inline-block' }}><div style={{ fontSize: 10, fontWeight: 700, color: '#D97706' }}>⏳</div></div>
                               : ha && cs !== null ? (
@@ -1235,11 +2576,373 @@ export function LMSPage() {
     )
   }
 
+  // ─── APPEALS TAB ────────────────────────────────────────────────────────────
+  function renderAppeals() {
+    const openAppeals = appeals.filter(a => a.status === 'open')
+    const resolvedAppeals = appeals.filter(a => a.status === 'resolved')
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 900, color: '#1A365E' }}>🚩 Grade Appeals{openAppeals.length > 0 ? ` (${openAppeals.length} open)` : ''}</div>
+          <div style={{ fontSize: 11, color: '#7A92B0', marginTop: 2 }}>Students appealing a Case Study score they think is a discrepancy.</div>
+        </div>
+        {renderNav()}
+        {appealsLoading ? (
+          <div style={{ textAlign: 'center', padding: 60, color: '#94A3B8' }}>Loading…</div>
+        ) : appeals.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: 60, color: '#94A3B8' }}>No appeals filed yet.</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {[...openAppeals, ...resolvedAppeals].map(a => {
+              const student = students.find(s => s.id === a.studentId)
+              const lesson = store.content.find(c => c.id === a.contentId)
+              return (
+                <AppealRowCard
+                  key={a.id}
+                  appeal={a}
+                  studentName={student ? `${student.lastName}, ${student.firstName}` : 'Unknown Student'}
+                  lessonTitle={lesson?.title ?? 'Unknown Lesson'}
+                  onResolved={(reply) => setAppeals(prev => prev.map(x => x.id === a.id ? { ...x, status: 'resolved', adminReply: reply } : x))}
+                />
+              )
+            })}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ─── CURRICULUM TAB ─────────────────────────────────────────────────────────
+  function renderCurriculumPage() {
+    const allCourses = store.courses.filter(co => co.status === 'Published' || co.status === 'Draft')
+    const cid = (allCourses.find(co => co.id === curriculumCourseId) ? curriculumCourseId : '') || (allCourses[0]?.id ?? '')
+    const course = allCourses.find(co => co.id === cid)
+    if (!course) return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ fontSize: 16, fontWeight: 900, color: '#1A365E' }}>🧩 Curriculum</div>
+        {renderNav()}
+        <div style={{ textAlign: 'center', padding: 60, color: '#94A3B8' }}>No courses yet.</div>
+      </div>
+    )
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 900, color: '#1A365E' }}>🧩 Curriculum</div>
+            <div style={{ fontSize: 11, color: '#7A92B0', marginTop: 2 }}>{course.title} · {course.subject}{course.gradeLevel ? ' · ' + course.gradeLevel : ''}</div>
+          </div>
+          {allCourses.length > 1 && (
+            <select value={cid} onChange={e => setCurriculumCourseId(e.target.value)} style={iStyle}>
+              {allCourses.map(co => <option key={co.id} value={co.id}>{co.title}</option>)}
+            </select>
+          )}
+        </div>
+        {renderNav()}
+        {renderCurriculum(course)}
+      </div>
+    )
+  }
+
+  // ─── CURRICULUM OUTLINE (used by the Curriculum tab) ────────────────────────
+  function renderCurriculum(course: LMSCourse) {
+    const content = store.content.filter(x => x.courseId === course.id)
+    const topLevel = content.filter(x => !x.unitTitle).sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    const unitTitles = [...new Set(content.filter(x => x.unitTitle).map(x => x.unitTitle as string))]
+    const units = unitTitles.map(t => {
+      const items = content.filter(x => x.unitTitle === t).sort((a, b) => (a.moduleOrder ?? 0) - (b.moduleOrder ?? 0) || (a.order ?? 0) - (b.order ?? 0))
+      return { title: t, unitOrder: items[0]?.unitOrder ?? 0, items }
+    }).sort((a, b) => a.unitOrder - b.unitOrder)
+
+    function isExpanded(key: string) { return curriculumExpanded[key] !== false }
+    function toggleExpanded(key: string) { setCurriculumExpanded(prev => ({ ...prev, [key]: !isExpanded(key) })) }
+    function expandAll() {
+      const next: Record<string, boolean> = {}
+      units.forEach(u => {
+        next['unit:' + u.title] = true
+        u.items.forEach(it => { if (hasMasteryBool(it.hasMastery) || hasAssignBool(it.hasAssignment)) next['topic:' + it.id] = true })
+      })
+      topLevel.forEach(it => { if (hasMasteryBool(it.hasMastery) || hasAssignBool(it.hasAssignment)) next['topic:' + it.id] = true })
+      setCurriculumExpanded(next)
+    }
+    function collapseAll() {
+      const next: Record<string, boolean> = {}
+      units.forEach(u => {
+        next['unit:' + u.title] = false
+        u.items.forEach(it => { if (hasMasteryBool(it.hasMastery) || hasAssignBool(it.hasAssignment)) next['topic:' + it.id] = false })
+      })
+      topLevel.forEach(it => { if (hasMasteryBool(it.hasMastery) || hasAssignBool(it.hasAssignment)) next['topic:' + it.id] = false })
+      setCurriculumExpanded(next)
+    }
+
+    function patchContent(id: string, patch: Partial<LMSContent>) {
+      persist({ ...store, content: store.content.map(c => c.id === id ? { ...c, ...patch } : c) })
+    }
+    function patchCourse(patch: Partial<LMSCourse>) {
+      persist({ ...store, courses: store.courses.map(c => c.id === course.id ? { ...c, ...patch } : c) })
+    }
+    function moveItem(list: LMSContent[], id: string, dir: -1 | 1, field: 'order' | 'moduleOrder') {
+      const idx = list.findIndex(x => x.id === id)
+      const swapIdx = idx + dir
+      if (idx < 0 || swapIdx < 0 || swapIdx >= list.length) return
+      const a = list[idx], b = list[swapIdx]
+      const aVal = a[field] ?? idx, bVal = b[field] ?? swapIdx
+      persist({
+        ...store, content: store.content.map(c => {
+          if (c.id === a.id) return { ...c, [field]: bVal }
+          if (c.id === b.id) return { ...c, [field]: aVal }
+          return c
+        })
+      })
+    }
+    function moveUnit(dir: -1 | 1, unitTitle: string) {
+      const idx = units.findIndex(u => u.title === unitTitle)
+      const swapIdx = idx + dir
+      if (idx < 0 || swapIdx < 0 || swapIdx >= units.length) return
+      const a = units[idx], b = units[swapIdx]
+      persist({
+        ...store, content: store.content.map(c => {
+          if (c.unitTitle === a.title) return { ...c, unitOrder: b.unitOrder }
+          if (c.unitTitle === b.title) return { ...c, unitOrder: a.unitOrder }
+          return c
+        })
+      })
+    }
+    function renameUnit(unitTitle: string) {
+      const next = prompt('Rename unit:', unitTitle)
+      if (!next?.trim() || next.trim() === unitTitle) return
+      persist({ ...store, content: store.content.map(c => c.unitTitle === unitTitle ? { ...c, unitTitle: next.trim() } : c) })
+    }
+    async function deleteUnit(unitTitle: string, items: LMSContent[]) {
+      if (!confirm(`Delete unit "${unitTitle}" and its ${items.length} item(s)? This cannot be undone.`)) return
+      await Promise.all(items.map(it => deleteLMSContent(it.id)))
+      setStore(prev => ({ ...prev, content: prev.content.filter(c => c.unitTitle !== unitTitle) }))
+    }
+    async function deleteItem(item: LMSContent) {
+      if (!confirm(`Delete "${item.title}"? This cannot be undone.`)) return
+      await deleteLMSContent(item.id)
+      setStore(prev => ({ ...prev, content: prev.content.filter(c => c.id !== item.id) }))
+      setCurriculumMenuOpenId(null)
+    }
+    function openAddItem(unitTitle: string | null) {
+      setActiveCourseId(course.id)
+      setPrefillUnit(unitTitle)
+      setEditLessonIdx(null)
+      setShowLessonModal(true)
+    }
+    function openAddUnit() {
+      const ut = prompt('Unit title:')
+      if (!ut?.trim()) return
+      openAddItem(ut.trim())
+    }
+    function openEdit(item: LMSContent) {
+      setActiveCourseId(course.id)
+      setEditLessonIdx(store.content.indexOf(item))
+      setPrefillUnit(null)
+      setShowLessonModal(true)
+      setCurriculumMenuOpenId(null)
+    }
+
+    const menuItemStyle: React.CSSProperties = { display: 'block', width: '100%', textAlign: 'left', padding: '9px 14px', background: 'none', border: 'none', fontSize: 11, fontWeight: 700, color: '#1A365E', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }
+    const thStyle: React.CSSProperties = { fontSize: 9, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '.05em', padding: '8px 10px' }
+    function statusBtnStyle(active?: boolean): React.CSSProperties {
+      return { width: 26, height: 26, borderRadius: 6, border: `1px solid ${active ? '#1A365E' : '#E4EAF2'}`, background: active ? '#1A365E' : '#fff', color: active ? '#fff' : '#B7C3D6', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }
+    }
+
+    function renderContentRow(item: LMSContent, depth: number, list: LMSContent[], orderField: 'order' | 'moduleOrder') {
+      const itemHasMastery = hasMasteryBool(item.hasMastery)
+      const itemHasAssignment = hasAssignBool(item.hasAssignment)
+      const hasSub = itemHasMastery || itemHasAssignment
+      const subLabels = ['Tutorial', ...(itemHasMastery ? ['Mastery Test'] : []), ...(itemHasAssignment ? ['Assignment'] : [])]
+      const key = 'topic:' + item.id
+      const expanded = isExpanded(key)
+      const isPretest = item.type === 'quiz' && item.title.toLowerCase().startsWith('pretest')
+      const icon = isPretest ? '⭐' : hasSub ? '📄' : '📋'
+      return (
+        <>
+          <tr key={item.id} style={{ borderBottom: '1px solid #F0F4FA' }}>
+            <td style={{ padding: '8px 10px', paddingLeft: 12 + depth * 26 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ color: '#D8E1EC', fontSize: 12 }}>⣿</span>
+                {hasSub ? (
+                  <button onClick={() => toggleExpanded(key)} style={{ width: 18, height: 18, border: '1px solid #E4EAF2', borderRadius: 4, background: '#fff', cursor: 'pointer', fontSize: 11, color: '#5A7290', padding: 0, lineHeight: 1 }}>{expanded ? '−' : '+'}</button>
+                ) : <span style={{ width: 18, flexShrink: 0 }} />}
+                <span style={{ fontSize: 15, flexShrink: 0 }}>{icon}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#1A365E' }}>{item.title || 'Untitled'}</span>
+              </div>
+            </td>
+            <td style={{ padding: '8px 10px', textAlign: 'center' }}>
+              <input type="date" value={item.targetDate ? item.targetDate.slice(0, 10) : ''} onChange={e => patchContent(item.id, { targetDate: e.target.value || null })}
+                style={{ border: '1px solid #E4EAF2', borderRadius: 6, fontSize: 11, padding: '3px 5px', color: '#1A365E', fontFamily: 'inherit', width: 118 }} />
+            </td>
+            <td style={{ padding: '8px 6px', textAlign: 'center' }}><button onClick={() => patchContent(item.id, { locked: !item.locked })} title="Locked" style={statusBtnStyle(item.locked)}>🔒</button></td>
+            <td style={{ padding: '8px 6px', textAlign: 'center' }}><button onClick={() => patchContent(item.id, { hidden: !item.hidden })} title="Hidden from students" style={statusBtnStyle(item.hidden)}>🚫</button></td>
+            <td style={{ padding: '8px 6px', textAlign: 'center' }}><button onClick={() => patchContent(item.id, { excludedFromGrade: !item.excludedFromGrade })} title="Excluded from grade" style={statusBtnStyle(item.excludedFromGrade)}>📄</button></td>
+            <td style={{ padding: '8px 10px', textAlign: 'right', position: 'relative' }}>
+              <button onClick={() => setCurriculumMenuOpenId(prev => prev === item.id ? null : item.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#5A7290', fontFamily: 'inherit' }}>⋯</button>
+              {curriculumMenuOpenId === item.id && (
+                <div ref={curriculumMenuRef} style={{ position: 'absolute', right: 10, top: '100%', background: '#fff', border: '1px solid #E4EAF2', borderRadius: 10, boxShadow: '0 8px 24px rgba(26,54,94,.14)', minWidth: 150, zIndex: 30, overflow: 'hidden' }}>
+                  <button onClick={() => openEdit(item)} style={menuItemStyle}>✏️ Edit</button>
+                  <button onClick={() => { moveItem(list, item.id, -1, orderField); setCurriculumMenuOpenId(null) }} style={menuItemStyle}>↑ Move Up</button>
+                  <button onClick={() => { moveItem(list, item.id, 1, orderField); setCurriculumMenuOpenId(null) }} style={menuItemStyle}>↓ Move Down</button>
+                  <button onClick={() => deleteItem(item)} style={{ ...menuItemStyle, color: '#D61F31', borderTop: '1px solid #F0F4FA' }}>🗑 Delete</button>
+                </div>
+              )}
+            </td>
+          </tr>
+          {hasSub && expanded && subLabels.map(label => (
+            <tr key={item.id + '-' + label} style={{ borderBottom: '1px solid #F0F4FA' }}>
+              <td style={{ padding: '6px 10px', paddingLeft: 12 + (depth + 1) * 26 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 14 }}>📋</span>
+                  <span style={{ fontSize: 11, color: '#5A7290' }}>{item.title}: {label}</span>
+                </div>
+              </td>
+              <td colSpan={4} />
+              <td />
+            </tr>
+          ))}
+        </>
+      )
+    }
+
+    function renderUnitRow(u: { title: string; unitOrder: number; items: LMSContent[] }) {
+      const key = 'unit:' + u.title
+      const expanded = isExpanded(key)
+      const menuKey = 'unit:' + u.title
+      return (
+        <tr key={u.title} style={{ background: '#FAFBFF', borderBottom: '1px solid #F0F4FA' }}>
+          <td style={{ padding: '8px 10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ color: '#D8E1EC', fontSize: 12 }}>⣿</span>
+              <button onClick={() => toggleExpanded(key)} style={{ width: 18, height: 18, border: '1px solid #E4EAF2', borderRadius: 4, background: '#fff', cursor: 'pointer', fontSize: 11, color: '#5A7290', padding: 0, lineHeight: 1 }}>{expanded ? '−' : '+'}</button>
+              <span style={{ fontSize: 15 }}>📁</span>
+              <span style={{ fontSize: 12, fontWeight: 800, color: '#1A365E' }}>{u.title}</span>
+            </div>
+          </td>
+          <td colSpan={4} />
+          <td style={{ padding: '8px 10px', textAlign: 'right', position: 'relative' }}>
+            <button onClick={() => setCurriculumMenuOpenId(prev => prev === menuKey ? null : menuKey)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#5A7290', fontFamily: 'inherit' }}>⋯</button>
+            {curriculumMenuOpenId === menuKey && (
+              <div ref={curriculumMenuRef} style={{ position: 'absolute', right: 10, top: '100%', background: '#fff', border: '1px solid #E4EAF2', borderRadius: 10, boxShadow: '0 8px 24px rgba(26,54,94,.14)', minWidth: 160, zIndex: 30, overflow: 'hidden' }}>
+                <button onClick={() => { openAddItem(u.title); setCurriculumMenuOpenId(null) }} style={menuItemStyle}>+ Add Topic</button>
+                <button onClick={() => { renameUnit(u.title); setCurriculumMenuOpenId(null) }} style={menuItemStyle}>✏️ Rename Unit</button>
+                <button onClick={() => { moveUnit(-1, u.title); setCurriculumMenuOpenId(null) }} style={menuItemStyle}>↑ Move Up</button>
+                <button onClick={() => { moveUnit(1, u.title); setCurriculumMenuOpenId(null) }} style={menuItemStyle}>↓ Move Down</button>
+                <button onClick={() => { deleteUnit(u.title, u.items); setCurriculumMenuOpenId(null) }} style={{ ...menuItemStyle, color: '#D61F31', borderTop: '1px solid #F0F4FA' }}>🗑 Delete Unit</button>
+              </div>
+            )}
+          </td>
+        </tr>
+      )
+    }
+
+    return (
+      <div>
+        <div style={{ fontSize: 12, color: '#7A92B0', marginBottom: 14 }}>Total Activities: {content.length}</div>
+
+        <button onClick={() => setCurriculumSettingsOpen(o => !o)}
+          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', padding: '12px 16px', background: '#fff', border: '1px solid #E4EAF2', borderRadius: curriculumSettingsOpen ? '10px 10px 0 0' : 10, cursor: 'pointer', fontFamily: 'inherit', marginBottom: curriculumSettingsOpen ? 0 : 16 }}>
+          <span style={{ fontSize: 11, fontWeight: 800, color: '#1A365E', letterSpacing: '.05em' }}>CURRICULUM SETTINGS</span>
+          <span style={{ fontSize: 11, color: '#5A7290' }}>{curriculumSettingsOpen ? '▲' : '▼'}</span>
+        </button>
+        {curriculumSettingsOpen && (
+          <div style={{ border: '1px solid #E4EAF2', borderTop: 'none', borderRadius: '0 0 10px 10px', padding: 16, marginBottom: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div>
+                <label style={labelStyle}>Mastery Test Threshold (%)</label>
+                <input type="number" min={0} max={100} value={course.passMark} onChange={e => patchCourse({ passMark: parseInt(e.target.value) || 80 })} style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Pre-Test Exemption Threshold (%)</label>
+                <input type="number" min={0} max={100} value={course.preTestExemptionThreshold ?? 80} onChange={e => patchCourse({ preTestExemptionThreshold: parseInt(e.target.value) || 80 })} style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Mastery Test Retakes</label>
+                <select value={course.masteryRetakes ?? 'unlimited'} onChange={e => patchCourse({ masteryRetakes: e.target.value })} style={selectStyle}>
+                  <option value="unlimited">Unlimited retakes</option>
+                  <option value="0">No retakes</option>
+                  <option value="1">1 retake</option>
+                  <option value="2">2 retakes</option>
+                  <option value="3">3 retakes</option>
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle}>Course Progression Settings</label>
+                <select value={course.progressionMode ?? 'open'} onChange={e => patchCourse({ progressionMode: e.target.value })} style={selectStyle}>
+                  <option value="open">Open</option>
+                  <option value="sequential">Sequential Completion</option>
+                  <option value="mastery">Mastery Learning</option>
+                  <option value="mastery_sequential">Mastery Learning with Sequential Completion</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <button onClick={expandAll} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 11, fontWeight: 800, letterSpacing: '.03em', cursor: 'pointer', fontFamily: 'inherit' }}>EXPAND ALL</button>
+            <span style={{ color: '#D8E1EC' }}>|</span>
+            <button onClick={collapseAll} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 11, fontWeight: 800, letterSpacing: '.03em', cursor: 'pointer', fontFamily: 'inherit' }}>COLLAPSE ALL</button>
+          </div>
+          <div style={{ fontSize: 11, color: '#7A92B0' }}>Last Saved: {course.updatedAt ? new Date(course.updatedAt).toLocaleString() : '—'}{course.createdBy ? ' by ' + course.createdBy : ''}</div>
+        </div>
+
+        <div style={{ border: '1px solid #E4EAF2', borderRadius: 12 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid #E4EAF2', background: '#F7F9FC' }}>
+                <th rowSpan={2} style={{ ...thStyle, textAlign: 'left' }} />
+                <th rowSpan={2} style={{ ...thStyle, textAlign: 'center' }}>Target Date</th>
+                <th colSpan={3} style={{ ...thStyle, textAlign: 'center', borderBottom: '1px solid #E4EAF2' }}>Statuses</th>
+                <th rowSpan={2} style={thStyle} />
+              </tr>
+              <tr style={{ borderBottom: '1px solid #E4EAF2', background: '#F7F9FC' }}>
+                <th style={{ ...thStyle, textAlign: 'center' }} title="Locked until prerequisite met">🔒</th>
+                <th style={{ ...thStyle, textAlign: 'center' }} title="Hidden from students">🚫</th>
+                <th style={{ ...thStyle, textAlign: 'center' }} title="Excluded from grade">📄</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style={{ background: '#fff', borderBottom: '1px solid #E4EAF2' }}>
+                <td style={{ padding: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 16 }}>📘</span>
+                    <span style={{ fontSize: 13, fontWeight: 900, color: '#1A365E' }}>{course.title}</span>
+                  </div>
+                </td>
+                <td colSpan={4} />
+                <td style={{ padding: '8px 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                  <button onClick={openAddUnit} title="Add Unit" style={{ padding: '5px 9px', background: '#EEF3FF', color: '#1A365E', border: '1px solid #DDE6F0', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginRight: 6 }}>+ Unit</button>
+                  <button onClick={() => openAddItem(null)} title="Add Lesson" style={{ padding: '5px 9px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>+ Lesson</button>
+                </td>
+              </tr>
+              {!content.length ? (
+                <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40, color: '#94A3B8', fontSize: 13 }}>No curriculum content yet. Add a unit or item above.</td></tr>
+              ) : (
+                <>
+                  {topLevel.map(item => renderContentRow(item, 0, topLevel, 'order'))}
+                  {units.map(u => (
+                    <Fragment key={u.title}>
+                      {renderUnitRow(u)}
+                      {isExpanded('unit:' + u.title) && u.items.map(item => renderContentRow(item, 1, u.items, 'moduleOrder'))}
+                    </Fragment>
+                  ))}
+                </>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )
+  }
+
   // ─── SECTION TAB ────────────────────────────────────────────────────────────
   function renderSection() {
     const courses = store.courses.filter(co => co.status === 'Published' || co.status === 'Draft')
     if (!courses.length) return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ fontSize: 18, fontWeight: 900, color: '#1A365E' }}>Section Details</div>
         {renderNav()}
         <div style={{ textAlign: 'center', padding: 40, color: '#94A3B8' }}>No courses yet.</div>
       </div>
@@ -1339,34 +3042,36 @@ export function LMSPage() {
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 18, fontWeight: 900, color: '#1A365E' }}>Section Details</div>
+          <div style={{ fontSize: 11, color: '#7A92B0', marginTop: 2 }}>Data as of {new Date().toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' })}</div>
+        </div>
+        {renderNav()}
+
         {/* Course header banner */}
-        <div style={{ background: `linear-gradient(135deg,${subjectCol},${subjectCol}CC)`, borderRadius: 14, padding: '16px 20px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ width: 64, height: 64, background: 'rgba(255,255,255,.15)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><span style={{ fontSize: 32 }}>📘</span></div>
+        <div style={{ background: 'transparent', border: `1.5px solid ${subjectCol}`, borderRadius: 14, padding: '16px 20px', marginTop: 14, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ width: 64, height: 64, background: subjectCol + '18', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><span style={{ fontSize: 32 }}>📘</span></div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,.75)', marginBottom: 2 }}>{course.subject}{course.gradeLevel ? ' · ' + course.gradeLevel : ''}</div>
-            <div style={{ fontSize: 18, fontWeight: 900, color: '#fff' }}>{course.title}</div>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,.7)', marginTop: 3 }}>{total} student{total !== 1 ? 's' : ''}{enrol0.dueDate ? ' · End Date: ' + enrol0.dueDate.substring(0, 10) : ''}</div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: '#5A7290', marginBottom: 2 }}>{course.subject}{course.gradeLevel ? ' · ' + course.gradeLevel : ''}</div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: '#1A365E' }}>{course.title}</div>
+            <div style={{ fontSize: 11, color: '#7A92B0', marginTop: 3 }}>{total} student{total !== 1 ? 's' : ''}{enrol0.dueDate ? ' · End Date: ' + enrol0.dueDate.substring(0, 10) : ''}</div>
           </div>
           {courses.length > 1 && (
-            <select value={cid} onChange={e => setSectionCourseId(e.target.value)} style={{ padding: '7px 12px', border: 'none', borderRadius: 9, fontSize: 12, color: '#1A365E', fontWeight: 600, fontFamily: 'inherit' }}>
+            <select value={cid} onChange={e => setSectionCourseId(e.target.value)} style={{ padding: '7px 12px', border: `1.5px solid ${subjectCol}`, borderRadius: 9, fontSize: 12, color: '#1A365E', fontWeight: 600, fontFamily: 'inherit', background: 'transparent', cursor: 'pointer' }}>
               {courses.map(co => <option key={co.id} value={co.id}>{co.title}</option>)}
             </select>
           )}
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 10, color: 'rgba(255,255,255,.7)' }}>End Date</div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{enrol0.dueDate ? enrol0.dueDate.substring(0, 10) : '—'}</div>
+            <div style={{ fontSize: 10, color: '#7A92B0' }}>End Date</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#1A365E' }}>{enrol0.dueDate ? enrol0.dueDate.substring(0, 10) : '—'}</div>
           </div>
         </div>
 
-        {/* Tab bar + NAV */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
-          <div style={{ display: 'flex', gap: 0, background: '#fff', border: '1.5px solid #E4EAF2', borderRadius: 10, overflow: 'hidden' }}>
-            {([{ k: 'gradebook', l: '📊 GRADEBOOK' }, { k: 'curriculum', l: '🔍 CURRICULUM' }] as const).map(tab => {
-              const a = sectionStudentTab === tab.k
-              return <button key={tab.k} onClick={() => setSectionStudentTab(tab.k)} style={{ padding: '9px 18px', border: 'none', background: a ? '#1A365E' : 'transparent', color: a ? '#fff' : '#5A7290', fontSize: 11, fontWeight: 800, cursor: 'pointer', letterSpacing: '.5px', fontFamily: 'inherit' }}>{tab.l}</button>
-            })}
-          </div>
-          {renderNav()}
+        {/* Gradebook / View Curriculum */}
+        <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+          <button style={{ padding: '9px 18px', borderRadius: 10, border: 'none', background: '#1A365E', color: '#fff', fontSize: 11, fontWeight: 800, cursor: 'default', letterSpacing: '.5px', fontFamily: 'inherit' }}>📊 GRADEBOOK</button>
+          <button onClick={() => { setCurriculumCourseId(course.id); navTab('curriculum') }}
+            style={{ padding: '9px 18px', borderRadius: 10, border: '1.5px solid #E4EAF2', background: '#fff', color: '#5A7290', fontSize: 11, fontWeight: 800, cursor: 'pointer', letterSpacing: '.5px', fontFamily: 'inherit' }}>🔍 CURRICULUM</button>
         </div>
 
         {/* Pace filter pills */}
@@ -1421,7 +3126,7 @@ export function LMSPage() {
                       <td style={{ padding: '10px 8px', textAlign: 'center' }}><input type="checkbox" style={{ cursor: 'pointer' }} /></td>
                       <td style={{ padding: '10px 6px', textAlign: 'center' }}><span style={{ fontSize: 16 }} title={stat.paceLabel}>{stat.paceIcon}</span></td>
                       <td style={{ padding: '10px 12px' }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: '#1A365E' }}>{s.lastName}, {s.firstName}</div>
+                        <div onClick={() => navigate(`/lms/student-section?sid=${stat.sid}&cid=${course.id}`)} style={{ fontSize: 12, fontWeight: 700, color: '#1A365E', cursor: 'pointer', textDecoration: 'underline' }}>{s.lastName}, {s.firstName}</div>
                         <div style={{ fontSize: 10, color: '#7A92B0' }}>{s.grade}{s.cohort ? ' · ' + s.cohort : ''}</div>
                       </td>
                       <td style={{ padding: '10px 8px', textAlign: 'center' }}>
@@ -1467,10 +3172,12 @@ export function LMSPage() {
     )
   }
 
-  // ─── COURSE MODAL ───────────────────────────────────────────────────────────
+  // ─── COURSE MODAL (creates/edits a Section) ────────────────────────────────
   function CourseModal() {
     const course = editCourseIdx !== null ? store.courses[editCourseIdx] : undefined
     const isNew = editCourseIdx === null
+    const locked = isNew && newSectionGroupId !== null
+    const lockedGroup = locked ? store.courseGroups.find(g => g.id === newSectionGroupId) : undefined
     const [title, setTitle] = useState(course?.title ?? '')
     const [subject, setSubject] = useState(course?.subject ?? SUBJECTS[0])
     const [gradeLevel, setGradeLevel] = useState(course?.gradeLevel ?? GRADE_LEVELS[0])
@@ -1480,37 +3187,85 @@ export function LMSPage() {
     const [requiredHours, setRequiredHours] = useState(String(course?.requiredHours ?? ''))
     const [status, setStatus] = useState<'Draft' | 'Published'>(course?.status ?? 'Draft')
     const [announcement, setAnnouncement] = useState(course?.announcement ?? '')
+    const [startDate, setStartDate] = useState(course?.startDate ?? '')
+    const [endDate, setEndDate] = useState(course?.endDate ?? '')
+    const [groupMode, setGroupMode] = useState<'none' | 'existing' | 'new'>(locked || course?.groupId ? 'existing' : 'none')
+    const [groupId, setGroupId] = useState(course?.groupId ?? newSectionGroupId ?? '')
+    const [newGroupTitle, setNewGroupTitle] = useState('')
     const save = () => {
-      if (!title.trim()) { alert('Title is required'); return }
+      if (!title.trim()) { alert('Section title is required'); return }
+      let finalGroupId: string | null = null
+      const newGroupsToAdd: LMSCourseGroup[] = []
+      if (groupMode === 'existing') {
+        finalGroupId = groupId || null
+      } else if (groupMode === 'new') {
+        if (!newGroupTitle.trim()) { alert('Enter a name for the new course'); return }
+        const newId = crypto.randomUUID()
+        finalGroupId = newId
+        newGroupsToAdd.push({ id: newId, title: newGroupTitle.trim() })
+      }
       const obj: LMSCourse = {
+        ...course,
         id: course?.id ?? lmsId(),
         title: title.trim(), subject, gradeLevel, description: description.trim(),
         passMark: parseInt(passMark) || 80,
         creditHours: parseFloat(creditHours) || 1,
         requiredHours: parseFloat(requiredHours) || 0,
         status, announcement: announcement.trim(),
-        createdBy: 'Admin',
+        createdBy: course?.createdBy ?? 'Admin',
         createdAt: course?.createdAt ?? new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        groupId: finalGroupId,
+        startDate: startDate || null,
+        endDate: endDate || null,
       }
       const courses = [...store.courses]
       if (isNew) courses.push(obj); else courses[editCourseIdx!] = obj
-      persist({ ...store, courses })
-      setShowCourseModal(false)
+      persist({ ...store, courses, courseGroups: [...store.courseGroups, ...newGroupsToAdd] })
+      closeCourseModal()
     }
     return (
-      <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 400, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto', backdropFilter: 'blur(4px)' }} onClick={e => { if (e.target === e.currentTarget) setShowCourseModal(false) }}>
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 400, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto', backdropFilter: 'blur(4px)' }} onClick={e => { if (e.target === e.currentTarget) closeCourseModal() }}>
         <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 560, boxShadow: '0 24px 60px rgba(0,0,0,.3)', margin: 'auto' }}>
           <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '18px 24px', borderRadius: '18px 18px 0 0' }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>📘 {isNew ? 'New Course' : 'Edit Course'}</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>📘 {isNew ? 'New Section' : 'Edit Section'}</div>
           </div>
           <div style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div><label style={labelStyle}>Course Title *</label><input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Introduction to Entrepreneurship" style={inputStyle} /></div>
+            <div>
+              <label style={labelStyle}>Course</label>
+              {locked ? (
+                <div style={{ ...inputStyle, background: '#F7F9FC', color: '#5A7290', boxSizing: 'border-box' }}>{lockedGroup?.title ?? 'Untitled Course'}</div>
+              ) : (
+                <>
+                  <select
+                    value={groupMode === 'new' ? '__new__' : (groupMode === 'existing' ? groupId : '')}
+                    onChange={e => {
+                      const v = e.target.value
+                      if (v === '__new__') setGroupMode('new')
+                      else if (v === '') setGroupMode('none')
+                      else { setGroupMode('existing'); setGroupId(v) }
+                    }}
+                    style={selectStyle}>
+                    <option value="">— No Course (standalone section) —</option>
+                    {store.courseGroups.map(g => <option key={g.id} value={g.id}>{g.title}</option>)}
+                    <option value="__new__">+ Create New Course…</option>
+                  </select>
+                  {groupMode === 'new' && (
+                    <input value={newGroupTitle} onChange={e => setNewGroupTitle(e.target.value)} placeholder="e.g. Accelerate to Algebra 1" style={{ ...inputStyle, marginTop: 6 }} />
+                  )}
+                </>
+              )}
+            </div>
+            <div><label style={labelStyle}>Section Title *</label><input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Introduction to Entrepreneurship" style={inputStyle} /></div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div><label style={labelStyle}>Subject</label><select value={subject} onChange={e => setSubject(e.target.value)} style={selectStyle}>{SUBJECTS.map(s => <option key={s}>{s}</option>)}</select></div>
               <div><label style={labelStyle}>Grade Level</label><select value={gradeLevel} onChange={e => setGradeLevel(e.target.value)} style={selectStyle}>{GRADE_LEVELS.map(g => <option key={g}>{g}</option>)}</select></div>
             </div>
             <div><label style={labelStyle}>Description</label><textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} placeholder="What will students learn in this course?" style={taStyle} /></div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div><label style={labelStyle}>Start Date</label><input value={startDate} onChange={e => setStartDate(e.target.value)} type="date" style={inputStyle} /></div>
+              <div><label style={labelStyle}>End Date (optional)</label><input value={endDate} onChange={e => setEndDate(e.target.value)} type="date" style={inputStyle} /></div>
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
               <div><label style={labelStyle}>Pass Mark (%)</label><input value={passMark} onChange={e => setPassMark(e.target.value)} type="number" min={1} max={100} style={inputStyle} /></div>
               <div><label style={labelStyle}>Credit Hours</label><input value={creditHours} onChange={e => setCreditHours(e.target.value)} type="number" min={0} max={10} step={0.5} style={inputStyle} /></div>
@@ -1527,11 +3282,556 @@ export function LMSPage() {
                 <textarea value={announcement} onChange={e => setAnnouncement(e.target.value)} rows={2} placeholder="e.g. Quiz rescheduled to Friday…" style={{ ...taStyle, fontSize: 11 }} />
               </div>
               <div style={{ display: 'flex', gap: 8, flexShrink: 0, paddingBottom: 1 }}>
-                <button onClick={() => setShowCourseModal(false)} style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-                <button onClick={save} style={{ padding: '9px 20px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>💾 Save Course</button>
+                <button onClick={closeCourseModal} style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+                <button onClick={save} style={{ padding: '9px 20px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>💾 Save Section</button>
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ─── NEW SECTION FLOW (full-screen, 2-step: pick Course → Section Details) ──
+  function NewSectionFlow() {
+    const editCourse = editCourseIdx !== null ? store.courses[editCourseIdx] : undefined
+    const isEdit = !!editCourse
+    const lockedGroupId = newSectionGroupId
+    const lockedGroup = lockedGroupId ? store.courseGroups.find(g => g.id === lockedGroupId) : undefined
+    const editGroup = isEdit && editCourse.groupId ? store.courseGroups.find(g => g.id === editCourse.groupId) : undefined
+    const locked = isEdit || !!lockedGroupId
+    const [step, setStep] = useState<'course' | 'details' | 'students'>(locked ? 'details' : 'course')
+    const campuses = useCampuses()
+
+    const [courseSearch, setCourseSearch] = useState('')
+    const [creatingCourse, setCreatingCourse] = useState(false)
+    const [newCourseName, setNewCourseName] = useState('')
+    const [chosenCourse, setChosenCourse] = useState<{ key: string; title: string; groupId: string | null } | null>(() => {
+      if (isEdit) return { key: editCourse.groupId || editCourse.id, title: editGroup?.title ?? editCourse.title, groupId: editCourse.groupId ?? null }
+      if (lockedGroupId) return { key: lockedGroupId, title: lockedGroup?.title ?? '', groupId: lockedGroupId }
+      return null
+    })
+    const [chosenIsNewGroup, setChosenIsNewGroup] = useState(false)
+
+    const [sectionName, setSectionName] = useState(editCourse?.title ?? '')
+    const [descOpen, setDescOpen] = useState(!!editCourse?.description)
+    const [description, setDescription] = useState(editCourse?.description ?? '')
+    const [startDate, setStartDate] = useState(editCourse?.startDate ?? new Date().toISOString().slice(0, 10))
+    const [noEndDate, setNoEndDate] = useState(isEdit ? !editCourse.endDate : true)
+    const [endDate, setEndDate] = useState(editCourse?.endDate ?? '')
+    const [instructorSearch, setInstructorSearch] = useState('')
+    const [instructorIds, setInstructorIds] = useState<Set<string>>(new Set(editCourse?.instructorIds ?? []))
+    const [showInstructorDirectory, setShowInstructorDirectory] = useState(false)
+    const [instructionsOpen, setInstructionsOpen] = useState(!!editCourse?.studentInstructions)
+    const [studentInstructions, setStudentInstructions] = useState(editCourse?.studentInstructions ?? '')
+    const [preTest, setPreTest] = useState(String(editCourse?.preTestExemptionThreshold ?? 80))
+    const [masteryThreshold, setMasteryThreshold] = useState(String(editCourse?.passMark ?? 80))
+    const [masteryRetakes, setMasteryRetakes] = useState(editCourse?.masteryRetakes ?? 'unlimited')
+    const [progressionMode, setProgressionMode] = useState(editCourse?.progressionMode ?? 'open')
+    const [selfEnroll, setSelfEnroll] = useState(editCourse?.selfEnrollEnabled ?? false)
+    const [selfEnrollCode, setSelfEnrollCode] = useState<string | null>(editCourse?.selfEnrollCode ?? null)
+    const [selfEnrollPassword, setSelfEnrollPassword] = useState<string | null>(editCourse?.selfEnrollPassword ?? null)
+    const [saving, setSaving] = useState(false)
+
+    const [directoryStudents, setDirectoryStudents] = useState<DirStudent[]>([])
+    const [addedStudentIds, setAddedStudentIds] = useState<Set<string>>(() => {
+      if (!editCourse) return new Set()
+      return new Set(store.enrolments.filter(e => e.courseId === editCourse.id && e.targetType === 'student').map(e => e.targetValue))
+    })
+    const [studentQuickSearch, setStudentQuickSearch] = useState('')
+    const [studentsLocationFilter, setStudentsLocationFilter] = useState('')
+    const [showStudentDirectory, setShowStudentDirectory] = useState(false)
+
+    useEffect(() => {
+      if (step !== 'students' || directoryStudents.length) return
+      supabase.from('students').select('id,first_name,last_name,grade,student_id,campus').order('last_name').then(({ data, error }) => {
+        if (error) { console.error('Student directory load error:', error); return }
+        if (data) {
+          setDirectoryStudents(data.map((r: Record<string, unknown>) => ({
+            id: r.id as string,
+            firstName: (r.first_name as string) ?? '',
+            lastName: (r.last_name as string) ?? '',
+            grade: (r.grade as string) ?? '',
+            studentId: (r.student_id as string) ?? '',
+            campus: (r.campus as string) ?? '',
+          })))
+        }
+      })
+    }, [step])
+
+    function closeFlow() {
+      setShowNewSectionFlow(false)
+      setNewSectionGroupId(null)
+      setEditCourseIdx(null)
+    }
+
+    const catalog = (() => {
+      const map = new Map<string, { key: string; title: string; groupId: string | null; count: number }>()
+      store.courses.forEach(co => {
+        const key = co.groupId || co.id
+        const existing = map.get(key)
+        if (existing) { existing.count++; return }
+        const title = co.groupId ? (store.courseGroups.find(g => g.id === co.groupId)?.title || co.title) : co.title
+        map.set(key, { key, title, groupId: co.groupId ?? null, count: 1 })
+      })
+      return [...map.values()].sort((a, b) => a.title.localeCompare(b.title))
+    })()
+    const filteredCatalog = courseSearch ? catalog.filter(c => c.title.toLowerCase().includes(courseSearch.toLowerCase())) : catalog
+
+    function pickCourse(c: { key: string; title: string; groupId: string | null }) {
+      setChosenCourse(c)
+      setChosenIsNewGroup(false)
+      setStep('details')
+    }
+    function confirmNewCourse() {
+      if (!newCourseName.trim()) { alert('Enter a course name'); return }
+      setChosenCourse({ key: 'NEW', title: newCourseName.trim(), groupId: null })
+      setChosenIsNewGroup(true)
+      setStep('details')
+    }
+
+    function toggleSelfEnroll() {
+      setSelfEnroll(prev => {
+        const next = !prev
+        if (next && !selfEnrollCode) { setSelfEnrollCode(genSelfEnrollCode()); setSelfEnrollPassword(genSelfEnrollPassword()) }
+        return next
+      })
+    }
+
+    async function finalize(studentIdsToEnroll: string[]) {
+      if (!sectionName.trim()) { alert('Section name is required'); return }
+      if (!chosenCourse) { alert('Select a course'); return }
+      setSaving(true)
+      let finalGroupId: string | null
+      const newGroupsToAdd: LMSCourseGroup[] = []
+      let coursesBase = store.courses
+      if (chosenIsNewGroup) {
+        const newId = crypto.randomUUID()
+        finalGroupId = newId
+        newGroupsToAdd.push({ id: newId, title: chosenCourse.title })
+      } else if (chosenCourse.groupId) {
+        finalGroupId = chosenCourse.groupId
+      } else {
+        // Existing standalone course picked — promote it into a real Course now
+        const newId = crypto.randomUUID()
+        finalGroupId = newId
+        newGroupsToAdd.push({ id: newId, title: chosenCourse.title })
+        coursesBase = store.courses.map(c => c.id === chosenCourse!.key ? { ...c, groupId: newId } : c)
+      }
+      const sibling = chosenCourse.groupId
+        ? store.courses.find(c => c.groupId === chosenCourse!.groupId)
+        : store.courses.find(c => c.id === chosenCourse!.key)
+      const newSection: LMSCourse = {
+        id: lmsId(),
+        title: sectionName.trim(),
+        subject: sibling?.subject ?? SUBJECTS[0],
+        gradeLevel: sibling?.gradeLevel ?? GRADE_LEVELS[0],
+        description: description.trim(),
+        passMark: parseInt(masteryThreshold) || 80,
+        creditHours: sibling?.creditHours ?? 1,
+        requiredHours: sibling?.requiredHours ?? 0,
+        status: 'Published',
+        announcement: '',
+        createdBy: 'Admin',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        groupId: finalGroupId,
+        startDate: startDate || null,
+        endDate: noEndDate ? null : (endDate || null),
+        preTestExemptionThreshold: parseInt(preTest) || 80,
+        masteryRetakes,
+        progressionMode,
+        selfEnrollEnabled: selfEnroll,
+        selfEnrollCode: selfEnroll ? selfEnrollCode : null,
+        selfEnrollPassword: selfEnroll ? selfEnrollPassword : null,
+        studentInstructions: studentInstructions.trim(),
+        instructorIds: [...instructorIds],
+      }
+      const newEnrolments: LMSEnrolment[] = studentIdsToEnroll.map(sid => ({
+        id: lmsId(), courseId: newSection.id, targetType: 'student', targetValue: sid,
+        assignedBy: 'Admin', assignedAt: new Date().toISOString(), active: true,
+      }))
+      await persist({
+        ...store,
+        courses: [...coursesBase, newSection],
+        courseGroups: [...store.courseGroups, ...newGroupsToAdd],
+        enrolments: [...store.enrolments, ...newEnrolments],
+      })
+      setSaving(false)
+      closeFlow()
+    }
+
+    // studentIdsToEnroll: null = leave individual-student enrolments untouched (details-only save);
+    // an array = sync the section's individual-student roster to exactly this set (add missing, remove dropped).
+    async function finalizeEdit(studentIdsToEnroll: string[] | null) {
+      if (!editCourse) return
+      if (!sectionName.trim()) { alert('Section name is required'); return }
+      setSaving(true)
+      const updated: LMSCourse = {
+        ...editCourse,
+        title: sectionName.trim(),
+        description: description.trim(),
+        updatedAt: new Date().toISOString(),
+        startDate: startDate || null,
+        endDate: noEndDate ? null : (endDate || null),
+        preTestExemptionThreshold: parseInt(preTest) || 80,
+        passMark: parseInt(masteryThreshold) || 80,
+        masteryRetakes,
+        progressionMode,
+        selfEnrollEnabled: selfEnroll,
+        selfEnrollCode: selfEnroll ? selfEnrollCode : null,
+        selfEnrollPassword: selfEnroll ? selfEnrollPassword : null,
+        studentInstructions: studentInstructions.trim(),
+        instructorIds: [...instructorIds],
+      }
+      let nextEnrolments = store.enrolments
+      if (studentIdsToEnroll !== null) {
+        const existingStudentEnrolments = store.enrolments.filter(e => e.courseId === editCourse.id && e.targetType === 'student')
+        const existingStudentIds = new Set(existingStudentEnrolments.map(e => e.targetValue))
+        const keepSet = new Set(studentIdsToEnroll)
+        const additions: LMSEnrolment[] = studentIdsToEnroll
+          .filter(sid => !existingStudentIds.has(sid))
+          .map(sid => ({
+            id: lmsId(), courseId: editCourse.id, targetType: 'student', targetValue: sid,
+            assignedBy: 'Admin', assignedAt: new Date().toISOString(), active: true,
+          }))
+        const removedIds = existingStudentEnrolments.filter(e => !keepSet.has(e.targetValue)).map(e => e.id)
+        if (removedIds.length) await Promise.all(removedIds.map(id => deleteLMSEnrolment(id)))
+        nextEnrolments = [...store.enrolments.filter(e => !removedIds.includes(e.id)), ...additions]
+      }
+      await persist({
+        ...store,
+        courses: store.courses.map(c => c.id === editCourse.id ? updated : c),
+        enrolments: nextEnrolments,
+      })
+      setSaving(false)
+      closeFlow()
+    }
+
+    const selectedInstructors = staffList.filter(s => instructorIds.has(s.id))
+    const instructorMatches = staffList.filter(s => !instructorIds.has(s.id) && instructorSearch && s.fullName.toLowerCase().includes(instructorSearch.toLowerCase()))
+    const collapsibleToggleStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', borderTop: '1px solid #E4EAF2', borderBottom: '1px solid #E4EAF2', padding: '12px 2px', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', width: '100%' }
+    const settingLabelStyle: React.CSSProperties = { fontSize: 12, fontWeight: 800, color: '#0F766E', letterSpacing: '.04em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }
+
+    return (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, backdropFilter: 'blur(4px)' }}
+        onClick={e => { if (e.target === e.currentTarget) closeFlow() }}>
+        <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 680, height: '85vh', maxHeight: 820, boxShadow: '0 24px 60px rgba(0,0,0,.3)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ padding: '28px 32px 40px', overflowY: 'auto', flex: 1 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+            {step === 'students' ? (
+              <button onClick={() => setStep('details')} title="Back"
+                style={{ width: 40, height: 40, borderRadius: '50%', border: 'none', background: '#F0F4FA', cursor: 'pointer', fontSize: 16, color: '#1A365E', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>←</button>
+            ) : step === 'details' && !locked ? (
+              <button onClick={() => setStep('course')} title="Back"
+                style={{ width: 40, height: 40, borderRadius: '50%', border: 'none', background: '#F0F4FA', cursor: 'pointer', fontSize: 16, color: '#1A365E', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>←</button>
+            ) : <div />}
+            <button onClick={closeFlow} title="Cancel"
+              style={{ width: 40, height: 40, borderRadius: '50%', border: 'none', background: '#F0F4FA', cursor: 'pointer', fontSize: 16, color: '#1A365E', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+          </div>
+
+          <div style={{ textAlign: 'center', marginBottom: 28 }}>
+            <div style={{ position: 'relative', display: 'inline-block', marginBottom: 12 }}>
+              <span style={{ fontSize: 44 }}>{step === 'students' ? '🧑' : '📘'}</span>
+              <span style={{ position: 'absolute', bottom: -2, left: -8, width: 20, height: 20, borderRadius: '50%', background: isEdit ? '#1A365E' : '#059669', color: '#fff', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900 }}>{isEdit ? '✏️' : '+'}</span>
+            </div>
+            {step === 'course' ? (
+              <>
+                <div style={{ fontSize: 21, fontWeight: 700, color: '#1A365E' }}>Create New Section</div>
+                <div style={{ fontSize: 14, color: '#5A7290', marginTop: 4 }}>Select a Course</div>
+              </>
+            ) : step === 'details' ? (
+              <>
+                <div style={{ fontSize: 21, fontWeight: 700, color: '#1A365E' }}>{chosenCourse?.title}</div>
+                <div style={{ fontSize: 14, color: '#5A7290', marginTop: 4 }}>{isEdit ? 'Edit Section Details' : 'Enter Section Details'}</div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: 21, fontWeight: 700, color: '#1A365E' }}>{chosenCourse?.title}</div>
+                <div style={{ fontSize: 14, color: '#5A7290', marginTop: 4 }}>Add Students to {sectionName || 'this section'}</div>
+              </>
+            )}
+          </div>
+
+          {step === 'course' ? (
+            <>
+              <div style={{ position: 'relative', marginBottom: 20 }}>
+                <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }}>🔍</span>
+                <input value={courseSearch} onChange={e => setCourseSearch(e.target.value)} placeholder="Search by course name"
+                  style={{ width: '100%', padding: '13px 14px 13px 40px', border: '1px solid #E4EAF2', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', boxSizing: 'border-box', background: '#F7F9FC' }} />
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                {creatingCourse ? (
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input autoFocus value={newCourseName} onChange={e => setNewCourseName(e.target.value)} placeholder="New course name" style={{ ...inputStyle, flex: 1 }} />
+                    <button onClick={confirmNewCourse} style={{ padding: '9px 16px', background: '#059669', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>Use This Name</button>
+                    <button onClick={() => setCreatingCourse(false)} style={{ padding: '9px 12px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>Cancel</button>
+                  </div>
+                ) : (
+                  <button onClick={() => setCreatingCourse(true)}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 16px 9px 10px', background: '#F0FBF4', border: '1px solid #BBF0D2', borderRadius: 20, cursor: 'pointer', fontFamily: 'inherit' }}>
+                    <span style={{ width: 20, height: 20, borderRadius: '50%', background: '#059669', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 900, flexShrink: 0 }}>+</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#059669' }}>Create New Course</span>
+                  </button>
+                )}
+              </div>
+              <div style={{ border: '1px solid #E4EAF2', borderRadius: 10, overflow: 'hidden' }}>
+                <div style={{ maxHeight: 420, overflowY: 'auto' }}>
+                  {!filteredCatalog.length ? (
+                    <div style={{ padding: 30, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>No courses match your search.</div>
+                  ) : filteredCatalog.map(c => (
+                    <button key={c.key} onClick={() => pickCourse(c)}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', textAlign: 'left', padding: '14px 18px', background: 'none', border: 'none', borderBottom: '1px solid #F0F4FA', cursor: 'pointer', fontFamily: 'inherit' }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#1A365E' }}>{c.title}</span>
+                      <span style={{ fontSize: 11, color: '#94A3B8', fontWeight: 700 }}>{c.count} SECTION{c.count !== 1 ? 'S' : ''}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : step === 'details' ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div>
+                <label style={settingLabelStyle}>Section Name</label>
+                <input value={sectionName} onChange={e => setSectionName(e.target.value)} placeholder="Example: Algebra IA Fall 2018 Jacobson"
+                  style={{ width: '100%', padding: '13px 14px', border: '1.5px solid #1A365E', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', boxSizing: 'border-box' }} />
+              </div>
+
+              {!descOpen ? (
+                <button onClick={() => setDescOpen(true)} style={collapsibleToggleStyle}>
+                  <span style={{ width: 20, height: 20, border: '1.5px solid #94A3B8', borderRadius: 5, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: '#5A7290' }}>+</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#1A365E' }}>Section Description</span>
+                </button>
+              ) : (
+                <div><label style={labelStyle}>Section Description</label><textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} style={taStyle} /></div>
+              )}
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'start' }}>
+                <div>
+                  <label style={settingLabelStyle}>Start Date</label>
+                  <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={{ ...settingLabelStyle, color: noEndDate ? '#94A3B8' : '#0F766E' }}>End Date</label>
+                  <input type="date" value={endDate} disabled={noEndDate} onChange={e => setEndDate(e.target.value)}
+                    style={{ ...inputStyle, background: noEndDate ? '#F7F9FC' : '#fff', color: noEndDate ? '#94A3B8' : '#1A365E' }} />
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, fontSize: 11, color: '#5A7290', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={noEndDate} onChange={e => setNoEndDate(e.target.checked)} /> No End Date (Disable Pacing)
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                  <label style={settingLabelStyle}>Instructors</label>
+                  <button onClick={() => setShowInstructorDirectory(true)}
+                    style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Browse Instructor Directory</button>
+                </div>
+                <div style={{ position: 'relative' }}>
+                  <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94A3B8', fontSize: 13 }}>🔍</span>
+                  <input value={instructorSearch} onChange={e => setInstructorSearch(e.target.value)}
+                    placeholder="Search and add instructors by name" style={{ ...inputStyle, paddingLeft: 32 }} />
+                </div>
+                {instructorMatches.length > 0 && (
+                  <div style={{ border: '1px solid #E4EAF2', borderRadius: 8, marginTop: 6, maxHeight: 180, overflowY: 'auto' }}>
+                    {instructorMatches.slice(0, 20).map(s => (
+                      <button key={s.id} onClick={() => { setInstructorIds(prev => new Set(prev).add(s.id)); setInstructorSearch('') }}
+                        style={{ display: 'flex', justifyContent: 'space-between', width: '100%', textAlign: 'left', padding: '9px 12px', background: 'none', border: 'none', borderBottom: '1px solid #F0F4FA', cursor: 'pointer', fontFamily: 'inherit' }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#1A365E' }}>{s.fullName}</span>
+                        <span style={{ fontSize: 11, color: '#94A3B8' }}>{s.role}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {selectedInstructors.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+                    {selectedInstructors.map(s => (
+                      <span key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#EEF3FF', color: '#1A365E', padding: '5px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>
+                        {s.fullName}
+                        <button onClick={() => setInstructorIds(prev => { const n = new Set(prev); n.delete(s.id); return n })}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5A7290', fontSize: 12, fontFamily: 'inherit', padding: 0 }}>✕</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {!instructionsOpen ? (
+                <button onClick={() => setInstructionsOpen(true)} style={collapsibleToggleStyle}>
+                  <span style={{ width: 20, height: 20, border: '1.5px solid #94A3B8', borderRadius: 5, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: '#5A7290' }}>+</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#1A365E' }}>Student Instructions</span>
+                </button>
+              ) : (
+                <div><label style={labelStyle}>Student Instructions</label><textarea value={studentInstructions} onChange={e => setStudentInstructions(e.target.value)} rows={3} style={taStyle} /></div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, borderTop: '1px solid #E4EAF2', paddingTop: 16 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#1A365E' }}>Pre-Test Exemption Threshold</div>
+                  <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>Set the minimum percentage students must earn on a pre-test to receive module exemption.</div>
+                </div>
+                <div style={{ position: 'relative', flexShrink: 0 }}>
+                  <input type="number" min={0} max={100} value={preTest} onChange={e => setPreTest(e.target.value)} style={{ ...inputStyle, width: 90, paddingRight: 24 }} />
+                  <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#94A3B8', fontSize: 12 }}>%</span>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#1A365E' }}>Mastery Test Threshold</div>
+                  <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>Set the minimum percentage students must earn to achieve module mastery.</div>
+                </div>
+                <div style={{ position: 'relative', flexShrink: 0 }}>
+                  <input type="number" min={0} max={100} value={masteryThreshold} onChange={e => setMasteryThreshold(e.target.value)} style={{ ...inputStyle, width: 90, paddingRight: 24 }} />
+                  <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#94A3B8', fontSize: 12 }}>%</span>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#1A365E' }}>Mastery Test Retakes</div>
+                  <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>Set the number of times students can unlock Mastery Tests by completing the Tutorial.</div>
+                </div>
+                <select value={masteryRetakes} onChange={e => setMasteryRetakes(e.target.value)} style={{ ...selectStyle, width: 170, flexShrink: 0 }}>
+                  <option value="unlimited">Unlimited retakes</option>
+                  <option value="0">No retakes</option>
+                  <option value="1">1 retake</option>
+                  <option value="2">2 retakes</option>
+                  <option value="3">3 retakes</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#1A365E' }}>Course Progression Settings</div>
+                <select value={progressionMode} onChange={e => setProgressionMode(e.target.value)} style={{ ...selectStyle, width: 280, flexShrink: 0 }}>
+                  <option value="open">Open</option>
+                  <option value="sequential">Sequential Completion</option>
+                  <option value="mastery">Mastery Learning</option>
+                  <option value="mastery_sequential">Mastery Learning with Sequential Completion</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#1A365E' }}>Self-Enroll</div>
+                  <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>Generate a Self-Enroll code and password that can be sent to any student.</div>
+                  {selfEnroll && selfEnrollCode && (
+                    <div style={{ marginTop: 10, display: 'flex', gap: 16, alignItems: 'center', background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 8, padding: '10px 14px' }}>
+                      <div><div style={{ fontSize: 9, fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase' }}>Code</div><div style={{ fontSize: 13, fontWeight: 800, color: '#1A365E', letterSpacing: '.05em' }}>{selfEnrollCode}</div></div>
+                      <div><div style={{ fontSize: 9, fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase' }}>Password</div><div style={{ fontSize: 13, fontWeight: 800, color: '#1A365E', letterSpacing: '.05em' }}>{selfEnrollPassword}</div></div>
+                      <button onClick={() => { setSelfEnrollCode(genSelfEnrollCode()); setSelfEnrollPassword(genSelfEnrollPassword()) }}
+                        style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#2563EB', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Regenerate</button>
+                    </div>
+                  )}
+                </div>
+                <button onClick={toggleSelfEnroll} style={{ width: 44, height: 24, borderRadius: 12, border: 'none', background: selfEnroll ? '#1A365E' : '#CBD5E1', position: 'relative', cursor: 'pointer', flexShrink: 0 }}>
+                  <span style={{ position: 'absolute', top: 2, left: selfEnroll ? 22 : 2, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: 'left .15s' }} />
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+                {isEdit ? (
+                  <>
+                    <button disabled={saving} onClick={() => void finalizeEdit(null)}
+                      style={{ padding: '12px 24px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 24, fontSize: 12, fontWeight: 800, letterSpacing: '.03em', cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', opacity: saving ? 0.6 : 1 }}>{saving ? 'Saving…' : '💾 SAVE SECTION'}</button>
+                    <span style={{ alignSelf: 'center', color: '#94A3B8', fontStyle: 'italic', fontSize: 12 }}>or</span>
+                    <button disabled={saving} onClick={() => setStep('students')}
+                      style={{ padding: '12px 24px', background: '#1D4ED8', color: '#fff', border: 'none', borderRadius: 24, fontSize: 12, fontWeight: 800, letterSpacing: '.03em', cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', opacity: saving ? 0.6 : 1 }}>+ ADD STUDENTS →</button>
+                  </>
+                ) : (
+                  <>
+                    <button disabled={saving} onClick={() => finalize([])}
+                      style={{ padding: '12px 24px', background: '#0F766E', color: '#fff', border: 'none', borderRadius: 24, fontSize: 12, fontWeight: 800, letterSpacing: '.03em', cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', opacity: saving ? 0.6 : 1 }}>SAVE SECTION WITHOUT STUDENTS</button>
+                    <span style={{ alignSelf: 'center', color: '#94A3B8', fontStyle: 'italic', fontSize: 12 }}>or</span>
+                    <button disabled={saving} onClick={() => setStep('students')}
+                      style={{ padding: '12px 24px', background: '#1D4ED8', color: '#fff', border: 'none', borderRadius: 24, fontSize: 12, fontWeight: 800, letterSpacing: '.03em', cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', opacity: saving ? 0.6 : 1 }}>CONTINUE TO STUDENTS →</button>
+                  </>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button onClick={() => setShowStudentDirectory(true)}
+                  style={{ background: 'none', border: 'none', color: '#1A365E', fontWeight: 800, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>Browse Student Directory</button>
+              </div>
+              <select value={studentsLocationFilter} onChange={e => setStudentsLocationFilter(e.target.value)}
+                style={{ border: 'none', background: 'none', fontSize: 13, color: '#1A365E', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', padding: 0, alignSelf: 'flex-start' }}>
+                <option value="">Search All Locations</option>
+                {campuses.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <div style={{ position: 'relative' }}>
+                <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }}>🔍</span>
+                <input value={studentQuickSearch} onChange={e => setStudentQuickSearch(e.target.value)} placeholder="Search to add students"
+                  style={{ width: '100%', padding: '13px 14px 13px 40px', border: '1px solid #E4EAF2', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', boxSizing: 'border-box', background: '#F7F9FC' }} />
+              </div>
+              {(() => {
+                const q = studentQuickSearch.trim().toLowerCase()
+                const quickMatches = q ? directoryStudents.filter(s => !addedStudentIds.has(s.id)
+                  && (!studentsLocationFilter || s.campus === studentsLocationFilter)
+                  && `${s.firstName} ${s.lastName}`.toLowerCase().includes(q)).slice(0, 20) : []
+                const addedStudents = directoryStudents.filter(s => addedStudentIds.has(s.id)).sort((a, b) => a.lastName.localeCompare(b.lastName))
+                return (
+                  <>
+                    {quickMatches.length > 0 && (
+                      <div style={{ border: '1px solid #E4EAF2', borderRadius: 10, maxHeight: 220, overflowY: 'auto' }}>
+                        {quickMatches.map(s => (
+                          <button key={s.id} onClick={() => { setAddedStudentIds(prev => new Set(prev).add(s.id)); setStudentQuickSearch('') }}
+                            style={{ display: 'flex', justifyContent: 'space-between', width: '100%', textAlign: 'left', padding: '10px 14px', background: 'none', border: 'none', borderBottom: '1px solid #F0F4FA', cursor: 'pointer', fontFamily: 'inherit' }}>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: '#1A365E' }}>{s.lastName}, {s.firstName}</span>
+                            <span style={{ fontSize: 11, color: '#94A3B8' }}>Grade {s.grade || '—'}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {!addedStudents.length ? (
+                      <div style={{ textAlign: 'center', padding: '50px 0' }}>
+                        <div style={{ fontSize: 15, fontWeight: 600, color: '#1A365E' }}>Add students using the search field above.</div>
+                        <div style={{ fontSize: 13, color: '#94A3B8', marginTop: 6 }}>You may also browse the student directory.</div>
+                      </div>
+                    ) : (
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 800, color: '#5A7290', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 6 }}>{addedStudents.length} Student{addedStudents.length !== 1 ? 's' : ''} Added</div>
+                        {addedStudents.map(s => (
+                          <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 4px', borderBottom: '1px solid #F0F4FA' }}>
+                            <div>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: '#1A365E' }}>{s.lastName}, {s.firstName}</div>
+                              <div style={{ fontSize: 11, color: '#94A3B8' }}>Grade {s.grade || '—'}{s.studentId ? ' · ' + s.studentId : ''}</div>
+                            </div>
+                            <button onClick={() => setAddedStudentIds(prev => { const n = new Set(prev); n.delete(s.id); return n })}
+                              style={{ background: 'none', border: 'none', color: '#D61F31', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}>✕ Remove</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8 }}>
+                <button disabled={saving} onClick={() => void (isEdit ? finalizeEdit([...addedStudentIds]) : finalize([...addedStudentIds]))}
+                  style={{ padding: '12px 32px', background: '#0F766E', color: '#fff', border: 'none', borderRadius: 24, fontSize: 12, fontWeight: 800, letterSpacing: '.03em', cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', opacity: saving ? 0.6 : 1 }}>{saving ? 'Saving…' : isEdit ? '💾 SAVE & ADD STUDENTS' : 'SAVE SECTION'}</button>
+              </div>
+            </div>
+          )}
+          {showInstructorDirectory && (
+            <InstructorDirectoryModal
+              staffList={staffList}
+              campuses={campuses}
+              initialSelectedIds={instructorIds}
+              onDone={ids => { setInstructorIds(ids); setShowInstructorDirectory(false) }}
+              onClose={() => setShowInstructorDirectory(false)}
+            />
+          )}
+          {showStudentDirectory && (
+            <StudentDirectoryModal
+              directoryStudents={directoryStudents}
+              campuses={campuses}
+              initialSelectedIds={addedStudentIds}
+              onDone={ids => { setAddedStudentIds(ids); setShowStudentDirectory(false) }}
+              onClose={() => setShowStudentDirectory(false)}
+            />
+          )}
+        </div>
         </div>
       </div>
     )
@@ -1545,7 +3845,7 @@ export function LMSPage() {
     const existingUnits = [...new Set(store.content.filter(x => x.courseId === courseId).map(x => x.unitTitle).filter(Boolean))] as string[]
     if (prefillUnit && !existingUnits.includes(prefillUnit)) existingUnits.push(prefillUnit)
     const [title, setTitle] = useState(item?.title ?? '')
-    const [unitTitle, setUnitTitle] = useState(item?.unitTitle ?? prefillUnit ?? existingUnits[0] ?? '')
+    const [unitTitle, setUnitTitle] = useState(item?.unitTitle ?? prefillUnit ?? '')
     const [type, setType] = useState(item?.type ?? 'video' as LMSContent['type'])
     const [lessonSubType, setLessonSubType] = useState(item?.lessonSubType ?? '')
     const [url, setUrl] = useState(item?.url ?? item?.body ?? '')
@@ -1562,13 +3862,12 @@ export function LMSPage() {
     const [moduleTitle, setModuleTitle] = useState(item?.moduleTitle ?? '')
     const [moduleOrder, setModuleOrder] = useState(String(item?.moduleOrder ?? 1))
     const [slideCount, setSlideCount] = useState(String(item?.slideCount ?? ''))
+    const [step, setStep] = useState<1 | 2 | 3>(1)
     const [hasAssignment, setHasAssignment] = useState(hasAssignBool(item?.hasAssignment))
-    const [assignInstructions, setAssignInstructions] = useState(item?.assignInstructions ?? '')
-    const [assignMaxScore, setAssignMaxScore] = useState(String(item?.assignMaxScore ?? 100))
-    const [assignDueDays, setAssignDueDays] = useState(String(item?.assignDueDays ?? ''))
-    const [assignSubType, setAssignSubType] = useState(item?.assignSubType ?? 'both')
     const [assignWeight, setAssignWeight] = useState(String(item?.assignWeight ?? 40))
-    const [assignRubric, setAssignRubric] = useState(item?.assignRubric ?? '')
+    const [caseStudyUrl, setCaseStudyUrl] = useState(item?.caseStudyUrl ?? '')
+    const [caseStudyFileName] = useState(item?.caseStudyFileName ?? '')
+    const [caseStudyFile, setCaseStudyFile] = useState<File | null>(null)
 
     // Mastery questions state
     interface MasteryQuestion { q: string; type: 'mcq' | 'short'; opts: string[]; ans: number }
@@ -1607,6 +3906,18 @@ export function LMSPage() {
           return
         }
       }
+      let finalCaseStudyUrl = caseStudyUrl.trim()
+      let finalCaseStudyFileName = caseStudyFileName
+      if (caseStudyFile) {
+        try {
+          const path = `lms-case-study/${Date.now()}_${caseStudyFile.name}`
+          finalCaseStudyUrl = await uploadFile(path, caseStudyFile)
+          finalCaseStudyFileName = caseStudyFile.name
+        } catch {
+          alert('Case study file upload failed. Please try again.')
+          return
+        }
+      }
       const obj: LMSContent = {
         id: item?.id ?? lmsId(),
         courseId,
@@ -1628,12 +3939,9 @@ export function LMSPage() {
         moduleOrder: parseInt(moduleOrder) || 1,
         slideCount: parseInt(slideCount) || undefined,
         hasAssignment,
-        assignInstructions: assignInstructions.trim(),
-        assignMaxScore: parseInt(assignMaxScore) || 100,
-        assignDueDays: parseInt(assignDueDays) || undefined,
-        assignSubType,
         assignWeight: parseInt(assignWeight) || 40,
-        assignRubric: assignRubric || undefined,
+        caseStudyUrl: finalCaseStudyUrl || undefined,
+        caseStudyFileName: finalCaseStudyFileName || undefined,
         masteryQuizJson: masteryQuestions.length ? JSON.stringify(masteryQuestions) : undefined,
       }
       const content = [...store.content]
@@ -1641,184 +3949,228 @@ export function LMSPage() {
       persist({ ...store, content })
       setShowLessonModal(false)
     }
+    const STEP_LABELS: Record<1 | 2 | 3, string> = { 1: 'Content', 2: 'Mastery Test', 3: 'Assignment' }
+    const canLeaveStep1 = title.trim().length > 0
+
     return (
       <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 400, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto', backdropFilter: 'blur(4px)' }} onClick={e => { if (e.target === e.currentTarget) setShowLessonModal(false) }}>
         <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 680, maxHeight: '94vh', overflowY: 'auto', boxShadow: '0 24px 60px rgba(0,0,0,.3)', margin: 'auto' }}>
           <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '18px 24px', borderRadius: '18px 18px 0 0', position: 'sticky', top: 0, zIndex: 10 }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>📄 {isNew ? 'New Lesson' : 'Edit Lesson'}</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', marginBottom: 12 }}>📄 {isNew ? 'New Lesson' : 'Edit Lesson'}</div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {([1, 2, 3] as const).map(s => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => { if (s === 1 || canLeaveStep1) setStep(s) }}
+                  disabled={s > 1 && !canLeaveStep1}
+                  style={{
+                    flex: 1, padding: '7px 4px', borderRadius: 8, border: 'none', fontSize: 11, fontWeight: 700, textAlign: 'center',
+                    cursor: s === 1 || canLeaveStep1 ? 'pointer' : 'not-allowed',
+                    background: step === s ? '#fff' : 'rgba(255,255,255,.14)',
+                    color: step === s ? '#1A365E' : 'rgba(255,255,255,.85)',
+                    opacity: s > 1 && !canLeaveStep1 ? 0.5 : 1,
+                  }}
+                >
+                  {s}. {STEP_LABELS[s]}
+                </button>
+              ))}
+            </div>
           </div>
           <div style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div><label style={labelStyle}>Lesson Title *</label><input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Introduction to Ratios" style={inputStyle} /></div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <div>
-                <label style={labelStyle}>Unit</label>
-                <select value={unitTitle} onChange={e => setUnitTitle(e.target.value)} style={selectStyle}>
-                  {existingUnits.map(u => <option key={u} value={u}>{u}</option>)}
-                  <option value="__new__">+ New unit...</option>
-                </select>
-              </div>
-              <div>
-                <label style={labelStyle}>Content Type</label>
-                <select value={type} onChange={e => setType(e.target.value as LMSContent['type'])} style={selectStyle}>
-                  {['video', 'article', 'link', 'file', 'quiz', 'presentation'].map(t => <option key={t}>{t}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={labelStyle}>Lesson Role</label>
-                <select value={lessonSubType} onChange={e => setLessonSubType(e.target.value)} style={selectStyle}>
-                  <option value="">Standard Lesson</option>
-                  <option value="pretest">📋 Pre-Test</option>
-                  <option value="posttest">📊 Post-Test</option>
-                  <option value="tutorial">📖 Tutorial</option>
-                  <option value="practice">✏️ Practice</option>
-                </select>
-              </div>
-            </div>
-            <div>
-              <label style={labelStyle}>Content URL (YouTube, Google Slides, Drive link, or article text)</label>
-              <textarea value={url} onChange={e => { setUrl(e.target.value); if (e.target.value) setContentFile(null) }} rows={3} placeholder="YouTube URL, Google Slides URL, or paste article text..." style={taStyle} />
-              <div style={{ marginTop: 8 }}>
-                <label style={{ ...labelStyle, marginBottom: 4 }}>— Or upload a file (PDF, image, doc) —</label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 8, border: `2px dashed ${contentFile ? '#059669' : '#CBD5E0'}`, background: contentFile ? '#F0FDF4' : '#F8FAFC', cursor: 'pointer', fontSize: 12, color: contentFile ? '#059669' : '#7A92B0', fontWeight: contentFile ? 700 : 400 }}>
-                  <input type="file" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) { setContentFile(f); setUrl('') } }} />
-                  {contentFile ? `✅ ${contentFile.name}` : '+ Choose file'}
-                </label>
-              </div>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <div><label style={labelStyle}>Est. Minutes</label><input value={estimatedMins} onChange={e => setEstimatedMins(e.target.value)} type="number" min={1} placeholder="15" style={inputStyle} /></div>
-              <div><label style={labelStyle}>Lesson Order</label><input value={order} onChange={e => setOrder(e.target.value)} type="number" min={1} style={inputStyle} /></div>
-              <div><label style={labelStyle}>Module (optional)</label><input value={moduleTitle} onChange={e => setModuleTitle(e.target.value)} placeholder="e.g. Module 1: Foundations" style={inputStyle} /></div>
-              <div><label style={labelStyle}>Module Order</label><input value={moduleOrder} onChange={e => setModuleOrder(e.target.value)} type="number" min={1} style={inputStyle} /></div>
-              <div><label style={labelStyle}>Slide Count (presentations)</label><input value={slideCount} onChange={e => setSlideCount(e.target.value)} type="number" min={1} placeholder="e.g. 15" style={inputStyle} /></div>
-            </div>
-            {/* Mastery + Assignment section */}
-            <div style={{ background: '#F7F9FC', borderRadius: 10, padding: 14 }}>
-              <div style={{ fontSize: 11, fontWeight: 800, color: '#1A365E', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '.5px' }}>📋 Mastery Test & Assignment</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 600, color: '#3D5475', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={hasMastery} onChange={e => setHasMastery(e.target.checked)} /> Enable Mastery Test
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 600, color: '#3D5475', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={hasAssignment} onChange={e => setHasAssignment(e.target.checked)} /> 📋 Include Assignment
-                </label>
-              </div>
-              {hasMastery && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                    <div><label style={labelStyle}>Pass Mark (%)</label><input value={masteryPassMark} onChange={e => setMasteryPassMark(e.target.value)} type="number" min={1} max={100} style={inputStyle} /></div>
-                    <div><label style={labelStyle}>Max Retakes</label><input value={masteryRetakes} onChange={e => setMasteryRetakes(e.target.value)} type="number" min={1} max={10} style={inputStyle} /></div>
-                  </div>
-                  <div><label style={labelStyle}>📋 Assessment Brief <span style={{ fontWeight: 400, color: '#94A3B8' }}>(optional — shown to student before the test)</span></label><textarea value={masteryBrief} onChange={e => setMasteryBrief(e.target.value)} rows={3} placeholder="Explain what this assessment is testing, what the student should focus on, or any instructions before they begin..." style={{ ...taStyle, fontSize: 11 }} /></div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                    <div><label style={labelStyle}>⏱ Time Limit (minutes)</label><input value={masteryTimeLimit} onChange={e => setMasteryTimeLimit(e.target.value)} type="number" min={1} max={180} placeholder="e.g. 30 — leave blank for unlimited" style={inputStyle} /></div>
-                    <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 20 }}>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700, color: '#1A365E' }}>
-                        <input type="checkbox" checked={masteryShuffleQuestions} onChange={e => setMasteryShuffleQuestions(e.target.checked)} style={{ width: 16, height: 16, cursor: 'pointer' }} /> 🔀 Shuffle Question Order
-                      </label>
-                    </div>
-                  </div>
-                  {/* Mastery Questions Builder */}
-                  <div style={{ border: '1px solid #E4EAF2', borderRadius: 10, overflow: 'hidden' }}>
-                    <div style={{ background: '#F7F9FC', padding: '8px 12px', borderBottom: '1px solid #E4EAF2', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: 11, fontWeight: 800, color: '#1A365E' }}>🎯 Mastery Test Questions <span style={{ fontWeight: 400, color: '#7A92B0' }}>({masteryQuestions.length})</span></span>
-                    </div>
-                    <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {masteryQuestions.length === 0 && (
-                        <div style={{ fontSize: 11, color: '#94A3B8', padding: '6px 0' }}>No questions yet. Click the button below to add one.</div>
-                      )}
-                      {masteryQuestions.map((q, qi) => (
-                        <div key={qi} style={{ background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 8, padding: '10px 12px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                            <span style={{ fontSize: 11, fontWeight: 800, color: '#1A365E', flexShrink: 0 }}>{qi + 1}.</span>
-                            <input
-                              value={q.q}
-                              onChange={e => updateMasteryQuestion(qi, 'q', e.target.value)}
-                              placeholder="Question text..."
-                              style={{ flex: 1, padding: '5px 8px', border: '1.5px solid #E4EAF2', borderRadius: 6, fontSize: 11, fontFamily: 'inherit' }}
-                            />
-                            <select
-                              value={q.type}
-                              onChange={e => {
-                                updateMasteryQuestion(qi, 'type', e.target.value)
-                                if (e.target.value === 'mcq' && !q.opts?.length) updateMasteryQuestion(qi, 'opts', ['', '', '', ''] as unknown as string)
-                              }}
-                              style={{ padding: '4px 6px', border: '1px solid #E4EAF2', borderRadius: 5, fontSize: 10 }}
-                            >
-                              <option value="mcq">MCQ</option>
-                              <option value="short">Short</option>
-                            </select>
-                            <button type="button" onClick={() => removeMasteryQuestion(qi)} style={{ padding: '3px 7px', background: '#FFF0F1', color: '#D61F31', border: '1px solid #F5C2C7', borderRadius: 5, fontSize: 11, cursor: 'pointer' }}>×</button>
-                          </div>
-                          {q.type === 'mcq' ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                              {(q.opts || ['', '', '', '']).map((opt, oi) => (
-                                <div key={oi} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                  <input
-                                    type="radio"
-                                    name={`mastery_ans_${qi}`}
-                                    checked={q.ans === oi}
-                                    onChange={() => updateMasteryQuestion(qi, 'ans', oi)}
-                                    title="Mark as correct answer"
-                                    style={{ flexShrink: 0, cursor: 'pointer' }}
-                                  />
-                                  <span style={{ fontSize: 10, fontWeight: 700, color: '#7A92B0', width: 14 }}>{['A', 'B', 'C', 'D'][oi]}</span>
-                                  <input
-                                    value={opt}
-                                    onChange={e => updateMasteryOption(qi, oi, e.target.value)}
-                                    placeholder={`Option ${['A', 'B', 'C', 'D'][oi]}...`}
-                                    style={{ flex: 1, padding: '4px 8px', border: '1px solid #E4EAF2', borderRadius: 5, fontSize: 11, fontFamily: 'inherit' }}
-                                  />
-                                </div>
-                              ))}
-                              <div style={{ fontSize: 9, color: '#94A3B8', marginTop: 2 }}>Click the radio button to mark the correct answer</div>
-                            </div>
-                          ) : (
-                            <div style={{ fontSize: 10, color: '#7A92B0', fontStyle: 'italic' }}>Short answer — student types their response</div>
-                          )}
-                        </div>
-                      ))}
-                      <button type="button" onClick={addMasteryQuestion} style={{ padding: '8px 14px', background: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', width: '100%' }}>+ Add Mastery Question</button>
-                    </div>
-                  </div>
-
-                  <div style={{ padding: 10, background: '#EEF3FF', borderRadius: 8, border: '1px solid #C7D9FF' }}>
-                    <div style={{ fontSize: 10, fontWeight: 800, color: '#1A365E', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>⚖️ Grade Weighting</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                      <div><label style={labelStyle}>Mastery Weight (%)</label><input value={masteryWeight} onChange={e => setMasteryWeight(e.target.value)} type="number" min={0} max={100} style={inputStyle} /></div>
-                      <div><label style={labelStyle}>Assignment Weight (%)</label><input value={assignWeight} onChange={e => setAssignWeight(e.target.value)} type="number" min={0} max={100} style={inputStyle} /></div>
-                    </div>
-                    <div style={{ fontSize: 10, color: '#5A7290', marginTop: 6 }}>Composite Grade = (Mastery × weight) + (Assignment × weight). Weights must total 100%.</div>
-                  </div>
-                </div>
-              )}
-              {hasAssignment && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8, padding: 12, background: '#FFF9F0', borderRadius: 10, border: '1px solid #FDE68A' }}>
-                  <div style={{ fontSize: 10, fontWeight: 800, color: '#92400E', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 2 }}>📋 Assignment Definition</div>
-                  <div><label style={labelStyle}>Assignment Instructions</label><textarea value={assignInstructions} onChange={e => setAssignInstructions(e.target.value)} rows={3} placeholder="Describe what students need to do..." style={taStyle} /></div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-                    <div><label style={labelStyle}>Max Score</label><input value={assignMaxScore} onChange={e => setAssignMaxScore(e.target.value)} type="number" min={1} max={100} style={inputStyle} /></div>
-                    <div><label style={labelStyle}>Due (days after enrol)</label><input value={assignDueDays} onChange={e => setAssignDueDays(e.target.value)} type="number" min={1} placeholder="e.g. 7" style={inputStyle} /></div>
-                    <div>
-                      <label style={labelStyle}>Submission Type</label>
-                      <select value={assignSubType} onChange={e => setAssignSubType(e.target.value)} style={selectStyle}>
-                        <option value="text">Text / Notes</option>
-                        <option value="link">Link (Google Doc)</option>
-                        <option value="both">Both</option>
-                      </select>
-                    </div>
-                  </div>
-                  {/* Assignment Rubric */}
+            {step === 1 && (
+              <>
+                <div><label style={labelStyle}>Lesson Title *</label><input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Introduction to Ratios" style={inputStyle} /></div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   <div>
-                    <label style={{ ...labelStyle, marginBottom: 6 }}>Assignment Rubric <span style={{ fontWeight: 400, color: '#94A3B8' }}>(optional)</span></label>
-                    <RubricBuilder value={assignRubric} onChange={setAssignRubric} />
+                    <label style={labelStyle}>Unit</label>
+                    <select value={unitTitle} onChange={e => setUnitTitle(e.target.value)} style={selectStyle}>
+                      <option value="">Default Unit</option>
+                      {existingUnits.map(u => <option key={u} value={u}>{u}</option>)}
+                      <option value="__new__">+ New unit...</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Content Type</label>
+                    <select value={type} onChange={e => setType(e.target.value as LMSContent['type'])} style={selectStyle}>
+                      {['video', 'article', 'link', 'file', 'quiz', 'presentation'].map(t => <option key={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Lesson Role</label>
+                    <select value={lessonSubType} onChange={e => setLessonSubType(e.target.value)} style={selectStyle}>
+                      <option value="">Standard Lesson</option>
+                      <option value="pretest">📋 Pre-Test</option>
+                      <option value="posttest">📊 Post-Test</option>
+                      <option value="tutorial">📖 Tutorial</option>
+                      <option value="practice">✏️ Practice</option>
+                    </select>
                   </div>
                 </div>
-              )}
-            </div>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6 }}>
-              <button onClick={() => setShowLessonModal(false)} style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-              <button onClick={save} style={{ padding: '9px 20px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>💾 Save Lesson</button>
+                <div>
+                  <label style={labelStyle}>Content URL (YouTube, Google Slides, Drive link, or article text)</label>
+                  <textarea value={url} onChange={e => { setUrl(e.target.value); if (e.target.value) setContentFile(null) }} rows={3} placeholder="YouTube URL, Google Slides URL, or paste article text..." style={taStyle} />
+                  <div style={{ marginTop: 8 }}>
+                    <label style={{ ...labelStyle, marginBottom: 4 }}>— Or upload a file (PDF, image, doc) —</label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 8, border: `2px dashed ${contentFile ? '#059669' : '#CBD5E0'}`, background: contentFile ? '#F0FDF4' : '#F8FAFC', cursor: 'pointer', fontSize: 12, color: contentFile ? '#059669' : '#7A92B0', fontWeight: contentFile ? 700 : 400 }}>
+                      <input type="file" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) { setContentFile(f); setUrl('') } }} />
+                      {contentFile ? `✅ ${contentFile.name}` : '+ Choose file'}
+                    </label>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div><label style={labelStyle}>Est. Minutes</label><input value={estimatedMins} onChange={e => setEstimatedMins(e.target.value)} type="number" min={1} placeholder="15" style={inputStyle} /></div>
+                  <div><label style={labelStyle}>Lesson Order</label><input value={order} onChange={e => setOrder(e.target.value)} type="number" min={1} style={inputStyle} /></div>
+                  <div><label style={labelStyle}>Module (optional)</label><input value={moduleTitle} onChange={e => setModuleTitle(e.target.value)} placeholder="e.g. Module 1: Foundations" style={inputStyle} /></div>
+                  <div><label style={labelStyle}>Module Order</label><input value={moduleOrder} onChange={e => setModuleOrder(e.target.value)} type="number" min={1} style={inputStyle} /></div>
+                  <div><label style={labelStyle}>Slide Count (presentations)</label><input value={slideCount} onChange={e => setSlideCount(e.target.value)} type="number" min={1} placeholder="e.g. 15" style={inputStyle} /></div>
+                </div>
+              </>
+            )}
+
+            {step === 2 && (
+              <div style={{ background: '#F7F9FC', borderRadius: 10, padding: 14 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 600, color: '#3D5475', cursor: 'pointer', marginBottom: hasMastery ? 10 : 0 }}>
+                  <input type="checkbox" checked={hasMastery} onChange={e => setHasMastery(e.target.checked)} /> 🎯 Enable Mastery Test
+                </label>
+                {hasMastery && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      <div><label style={labelStyle}>Pass Mark (%)</label><input value={masteryPassMark} onChange={e => setMasteryPassMark(e.target.value)} type="number" min={1} max={100} style={inputStyle} /></div>
+                      <div><label style={labelStyle}>Max Retakes</label><input value={masteryRetakes} onChange={e => setMasteryRetakes(e.target.value)} type="number" min={1} max={10} style={inputStyle} /></div>
+                    </div>
+                    <div><label style={labelStyle}>📋 Assessment Brief <span style={{ fontWeight: 400, color: '#94A3B8' }}>(optional — shown to student before the test)</span></label><textarea value={masteryBrief} onChange={e => setMasteryBrief(e.target.value)} rows={3} placeholder="Explain what this assessment is testing, what the student should focus on, or any instructions before they begin..." style={{ ...taStyle, fontSize: 11 }} /></div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                      <div><label style={labelStyle}>⏱ Time Limit (minutes)</label><input value={masteryTimeLimit} onChange={e => setMasteryTimeLimit(e.target.value)} type="number" min={1} max={180} placeholder="e.g. 30 — leave blank for unlimited" style={inputStyle} /></div>
+                      <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 20 }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700, color: '#1A365E' }}>
+                          <input type="checkbox" checked={masteryShuffleQuestions} onChange={e => setMasteryShuffleQuestions(e.target.checked)} style={{ width: 16, height: 16, cursor: 'pointer' }} /> 🔀 Shuffle Question Order
+                        </label>
+                      </div>
+                    </div>
+                    {/* Mastery Questions Builder */}
+                    <div style={{ border: '1px solid #E4EAF2', borderRadius: 10, overflow: 'hidden' }}>
+                      <div style={{ background: '#F7F9FC', padding: '8px 12px', borderBottom: '1px solid #E4EAF2', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: 11, fontWeight: 800, color: '#1A365E' }}>🎯 Mastery Test Questions <span style={{ fontWeight: 400, color: '#7A92B0' }}>({masteryQuestions.length})</span></span>
+                      </div>
+                      <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {masteryQuestions.length === 0 && (
+                          <div style={{ fontSize: 11, color: '#94A3B8', padding: '6px 0' }}>No questions yet. Click the button below to add one.</div>
+                        )}
+                        {masteryQuestions.map((q, qi) => (
+                          <div key={qi} style={{ background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 8, padding: '10px 12px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                              <span style={{ fontSize: 11, fontWeight: 800, color: '#1A365E', flexShrink: 0 }}>{qi + 1}.</span>
+                              <input
+                                value={q.q}
+                                onChange={e => updateMasteryQuestion(qi, 'q', e.target.value)}
+                                placeholder="Question text..."
+                                style={{ flex: 1, padding: '5px 8px', border: '1.5px solid #E4EAF2', borderRadius: 6, fontSize: 11, fontFamily: 'inherit' }}
+                              />
+                              <select
+                                value={q.type}
+                                onChange={e => {
+                                  updateMasteryQuestion(qi, 'type', e.target.value)
+                                  if (e.target.value === 'mcq' && !q.opts?.length) updateMasteryQuestion(qi, 'opts', ['', '', '', ''] as unknown as string)
+                                }}
+                                style={{ padding: '4px 6px', border: '1px solid #E4EAF2', borderRadius: 5, fontSize: 10 }}
+                              >
+                                <option value="mcq">MCQ</option>
+                                <option value="short">Short</option>
+                              </select>
+                              <button type="button" onClick={() => removeMasteryQuestion(qi)} style={{ padding: '3px 7px', background: '#FFF0F1', color: '#D61F31', border: '1px solid #F5C2C7', borderRadius: 5, fontSize: 11, cursor: 'pointer' }}>×</button>
+                            </div>
+                            {q.type === 'mcq' ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                {(q.opts || ['', '', '', '']).map((opt, oi) => (
+                                  <div key={oi} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <input
+                                      type="radio"
+                                      name={`mastery_ans_${qi}`}
+                                      checked={q.ans === oi}
+                                      onChange={() => updateMasteryQuestion(qi, 'ans', oi)}
+                                      title="Mark as correct answer"
+                                      style={{ flexShrink: 0, cursor: 'pointer' }}
+                                    />
+                                    <span style={{ fontSize: 10, fontWeight: 700, color: '#7A92B0', width: 14 }}>{['A', 'B', 'C', 'D'][oi]}</span>
+                                    <input
+                                      value={opt}
+                                      onChange={e => updateMasteryOption(qi, oi, e.target.value)}
+                                      placeholder={`Option ${['A', 'B', 'C', 'D'][oi]}...`}
+                                      style={{ flex: 1, padding: '4px 8px', border: '1px solid #E4EAF2', borderRadius: 5, fontSize: 11, fontFamily: 'inherit' }}
+                                    />
+                                  </div>
+                                ))}
+                                <div style={{ fontSize: 9, color: '#94A3B8', marginTop: 2 }}>Click the radio button to mark the correct answer</div>
+                              </div>
+                            ) : (
+                              <div style={{ fontSize: 10, color: '#7A92B0', fontStyle: 'italic' }}>Short answer — student types their response</div>
+                            )}
+                          </div>
+                        ))}
+                        <button type="button" onClick={addMasteryQuestion} style={{ padding: '8px 14px', background: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', width: '100%' }}>+ Add Mastery Question</button>
+                      </div>
+                    </div>
+
+                    <div style={{ padding: 10, background: '#EEF3FF', borderRadius: 8, border: '1px solid #C7D9FF' }}>
+                      <label style={labelStyle}>Mastery Weight (%) <span style={{ fontWeight: 400, color: '#94A3B8' }}>— of the composite grade, alongside the assignment weight set in step 3</span></label>
+                      <input value={masteryWeight} onChange={e => setMasteryWeight(e.target.value)} type="number" min={0} max={100} style={inputStyle} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {step === 3 && (
+              <div style={{ background: '#F7F9FC', borderRadius: 10, padding: 14 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 600, color: '#3D5475', cursor: 'pointer', marginBottom: hasAssignment ? 10 : 0 }}>
+                  <input type="checkbox" checked={hasAssignment} onChange={e => setHasAssignment(e.target.checked)} /> 📚 Include Case Study Assignment
+                </label>
+                {hasAssignment && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div style={{ padding: 10, background: '#EEF3FF', borderRadius: 8, border: '1px solid #C7D9FF' }}>
+                      <label style={labelStyle}>Assignment Weight (%) <span style={{ fontWeight: 400, color: '#94A3B8' }}>— Composite Grade = (Mastery × weight) + (Assignment × weight); weights should total 100%</span></label>
+                      <input value={assignWeight} onChange={e => setAssignWeight(e.target.value)} type="number" min={0} max={100} style={inputStyle} />
+                    </div>
+                    <div style={{ padding: 12, background: '#FFF9F0', borderRadius: 10, border: '1px solid #FDE68A', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      <div style={{ fontSize: 10, fontWeight: 800, color: '#92400E', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 2 }}>📚 Case Study Document</div>
+                      <div style={{ fontSize: 10, color: '#7A92B0', marginBottom: 2 }}>
+                        Students will view this case study, then work through a fixed 7-section flow (Case Study → Notes Score → Discussion Post → Socratic Debate Score → OMR Test Score → Presentation Upload → Presentation Score). Scoring happens per-student in the Gradebook — the rubric is fixed and not editable here.
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Case Study URL (Google Slides, Drive link)</label>
+                        <textarea value={caseStudyUrl} onChange={e => { setCaseStudyUrl(e.target.value); if (e.target.value) setCaseStudyFile(null) }} rows={2} placeholder="Google Slides URL or Drive link..." style={taStyle} />
+                        <div style={{ marginTop: 8 }}>
+                          <label style={{ ...labelStyle, marginBottom: 4 }}>— Or upload a file (PDF, PPT) —</label>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 8, border: `2px dashed ${caseStudyFile ? '#059669' : '#CBD5E0'}`, background: caseStudyFile ? '#F0FDF4' : '#F8FAFC', cursor: 'pointer', fontSize: 12, color: caseStudyFile ? '#059669' : '#7A92B0', fontWeight: caseStudyFile ? 700 : 400 }}>
+                            <input type="file" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) { setCaseStudyFile(f); setCaseStudyUrl('') } }} />
+                            {caseStudyFile ? `✅ ${caseStudyFile.name}` : caseStudyFileName ? `📎 ${caseStudyFileName} (uploaded — choose a new file to replace)` : '+ Choose file'}
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', marginTop: 6 }}>
+              <div>
+                {step > 1 && <button onClick={() => setStep(prev => (prev - 1) as 1 | 2 | 3)} style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>← Back</button>}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => setShowLessonModal(false)} style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+                {step < 3 ? (
+                  <button
+                    onClick={() => { if (step === 1 && !canLeaveStep1) { alert('Title is required'); return } setStep(prev => (prev + 1) as 1 | 2 | 3) }}
+                    style={{ padding: '9px 20px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+                  >
+                    Next →
+                  </button>
+                ) : (
+                  <button onClick={save} style={{ padding: '9px 20px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>💾 Save Lesson</button>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -1829,76 +4181,409 @@ export function LMSPage() {
   // ─── RENDER ─────────────────────────────────────────────────────────────────
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '0 0 32px 0' }}>
+      {activeTab === 'overview' && renderOverview()}
       {activeTab === 'manage' && renderManage()}
+      {activeTab === 'students' && renderManageStudents()}
+      {activeTab === 'student-section' && renderStudentSectionDetail()}
       {activeTab === 'courses' && renderCourses()}
       {activeTab === 'content' && renderContent()}
       {activeTab === 'assign' && renderAssign()}
       {activeTab === 'gradebook' && renderGradebook()}
+      {activeTab === 'curriculum' && renderCurriculumPage()}
+      {activeTab === 'appeals' && renderAppeals()}
       {activeTab === 'student' && renderStudentDetail()}
       {activeTab === 'section' && renderSection()}
       {activeTab === 'progress' && renderProgress()}
       {showCourseModal && <CourseModal />}
+      {showNewSectionFlow && <NewSectionFlow />}
       {showLessonModal && <LessonModal />}
       {showEnrolModal && <EnrolModal courses={store.courses} students={students} cohorts={cohorts} onSave={enrolment => persist({ ...store, enrolments: [...store.enrolments, enrolment] })} onClose={() => setShowEnrolModal(false)} />}
+      {notesSectionId && (
+        <SectionNotesModal
+          sectionId={notesSectionId}
+          sectionTitle={store.courses.find(c => c.id === notesSectionId)?.title ?? 'Section'}
+          authorId={profile?.id}
+          authorName={profile?.full_name || profile?.email}
+          onClose={() => setNotesSectionId(null)}
+        />
+      )}
+      {studentNotesTarget && (
+        <StudentNotesModal
+          sectionId={studentNotesTarget.cid}
+          studentId={studentNotesTarget.sid}
+          studentName={studentNotesTarget.studentName}
+          courseTitle={studentNotesTarget.courseTitle}
+          authorId={profile?.id}
+          authorName={profile?.full_name || profile?.email}
+          onClose={() => setStudentNotesTarget(null)}
+        />
+      )}
       {previewItem && <LessonPreviewModal item={previewItem} onClose={() => setPreviewItem(null)} />}
-      {scoreModal && <GBScoreModal data={scoreModal} onClose={() => setScoreModal(null)} onSave={(score, _note) => {
+      {scoreModal && <CaseStudyGradingPanel data={scoreModal} onClose={() => setScoreModal(null)} onFinalGradeChange={(score) => {
         const key = scoreModal.studentId + '_' + scoreModal.contentId
         persist({ ...store, progress: store.progress.map(p => p.studentId === scoreModal.studentId && p.contentId === scoreModal.contentId ? { ...p, assignScore: score, assignStatus: 'scored' } : p).concat(store.progress.find(p => p.studentId === scoreModal.studentId && p.contentId === scoreModal.contentId) ? [] : [{ studentId: scoreModal.studentId, courseId: scoreModal.courseId, contentId: scoreModal.contentId, status: 'in_progress' as const, assignScore: score, assignStatus: 'scored', id: key }]) })
-        setScoreModal(null)
       }} />}
     </div>
   )
 }
 
-function GBScoreModal({ data, onClose, onSave }: {
-  data: { studentId: string; contentId: string; lessonTitle: string; maxScore: number; currentScore: string; instructions: string; submNote: string; submLink: string }
-  onClose: () => void
-  onSave: (score: number, note: string) => void
-}) {
-  const [score, setScore] = useState(data.currentScore)
-  const [note, setNote] = useState('')
-  const [saving, setSaving] = useState(false)
+interface CaseStudyGradingData {
+  studentId: string
+  studentName: string
+  contentId: string
+  courseId: string
+  lessonTitle: string
+  caseStudyUrl?: string
+}
 
-  function save() {
-    const v = parseInt(score)
-    if (isNaN(v) || v < 0 || v > data.maxScore) return
-    setSaving(true)
-    onSave(v, note)
+interface ScoreComponentRow {
+  criteriaScores: Record<string, number>
+  subtotal: number | null
+  feedback: string
+  status: 'not_scored' | 'scored'
+}
+
+interface DiscussionPostRow { id: string; studentId: string; studentName: string; body: string; createdAt: string; parentPostId: string | null }
+interface AppealRow { id: string; componentType: ScoreComponentType; message: string; status: 'open' | 'resolved'; adminReply: string | null }
+
+function emptyScoreComponents(): Record<ScoreComponentType, ScoreComponentRow> {
+  return Object.fromEntries(SCORE_COMPONENT_TYPES.map(t => [t, { criteriaScores: {}, subtotal: null, feedback: '', status: 'not_scored' as const }])) as Record<ScoreComponentType, ScoreComponentRow>
+}
+
+/** A submission row counts as this content's Presentation Upload unless its note is
+ *  tagged JSON metadata for something else (e.g. a mastery-quiz snapshot). */
+function isPresentationSubmission(row: Record<string, unknown>): boolean {
+  const noteVal = row.note
+  if (typeof noteVal !== 'string') return true
+  const t = noteVal.trim()
+  if (!t.startsWith('{')) return true
+  try {
+    const parsed = JSON.parse(t)
+    return !(parsed && typeof parsed === 'object' && 'kind' in parsed)
+  } catch {
+    return true
+  }
+}
+
+function CaseStudyGradingPanel({ data, onClose, onFinalGradeChange }: {
+  data: CaseStudyGradingData
+  onClose: () => void
+  onFinalGradeChange: (finalGradeVal: number) => void
+}) {
+  const [loading, setLoading] = useState(true)
+  const [scores, setScores] = useState<Record<ScoreComponentType, ScoreComponentRow>>(emptyScoreComponents)
+  const [draftCriteria, setDraftCriteria] = useState<Record<ScoreComponentType, Record<string, string>>>(() => Object.fromEntries(SCORE_COMPONENT_TYPES.map(t => [t, {}])) as Record<ScoreComponentType, Record<string, string>>)
+  const [draftFeedback, setDraftFeedback] = useState<Record<ScoreComponentType, string>>(() => Object.fromEntries(SCORE_COMPONENT_TYPES.map(t => [t, ''])) as Record<ScoreComponentType, string>)
+  const [posts, setPosts] = useState<DiscussionPostRow[]>([])
+  const [presentationSub, setPresentationSub] = useState<{ note: string; linkUrl: string; submittedAt: string } | null>(null)
+  const [appeals, setAppeals] = useState<AppealRow[]>([])
+  const [saving, setSaving] = useState<ScoreComponentType | null>(null)
+
+  async function load() {
+    setLoading(true)
+    const [scRes, dpRes, subRes, apRes] = await Promise.all([
+      supabase.from('lms_score_components').select('*').eq('content_id', data.contentId).eq('student_id', data.studentId),
+      supabase.from('lms_discussion_posts').select('*').eq('content_id', data.contentId).order('created_at', { ascending: true }),
+      supabase.from('lms_submissions').select('*').eq('content_id', data.contentId).eq('student_id', data.studentId).order('submitted_at', { ascending: false }),
+      supabase.from('lms_grade_appeals').select('*').eq('content_id', data.contentId).eq('student_id', data.studentId),
+    ])
+
+    const nextScores = emptyScoreComponents()
+    const nextDraftCriteria = Object.fromEntries(SCORE_COMPONENT_TYPES.map(t => [t, {}])) as Record<ScoreComponentType, Record<string, string>>
+    const nextDraftFeedback = Object.fromEntries(SCORE_COMPONENT_TYPES.map(t => [t, ''])) as Record<ScoreComponentType, string>
+    ;(scRes.data ?? []).forEach((r: Record<string, unknown>) => {
+      const type = r.component_type as ScoreComponentType
+      if (!SCORE_COMPONENT_TYPES.includes(type)) return
+      const criteriaScores = (r.criteria_scores as Record<string, number>) ?? {}
+      nextScores[type] = { criteriaScores, subtotal: r.subtotal as number | null, feedback: (r.feedback as string) ?? '', status: (r.status as 'not_scored' | 'scored') ?? 'not_scored' }
+      nextDraftCriteria[type] = Object.fromEntries(Object.entries(criteriaScores).map(([k, v]) => [k, String(v)]))
+      nextDraftFeedback[type] = (r.feedback as string) ?? ''
+    })
+    setScores(nextScores)
+    setDraftCriteria(nextDraftCriteria)
+    setDraftFeedback(nextDraftFeedback)
+
+    const rawPosts = (dpRes.data ?? []) as Record<string, unknown>[]
+    const posterIds = [...new Set(rawPosts.map(p => p.student_id as string))]
+    let names: Record<string, string> = {}
+    if (posterIds.length) {
+      const { data: rows } = await supabase.from('students').select('id,first_name,last_name').in('id', posterIds)
+      names = Object.fromEntries((rows ?? []).map((r: Record<string, unknown>) => [r.id, `${(r.first_name as string) ?? ''} ${(r.last_name as string) ?? ''}`.trim()]))
+    }
+    setPosts(rawPosts.map(p => ({
+      id: p.id as string, studentId: p.student_id as string, studentName: names[p.student_id as string] ?? 'Student',
+      body: p.body as string, createdAt: p.created_at as string, parentPostId: (p.parent_post_id as string) ?? null,
+    })))
+
+    const presRow = (subRes.data ?? []).find(isPresentationSubmission) as Record<string, unknown> | undefined
+    setPresentationSub(presRow ? { note: (presRow.note as string) ?? '', linkUrl: (presRow.link_url as string) ?? '', submittedAt: (presRow.submitted_at as string) ?? '' } : null)
+
+    setAppeals((apRes.data ?? []).map((a: Record<string, unknown>) => ({
+      id: a.id as string, componentType: a.component_type as ScoreComponentType, message: a.message as string,
+      status: a.status as 'open' | 'resolved', adminReply: (a.admin_reply as string) ?? null,
+    })))
+    setLoading(false)
+  }
+
+  useEffect(() => { void load() }, []) // eslint-disable-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
+
+  async function saveCategory(type: ScoreComponentType) {
+    const criteria = CASE_STUDY_RUBRIC[type].criteria
+    const criteriaScores: Record<string, number> = {}
+    for (const c of criteria) {
+      const raw = draftCriteria[type][c.key] ?? ''
+      const v = Math.max(0, Math.min(c.max, Number(raw) || 0))
+      criteriaScores[c.key] = v
+    }
+    const subtotal = categorySubtotal(type, criteriaScores)
+    setSaving(type)
+    const { error } = await supabase.from('lms_score_components').upsert({
+      content_id: data.contentId, student_id: data.studentId, component_type: type,
+      criteria_scores: criteriaScores, subtotal, feedback: draftFeedback[type].trim() || null,
+      status: 'scored', scored_at: new Date().toISOString(),
+    }, { onConflict: 'content_id,student_id,component_type' })
+    setSaving(null)
+    if (error) { alert('Failed to save score. Please try again.'); return }
+
+    const nextScores: Record<ScoreComponentType, ScoreComponentRow> = { ...scores, [type]: { criteriaScores, subtotal, feedback: draftFeedback[type].trim(), status: 'scored' } }
+    setScores(nextScores)
+
+    const subtotalsByType = Object.fromEntries(SCORE_COMPONENT_TYPES.map(t => [t, nextScores[t].status === 'scored' ? nextScores[t].subtotal : null])) as Partial<Record<ScoreComponentType, number | null>>
+    const fg = finalGrade(subtotalsByType)
+    if (fg !== null) onFinalGradeChange(fg)
+  }
+
+  function appealFor(type: ScoreComponentType) {
+    return appeals.find(a => a.componentType === type)
+  }
+
+  const subtotalsByType = Object.fromEntries(SCORE_COMPONENT_TYPES.map(t => [t, scores[t].status === 'scored' ? scores[t].subtotal : null])) as Partial<Record<ScoreComponentType, number | null>>
+  const currentFinalGrade = finalGrade(subtotalsByType)
+
+  function renderCategoryEditor(type: ScoreComponentType) {
+    return (
+      <CategoryEditor
+        type={type}
+        row={scores[type]}
+        draftValues={draftCriteria[type]}
+        draftFeedback={draftFeedback[type]}
+        saving={saving === type}
+        appeal={appealFor(type)}
+        onCriteriaChange={(key, val) => setDraftCriteria(prev => ({ ...prev, [type]: { ...prev[type], [key]: val } }))}
+        onFeedbackChange={val => setDraftFeedback(prev => ({ ...prev, [type]: val }))}
+        onSave={() => void saveCategory(type)}
+        onAppealResolved={reply => setAppeals(prev => prev.map(a => a.componentType === type ? { ...a, status: 'resolved', adminReply: reply } : a))}
+      />
+    )
   }
 
   return (
-    <div onClick={e => { if (e.target === e.currentTarget) onClose() }} style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.6)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 500, padding: 24, boxShadow: '0 24px 60px rgba(0,0,0,.3)', maxHeight: '90vh', overflowY: 'auto' }}>
-        <div style={{ fontSize: 16, fontWeight: 900, color: '#1A365E', marginBottom: 4 }}>📋 Score Assignment</div>
-        <div style={{ fontSize: 11, color: '#7A92B0', marginBottom: 14 }}>{data.lessonTitle} · Max: {data.maxScore} pts</div>
-        {data.instructions && (
-          <div style={{ background: '#EEF3FF', borderRadius: 8, padding: '10px 12px', marginBottom: 10 }}>
-            <div style={{ fontSize: 9, fontWeight: 800, color: '#1A365E', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Assignment Instructions</div>
-            <div style={{ fontSize: 11, color: '#3D5475', whiteSpace: 'pre-wrap' }}>{data.instructions}</div>
-          </div>
-        )}
-        {(data.submNote || data.submLink) ? (
-          <div style={{ background: '#F7F9FC', borderRadius: 8, padding: '10px 12px', marginBottom: 10, borderLeft: '3px solid #1A365E' }}>
-            <div style={{ fontSize: 9, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>Student Submission</div>
-            {data.submNote && <div style={{ fontSize: 11, color: '#3D5475', marginBottom: 6, whiteSpace: 'pre-wrap' }}>{data.submNote}</div>}
-            {data.submLink && <a href={data.submLink} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#1A365E', fontWeight: 700, wordBreak: 'break-all' }}>🔗 {data.submLink}</a>}
-          </div>
-        ) : (
-          <div style={{ background: '#FEF3C7', borderRadius: 8, padding: '8px 12px', marginBottom: 10, fontSize: 11, color: '#92400E' }}>⏳ No text submission — student may have worked offline.</div>
-        )}
-        <div style={{ marginBottom: 10 }}>
-          <label style={{ fontSize: 11, fontWeight: 700, color: '#5A7290', display: 'block', marginBottom: 4 }}>Assignment Score (0–{data.maxScore})</label>
-          <input type="number" min={0} max={data.maxScore} value={score} onChange={e => setScore(e.target.value)} placeholder={`0–${data.maxScore}`} style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', boxSizing: 'border-box' }} />
+    <div onClick={e => { if (e.target === e.currentTarget) onClose() }} style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 500, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto' }}>
+      <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 640, margin: '0 auto', boxShadow: '0 24px 60px rgba(0,0,0,.3)', overflow: 'hidden' }}>
+        <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '16px 20px', position: 'sticky', top: 0, zIndex: 10 }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>📚 Grade Case Study — {data.studentName}</div>
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,.75)', marginTop: 2 }}>{data.lessonTitle}</div>
         </div>
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ fontSize: 11, fontWeight: 700, color: '#5A7290', display: 'block', marginBottom: 4 }}>Teacher Feedback (optional)</label>
-          <textarea rows={2} value={note} onChange={e => setNote(e.target.value)} placeholder="Feedback visible to student..." style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 12, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
-        </div>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button onClick={onClose} style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-          <button onClick={save} disabled={saving} style={{ padding: '9px 20px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>💾 Save Score</button>
+        <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: 40, color: '#94A3B8' }}>Loading…</div>
+          ) : (
+            <>
+              <div style={{ padding: '10px 12px', background: currentFinalGrade !== null ? '#DCFCE7' : '#F7F9FC', border: `1px solid ${currentFinalGrade !== null ? '#BBF7D0' : '#E4EAF2'}`, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#5A7290' }}>Final Grade</span>
+                <span style={{ fontSize: 16, fontWeight: 900, color: currentFinalGrade !== null ? '#059669' : '#94A3B8' }}>{currentFinalGrade !== null ? `${currentFinalGrade}/100` : 'Pending — score all 5 categories'}</span>
+              </div>
+
+              {/* 1. Case Study */}
+              <div style={{ background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 10, padding: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: '#1A365E', marginBottom: 6 }}>1. Case Study</div>
+                {data.caseStudyUrl
+                  ? <a href={data.caseStudyUrl} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#1A365E', fontWeight: 700 }}>↗ Open case study document</a>
+                  : <div style={{ fontSize: 11, color: '#94A3B8' }}>No case study document uploaded.</div>}
+              </div>
+
+              {/* 2. Notes Score */}
+              {renderCategoryEditor('notes')}
+
+              {/* 3. Discussion Post */}
+              <div style={{ background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 10, padding: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: '#1A365E', marginBottom: 6 }}>3. Discussion Thread ({posts.length})</div>
+                {posts.length === 0 ? (
+                  <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 8 }}>No posts yet.</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8, maxHeight: 220, overflowY: 'auto' }}>
+                    {posts.map(p => (
+                      <div key={p.id} style={{ background: p.studentId === data.studentId ? '#EEF3FF' : '#fff', border: '1px solid #E4EAF2', borderRadius: 8, padding: '8px 10px', marginLeft: p.parentPostId ? 16 : 0 }}>
+                        <div style={{ fontSize: 9, fontWeight: 800, color: '#1A365E', marginBottom: 3 }}>{p.studentName}{p.studentId === data.studentId ? ' (this student)' : ''}</div>
+                        <div style={{ fontSize: 11, color: '#3D5475', whiteSpace: 'pre-wrap' }}>{p.body}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {renderCategoryEditor('discussion')}
+              </div>
+
+              {/* 4. Socratic Debate */}
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 800, color: '#1A365E', marginBottom: 6 }}>4. Socratic Debate</div>
+                {renderCategoryEditor('debate')}
+              </div>
+
+              {/* 5. OMR Test */}
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 800, color: '#1A365E', marginBottom: 6 }}>5. OMR Test</div>
+                {renderCategoryEditor('omr')}
+              </div>
+
+              {/* 6. Presentation Upload */}
+              <div style={{ background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 10, padding: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: '#1A365E', marginBottom: 6 }}>6. Presentation Upload</div>
+                {presentationSub ? (
+                  <>
+                    {presentationSub.note && <div style={{ fontSize: 11, color: '#3D5475', marginBottom: 6, whiteSpace: 'pre-wrap' }}>{presentationSub.note}</div>}
+                    {presentationSub.linkUrl && <a href={presentationSub.linkUrl} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#1A365E', fontWeight: 700, wordBreak: 'break-all' }}>🔗 View uploaded presentation</a>}
+                  </>
+                ) : (
+                  <div style={{ fontSize: 11, color: '#94A3B8' }}>Student has not uploaded a presentation yet.</div>
+                )}
+              </div>
+
+              {/* 7. Presentation Score */}
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 800, color: '#1A365E', marginBottom: 6 }}>7. Presentation Score</div>
+                {renderCategoryEditor('presentation')}
+              </div>
+            </>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
+            <button onClick={onClose} style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Close</button>
+          </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+function CategoryEditorAppealNote({ appeal, onResolved }: {
+  appeal: AppealRow | undefined
+  onResolved: (reply: string) => void
+}) {
+  const [reply, setReply] = useState(appeal?.adminReply ?? '')
+  const [saving, setSaving] = useState(false)
+  if (!appeal) return null
+
+  async function resolve() {
+    if (!reply.trim()) { alert('Enter a reply before resolving.'); return }
+    setSaving(true)
+    const { error } = await supabase.from('lms_grade_appeals').update({ status: 'resolved', admin_reply: reply.trim(), resolved_at: new Date().toISOString() }).eq('id', appeal!.id)
+    setSaving(false)
+    if (error) { alert('Failed to resolve appeal.'); return }
+    onResolved(reply.trim())
+  }
+
+  return (
+    <div style={{ marginTop: 8, padding: '8px 10px', background: appeal.status === 'open' ? '#FEF3C7' : '#F0FDF4', border: `1px solid ${appeal.status === 'open' ? '#FDE68A' : '#BBF7D0'}`, borderRadius: 8 }}>
+      <div style={{ fontSize: 9, fontWeight: 800, color: appeal.status === 'open' ? '#92400E' : '#059669', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>
+        🚩 {appeal.status === 'open' ? 'Open Appeal' : 'Appeal Resolved'}
+      </div>
+      <div style={{ fontSize: 11, color: '#3D5475', whiteSpace: 'pre-wrap', marginBottom: 6 }}>{appeal.message}</div>
+      {appeal.status === 'open' ? (
+        <>
+          <textarea rows={2} value={reply} onChange={e => setReply(e.target.value)} placeholder="Reply to the student..." style={{ width: '100%', padding: '6px 8px', border: '1.5px solid #FDE68A', borderRadius: 6, fontSize: 11, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box', marginBottom: 6 }} />
+          <button onClick={() => void resolve()} disabled={saving} style={{ padding: '5px 12px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>{saving ? 'Saving…' : 'Mark Resolved'}</button>
+        </>
+      ) : (
+        <div style={{ fontSize: 11, color: '#059669', whiteSpace: 'pre-wrap' }}>↩ {appeal.adminReply}</div>
+      )}
+    </div>
+  )
+}
+
+function CategoryEditor({ type, row, draftValues, draftFeedback, saving, appeal, onCriteriaChange, onFeedbackChange, onSave, onAppealResolved }: {
+  type: ScoreComponentType
+  row: ScoreComponentRow
+  draftValues: Record<string, string>
+  draftFeedback: string
+  saving: boolean
+  appeal: AppealRow | undefined
+  onCriteriaChange: (key: string, val: string) => void
+  onFeedbackChange: (val: string) => void
+  onSave: () => void
+  onAppealResolved: (reply: string) => void
+}) {
+  const cat = CASE_STUDY_RUBRIC[type]
+  return (
+    <div style={{ background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 10, padding: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: '#1A365E' }}>{cat.label}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {row.status === 'scored' && <span style={{ fontSize: 10, fontWeight: 900, color: '#059669', background: '#DCFCE7', padding: '2px 8px', borderRadius: 10 }}>{row.subtotal}/{cat.weight}</span>}
+          <span style={{ fontSize: 9, color: '#94A3B8' }}>{cat.weight}% of grade</span>
+        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(cat.criteria.length, 4)}, 1fr)`, gap: 8, marginBottom: 8 }}>
+        {cat.criteria.map(c => (
+          <div key={c.key}>
+            <label style={{ fontSize: 9, fontWeight: 700, color: '#5A7290', display: 'block', marginBottom: 2 }}>{c.label} (0–{c.max})</label>
+            <input
+              type="number" min={0} max={c.max}
+              value={draftValues[c.key] ?? ''}
+              onChange={e => onCriteriaChange(c.key, e.target.value)}
+              style={{ width: '100%', padding: '6px 8px', border: '1.5px solid #E4EAF2', borderRadius: 6, fontSize: 12, fontFamily: 'inherit', boxSizing: 'border-box' }}
+            />
+          </div>
+        ))}
+      </div>
+      <textarea
+        rows={2} value={draftFeedback}
+        onChange={e => onFeedbackChange(e.target.value)}
+        placeholder="Feedback visible to the student..."
+        style={{ width: '100%', padding: '6px 8px', border: '1.5px solid #E4EAF2', borderRadius: 6, fontSize: 11, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box', marginBottom: 8 }}
+      />
+      <button onClick={onSave} disabled={saving} style={{ padding: '6px 14px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+        {saving ? 'Saving…' : row.status === 'scored' ? '💾 Update Score' : '💾 Save Score'}
+      </button>
+      <CategoryEditorAppealNote appeal={appeal} onResolved={onAppealResolved} />
+    </div>
+  )
+}
+
+function AppealRowCard({ appeal, studentName, lessonTitle, onResolved }: {
+  appeal: { id: string; componentType: ScoreComponentType; message: string; status: 'open' | 'resolved'; adminReply: string | null; createdAt: string }
+  studentName: string
+  lessonTitle: string
+  onResolved: (reply: string) => void
+}) {
+  const [reply, setReply] = useState(appeal.adminReply ?? '')
+  const [saving, setSaving] = useState(false)
+
+  async function resolve() {
+    if (!reply.trim()) { alert('Enter a reply before resolving.'); return }
+    setSaving(true)
+    const { error } = await supabase.from('lms_grade_appeals').update({ status: 'resolved', admin_reply: reply.trim(), resolved_at: new Date().toISOString() }).eq('id', appeal.id)
+    setSaving(false)
+    if (error) { alert('Failed to resolve appeal.'); return }
+    onResolved(reply.trim())
+  }
+
+  return (
+    <div style={{ background: '#fff', border: `1px solid ${appeal.status === 'open' ? '#FDE68A' : '#E4EAF2'}`, borderRadius: 10, padding: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
+        <div style={{ fontSize: 12, fontWeight: 800, color: '#1A365E' }}>{studentName} · {CASE_STUDY_RUBRIC[appeal.componentType].label}</div>
+        <span style={{ fontSize: 9, fontWeight: 700, color: appeal.status === 'open' ? '#92400E' : '#059669', background: appeal.status === 'open' ? '#FEF3C7' : '#DCFCE7', padding: '3px 8px', borderRadius: 10 }}>
+          {appeal.status === 'open' ? '⏳ Open' : '✅ Resolved'}
+        </span>
+      </div>
+      <div style={{ fontSize: 10, color: '#7A92B0', marginBottom: 8 }}>{lessonTitle} · Filed {appeal.createdAt ? new Date(appeal.createdAt).toLocaleDateString() : ''}</div>
+      <div style={{ fontSize: 12, color: '#3D5475', whiteSpace: 'pre-wrap', marginBottom: 8, background: '#F7F9FC', borderRadius: 8, padding: '8px 10px' }}>{appeal.message}</div>
+      {appeal.status === 'open' ? (
+        <>
+          <textarea rows={2} value={reply} onChange={e => setReply(e.target.value)} placeholder="Reply to the student..." style={{ width: '100%', padding: '7px 9px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 12, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box', marginBottom: 8 }} />
+          <button onClick={() => void resolve()} disabled={saving} style={{ padding: '7px 16px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>{saving ? 'Saving…' : 'Mark Resolved'}</button>
+        </>
+      ) : (
+        <div style={{ fontSize: 12, color: '#059669', whiteSpace: 'pre-wrap' }}>↩ {appeal.adminReply}</div>
+      )}
     </div>
   )
 }
@@ -1908,7 +4593,6 @@ function LessonPreviewModal({ item, onClose }: { item: LMSContent; onClose: () =
   const [noteOpen, setNoteOpen] = useState(() => { try { return !!localStorage.getItem(noteKey) } catch { return false } })
   const [noteText, setNoteText] = useState(() => { try { return localStorage.getItem(noteKey) || '' } catch { return '' } })
   const [slideIdx, setSlideIdx] = useState(0)
-  const [discText, setDiscText] = useState('')
 
   const contentTypeLabels: Record<string, string> = { video: '🎬 Video', article: '📝 Article', link: '🔗 Web Link', file: '📎 File', quiz: '❓ Quiz', presentation: '🖥️ Presentation' }
   const passMark = item.masteryPassMark ?? 80
@@ -1916,9 +4600,6 @@ function LessonPreviewModal({ item, onClose }: { item: LMSContent; onClose: () =
 
   let masteryQuestions: Array<{ q: string; opts?: string[]; ans?: number }> = []
   try { masteryQuestions = JSON.parse(item.masteryQuizJson || item.quizJson || '[]') } catch { /* empty */ }
-
-  let extraAssignments: Array<{ instructions?: string; maxScore?: number; dueDays?: number; subType?: string }> = []
-  try { extraAssignments = JSON.parse(item.assignments || '[]') } catch { /* empty */ }
 
   function getEmbedUrl(url: string): string {
     if (url.includes('docs.google.com/presentation')) {
@@ -2062,29 +4743,67 @@ function LessonPreviewModal({ item, onClose }: { item: LMSContent; onClose: () =
     return <div style={{ padding: 20, color: '#94A3B8' }}>No content available.</div>
   }
 
-  function renderAssignPanel(aItem: { instructions?: string; maxScore?: number; dueDays?: number; subType?: string; rubric?: string }, idx?: number) {
+  // Read-only preview of a fixed rubric category's criteria (Notes/Discussion/Debate/OMR/Presentation) —
+  // structure only, no live scores, since preview has no specific student.
+  function renderRubricPreview(type: ScoreComponentType) {
+    const cat = CASE_STUDY_RUBRIC[type]
+    return (
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+        {cat.criteria.map(c => (
+          <span key={c.key} style={{ fontSize: 10, fontWeight: 700, color: '#3D5475', background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 6, padding: '4px 8px' }}>{c.label} /{c.max}</span>
+        ))}
+      </div>
+    )
+  }
+
+  function caseStudySectionShell(icon: string, title: string, weightPct: number | null, children: React.ReactNode) {
     return (
       <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10, padding: '12px 14px' }}>
-        {idx !== undefined && <div style={{ fontSize: 10, fontWeight: 800, color: '#7C3AED', marginBottom: 6 }}>📋 Assignment {idx + 2}</div>}
-        {!idx && <div style={{ fontSize: 11, fontWeight: 800, color: '#1D4ED8', marginBottom: 8 }}>📋 Assignment</div>}
-        {aItem.instructions && <div style={{ fontSize: 12, color: '#2D3F5E', lineHeight: 1.6, marginBottom: 8, whiteSpace: 'pre-wrap' }}>{aItem.instructions}</div>}
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 11, color: '#1D4ED8', marginBottom: aItem.rubric ? 8 : 0 }}>
-          {aItem.maxScore !== undefined && aItem.maxScore !== null && <span>Max Score: <strong>{aItem.maxScore}</strong></span>}
-          {aItem.dueDays !== undefined && aItem.dueDays !== null && <span>Due in: <strong>{aItem.dueDays} days</strong></span>}
-          {aItem.subType && <span>Submission: <strong>{aItem.subType}</strong></span>}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: '#1D4ED8' }}>{icon} {title}</div>
+          {weightPct !== null && <span style={{ fontSize: 9, fontWeight: 700, color: '#7A92B0' }}>{weightPct}% of grade</span>}
         </div>
-        {aItem.rubric && (
-          <div style={{ background: '#F0F4FA', borderRadius: 8, padding: '8px 10px', marginTop: 6 }}>
-            <div style={{ fontSize: 9, fontWeight: 800, color: '#1A365E', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>📐 Rubric</div>
-            <div style={{ fontSize: 11, color: '#3D5475', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{aItem.rubric}</div>
+        {children}
+      </div>
+    )
+  }
+
+  // Preview of the fixed 7-section Case Study Assignment (structure only — no real
+  // student, so scores/threads/uploads all render disabled/empty).
+  function renderCaseStudyPreview() {
+    if (hasMasteryBool(item.hasMastery)) {
+      return (
+        <div style={{ marginTop: 4, padding: '14px 16px', background: '#F7F9FC', borderRadius: 10, border: '1px solid #E4EAF2', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 24 }}>🔒</span>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#7A92B0' }}>Case Study Assignment Locked</div>
+            <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>Pass the mastery test first to unlock this assignment.</div>
           </div>
-        )}
-        <div style={{ marginTop: 10 }}>
-          <div style={{ fontSize: 9, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', marginBottom: 4 }}>Student Submission (Preview)</div>
-          <textarea disabled rows={3} placeholder="Student would enter notes here…" style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #BFDBFE', borderRadius: 8, fontSize: 11, resize: 'none', boxSizing: 'border-box', background: '#F7FBFF', color: '#7A92B0', fontFamily: 'inherit' }} />
-          <input disabled type="text" placeholder="Or paste a link here…" style={{ width: '100%', marginTop: 6, padding: '7px 10px', border: '1.5px solid #BFDBFE', borderRadius: 8, fontSize: 11, boxSizing: 'border-box', background: '#F7FBFF', color: '#7A92B0', fontFamily: 'inherit' }} />
-          <button disabled style={{ marginTop: 6, padding: '8px 16px', background: '#BFDBFE', color: '#94A3B8', border: 'none', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'not-allowed', width: '100%' }}>📤 Submit Assignment (Preview)</button>
         </div>
+      )
+    }
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {caseStudySectionShell('📚', '1. Case Study', null, item.caseStudyUrl
+          ? <div style={{ fontSize: 11, color: '#2D3F5E' }}><a href={item.caseStudyUrl} target="_blank" rel="noreferrer" style={{ color: '#1D4ED8', fontWeight: 700 }}>↗ Open case study document</a></div>
+          : <div style={{ fontSize: 11, color: '#94A3B8' }}>No case study document uploaded yet.</div>
+        )}
+        {caseStudySectionShell('📝', '2. Notes Score', CASE_STUDY_RUBRIC.notes.weight, <>
+          <div style={{ fontSize: 11, color: '#5A7290' }}>Admin scores the student's physical notes — no student view/upload here.</div>
+          {renderRubricPreview('notes')}
+        </>)}
+        {caseStudySectionShell('💬', '3. Discussion Post', CASE_STUDY_RUBRIC.discussion.weight, <>
+          <div style={{ fontSize: 11, color: '#5A7290', marginBottom: 6 }}>Student posts about the case study, then views/comments on classmates' posts.</div>
+          <textarea disabled rows={2} placeholder="Student would post here… (Preview Only)" style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #BFDBFE', borderRadius: 8, fontSize: 11, resize: 'none', boxSizing: 'border-box', background: '#F7FBFF', color: '#94A3B8', fontFamily: 'inherit' }} />
+          {renderRubricPreview('discussion')}
+        </>)}
+        {caseStudySectionShell('⚖️', '4. Socratic Debate Score', CASE_STUDY_RUBRIC.debate.weight, renderRubricPreview('debate'))}
+        {caseStudySectionShell('🔢', '5. OMR Test Score', CASE_STUDY_RUBRIC.omr.weight, renderRubricPreview('omr'))}
+        {caseStudySectionShell('📤', '6. Presentation Upload', null, <>
+          <div style={{ fontSize: 11, color: '#5A7290', marginBottom: 6 }}>Student uploads their presentation file here.</div>
+          <div style={{ padding: '9px 12px', borderRadius: 8, border: '2px dashed #BFDBFE', background: '#F7FBFF', fontSize: 11, color: '#94A3B8', textAlign: 'center' }}>+ Choose file (Preview Only)</div>
+        </>)}
+        {caseStudySectionShell('🏆', '7. Presentation Score', CASE_STUDY_RUBRIC.presentation.weight, renderRubricPreview('presentation'))}
       </div>
     )
   }
@@ -2165,54 +4884,13 @@ function LessonPreviewModal({ item, onClose }: { item: LMSContent; onClose: () =
             </div>
           )}
 
-          {/* Assignment panel — locked if mastery required (preview = never passed) */}
+          {/* Case Study Assignment — fixed 7-section preview */}
           {hasAssignBool(item.hasAssignment) && (
-            hasMasteryBool(item.hasMastery)
-              ? (
-                <div style={{ marginTop: 4, padding: '14px 16px', background: '#F7F9FC', borderRadius: 10, border: '1px solid #E4EAF2', display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 24 }}>🔒</span>
-                  <div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#7A92B0' }}>Assignment Locked</div>
-                    <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>Pass the mastery test first to unlock this assignment.</div>
-                  </div>
-                </div>
-              )
-              : renderAssignPanel({
-                instructions: item.assignInstructions,
-                maxScore: item.assignMaxScore,
-                dueDays: item.assignDueDays,
-                subType: item.assignSubType,
-                rubric: item.assignRubric,
-              })
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: '#1A365E', marginBottom: 8 }}>📚 Case Study Assignment</div>
+              {renderCaseStudyPreview()}
+            </div>
           )}
-
-          {/* Additional assignments */}
-          {extraAssignments.map((ea, eai) => (
-            <div key={eai} style={{ borderTop: '1px dashed #E4EAF2', paddingTop: 8 }}>
-              {renderAssignPanel({ instructions: ea.instructions, maxScore: ea.maxScore, dueDays: ea.dueDays, subType: ea.subType }, eai)}
-            </div>
-          ))}
-
-          {/* Discussion board */}
-          <div style={{ background: '#fff', border: '1px solid #E4EAF2', borderRadius: 13, padding: 16 }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: '#1A365E', marginBottom: 10 }}>💬 Lesson Discussion & Peer Review</div>
-            <div style={{ fontSize: 12, fontWeight: 800, color: '#1A365E', marginBottom: 10 }}>💬 Discussion (0 posts)</div>
-            <div style={{ background: '#F7F9FC', borderRadius: 10, padding: '12px 14px', border: '1px solid #E4EAF2', marginBottom: 10 }}>
-              <div style={{ fontSize: 9, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Share your thoughts or ask a question</div>
-              <textarea
-                value={discText}
-                onChange={e => setDiscText(e.target.value)}
-                rows={3}
-                placeholder="What's on your mind about this lesson?"
-                style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 12, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box', background: '#fff', lineHeight: 1.6 }}
-              />
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
-                <span style={{ fontSize: 11, color: '#94A3B8' }}>Peer reviews and questions welcome 👋</span>
-                <button onClick={() => setDiscText('')} style={{ padding: '7px 18px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>🚀 Post</button>
-              </div>
-            </div>
-            <div style={{ textAlign: 'center', padding: '10px', color: '#94A3B8', fontSize: 12 }}>No posts yet. Start the discussion! 🎯</div>
-          </div>
 
           {/* Private notepad */}
           <div style={{ background: '#FFFBEA', border: '1px solid #FDE68A', borderRadius: 13, overflow: 'hidden' }}>

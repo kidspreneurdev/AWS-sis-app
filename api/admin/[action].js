@@ -4,8 +4,8 @@ const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY
 
-const CREATE_ALLOWED_ROLES = ['admin', 'staff', 'teacher', 'principal', 'partner', 'coach', 'viewer', 'parent']
-const UPDATE_ALLOWED_ROLES = ['admin', 'staff', 'teacher', 'principal', 'partner', 'coach', 'viewer']
+const CREATE_ALLOWED_ROLES = ['admin', 'staff', 'teacher', 'principal', 'partner', 'coach', 'viewer', 'counselor', 'readonly', 'parent']
+const UPDATE_ALLOWED_ROLES = ['admin', 'staff', 'teacher', 'principal', 'partner', 'coach', 'viewer', 'counselor', 'readonly', 'parent']
 
 function json(res, status, body) {
   res.status(status).setHeader('Content-Type', 'application/json')

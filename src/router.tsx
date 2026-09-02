@@ -230,11 +230,17 @@ export const router = createBrowserRouter([
         { path: '/pt/reports', element: <Lazy><PTReportsPage /></Lazy> },
 
         // Learning Management System
+        { path: '/lms', element: <Navigate to="/lms/overview" replace /> },
+        { path: '/lms/overview', element: <Lazy><LMSPage /></Lazy> },
         { path: '/lms/manage', element: <Lazy><LMSPage /></Lazy> },
+        { path: '/lms/students', element: <Lazy><LMSPage /></Lazy> },
+        { path: '/lms/student-section', element: <Lazy><LMSPage /></Lazy> },
         { path: '/lms/courses', element: <Lazy><LMSPage /></Lazy> },
         { path: '/lms/content', element: <Lazy><LMSPage /></Lazy> },
         { path: '/lms/assign', element: <Lazy><LMSPage /></Lazy> },
         { path: '/lms/gradebook', element: <Lazy><LMSPage /></Lazy> },
+        { path: '/lms/curriculum', element: <Lazy><LMSPage /></Lazy> },
+        { path: '/lms/appeals', element: <Lazy><LMSPage /></Lazy> },
         { path: '/lms/section', element: <Lazy><LMSPage /></Lazy> },
         { path: '/lms/progress', element: <Lazy><LMSPage /></Lazy> },
         { path: '/lms/student', element: <Lazy><LMSPage /></Lazy> },

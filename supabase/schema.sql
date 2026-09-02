@@ -202,10 +202,12 @@ create table communications (
   outcome       text,
   notes         text,
   staff_member  text,
+  campus        text,
   created_at    timestamptz default now()
 );
 
 create index on communications(student_id);
+create index on communications(campus);
 
 -- ─── Staff ──────────────────────────────────────────────────
 create table staff (

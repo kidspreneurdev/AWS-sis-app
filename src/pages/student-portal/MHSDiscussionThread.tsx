@@ -114,9 +114,9 @@ export function MHSDiscussionThread() {
   if (!selectedLessonId) {
     return (
       <div style={card}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: '#1A365E', marginBottom: 10 }}>Discussion Boards</div>
+        <div style={{ fontSize: 13, fontWeight: 800, color: '#1A365E', marginBottom: 10 }}>Share it</div>
         {error && <div style={{ color: '#DC2626', fontSize: 12, marginBottom: 8 }}>{error}</div>}
-        {lessons.length === 0 && <div style={{ fontSize: 12, color: '#7A92B0' }}>No discussion boards assigned yet.</div>}
+        {lessons.length === 0 && <div style={{ fontSize: 12, color: '#7A92B0' }}>Nothing to share yet.</div>}
         {lessons.map((l) => (
           <button
             key={l.lessonId}
@@ -133,7 +133,7 @@ export function MHSDiscussionThread() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <button onClick={() => { setSelectedLessonId(null); setThread(null) }} style={{ background: 'none', border: 'none', color: '#0369A1', fontSize: 11, cursor: 'pointer', alignSelf: 'flex-start' }}>← Back to discussion boards</button>
+      <button onClick={() => { setSelectedLessonId(null); setThread(null) }} style={{ background: 'none', border: 'none', color: '#0369A1', fontSize: 11, cursor: 'pointer', alignSelf: 'flex-start' }}>← Back to Share it</button>
       {error && <div style={{ color: '#DC2626', fontSize: 12 }}>{error}</div>}
       {!thread ? (
         <div style={card}>Loading…</div>

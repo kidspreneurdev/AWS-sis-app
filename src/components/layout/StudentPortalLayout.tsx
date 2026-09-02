@@ -8,7 +8,7 @@ const SP_NAV = [
   { id: 'sp_attend',   icon: '📅', label: 'Attendance',          to: '/portal/attendance' },
   { id: 'sp_assign',   icon: '📝', label: 'Assignments',         to: '/portal/assignments' },
   { id: 'sp_mhs_quiz', icon: '🧩', label: 'My Quizzes',           to: '/portal/mhs-quiz' },
-  { id: 'sp_mhs_disc', icon: '💬', label: 'Discussion Boards',    to: '/portal/mhs-discussion' },
+  { id: 'sp_mhs_disc', icon: '💬', label: 'Share it',             to: '/portal/mhs-discussion' },
   { id: 'sp_learning', icon: '📚', label: 'My Learning',         to: '/portal/learning' },
   { id: 'sp_project',  icon: '🚀', label: 'My Project',          to: '/portal/project' },
   { id: 'sp_portfolio',icon: '🗂️', label: 'Portfolio',           to: '/portal/portfolio' },

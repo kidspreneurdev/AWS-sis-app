@@ -3,7 +3,8 @@ import { supabase } from '@/lib/supabase'
 import { uploadFile } from '@/lib/uploadFile'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
-import { TYPE_ICONS, TYPE_COLORS, SUBJECT_COLORS, isActiveBool, type LMSCourse, type LMSContent, type LMSEnrolment, type LMSProgress, type LMSQuestion } from '@/pages/lms/lmsStore'
+import { TYPE_ICONS, SUBJECT_COLORS, isActiveBool, type LMSCourse, type LMSContent, type LMSEnrolment, type LMSProgress, type LMSQuestion } from '@/pages/lms/lmsStore'
+import { CASE_STUDY_RUBRIC, SCORE_COMPONENT_TYPES, finalGrade, type ScoreComponentType } from '@/lib/lms/caseStudyRubric'
 import { toLegacyStudentGradeValue } from '@/types/student'
 import { K5MyLearningPage } from '@/pages/student-portal/K5MyLearningPage'
 
@@ -15,6 +16,12 @@ const SP_GREEN = '#1DBD6A'
 
 function getLessonTimerKey(studentId: string, lessonId: string) {
   return `sp_learning_started_${studentId}_${lessonId}`
+}
+
+const partRowStyle: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 18px 6px 56px',
+  background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
+  fontSize: 11, color: '#5A7290',
 }
 
 
@@ -313,152 +320,358 @@ function MasteryQuiz({ item, prog, studentId, coursePassMark, onUpdate }: {
 }
 
 // ─── Assignment Panel ──────────────────────────────────────────────────────────
-function AssignmentPanel({ item, prog, studentId, masteryPassed, onUpdate }: {
+async function studentPortalFetch(token: string | null, url: string, opts: RequestInit = {}) {
+  const res = await fetch(url, {
+    ...opts,
+    headers: { ...(opts.body ? { 'Content-Type': 'application/json' } : {}), Authorization: `Bearer ${token ?? ''}`, ...(opts.headers ?? {}) },
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(body?.error || 'Request failed.')
+  return body
+}
+
+function getCaseStudyEmbedUrl(url: string): string {
+  if (url.includes('docs.google.com/presentation')) {
+    const base = url.replace(/\/pub(\?.*)?$/, '').replace(/\/edit(\?.*)?$/, '').replace(/\/embed(\?.*)?$/, '')
+    return base + '/embed?start=false&loop=false&rm=minimal'
+  }
+  const driveMatch = url.match(/\/file\/d\/([^/]+)/)
+  if (driveMatch) return `https://drive.google.com/file/d/${driveMatch[1]}/preview`
+  return url
+}
+
+interface CSScoreData { componentType: string; criteriaScores: Record<string, number>; subtotal: number | null; feedback: string | null; status: 'not_scored' | 'scored' }
+interface CSPostData { id: string; studentId: string; authorName: string; isMine: boolean; body: string; parentPostId: string | null; createdAt: string }
+interface CSAppealData { id: string; componentType: string; message: string; status: 'open' | 'resolved'; adminReply: string | null }
+interface CaseStudyBundle {
+  lesson: { id: string; title: string; caseStudyUrl: string | null }
+  scores: CSScoreData[]
+  discussion: { myStudentId: string; posts: CSPostData[] }
+  presentation: { note: string | null; linkUrl: string | null; submittedAt: string } | null
+  appeals: CSAppealData[]
+}
+
+function CaseStudyPanel({ item, studentId, masteryPassed }: {
   item: LMSContent
-  prog: LMSProgress | undefined
   studentId: string
   masteryPassed: boolean
-  onUpdate: (updates: Partial<LMSProgress>) => void
 }) {
   const { readOnly } = usePortalReadOnly()
+  const { getToken } = useStudentPortal()
   const hasMastery = item.hasMastery === true || item.hasMastery === 'TRUE'
   const locked = hasMastery && !masteryPassed
-  const maxScore = item.assignMaxScore ?? 100
-  const masteryWeight = item.masteryWeight ?? 60
-  const assignWeight = item.assignWeight ?? 40
 
-  const assignScore = prog?.assignScore != null && !Number.isNaN(Number(prog.assignScore)) ? Number(prog.assignScore) : null
-  const assignStatus = prog?.assignStatus
-  const isSubmitted = assignStatus === 'submitted' || assignScore !== null
-  const isScored = assignScore !== null
-  const masteryScore = prog?.masteryScore != null ? Number(prog.masteryScore) : null
-  const finalScore = masteryScore !== null && assignScore !== null
-    ? Math.round((masteryScore * masteryWeight + assignScore * assignWeight) / 100)
-    : null
+  const [loading, setLoading] = useState(true)
+  const [bundle, setBundle] = useState<CaseStudyBundle | null>(null)
+  const [postBody, setPostBody] = useState('')
+  const [replyBody, setReplyBody] = useState<Record<string, string>>({})
+  const [replyOpenFor, setReplyOpenFor] = useState<string | null>(null)
+  const [posting, setPosting] = useState(false)
+  const [presFile, setPresFile] = useState<File | null>(null)
+  const [presNote, setPresNote] = useState('')
+  const [presSubmitting, setPresSubmitting] = useState(false)
+  const [appealOpenFor, setAppealOpenFor] = useState<string | null>(null)
+  const [appealText, setAppealText] = useState<Record<string, string>>({})
+  const [filingAppeal, setFilingAppeal] = useState<string | null>(null)
 
-  const [note, setNote] = useState('')
-  const [file, setFile] = useState<File | null>(null)
-  const [submitting, setSubmitting] = useState(false)
+  async function load() {
+    setLoading(true)
+    try {
+      const data = await studentPortalFetch(getToken(), `/api/student-portal/lms-get-case-study?contentId=${item.id}`)
+      setBundle(data as CaseStudyBundle)
+    } catch {
+      setBundle(null)
+    }
+    setLoading(false)
+  }
+
+  useEffect(() => { if (!locked) void load() }, [item.id, locked]) // eslint-disable-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
 
   if (locked) {
     return (
       <div style={{ padding: '14px 16px', background: '#F7F9FC', borderRadius: 10, border: '1px solid #E4EAF2', display: 'flex', alignItems: 'center', gap: 10 }}>
         <span style={{ fontSize: 24 }}>🔒</span>
         <div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#7A92B0' }}>Assignment Locked</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#7A92B0' }}>Case Study Assignment Locked</div>
           <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>Pass the mastery test first to unlock this assignment.</div>
         </div>
       </div>
     )
   }
 
-  async function submitAssignment() {
-    setSubmitting(true)
-    let fileUrl: string | null = null
-    if (file) {
-      try {
-        const path = `lms/${studentId}/${item.id}/${Date.now()}_${file.name}`
-        fileUrl = await uploadFile(path, file)
-      } catch {
-        alert('Upload failed. Please try again.')
-        setSubmitting(false)
-        return
-      }
-    }
-    const assignPayload: Record<string, unknown> = {
-      student_id: studentId,
-      course_id: item.courseId,
-      content_id: item.id,
-      status: prog?.status ?? 'in_progress',
-      assign_status: 'submitted',
-    }
-    if (prog?.id) assignPayload.id = prog.id
-    await supabase.from('lms_progress').upsert(assignPayload, { onConflict: 'student_id,content_id' })
-    try {
-      await supabase.from('lms_submissions').insert({
-        student_id: studentId,
-        content_id: item.id,
-        course_id: item.courseId,
-        note: note.trim() || null,
-        link_url: fileUrl,
-        submitted_at: new Date().toISOString(),
-      })
-    } catch { /* table may not exist yet */ }
-    setSubmitting(false)
-    onUpdate({ assignStatus: 'submitted' })
+  if (loading) {
+    return <div style={{ ...emptyState }}>Loading case study…</div>
+  }
+  if (!bundle) {
+    return <div style={{ ...emptyState }}>Couldn't load the case study assignment. Try reopening this lesson.</div>
   }
 
+  const scoreByType = Object.fromEntries(bundle.scores.map((s) => [s.componentType, s])) as Record<string, CSScoreData | undefined>
+  const appealByType = Object.fromEntries(bundle.appeals.map((a) => [a.componentType, a])) as Record<string, CSAppealData | undefined>
+
+  async function submitPost(parentPostId: string | null) {
+    const body = parentPostId ? (replyBody[parentPostId] ?? '') : postBody
+    if (!body.trim()) return
+    setPosting(true)
+    try {
+      await studentPortalFetch(getToken(), '/api/student-portal/lms-submit-discussion-post', {
+        method: 'POST', body: JSON.stringify({ contentId: item.id, body: body.trim(), parentPostId: parentPostId || undefined }),
+      })
+      if (parentPostId) { setReplyBody((p) => ({ ...p, [parentPostId]: '' })); setReplyOpenFor(null) } else setPostBody('')
+      await load()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to post.')
+    }
+    setPosting(false)
+  }
+
+  async function submitPresentation() {
+    if (!presFile) return
+    setPresSubmitting(true)
+    try {
+      const path = `lms/${studentId}/${item.id}/${Date.now()}_${presFile.name}`
+      const fileUrl = await uploadFile(path, presFile)
+      await studentPortalFetch(getToken(), '/api/student-portal/lms-submit-presentation', {
+        method: 'POST', body: JSON.stringify({ contentId: item.id, fileUrl, note: presNote.trim() || undefined }),
+      })
+      await load()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Upload failed. Please try again.')
+    }
+    setPresSubmitting(false)
+  }
+
+  async function fileAppeal(componentType: string) {
+    const message = appealText[componentType] ?? ''
+    if (!message.trim()) return
+    setFilingAppeal(componentType)
+    try {
+      await studentPortalFetch(getToken(), '/api/student-portal/lms-file-appeal', {
+        method: 'POST', body: JSON.stringify({ contentId: item.id, componentType, message: message.trim() }),
+      })
+      setAppealOpenFor(null)
+      await load()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to file appeal.')
+    }
+    setFilingAppeal(null)
+  }
+
+  function renderAppealControl(type: ScoreComponentType) {
+    const score = scoreByType[type]
+    if (!score || score.status !== 'scored') return null
+    return (
+      <CSAppealControl
+        appeal={appealByType[type]}
+        isOpen={appealOpenFor === type}
+        draftText={appealText[type] ?? ''}
+        filing={filingAppeal === type}
+        readOnly={readOnly}
+        onOpen={() => setAppealOpenFor(type)}
+        onCancel={() => setAppealOpenFor(null)}
+        onDraftChange={(val) => setAppealText((p) => ({ ...p, [type]: val }))}
+        onFile={() => void fileAppeal(type)}
+      />
+    )
+  }
+
+  function renderScoreBlock(type: ScoreComponentType, icon: string, title: string, order: number) {
+    return <CSScoreBlock type={type} icon={icon} title={title} order={order} score={scoreByType[type]} appealControl={renderAppealControl(type)} />
+  }
+
+  const myTopLevelPost = bundle.discussion.posts.find((p) => p.isMine && !p.parentPostId)
+  const subtotalsByType = Object.fromEntries(SCORE_COMPONENT_TYPES.map((t) => [t, scoreByType[t]?.status === 'scored' ? scoreByType[t]!.subtotal : null])) as Partial<Record<ScoreComponentType, number | null>>
+  const overallFinalGrade = finalGrade(subtotalsByType)
+
   return (
-    <div style={{ background: '#fff', border: '1.5px solid #1A365E22', borderRadius: 12, overflow: 'hidden' }}>
-      <div style={{ background: 'linear-gradient(135deg,#1A365E,#0F2240)', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 18 }}>📋</span>
-          <span style={{ fontSize: 13, fontWeight: 800, color: '#fff' }}>Assignment</span>
-          <span style={{ fontSize: 10, color: 'rgba(255,255,255,.6)', marginLeft: 4 }}>Max: {maxScore} pts</span>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ fontSize: 14, fontWeight: 800, color: '#1A365E' }}>📚 Case Study Assignment</div>
+
+      <div style={{ background: '#fff', border: '1.5px solid #1A365E22', borderRadius: 12, padding: '12px 16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+          {SCORE_COMPONENT_TYPES.map((t) => (
+            <div key={t} style={{ textAlign: 'center', flex: 1, minWidth: 64 }}>
+              <div style={{ fontSize: 8, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase' }}>{CASE_STUDY_RUBRIC[t].label}</div>
+              <div style={{ fontSize: 14, fontWeight: 900, color: subtotalsByType[t] != null ? '#1A365E' : '#94A3B8' }}>{subtotalsByType[t] != null ? `${subtotalsByType[t]}/${CASE_STUDY_RUBRIC[t].weight}` : '—'}</div>
+            </div>
+          ))}
+          <div style={{ textAlign: 'center', flex: 1, minWidth: 80, borderLeft: '1px solid #E4EAF2', paddingLeft: 12 }}>
+            <div style={{ fontSize: 8, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase' }}>Final Grade</div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: overallFinalGrade !== null ? (overallFinalGrade >= 70 ? '#059669' : SP_RED) : '#94A3B8' }}>{overallFinalGrade !== null ? `${overallFinalGrade}/100` : '—'}</div>
+          </div>
         </div>
-        {isScored && <span style={{ background: '#059669', color: '#fff', fontSize: 12, fontWeight: 900, padding: '4px 12px', borderRadius: 20 }}>{assignScore}%</span>}
-        {isSubmitted && !isScored && <span style={{ background: '#D97706', color: '#fff', fontSize: 10, fontWeight: 700, padding: '4px 10px', borderRadius: 20 }}>⏳ Awaiting Score</span>}
       </div>
-      <div style={{ padding: '14px 16px' }}>
-        {hasMastery && (masteryScore !== null || assignScore !== null) && (
-          <div style={{ background: '#F0F4FA', borderRadius: 8, padding: '10px 12px', marginBottom: 12, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <div style={{ textAlign: 'center', flex: 1 }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase' }}>Mastery ({masteryWeight}%)</div>
-              <div style={{ fontSize: 18, fontWeight: 900, color: masteryScore !== null ? '#059669' : '#94A3B8' }}>{masteryScore !== null ? `${masteryScore}%` : '—'}</div>
-            </div>
-            <div style={{ textAlign: 'center', flex: 1 }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase' }}>Assignment ({assignWeight}%)</div>
-              <div style={{ fontSize: 18, fontWeight: 900, color: assignScore !== null ? '#1A365E' : '#94A3B8' }}>{assignScore !== null ? `${assignScore}%` : 'Pending'}</div>
-            </div>
-            <div style={{ textAlign: 'center', flex: 1, borderLeft: '1px solid #E4EAF2', paddingLeft: 12 }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase' }}>Final Grade</div>
-              <div style={{ fontSize: 20, fontWeight: 900, color: finalScore !== null ? (finalScore >= 70 ? '#059669' : SP_RED) : '#1A365E' }}>{finalScore !== null ? `${finalScore}%` : '—'}</div>
-            </div>
-          </div>
-        )}
-        {isScored && (
-          <div style={{ padding: '10px 12px', background: '#DCFCE7', borderRadius: 8, fontSize: 11, color: '#059669', fontWeight: 700 }}>
-            ✅ Assignment scored by teacher: {assignScore}%
-          </div>
-        )}
-        {isSubmitted && !isScored && (
-          <div style={{ padding: '10px 12px', background: '#FEF3C7', borderRadius: 8, fontSize: 11, color: '#D97706', fontWeight: 700 }}>
-            ⏳ Your assignment has been submitted and is awaiting teacher scoring.
-          </div>
-        )}
-        {!isSubmitted && (
+
+      {/* 1. Case Study */}
+      <div style={{ background: '#fff', border: '1px solid #E4EAF2', borderRadius: 12, overflow: 'hidden' }}>
+        <div style={{ padding: '10px 16px', background: '#F7F9FC', borderBottom: '1px solid #E4EAF2', fontSize: 12, fontWeight: 800, color: '#1A365E' }}>1. Case Study</div>
+        {bundle.lesson.caseStudyUrl ? (
           <>
-            {item.assignInstructions && (
-              <div style={{ background: '#FEF9E7', borderRadius: 8, padding: '10px 12px', marginBottom: 10, borderLeft: '3px solid #F59E0B' }}>
-                <div style={{ fontSize: 9, fontWeight: 800, color: '#92400E', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 4 }}>📋 Assignment Instructions</div>
-                <div style={{ fontSize: 11, color: '#3D5475', whiteSpace: 'pre-wrap' }}>{item.assignInstructions}</div>
-              </div>
-            )}
-            <div style={{ fontSize: 11, color: '#3D5475', marginBottom: 10 }}>Submit your work below. Your teacher will review and score it.</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div>
-                <label style={{ fontSize: 10, fontWeight: 700, color: '#5A7290', textTransform: 'uppercase', letterSpacing: '.5px', display: 'block', marginBottom: 4 }}>Submission Notes</label>
-                <textarea rows={3} placeholder="Describe what you submitted or add notes for your teacher..." value={note} onChange={(e) => setNote(e.target.value)} style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 11, fontFamily: 'Poppins,sans-serif', resize: 'vertical', boxSizing: 'border-box' }} />
-              </div>
-              <div>
-                <label style={{ fontSize: 10, fontWeight: 700, color: '#5A7290', textTransform: 'uppercase', letterSpacing: '.5px', display: 'block', marginBottom: 4 }}>Upload File</label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, border: `2px dashed ${file ? '#1DBD6A' : '#CBD5E0'}`, background: file ? '#F0FDF4' : '#F8FAFC', cursor: 'pointer', fontSize: 11, color: file ? '#1DBD6A' : '#7A92B0', fontWeight: file ? 700 : 400, fontFamily: 'Poppins,sans-serif' }}>
-                  <input type="file" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) setFile(f) }} />
-                  {file ? `✅ ${file.name}` : '+ Choose file (PDF, image, doc…)'}
-                </label>
-              </div>
-              <button
-                onClick={() => void submitAssignment()}
-                disabled={readOnly || submitting || (!note.trim() && !file)}
-                title={readOnly ? 'View-only access' : undefined}
-                style={{ padding: '9px 16px', background: (note.trim() || file) && !readOnly ? '#1A365E' : '#E4EAF2', color: (note.trim() || file) && !readOnly ? '#fff' : '#94A3B8', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: readOnly || (!note.trim() && !file) ? 'not-allowed' : 'pointer', alignSelf: 'flex-end', fontFamily: 'inherit', opacity: readOnly ? 0.5 : 1 }}
-              >
-                {submitting ? '⏳ Uploading & Submitting…' : readOnly ? '🔒 View-only access' : '📤 Submit Assignment'}
-              </button>
+            <div style={{ position: 'relative', paddingBottom: '65%', height: 0 }}>
+              <iframe src={getCaseStudyEmbedUrl(bundle.lesson.caseStudyUrl)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }} title="Case Study" loading="lazy" />
+            </div>
+            <div style={{ padding: '8px 16px', textAlign: 'right' }}>
+              <a href={bundle.lesson.caseStudyUrl} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#1A365E', fontWeight: 700 }}>↗ Open in new tab</a>
             </div>
           </>
+        ) : (
+          <div style={{ padding: 20, color: '#94A3B8', fontSize: 12 }}>No case study document has been uploaded yet.</div>
         )}
       </div>
+
+      {/* 2. Notes Score */}
+      {renderScoreBlock('notes', '📝', 'Notes Score', 2)}
+
+      {/* 3. Discussion Post */}
+      <div style={{ background: '#fff', border: '1px solid #E4EAF2', borderRadius: 12, padding: '14px 16px' }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: '#1A365E', marginBottom: 8 }}>💬 3. Discussion Post</div>
+        {!myTopLevelPost ? (
+          <div style={{ background: '#F7F9FC', borderRadius: 10, padding: '12px 14px', border: '1px solid #E4EAF2' }}>
+            <div style={{ fontSize: 9, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Share your thoughts on the case study</div>
+            <textarea value={postBody} onChange={(e) => setPostBody(e.target.value)} rows={3} placeholder="What's your take on the case study?" style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 12, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+              <button onClick={() => void submitPost(null)} disabled={readOnly || posting || !postBody.trim()} style={{ padding: '7px 18px', background: postBody.trim() ? '#1A365E' : '#E4EAF2', color: postBody.trim() ? '#fff' : '#94A3B8', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: postBody.trim() ? 'pointer' : 'not-allowed' }}>{posting ? 'Posting…' : '🚀 Post'}</button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 4 }}>
+            {bundle.discussion.posts.filter((p) => !p.parentPostId).map((p) => (
+              <div key={p.id} style={{ background: p.isMine ? '#EEF3FF' : '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 10, padding: '10px 12px' }}>
+                <div style={{ fontSize: 10, fontWeight: 800, color: '#1A365E', marginBottom: 4 }}>{p.authorName}</div>
+                <div style={{ fontSize: 12, color: '#3D5475', whiteSpace: 'pre-wrap', marginBottom: 6 }}>{p.body}</div>
+                {bundle.discussion.posts.filter((r) => r.parentPostId === p.id).map((r) => (
+                  <div key={r.id} style={{ marginLeft: 16, marginTop: 6, background: '#fff', border: '1px solid #E4EAF2', borderRadius: 8, padding: '7px 10px' }}>
+                    <div style={{ fontSize: 9, fontWeight: 800, color: '#1A365E', marginBottom: 2 }}>{r.authorName}</div>
+                    <div style={{ fontSize: 11, color: '#3D5475', whiteSpace: 'pre-wrap' }}>{r.body}</div>
+                  </div>
+                ))}
+                {replyOpenFor === p.id ? (
+                  <div style={{ marginLeft: 16, marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <textarea rows={2} value={replyBody[p.id] ?? ''} onChange={(e) => setReplyBody((prev) => ({ ...prev, [p.id]: e.target.value }))} placeholder="Write a comment..." style={{ width: '100%', padding: '6px 8px', border: '1.5px solid #E4EAF2', borderRadius: 6, fontSize: 11, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button onClick={() => void submitPost(p.id)} disabled={posting} style={{ padding: '4px 10px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>Reply</button>
+                      <button onClick={() => setReplyOpenFor(null)} style={{ padding: '4px 10px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <button onClick={() => setReplyOpenFor(p.id)} style={{ marginTop: 4, padding: 0, background: 'none', border: 'none', color: '#5A7290', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>💬 Comment</button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{ marginTop: 10 }}>{renderAppealControl('discussion')}{scoreByType.discussion?.status === 'scored' && (
+          <div style={{ marginTop: 4 }}>
+            <span style={{ background: '#DCFCE7', color: '#059669', fontSize: 11, fontWeight: 900, padding: '3px 10px', borderRadius: 20 }}>Discussion Board: {scoreByType.discussion!.subtotal}/{CASE_STUDY_RUBRIC.discussion.weight}</span>
+            {scoreByType.discussion!.feedback && <div style={{ fontSize: 11, color: '#3D5475', marginTop: 6 }}><strong>Teacher feedback:</strong> {scoreByType.discussion!.feedback}</div>}
+          </div>
+        )}</div>
+      </div>
+
+      {/* 4. Socratic Debate Score */}
+      {renderScoreBlock('debate', '⚖️', 'Socratic Debate Score', 4)}
+
+      {/* 5. OMR Test Score */}
+      {renderScoreBlock('omr', '🔢', 'OMR Test Score', 5)}
+
+      {/* 6. Presentation Upload */}
+      <div style={{ background: '#fff', border: '1px solid #E4EAF2', borderRadius: 12, padding: '14px 16px' }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: '#1A365E', marginBottom: 8 }}>📤 6. Presentation Upload</div>
+        {bundle.presentation ? (
+          <div style={{ background: '#F0FDF4', borderRadius: 8, padding: '10px 12px', border: '1px solid #BBF7D0' }}>
+            <div style={{ fontSize: 11, color: '#059669', fontWeight: 700, marginBottom: 4 }}>✅ Submitted {new Date(bundle.presentation.submittedAt).toLocaleDateString()}</div>
+            {bundle.presentation.note && <div style={{ fontSize: 11, color: '#3D5475', marginBottom: 4, whiteSpace: 'pre-wrap' }}>{bundle.presentation.note}</div>}
+            {bundle.presentation.linkUrl && <a href={bundle.presentation.linkUrl} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#1A365E', fontWeight: 700 }}>🔗 View your presentation</a>}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <textarea rows={2} value={presNote} onChange={(e) => setPresNote(e.target.value)} placeholder="Notes for your teacher (optional)..." style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 11, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, border: `2px dashed ${presFile ? '#1DBD6A' : '#CBD5E0'}`, background: presFile ? '#F0FDF4' : '#F8FAFC', cursor: 'pointer', fontSize: 11, color: presFile ? '#1DBD6A' : '#7A92B0', fontWeight: presFile ? 700 : 400 }}>
+              <input type="file" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) setPresFile(f) }} />
+              {presFile ? `✅ ${presFile.name}` : '+ Choose file (PDF, PPT…)'}
+            </label>
+            <button onClick={() => void submitPresentation()} disabled={readOnly || presSubmitting || !presFile} style={{ padding: '9px 16px', background: presFile && !readOnly ? '#1A365E' : '#E4EAF2', color: presFile && !readOnly ? '#fff' : '#94A3B8', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: presFile && !readOnly ? 'pointer' : 'not-allowed', alignSelf: 'flex-end' }}>
+              {presSubmitting ? '⏳ Uploading…' : '📤 Submit Presentation'}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* 7. Presentation Score */}
+      {renderScoreBlock('presentation', '🏆', 'Presentation Score', 7)}
+    </div>
+  )
+}
+
+function CSAppealControl({ appeal, isOpen, draftText, filing, readOnly, onOpen, onCancel, onDraftChange, onFile }: {
+  appeal: CSAppealData | undefined
+  isOpen: boolean
+  draftText: string
+  filing: boolean
+  readOnly: boolean
+  onOpen: () => void
+  onCancel: () => void
+  onDraftChange: (val: string) => void
+  onFile: () => void
+}) {
+  if (appeal) {
+    return (
+      <div style={{ marginTop: 8, padding: '8px 10px', background: appeal.status === 'open' ? '#FEF3C7' : '#F0FDF4', border: `1px solid ${appeal.status === 'open' ? '#FDE68A' : '#BBF7D0'}`, borderRadius: 8, fontSize: 11 }}>
+        {appeal.status === 'open'
+          ? <span style={{ color: '#92400E', fontWeight: 700 }}>🚩 Appeal sent — pending review.</span>
+          : <span style={{ color: '#059669' }}><strong>✅ Appeal resolved:</strong> {appeal.adminReply}</span>}
+      </div>
+    )
+  }
+  return (
+    <div style={{ marginTop: 8 }}>
+      {isOpen ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <textarea rows={2} value={draftText} onChange={(e) => onDraftChange(e.target.value)} placeholder="Explain the discrepancy you'd like reviewed..." style={{ width: '100%', padding: '7px 9px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 11, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={onFile} disabled={filing} style={{ padding: '5px 12px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>{filing ? 'Sending…' : 'Send Appeal'}</button>
+            <button onClick={onCancel} style={{ padding: '5px 12px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={onOpen} disabled={readOnly} style={{ padding: '4px 10px', background: 'none', color: '#D97706', border: '1px solid #FDE68A', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: readOnly ? 'not-allowed' : 'pointer' }}>🚩 Appeal this score</button>
+      )}
+    </div>
+  )
+}
+
+function CSScoreBlock({ type, icon, title, order, score, appealControl }: {
+  type: ScoreComponentType
+  icon: string
+  title: string
+  order: number
+  score: CSScoreData | undefined
+  appealControl: React.ReactNode
+}) {
+  const cat = CASE_STUDY_RUBRIC[type]
+  const isScored = score?.status === 'scored'
+  return (
+    <div style={{ background: '#fff', border: '1px solid #E4EAF2', borderRadius: 12, padding: '14px 16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: '#1A365E' }}>{icon} {order}. {title}</div>
+        {isScored
+          ? <span style={{ background: '#DCFCE7', color: '#059669', fontSize: 12, fontWeight: 900, padding: '4px 12px', borderRadius: 20 }}>{score!.subtotal}/{cat.weight}</span>
+          : <span style={{ background: '#F0F4FA', color: '#7A92B0', fontSize: 10, fontWeight: 700, padding: '4px 10px', borderRadius: 20 }}>⏳ Pending</span>}
+      </div>
+      {isScored && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+          {cat.criteria.map((c) => (
+            <span key={c.key} style={{ fontSize: 10, fontWeight: 700, color: '#3D5475', background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 6, padding: '4px 8px' }}>{c.label}: {score!.criteriaScores[c.key] ?? 0}/{c.max}</span>
+          ))}
+        </div>
+      )}
+      {isScored && score!.feedback && (
+        <div style={{ background: '#EEF3FF', borderRadius: 8, padding: '8px 10px', fontSize: 11, color: '#3D5475', whiteSpace: 'pre-wrap' }}>
+          <strong style={{ color: '#1A365E' }}>Teacher feedback:</strong> {score!.feedback}
+        </div>
+      )}
+      {!isScored && <div style={{ fontSize: 11, color: '#94A3B8' }}>Your teacher hasn't scored this yet.</div>}
+      {appealControl}
     </div>
   )
 }
@@ -633,6 +846,8 @@ export function SPMyLearningPage() {
   const [search, setSearch] = useState('')
   const [subjectFilter, setSubjectFilter] = useState('All')
   const [activeLessonId, setActiveLessonId] = useState<string | null>(null)
+  const [activePart, setActivePart] = useState<'tutorial' | 'mastery' | 'assignment' | null>(null)
+  const [collapsedLessonIds, setCollapsedLessonIds] = useState<Set<string>>(new Set())
   const [openedAtMap, setOpenedAtMap] = useState<Record<string, number>>({})
   const [, setTimerNow] = useState(Date.now())
 
@@ -803,22 +1018,34 @@ export function SPMyLearningPage() {
     if (error) console.error('markComplete error:', error)
   }
 
-  function openLesson(item: LMSContent) {
-    if (!session) {
-      setActiveLessonId(item.id)
-      return
-    }
-    const existing = openedAtMap[item.id]
-    if (!existing) {
-      const startedAt = Date.now()
-      setOpenedAtMap((prev) => ({ ...prev, [item.id]: startedAt }))
-      try {
-        localStorage.setItem(getLessonTimerKey(session.dbId, item.id), String(startedAt))
-      } catch {
-        // ignore storage failures
+  function openPart(item: LMSContent, part: 'tutorial' | 'mastery' | 'assignment') {
+    if (part === 'tutorial' && session) {
+      const existing = openedAtMap[item.id]
+      if (!existing) {
+        const startedAt = Date.now()
+        setOpenedAtMap((prev) => ({ ...prev, [item.id]: startedAt }))
+        try {
+          localStorage.setItem(getLessonTimerKey(session.dbId, item.id), String(startedAt))
+        } catch {
+          // ignore storage failures
+        }
       }
     }
     setActiveLessonId(item.id)
+    setActivePart(part)
+  }
+
+  function backToLessonList() {
+    setActiveLessonId(null)
+    setActivePart(null)
+  }
+
+  function toggleLessonExpanded(itemId: string) {
+    setCollapsedLessonIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(itemId)) next.delete(itemId); else next.add(itemId)
+      return next
+    })
   }
 
   function handleProgressUpdate(contentId: string, updates: Partial<LMSProgress>) {
@@ -1105,36 +1332,41 @@ export function SPMyLearningPage() {
                       {items.map((item, idx) => {
                         const itemProgress = progress.find((entry) => entry.contentId === item.id && entry.studentId === session?.dbId)
                         const done = itemProgress?.status === 'completed'
-                        const typeColor = TYPE_COLORS[item.type] || '#6B7280'
-                        const badge = contentStatus(item, itemProgress, selectedCourse.passMark || 80)
-                        const elapsedMs = lessonElapsedMs(session?.dbId, item.id, openedAtMap)
-                        const requiredMs = (item.estimatedMins ?? 0) * 60 * 1000
-                        const canMarkDone = !item.estimatedMins || elapsedMs >= requiredMs
-                        const remainingMs = Math.max(0, requiredMs - elapsedMs)
+                        const itemHasMastery = item.hasMastery === true || item.hasMastery === 'TRUE'
+                        const itemHasAssignment = item.hasAssignment === true || item.hasAssignment === 'TRUE'
+                        const masteryScore = itemProgress?.masteryScore != null && !Number.isNaN(Number(itemProgress.masteryScore)) ? Number(itemProgress.masteryScore) : null
+                        const assignScore = itemProgress?.assignScore != null && !Number.isNaN(Number(itemProgress.assignScore)) ? Number(itemProgress.assignScore) : null
+                        const expanded = !collapsedLessonIds.has(item.id)
                         return (
-                          <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px', borderBottom: idx < items.length - 1 ? '1px solid #F0F4FA' : 'none' }}>
-                            <div style={{ width: 34, height: 34, borderRadius: 8, background: `${typeColor}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>
-                              {TYPE_ICONS[item.type] || '📄'}
-                            </div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 12, fontWeight: 700, color: '#1A365E' }}>{item.title}</div>
-                              <div style={{ display: 'flex', gap: 8, fontSize: 10, color: '#7A92B0', marginTop: 2, flexWrap: 'wrap' }}>
-                                <span>{item.type.charAt(0).toUpperCase() + item.type.slice(1)}</span>
-                                {item.estimatedMins ? <span>⏱ {item.estimatedMins} min</span> : <span>⏱ No estimate</span>}
-                                {badge ? <span style={{ color: badge.color, fontWeight: 700 }}>{badge.text}</span> : <span>No progress yet</span>}
-                                {item.estimatedMins ? (
-                                  <span style={{ color: canMarkDone ? '#059669' : '#D97706', fontWeight: 700 }}>
-                                    {canMarkDone ? 'Timer complete' : `Remaining ${formatRemaining(remainingMs)}`}
-                                  </span>
-                                ) : null}
-                              </div>
-                            </div>
-                            <button onClick={() => openLesson(item)} style={{ padding: '5px 12px', background: '#1A365E', color: '#fff', borderRadius: 7, border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                              {item.estimatedMins ? 'Start Lesson' : 'Open Lesson'}
+                          <div key={item.id} style={{ borderBottom: idx < items.length - 1 ? '1px solid #F0F4FA' : 'none' }}>
+                            <button
+                              onClick={() => toggleLessonExpanded(item.id)}
+                              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 18px', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}
+                            >
+                              <span style={{ width: 20, height: 20, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #E4EAF2', borderRadius: 4, background: '#fff', fontSize: 12, color: '#5A7290' }}>{expanded ? '−' : '+'}</span>
+                              <span style={{ fontSize: 16, flexShrink: 0 }}>{TYPE_ICONS[item.type] || '📄'}</span>
+                              <span style={{ fontSize: 13, fontWeight: 700, color: '#1A365E', flex: 1, minWidth: 0 }}>{item.title}</span>
                             </button>
-                            {!readOnly && <button disabled={!done && !canMarkDone} onClick={() => void markComplete(item)} title={readOnly ? 'View-only access' : undefined} style={{ padding: '5px 12px', background: done ? '#DCFCE7' : canMarkDone ? '#F0F4FA' : '#F8FAFC', color: done ? '#059669' : canMarkDone ? '#5A7290' : '#94A3B8', border: `1px solid ${done ? '#86EFAC' : canMarkDone ? '#E4EAF2' : '#E5E7EB'}`, borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: done || canMarkDone ? 'pointer' : 'not-allowed', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                              {done ? '✓ Done' : 'Mark done'}
-                            </button>}
+                            {expanded && (
+                              <div style={{ display: 'flex', flexDirection: 'column', paddingBottom: 4 }}>
+                                <button onClick={() => openPart(item, 'tutorial')} style={partRowStyle}>
+                                  <span style={{ fontSize: 14 }}>📋</span>
+                                  <span>{item.title}: Tutorial{done ? ' · ✓ Done' : ''}</span>
+                                </button>
+                                {itemHasMastery && (
+                                  <button onClick={() => openPart(item, 'mastery')} style={partRowStyle}>
+                                    <span style={{ fontSize: 14 }}>📋</span>
+                                    <span>{item.title}: Mastery Test{masteryScore !== null ? ` · ${masteryScore}%` : ''}</span>
+                                  </button>
+                                )}
+                                {itemHasAssignment && (
+                                  <button onClick={() => openPart(item, 'assignment')} style={partRowStyle}>
+                                    <span style={{ fontSize: 14 }}>📋</span>
+                                    <span>{item.title}: Assignment{assignScore !== null ? ` · ${assignScore}%` : ''}</span>
+                                  </button>
+                                )}
+                              </div>
+                            )}
                           </div>
                         )
                       })}
@@ -1151,43 +1383,19 @@ export function SPMyLearningPage() {
           </div>
         </div>
       )}
-      {selectedCourse && activeLesson && (
+      {selectedCourse && activeLesson && activePart === 'tutorial' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ background: 'linear-gradient(135deg,#059669,#047857)', borderRadius: 11, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <button onClick={() => setActiveLessonId(null)} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>← Back to Course</button>
+              <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>← Back to Lessons</button>
               <div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>{activeLesson.title}</div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>📖 {activeLesson.title} · Tutorial</div>
                 <div style={{ fontSize: 11, color: 'rgba(255,255,255,.78)' }}>{activeLesson.type}{activeLesson.estimatedMins ? ` · ${activeLesson.estimatedMins} min` : ''}</div>
               </div>
             </div>
           </div>
 
           <LessonPreviewContent item={activeLesson} />
-
-          {(activeLesson.hasMastery === true || activeLesson.hasMastery === 'TRUE') && (
-            <MasteryQuiz
-              item={activeLesson}
-              prog={progress.find((p) => p.contentId === activeLesson.id && p.studentId === session?.dbId)}
-              studentId={session?.dbId ?? ''}
-              coursePassMark={selectedCourse.passMark || 80}
-              onUpdate={(updates) => handleProgressUpdate(activeLesson.id, updates)}
-            />
-          )}
-
-          {(activeLesson.hasAssignment === true || activeLesson.hasAssignment === 'TRUE') && (() => {
-            const lessonProg = progress.find((p) => p.contentId === activeLesson.id && p.studentId === session?.dbId)
-            const masteryPassed = lessonProg?.masteryPassed === true || lessonProg?.masteryPassed === 'TRUE'
-            return (
-              <AssignmentPanel
-                item={activeLesson}
-                prog={lessonProg}
-                studentId={session?.dbId ?? ''}
-                masteryPassed={masteryPassed}
-                onUpdate={(updates) => handleProgressUpdate(activeLesson.id, updates)}
-              />
-            )
-          })()}
 
           <div style={{ ...card, padding: 16 }}>
             {(() => {
@@ -1222,6 +1430,48 @@ export function SPMyLearningPage() {
           </div>
         </div>
       )}
+
+      {selectedCourse && activeLesson && activePart === 'mastery' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ background: 'linear-gradient(135deg,#2563EB,#1D4ED8)', borderRadius: 11, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>← Back to Lessons</button>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>🎯 {activeLesson.title} · Mastery Test</div>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,.78)' }}>Pass mark: {activeLesson.masteryPassMark ?? 80}%</div>
+            </div>
+          </div>
+
+          <MasteryQuiz
+            item={activeLesson}
+            prog={progress.find((p) => p.contentId === activeLesson.id && p.studentId === session?.dbId)}
+            studentId={session?.dbId ?? ''}
+            coursePassMark={selectedCourse.passMark || 80}
+            onUpdate={(updates) => handleProgressUpdate(activeLesson.id, updates)}
+          />
+        </div>
+      )}
+
+      {selectedCourse && activeLesson && activePart === 'assignment' && (() => {
+        const lessonProg = progress.find((p) => p.contentId === activeLesson.id && p.studentId === session?.dbId)
+        const masteryPassed = lessonProg?.masteryPassed === true || lessonProg?.masteryPassed === 'TRUE'
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', borderRadius: 11, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>← Back to Lessons</button>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>📚 {activeLesson.title} · Assignment</div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,.78)' }}>Case Study Assignment</div>
+              </div>
+            </div>
+
+            <CaseStudyPanel
+              item={activeLesson}
+              studentId={session?.dbId ?? ''}
+              masteryPassed={masteryPassed}
+            />
+          </div>
+        )
+      })()}
     </div>
   )
 }

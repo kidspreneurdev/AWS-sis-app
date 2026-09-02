@@ -15,6 +15,26 @@ export interface LMSCourse {
   createdBy?: string
   createdAt?: string
   updatedAt?: string
+  groupId?: string | null
+  startDate?: string | null
+  endDate?: string | null
+  preTestExemptionThreshold?: number
+  masteryRetakes?: string
+  progressionMode?: string
+  selfEnrollEnabled?: boolean
+  selfEnrollCode?: string | null
+  selfEnrollPassword?: string | null
+  studentInstructions?: string
+  instructorIds?: string[]
+}
+
+// A "Course Group" is the parent "Course" shown on the Manage Courses page —
+// it groups one or more lms_courses rows ("Sections") together. Ungrouped
+// courses (groupId null) render as their own standalone Course with 1 Section.
+export interface LMSCourseGroup {
+  id: string
+  title: string
+  createdAt?: string
 }
 
 export interface LMSQuestion {
@@ -56,6 +76,12 @@ export interface LMSContent {
   masteryWeight?: number
   assignRubric?: string
   assignments?: string
+  caseStudyUrl?: string
+  caseStudyFileName?: string
+  targetDate?: string | null
+  locked?: boolean
+  hidden?: boolean
+  excludedFromGrade?: boolean
 }
 
 export interface LMSEnrolment {
@@ -91,6 +117,7 @@ export interface LMSStore {
   content: LMSContent[]
   enrolments: LMSEnrolment[]
   progress: LMSProgress[]
+  courseGroups: LMSCourseGroup[]
 }
 
 // ─── Row mappers ──────────────────────────────────────────────────────────────
@@ -109,6 +136,25 @@ function rowToLMSCourse(r: Record<string, unknown>): LMSCourse {
     createdBy: (r.created_by as string) ?? '',
     createdAt: (r.created_at as string) ?? '',
     updatedAt: (r.updated_at as string) ?? '',
+    groupId: (r.group_id as string) ?? null,
+    startDate: (r.start_date as string) ?? null,
+    endDate: (r.end_date as string) ?? null,
+    preTestExemptionThreshold: r.pre_test_exemption_threshold != null ? Number(r.pre_test_exemption_threshold) : 80,
+    masteryRetakes: (r.mastery_retakes as string) ?? 'unlimited',
+    progressionMode: (r.progression_mode as string) ?? 'open',
+    selfEnrollEnabled: r.self_enroll_enabled === true,
+    selfEnrollCode: (r.self_enroll_code as string) ?? null,
+    selfEnrollPassword: (r.self_enroll_password as string) ?? null,
+    studentInstructions: (r.student_instructions as string) ?? '',
+    instructorIds: Array.isArray(r.instructor_ids) ? (r.instructor_ids as string[]) : [],
+  }
+}
+
+function rowToLMSCourseGroup(r: Record<string, unknown>): LMSCourseGroup {
+  return {
+    id: r.id as string,
+    title: (r.title as string) ?? '',
+    createdAt: (r.created_at as string) ?? '',
   }
 }
 
@@ -146,6 +192,12 @@ function rowToLMSContent(r: Record<string, unknown>): LMSContent {
     masteryWeight: extra.masteryWeight as number | undefined,
     assignRubric: extra.assignRubric as string | undefined,
     assignments: extra.assignments as string | undefined,
+    caseStudyUrl: extra.caseStudyUrl as string | undefined,
+    caseStudyFileName: extra.caseStudyFileName as string | undefined,
+    targetDate: (extra.targetDate as string) ?? null,
+    locked: extra.locked === true,
+    hidden: extra.hidden === true,
+    excludedFromGrade: extra.excludedFromGrade === true,
   }
 }
 
@@ -183,43 +235,86 @@ function rowToLMSProgress(r: Record<string, unknown>): LMSProgress {
 
 // ─── Load from Supabase ───────────────────────────────────────────────────────
 export async function loadLMSFromDB(): Promise<LMSStore> {
-  const [cr, co, en, pr] = await Promise.all([
+  const [cr, co, en, pr, gr] = await Promise.all([
     supabase.from('lms_courses').select('*').order('created_at'),
     supabase.from('lms_content').select('*').order('unit_order').order('order_idx'),
     supabase.from('lms_enrolments').select('*').order('created_at'),
     supabase.from('lms_progress').select('*'),
+    supabase.from('lms_course_groups').select('*').order('created_at'),
   ])
   if (cr.error) console.error('lms_courses load error:', cr.error)
   if (co.error) console.error('lms_content load error:', co.error)
   if (en.error) console.error('lms_enrolments load error:', en.error)
   if (pr.error) console.error('lms_progress load error:', pr.error)
+  // lms_course_groups may not exist yet until the migration is applied — degrade gracefully
+  if (gr.error) console.warn('lms_course_groups load error (migration may not be applied yet):', gr.error)
   console.log('LMS load — courses:', cr.data?.length, 'content:', co.data?.length, 'enrolments:', en.data?.length)
   return {
     courses: (cr.data ?? []).map(r => rowToLMSCourse(r as Record<string, unknown>)),
     content: (co.data ?? []).map(r => rowToLMSContent(r as Record<string, unknown>)),
     enrolments: (en.data ?? []).map(r => rowToLMSEnrolment(r as Record<string, unknown>)),
     progress: (pr.data ?? []).map(r => rowToLMSProgress(r as Record<string, unknown>)),
+    courseGroups: (gr.data ?? []).map(r => rowToLMSCourseGroup(r as Record<string, unknown>)),
   }
 }
 
 // Keep sync stub so existing useState(loadLMS) call doesn't break at startup
 export function loadLMS(): LMSStore {
-  return { courses: [], content: [], enrolments: [], progress: [] }
+  return { courses: [], content: [], enrolments: [], progress: [], courseGroups: [] }
 }
 
 // ─── Save to Supabase ─────────────────────────────────────────────────────────
+// Columns added by migrations that may not have been applied yet — upsert retries
+// with each missing column stripped in turn rather than failing the whole save.
+const OPTIONAL_COURSE_COLUMNS = [
+  'group_id', 'start_date', 'end_date',
+  'pre_test_exemption_threshold', 'mastery_retakes', 'progression_mode',
+  'self_enroll_enabled', 'self_enroll_code', 'self_enroll_password',
+  'student_instructions', 'instructor_ids',
+]
+
+async function upsertLmsCourses(payloads: Record<string, unknown>[]): Promise<string | null> {
+  let rows = payloads
+  let remainingOptional = [...OPTIONAL_COURSE_COLUMNS]
+  for (let attempt = 0; attempt <= OPTIONAL_COURSE_COLUMNS.length; attempt++) {
+    const { error } = await supabase.from('lms_courses').upsert(rows, { onConflict: 'id' })
+    if (!error) return null
+    const missingCol = remainingOptional.find(c => (error.message ?? '').includes(c))
+    if (!missingCol) return error.message
+    console.warn(`lms_courses.${missingCol} column missing — retrying without it (apply the pending LMS migrations):`, error)
+    rows = rows.map(row => { const clone = { ...row }; delete clone[missingCol]; return clone })
+    remainingOptional = remainingOptional.filter(c => c !== missingCol)
+  }
+  return 'lms_courses save failed after removing all optional columns'
+}
+
 export async function saveLMS(store: LMSStore): Promise<string | null> {
-  if (store.courses.length) {
-    const { error } = await supabase.from('lms_courses').upsert(
-      store.courses.map(c => ({
-        id: c.id, title: c.title, subject: c.subject, grade_level: c.gradeLevel,
-        description: c.description, pass_mark: c.passMark, credit_hours: c.creditHours,
-        required_hours: c.requiredHours || null, status: c.status,
-        announcement: c.announcement ?? null, created_by: c.createdBy ?? null,
-      })),
+  if (store.courseGroups.length) {
+    const { error } = await supabase.from('lms_course_groups').upsert(
+      store.courseGroups.map(g => ({ id: g.id, title: g.title })),
       { onConflict: 'id' }
     )
-    if (error) { console.error('lms_courses save error:', error); return error.message }
+    // lms_course_groups may not exist yet until the migration is applied — degrade gracefully
+    if (error) console.warn('lms_course_groups save error (migration may not be applied yet):', error)
+  }
+  if (store.courses.length) {
+    const payloads = store.courses.map(c => ({
+      id: c.id, title: c.title, subject: c.subject, grade_level: c.gradeLevel,
+      description: c.description, pass_mark: c.passMark, credit_hours: c.creditHours,
+      required_hours: c.requiredHours || null, status: c.status,
+      announcement: c.announcement ?? null, created_by: c.createdBy ?? null,
+      group_id: c.groupId ?? null, start_date: c.startDate || null, end_date: c.endDate || null,
+      pre_test_exemption_threshold: c.preTestExemptionThreshold ?? 80,
+      mastery_retakes: c.masteryRetakes ?? 'unlimited',
+      progression_mode: c.progressionMode ?? 'open',
+      self_enroll_enabled: c.selfEnrollEnabled === true,
+      self_enroll_code: c.selfEnrollCode ?? null,
+      self_enroll_password: c.selfEnrollPassword ?? null,
+      student_instructions: c.studentInstructions ?? null,
+      instructor_ids: c.instructorIds ?? [],
+    }))
+    const err = await upsertLmsCourses(payloads)
+    if (err) { console.error('lms_courses save error:', err); return err }
   }
   if (store.content.length) {
     const { error } = await supabase.from('lms_content').upsert(
@@ -240,6 +335,8 @@ export async function saveLMS(store: LMSStore): Promise<string | null> {
           assignSubType: c.assignSubType, assignWeight: c.assignWeight,
           masteryWeight: c.masteryWeight, assignRubric: c.assignRubric,
           assignments: c.assignments,
+          caseStudyUrl: c.caseStudyUrl, caseStudyFileName: c.caseStudyFileName,
+          targetDate: c.targetDate, locked: c.locked, hidden: c.hidden, excludedFromGrade: c.excludedFromGrade,
         },
       })),
       { onConflict: 'id' }

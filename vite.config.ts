@@ -27,7 +27,9 @@ function mhsApiDevPlugin(env: Record<string, string>): Plugin {
         const match = url.pathname.match(/^\/api\/student-portal\/([a-z0-9-]+)$/i)
         if (!match) return next()
 
-        const handlerPath = path.join(apiDir, `${match[1]}.js`)
+        // All actions are dispatched through the single [action].js catch-all,
+        // mirroring Vercel's dynamic-route file resolution in production.
+        const handlerPath = path.join(apiDir, '[action].js')
         if (!fs.existsSync(handlerPath)) {
           res.statusCode = 404
           res.setHeader('Content-Type', 'application/json')
@@ -36,7 +38,7 @@ function mhsApiDevPlugin(env: Record<string, string>): Plugin {
         }
 
         const reqWithExtras = req as IncomingMessage & { query: Record<string, string>; body: unknown }
-        reqWithExtras.query = Object.fromEntries(url.searchParams)
+        reqWithExtras.query = { ...Object.fromEntries(url.searchParams), action: match[1] }
 
         if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
           const chunks: Buffer[] = []

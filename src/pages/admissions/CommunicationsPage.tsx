@@ -112,7 +112,7 @@ export function CommunicationsPage() {
   const { profile } = useAuthStore()
   const [comms, setComms] = useState<CommRecord[]>([])
   const [commSchema, setCommSchema] = useState<CommSchema>('modern')
-  const [stuList, setStuList] = useState<{ id: string; name: string }[]>([])
+  const [stuList, setStuList] = useState<{ id: string; name: string; campus: string | null }[]>([])
   const [search, setSearch] = useState('')
   const [filterType, setFilterType] = useState('All')
   const [modalOpen, setModalOpen] = useState(false)
@@ -138,12 +138,11 @@ export function CommunicationsPage() {
     const schema = await detectCommSchema()
     setCommSchema(schema)
 
-    let sQuery = supabase.from('students').select('id,first_name,last_name')
+    let sQuery = supabase.from('students').select('id,first_name,last_name,campus')
     if (cf) sQuery = sQuery.eq('campus', cf)
-    const [stuRes, commRes] = await Promise.all([
-      sQuery,
-      supabase.from('communications').select('*'),
-    ])
+    let cQuery = supabase.from('communications').select('*')
+    if (cf) cQuery = cQuery.eq('campus', cf)
+    const [stuRes, commRes] = await Promise.all([sQuery, cQuery])
     if (stuRes.error) {
       toast(stuRes.error.message || 'Failed to load students', 'err')
       return
@@ -154,6 +153,7 @@ export function CommunicationsPage() {
     }
     const stus = (stuRes.data ?? []).map((r: Record<string, unknown>) => ({
       id: r.id as string, name: `${r.first_name} ${r.last_name}`,
+      campus: (r.campus as string | null) ?? null,
     }))
     setStuList(stus)
     const stuMap = Object.fromEntries(stus.map(s => [s.id, s.name]))
@@ -194,6 +194,10 @@ export function CommunicationsPage() {
   }), [comms, search, filterType])
 
   async function saveComm(data: typeof EMPTY_FORM): Promise<boolean> {
+    // A communication is scoped to the campus of the student it concerns; fall
+    // back to the logged-in user's campus, then Chennai.
+    const commCampus = stuList.find(s => s.id === data.studentId)?.campus
+      ?? cf ?? profile?.campus ?? 'Chennai'
     const payload = commSchema === 'modern'
       ? {
         student_id: data.studentId,
@@ -202,6 +206,7 @@ export function CommunicationsPage() {
         body: data.body || null,
         sent_by: data.sentBy || null,
         sent_at: new Date().toISOString(),
+        campus: commCampus,
       }
       : {
         student_id: data.studentId,
@@ -210,6 +215,7 @@ export function CommunicationsPage() {
         notes: data.body || data.subject,
         staff_member: data.sentBy || null,
         date: new Date().toISOString().slice(0, 10),
+        campus: commCampus,
       }
 
     const { error } = await supabase.from('communications').insert(payload)

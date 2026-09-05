@@ -26,6 +26,83 @@ const inputStyle: React.CSSProperties = { width: '100%', padding: '8px 10px', bo
 const selectStyle: React.CSSProperties = { ...inputStyle }
 const taStyle: React.CSSProperties = { ...inputStyle, resize: 'vertical' as const }
 
+// ─── Confirm / Prompt dialogs — in-app replacements for window.confirm() / prompt() ──
+// Native browser dialogs render as unstyled OS chrome (and pick up the OS's dark/light
+// theme, not the app's), so every "are you sure?" / "name this" interaction in the LMS
+// goes through these instead.
+interface ConfirmDialogState {
+  title: string
+  message: string
+  confirmLabel?: string
+  danger?: boolean
+  onConfirm: () => void | Promise<void>
+}
+interface PromptDialogState {
+  title: string
+  label?: string
+  placeholder?: string
+  defaultValue?: string
+  confirmLabel?: string
+  onConfirm: (value: string) => void
+}
+
+function ConfirmDialog({ state, onClose }: { state: ConfirmDialogState; onClose: () => void }) {
+  const [busy, setBusy] = useState(false)
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, backdropFilter: 'blur(4px)' }}
+      onClick={e => { if (e.target === e.currentTarget && !busy) onClose() }}>
+      <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 420, boxShadow: '0 24px 60px rgba(0,0,0,.3)', padding: '22px 24px' }}>
+        <div style={{ fontSize: 15, fontWeight: 800, color: '#1A365E' }}>{state.title}</div>
+        <div style={{ fontSize: 12.5, color: '#5A7290', lineHeight: 1.55, marginTop: 8 }}>{state.message}</div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 20 }}>
+          <button onClick={onClose} disabled={busy}
+            style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: busy ? 'default' : 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+          <button
+            onClick={async () => { setBusy(true); await state.onConfirm(); setBusy(false); onClose() }}
+            disabled={busy}
+            style={{ padding: '9px 20px', background: state.danger ? '#D61F31' : '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: busy ? 'default' : 'pointer', fontFamily: 'inherit', opacity: busy ? .7 : 1 }}
+          >{busy ? 'Working…' : (state.confirmLabel || 'Confirm')}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PromptDialog({ state, onClose }: { state: PromptDialogState; onClose: () => void }) {
+  const [value, setValue] = useState(state.defaultValue ?? '')
+  const inputRef = useRef<HTMLInputElement>(null)
+  useEffect(() => { inputRef.current?.focus(); inputRef.current?.select() }, [])
+  function submit() {
+    const trimmed = value.trim()
+    if (!trimmed) return
+    state.onConfirm(trimmed)
+    onClose()
+  }
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, backdropFilter: 'blur(4px)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 420, boxShadow: '0 24px 60px rgba(0,0,0,.3)', padding: '22px 24px' }}>
+        <div style={{ fontSize: 15, fontWeight: 800, color: '#1A365E', marginBottom: 12 }}>{state.title}</div>
+        {state.label && <label style={labelStyle}>{state.label}</label>}
+        <input
+          ref={inputRef}
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') onClose() }}
+          placeholder={state.placeholder}
+          style={inputStyle}
+        />
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 18 }}>
+          <button onClick={onClose} style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+          <button onClick={submit} disabled={!value.trim()}
+            style={{ padding: '9px 20px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: value.trim() ? 'pointer' : 'default', fontFamily: 'inherit', opacity: value.trim() ? 1 : .5 }}
+          >{state.confirmLabel || 'Save'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const TAB_PATHS: Record<string, string> = {
   '/lms/overview': 'overview',
   '/lms/manage': 'manage',
@@ -760,10 +837,18 @@ export function LMSPage() {
   const [curriculumSettingsOpen, setCurriculumSettingsOpen] = useState(false)
   const [curriculumMenuOpenId, setCurriculumMenuOpenId] = useState<string | null>(null)
   const curriculumMenuRef = useRef<HTMLDivElement>(null)
+  // Curriculum drag-and-drop reordering. `kind` scopes what can drop where:
+  // 'top' = top-level lesson, 'unit' = unit folder, 'unititem' = lesson inside a unit (scoped by unit title).
+  const [curriculumDrag, setCurriculumDrag] = useState<{ kind: 'top' | 'unit' | 'unititem'; id: string; scope: string } | null>(null)
+  const [curriculumDropTarget, setCurriculumDropTarget] = useState<string | null>(null)
   const [showLessonModal, setShowLessonModal] = useState(false)
   const [editLessonIdx, setEditLessonIdx] = useState<number | null>(null)
   const [prefillUnit, setPrefillUnit] = useState<string | null>(null)
+  const [showCaseStudyModal, setShowCaseStudyModal] = useState(false)
+  const [editCaseStudyIdx, setEditCaseStudyIdx] = useState<number | null>(null)
   const [showEnrolModal, setShowEnrolModal] = useState(false)
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null)
+  const [promptDialog, setPromptDialog] = useState<PromptDialogState | null>(null)
   const [previewItem, setPreviewItem] = useState<LMSContent | null>(null)
   const [scoreModal, setScoreModal] = useState<{ studentId: string; studentName: string; contentId: string; courseId: string; lessonTitle: string; caseStudyUrl?: string } | null>(null)
   const [studentSubmissions, setStudentSubmissions] = useState<LMSSubmissionRow[]>([])
@@ -911,6 +996,20 @@ export function LMSPage() {
     setNewSectionGroupId(null)
   }
 
+  // Case Study Assignments are edited in their own modal, not the Tutorial/Mastery Test
+  // lesson editor — route to whichever one actually owns this item's fields.
+  function openEditItem(item: LMSContent, idx: number, courseId: string) {
+    setActiveCourseId(courseId)
+    setPrefillUnit(null)
+    if (hasAssignBool(item.hasAssignment)) {
+      setEditCaseStudyIdx(idx)
+      setShowCaseStudyModal(true)
+    } else {
+      setEditLessonIdx(idx)
+      setShowLessonModal(true)
+    }
+  }
+
   // ─── Shared per-student × per-course stat calc (Manage Students + student-section detail) ──
   interface StuCourseStat {
     course: LMSCourse
@@ -1032,7 +1131,7 @@ export function LMSPage() {
                     <div style={{ fontSize: 11, color: '#7A92B0', marginBottom: 8 }}>{course.subject}{course.gradeLevel ? ' · ' + course.gradeLevel : ''}</div>
                     {course.description && <div style={{ fontSize: 11, color: '#3D5475', marginBottom: 10, lineHeight: 1.5 }}>{course.description.substring(0, 100)}{course.description.length > 100 ? '…' : ''}</div>}
                     <div style={{ display: 'flex', gap: 12, fontSize: 10, color: '#7A92B0', marginBottom: 12 }}>
-                      <span>📂 {unitSet.size} unit{unitSet.size !== 1 ? 's' : ''}</span>
+                      <span>📂 {unitSet.size} module{unitSet.size !== 1 ? 's' : ''}</span>
                       <span>📄 {contentItems.length} lesson{contentItems.length !== 1 ? 's' : ''}</span>
                       <span>🎯 Pass: {course.passMark || 80}%</span>
                     </div>
@@ -1041,12 +1140,17 @@ export function LMSPage() {
                         style={{ flex: 1, padding: 7, background: '#EEF3FF', color: '#1A365E', border: 'none', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>✏️ Edit</button>
                       <button onClick={() => { setActiveCourseId(course.id); navTab('content') }}
                         style={{ flex: 1, padding: 7, background: '#E8FBF0', color: '#059669', border: 'none', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>📄 Content</button>
-                      <button onClick={async () => {
-                        if (!confirm('Delete this course and all its content?')) return
-                        await deleteLMSCourse(course.id)
-                        const updated = { ...store, courses: store.courses.filter((_, i) => i !== idx), content: store.content.filter(x => x.courseId !== course.id) }
-                        setStore(updated)
-                      }} style={{ padding: '7px 10px', background: '#FFF0F1', color: '#D61F31', border: '1px solid #F5C2C7', borderRadius: 7, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>🗑</button>
+                      <button onClick={() => setConfirmDialog({
+                        title: 'Delete Course',
+                        message: 'Delete this course and all its content? This cannot be undone.',
+                        danger: true,
+                        confirmLabel: 'Delete',
+                        onConfirm: async () => {
+                          await deleteLMSCourse(course.id)
+                          const updated = { ...store, courses: store.courses.filter((_, i) => i !== idx), content: store.content.filter(x => x.courseId !== course.id) }
+                          setStore(updated)
+                        },
+                      })} style={{ padding: '7px 10px', background: '#FFF0F1', color: '#D61F31', border: '1px solid #F5C2C7', borderRadius: 7, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>🗑</button>
                     </div>
                   </div>
                 </div>
@@ -1067,7 +1171,7 @@ export function LMSPage() {
     const units: string[] = []
     const unitMap: Record<string, LMSContent[]> = {}
     items.forEach(item => {
-      const ut = item.unitTitle || 'Default Unit'
+      const ut = item.unitTitle || 'Default Module'
       if (!unitMap[ut]) { unitMap[ut] = []; units.push(ut) }
       unitMap[ut].push(item)
     })
@@ -1077,19 +1181,23 @@ export function LMSPage() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
           <div>
             <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E' }}>📄 Content Library</div>
-            <div style={{ fontSize: 11, color: '#7A92B0', marginTop: 2 }}>{items.length} lesson{items.length !== 1 ? 's' : ''} · {units.length} unit{units.length !== 1 ? 's' : ''}</div>
+            <div style={{ fontSize: 11, color: '#7A92B0', marginTop: 2 }}>{items.length} lesson{items.length !== 1 ? 's' : ''} · {units.length} module{units.length !== 1 ? 's' : ''}</div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <select value={courseId} onChange={e => setActiveCourseId(e.target.value)} style={iStyle}>
               {courseOpts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
-            <button onClick={() => {
-              const ut = prompt('Unit title:')
-              if (!ut?.trim()) return
-              setPrefillUnit(ut.trim()); setEditLessonIdx(null); setShowLessonModal(true)
-            }} style={{ padding: '9px 14px', background: '#EEF3FF', color: '#1A365E', border: '1px solid #DDE6F0', borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>+ Unit</button>
+            <button onClick={() => setPromptDialog({
+              title: 'New Module',
+              label: 'Module title',
+              placeholder: 'e.g. Module 1: Business Writing Fundamentals & Persuasive Memos',
+              confirmLabel: 'Continue',
+              onConfirm: (ut) => { setPrefillUnit(ut); setEditLessonIdx(null); setShowLessonModal(true) },
+            })} style={{ padding: '9px 14px', background: '#EEF3FF', color: '#1A365E', border: '1px solid #DDE6F0', borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>+ Module</button>
             <button onClick={() => { setPrefillUnit(null); setEditLessonIdx(null); setShowLessonModal(true) }}
               style={{ padding: '9px 18px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>+ Lesson</button>
+            <button onClick={() => { setActiveCourseId(courseId); setPrefillUnit(null); setEditCaseStudyIdx(null); setShowCaseStudyModal(true) }}
+              style={{ padding: '9px 14px', background: '#FFF3D6', color: '#92400E', border: '1px solid #FDE68A', borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>📚 + Case Study</button>
           </div>
         </div>
         {renderNav()}
@@ -1099,7 +1207,7 @@ export function LMSPage() {
           <div style={{ textAlign: 'center', padding: '60px 20px', color: '#94A3B8' }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>📄</div>
             <div style={{ fontSize: 14, fontWeight: 700, color: '#1A365E' }}>No content yet</div>
-            <div style={{ fontSize: 12, marginTop: 6 }}>Add a unit then add lessons inside it</div>
+            <div style={{ fontSize: 12, marginTop: 6 }}>Add a module then add lessons inside it</div>
           </div>
         ) : units.map(unitTitle => {
           const unitItems = unitMap[unitTitle]
@@ -1127,14 +1235,19 @@ export function LMSPage() {
                       </div>
                       <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
                         <button onClick={() => setPreviewItem(item)} title="Preview as student" style={{ padding: '5px 10px', background: '#F0FFF4', color: '#1DBD6A', border: '1px solid #BBF7D0', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>👁</button>
-                        <button onClick={() => { setEditLessonIdx(realIdx); setPrefillUnit(null); setShowLessonModal(true) }}
+                        <button onClick={() => openEditItem(item, realIdx, courseId)}
                           style={{ padding: '5px 10px', background: '#EEF3FF', color: '#1A365E', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>✏️</button>
-                        <button onClick={async () => {
-                          if (!confirm('Delete this lesson?')) return
-                          await deleteLMSContent(item.id)
-                          const updated = { ...store, content: store.content.filter((_, j) => j !== realIdx) }
-                          setStore(updated)
-                        }} style={{ padding: '5px 8px', background: '#FFF0F1', color: '#D61F31', border: '1px solid #F5C2C7', borderRadius: 6, fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}>🗑</button>
+                        <button onClick={() => setConfirmDialog({
+                          title: 'Delete Lesson',
+                          message: 'Delete this lesson? This cannot be undone.',
+                          danger: true,
+                          confirmLabel: 'Delete',
+                          onConfirm: async () => {
+                            await deleteLMSContent(item.id)
+                            const updated = { ...store, content: store.content.filter((_, j) => j !== realIdx) }
+                            setStore(updated)
+                          },
+                        })} style={{ padding: '5px 8px', background: '#FFF0F1', color: '#D61F31', border: '1px solid #F5C2C7', borderRadius: 6, fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}>🗑</button>
                       </div>
                     </div>
                   )
@@ -1191,12 +1304,17 @@ export function LMSPage() {
                     </div>
                   </div>
                   <span style={{ fontSize: 9, fontWeight: 700, color: active ? '#059669' : '#94A3B8', background: active ? '#DCFCE7' : '#F1F5F9', padding: '2px 8px', borderRadius: 5 }}>{active ? 'Active' : 'Inactive'}</span>
-                  <button onClick={async () => {
-                    if (!confirm('Remove this assignment?')) return
-                    await deleteLMSEnrolment(en.id)
-                    const updated = { ...store, enrolments: store.enrolments.filter((_, i) => i !== idx) }
-                    setStore(updated)
-                  }} style={{ padding: '6px 10px', background: '#FFF0F1', color: '#D61F31', border: '1px solid #F5C2C7', borderRadius: 7, fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}>Remove</button>
+                  <button onClick={() => setConfirmDialog({
+                    title: 'Remove Course Assignment',
+                    message: 'Remove this course assignment?',
+                    danger: true,
+                    confirmLabel: 'Remove',
+                    onConfirm: async () => {
+                      await deleteLMSEnrolment(en.id)
+                      const updated = { ...store, enrolments: store.enrolments.filter((_, i) => i !== idx) }
+                      setStore(updated)
+                    },
+                  })} style={{ padding: '6px 10px', background: '#FFF0F1', color: '#D61F31', border: '1px solid #F5C2C7', borderRadius: 7, fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}>Remove</button>
                 </div>
               )
             })}
@@ -1478,11 +1596,18 @@ export function LMSPage() {
       persist({ ...store, courses: store.courses.map(c => c.id === co.id ? { ...c, status: nextStatus } : c) })
       setSectionMenuOpenId(null)
     }
-    async function deleteSection(co: LMSCourse) {
-      if (!confirm(`Delete section "${co.title}"? This cannot be undone.`)) return
+    function deleteSection(co: LMSCourse) {
       setSectionMenuOpenId(null)
-      await deleteLMSCourse(co.id)
-      setStore(prev => ({ ...prev, courses: prev.courses.filter(c => c.id !== co.id), content: prev.content.filter(x => x.courseId !== co.id) }))
+      setConfirmDialog({
+        title: 'Delete Section',
+        message: `Delete section "${co.title}"? This cannot be undone.`,
+        danger: true,
+        confirmLabel: 'Delete',
+        onConfirm: async () => {
+          await deleteLMSCourse(co.id)
+          setStore(prev => ({ ...prev, courses: prev.courses.filter(c => c.id !== co.id), content: prev.content.filter(x => x.courseId !== co.id) }))
+        },
+      })
     }
     function selectAllInGroup(g: CourseGroupRow) {
       setSelectedSectionIds(prev => { const next = new Set(prev); g.sections.forEach(s => next.add(s.id)); return next })
@@ -2680,47 +2805,89 @@ export function LMSPage() {
     function patchCourse(patch: Partial<LMSCourse>) {
       persist({ ...store, courses: store.courses.map(c => c.id === course.id ? { ...c, ...patch } : c) })
     }
-    function moveItem(list: LMSContent[], id: string, dir: -1 | 1, field: 'order' | 'moduleOrder') {
-      const idx = list.findIndex(x => x.id === id)
-      const swapIdx = idx + dir
-      if (idx < 0 || swapIdx < 0 || swapIdx >= list.length) return
-      const a = list[idx], b = list[swapIdx]
-      const aVal = a[field] ?? idx, bVal = b[field] ?? swapIdx
-      persist({
-        ...store, content: store.content.map(c => {
-          if (c.id === a.id) return { ...c, [field]: bVal }
-          if (c.id === b.id) return { ...c, [field]: aVal }
-          return c
-        })
+    // Move `draggedId` to the position of `targetId` within `list`, then renumber the whole list.
+    function reorderContent(list: LMSContent[], draggedId: string, targetId: string, field: 'order' | 'moduleOrder') {
+      const from = list.findIndex(x => x.id === draggedId)
+      const to = list.findIndex(x => x.id === targetId)
+      if (from < 0 || to < 0 || from === to) return
+      const next = [...list]
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
+      const orderMap = new Map(next.map((x, i) => [x.id, i]))
+      persist({ ...store, content: store.content.map(c => orderMap.has(c.id) ? { ...c, [field]: orderMap.get(c.id) as number } : c) })
+    }
+    // Move `unitTitle` to 0-based `targetIdx` among the other modules, then renumber unitOrder
+    // across every content row in each module. Shared by both drag-reordering and the manual
+    // "Module Order" prompt below.
+    function applyUnitOrder(unitTitle: string, targetIdx: number) {
+      const moved = units.find(u => u.title === unitTitle)
+      if (!moved) return
+      const others = units.filter(u => u.title !== unitTitle)
+      others.splice(Math.max(0, Math.min(targetIdx, others.length)), 0, moved)
+      const orderMap = new Map(others.map((u, i) => [u.title, i]))
+      persist({ ...store, content: store.content.map(c => c.unitTitle && orderMap.has(c.unitTitle) ? { ...c, unitOrder: orderMap.get(c.unitTitle) as number } : c) })
+    }
+    function reorderUnits(draggedTitle: string, targetTitle: string) {
+      const targetIdx = units.findIndex(u => u.title === targetTitle)
+      if (targetIdx < 0) return
+      applyUnitOrder(draggedTitle, targetIdx)
+    }
+    function setModuleOrder(unitTitle: string) {
+      const currentPos = units.findIndex(u => u.title === unitTitle) + 1
+      setPromptDialog({
+        title: 'Module Order',
+        label: 'Position in list (1 = first)',
+        defaultValue: String(currentPos || units.length),
+        confirmLabel: 'Save',
+        onConfirm: (value) => {
+          const requested = parseInt(value)
+          if (Number.isFinite(requested) && requested >= 1) applyUnitOrder(unitTitle, requested - 1)
+        },
       })
     }
-    function moveUnit(dir: -1 | 1, unitTitle: string) {
-      const idx = units.findIndex(u => u.title === unitTitle)
-      const swapIdx = idx + dir
-      if (idx < 0 || swapIdx < 0 || swapIdx >= units.length) return
-      const a = units[idx], b = units[swapIdx]
-      persist({
-        ...store, content: store.content.map(c => {
-          if (c.unitTitle === a.title) return { ...c, unitOrder: b.unitOrder }
-          if (c.unitTitle === b.title) return { ...c, unitOrder: a.unitOrder }
-          return c
-        })
-      })
+    function handleCurriculumDrop(targetKind: 'top' | 'unit' | 'unititem', targetId: string, targetScope: string) {
+      const drag = curriculumDrag
+      setCurriculumDrag(null)
+      setCurriculumDropTarget(null)
+      if (!drag || drag.kind !== targetKind || drag.scope !== targetScope || drag.id === targetId) return
+      if (targetKind === 'unit') reorderUnits(drag.id, targetId)
+      else reorderContent(targetKind === 'top' ? topLevel : (units.find(u => u.title === targetScope)?.items ?? []), drag.id, targetId, targetKind === 'top' ? 'order' : 'moduleOrder')
     }
     function renameUnit(unitTitle: string) {
-      const next = prompt('Rename unit:', unitTitle)
-      if (!next?.trim() || next.trim() === unitTitle) return
-      persist({ ...store, content: store.content.map(c => c.unitTitle === unitTitle ? { ...c, unitTitle: next.trim() } : c) })
+      setPromptDialog({
+        title: 'Rename Module',
+        label: 'Module title',
+        defaultValue: unitTitle,
+        confirmLabel: 'Rename',
+        onConfirm: (next) => {
+          if (next === unitTitle) return
+          persist({ ...store, content: store.content.map(c => c.unitTitle === unitTitle ? { ...c, unitTitle: next } : c) })
+        },
+      })
     }
-    async function deleteUnit(unitTitle: string, items: LMSContent[]) {
-      if (!confirm(`Delete unit "${unitTitle}" and its ${items.length} item(s)? This cannot be undone.`)) return
-      await Promise.all(items.map(it => deleteLMSContent(it.id)))
-      setStore(prev => ({ ...prev, content: prev.content.filter(c => c.unitTitle !== unitTitle) }))
+    function deleteUnit(unitTitle: string, items: LMSContent[]) {
+      setConfirmDialog({
+        title: 'Delete Module',
+        message: `Delete module "${unitTitle}" and its ${items.length} item(s)? This cannot be undone.`,
+        danger: true,
+        confirmLabel: 'Delete',
+        onConfirm: async () => {
+          await Promise.all(items.map(it => deleteLMSContent(it.id)))
+          setStore(prev => ({ ...prev, content: prev.content.filter(c => c.unitTitle !== unitTitle) }))
+        },
+      })
     }
-    async function deleteItem(item: LMSContent) {
-      if (!confirm(`Delete "${item.title}"? This cannot be undone.`)) return
-      await deleteLMSContent(item.id)
-      setStore(prev => ({ ...prev, content: prev.content.filter(c => c.id !== item.id) }))
+    function deleteItem(item: LMSContent) {
+      setConfirmDialog({
+        title: 'Delete Item',
+        message: `Delete "${item.title}"? This cannot be undone.`,
+        danger: true,
+        confirmLabel: 'Delete',
+        onConfirm: async () => {
+          await deleteLMSContent(item.id)
+          setStore(prev => ({ ...prev, content: prev.content.filter(c => c.id !== item.id) }))
+        },
+      })
       setCurriculumMenuOpenId(null)
     }
     function openAddItem(unitTitle: string | null) {
@@ -2730,15 +2897,16 @@ export function LMSPage() {
       setShowLessonModal(true)
     }
     function openAddUnit() {
-      const ut = prompt('Unit title:')
-      if (!ut?.trim()) return
-      openAddItem(ut.trim())
+      setPromptDialog({
+        title: 'New Module',
+        label: 'Module title',
+        placeholder: 'e.g. Module 1: Business Writing Fundamentals & Persuasive Memos',
+        confirmLabel: 'Continue',
+        onConfirm: (ut) => openAddItem(ut),
+      })
     }
     function openEdit(item: LMSContent) {
-      setActiveCourseId(course.id)
-      setEditLessonIdx(store.content.indexOf(item))
-      setPrefillUnit(null)
-      setShowLessonModal(true)
+      openEditItem(item, store.content.indexOf(item), course.id)
       setCurriculumMenuOpenId(null)
     }
 
@@ -2748,7 +2916,30 @@ export function LMSPage() {
       return { width: 26, height: 26, borderRadius: 6, border: `1px solid ${active ? '#1A365E' : '#E4EAF2'}`, background: active ? '#1A365E' : '#fff', color: active ? '#fff' : '#B7C3D6', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }
     }
 
-    function renderContentRow(item: LMSContent, depth: number, list: LMSContent[], orderField: 'order' | 'moduleOrder') {
+    function renderContentRow(item: LMSContent, depth: number, orderField: 'order' | 'moduleOrder', dragScope = '') {
+      const dragKind: 'top' | 'unititem' = orderField === 'order' ? 'top' : 'unititem'
+      const isDragging = curriculumDrag?.kind === dragKind && curriculumDrag.id === item.id
+      const isDropTarget = curriculumDropTarget === item.id && curriculumDrag?.kind === dragKind && curriculumDrag.scope === dragScope && curriculumDrag.id !== item.id
+      const dragHandleProps = {
+        draggable: true,
+        onDragStart: (e: React.DragEvent) => {
+          setCurriculumDrag({ kind: dragKind, id: item.id, scope: dragScope })
+          e.dataTransfer.effectAllowed = 'move'
+          const row = (e.currentTarget as HTMLElement).closest('tr')
+          if (row) e.dataTransfer.setDragImage(row, 12, 12)
+        },
+        onDragEnd: () => { setCurriculumDrag(null); setCurriculumDropTarget(null) },
+      }
+      const rowDropProps = {
+        onDragOver: (e: React.DragEvent) => {
+          if (curriculumDrag?.kind === dragKind && curriculumDrag.scope === dragScope) {
+            e.preventDefault()
+            e.dataTransfer.dropEffect = 'move'
+            if (curriculumDropTarget !== item.id) setCurriculumDropTarget(item.id)
+          }
+        },
+        onDrop: (e: React.DragEvent) => { e.preventDefault(); handleCurriculumDrop(dragKind, item.id, dragScope) },
+      }
       const itemHasMastery = hasMasteryBool(item.hasMastery)
       const itemHasAssignment = hasAssignBool(item.hasAssignment)
       const hasSub = itemHasMastery || itemHasAssignment
@@ -2759,10 +2950,10 @@ export function LMSPage() {
       const icon = isPretest ? '⭐' : hasSub ? '📄' : '📋'
       return (
         <>
-          <tr key={item.id} style={{ borderBottom: '1px solid #F0F4FA' }}>
+          <tr key={item.id} {...rowDropProps} style={{ borderBottom: isDropTarget ? '2px solid #2563EB' : '1px solid #F0F4FA', opacity: isDragging ? 0.4 : 1, background: isDragging ? '#F7F9FC' : undefined }}>
             <td style={{ padding: '8px 10px', paddingLeft: 12 + depth * 26 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ color: '#D8E1EC', fontSize: 12 }}>⣿</span>
+                <span {...dragHandleProps} title="Drag to reorder" style={{ color: '#B7C3D6', fontSize: 12, cursor: 'grab', userSelect: 'none' }}>⣿</span>
                 {hasSub ? (
                   <button onClick={() => toggleExpanded(key)} style={{ width: 18, height: 18, border: '1px solid #E4EAF2', borderRadius: 4, background: '#fff', cursor: 'pointer', fontSize: 11, color: '#5A7290', padding: 0, lineHeight: 1 }}>{expanded ? '−' : '+'}</button>
                 ) : <span style={{ width: 18, flexShrink: 0 }} />}
@@ -2782,8 +2973,6 @@ export function LMSPage() {
               {curriculumMenuOpenId === item.id && (
                 <div ref={curriculumMenuRef} style={{ position: 'absolute', right: 10, top: '100%', background: '#fff', border: '1px solid #E4EAF2', borderRadius: 10, boxShadow: '0 8px 24px rgba(26,54,94,.14)', minWidth: 150, zIndex: 30, overflow: 'hidden' }}>
                   <button onClick={() => openEdit(item)} style={menuItemStyle}>✏️ Edit</button>
-                  <button onClick={() => { moveItem(list, item.id, -1, orderField); setCurriculumMenuOpenId(null) }} style={menuItemStyle}>↑ Move Up</button>
-                  <button onClick={() => { moveItem(list, item.id, 1, orderField); setCurriculumMenuOpenId(null) }} style={menuItemStyle}>↓ Move Down</button>
                   <button onClick={() => deleteItem(item)} style={{ ...menuItemStyle, color: '#D61F31', borderTop: '1px solid #F0F4FA' }}>🗑 Delete</button>
                 </div>
               )}
@@ -2809,11 +2998,28 @@ export function LMSPage() {
       const key = 'unit:' + u.title
       const expanded = isExpanded(key)
       const menuKey = 'unit:' + u.title
+      const isDragging = curriculumDrag?.kind === 'unit' && curriculumDrag.id === u.title
+      const isDropTarget = curriculumDropTarget === u.title && curriculumDrag?.kind === 'unit' && curriculumDrag.id !== u.title
       return (
-        <tr key={u.title} style={{ background: '#FAFBFF', borderBottom: '1px solid #F0F4FA' }}>
+        <tr key={u.title}
+          onDragOver={(e: React.DragEvent) => {
+            if (curriculumDrag?.kind === 'unit') { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (curriculumDropTarget !== u.title) setCurriculumDropTarget(u.title) }
+          }}
+          onDrop={(e: React.DragEvent) => { e.preventDefault(); handleCurriculumDrop('unit', u.title, '') }}
+          style={{ background: '#FAFBFF', borderBottom: isDropTarget ? '2px solid #2563EB' : '1px solid #F0F4FA', opacity: isDragging ? 0.4 : 1 }}>
           <td style={{ padding: '8px 10px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ color: '#D8E1EC', fontSize: 12 }}>⣿</span>
+              <span
+                draggable
+                onDragStart={(e: React.DragEvent) => {
+                  setCurriculumDrag({ kind: 'unit', id: u.title, scope: '' })
+                  e.dataTransfer.effectAllowed = 'move'
+                  const row = (e.currentTarget as HTMLElement).closest('tr')
+                  if (row) e.dataTransfer.setDragImage(row, 12, 12)
+                }}
+                onDragEnd={() => { setCurriculumDrag(null); setCurriculumDropTarget(null) }}
+                title="Drag to reorder"
+                style={{ color: '#B7C3D6', fontSize: 12, cursor: 'grab', userSelect: 'none' }}>⣿</span>
               <button onClick={() => toggleExpanded(key)} style={{ width: 18, height: 18, border: '1px solid #E4EAF2', borderRadius: 4, background: '#fff', cursor: 'pointer', fontSize: 11, color: '#5A7290', padding: 0, lineHeight: 1 }}>{expanded ? '−' : '+'}</button>
               <span style={{ fontSize: 15 }}>📁</span>
               <span style={{ fontSize: 12, fontWeight: 800, color: '#1A365E' }}>{u.title}</span>
@@ -2825,10 +3031,9 @@ export function LMSPage() {
             {curriculumMenuOpenId === menuKey && (
               <div ref={curriculumMenuRef} style={{ position: 'absolute', right: 10, top: '100%', background: '#fff', border: '1px solid #E4EAF2', borderRadius: 10, boxShadow: '0 8px 24px rgba(26,54,94,.14)', minWidth: 160, zIndex: 30, overflow: 'hidden' }}>
                 <button onClick={() => { openAddItem(u.title); setCurriculumMenuOpenId(null) }} style={menuItemStyle}>+ Add Topic</button>
-                <button onClick={() => { renameUnit(u.title); setCurriculumMenuOpenId(null) }} style={menuItemStyle}>✏️ Rename Unit</button>
-                <button onClick={() => { moveUnit(-1, u.title); setCurriculumMenuOpenId(null) }} style={menuItemStyle}>↑ Move Up</button>
-                <button onClick={() => { moveUnit(1, u.title); setCurriculumMenuOpenId(null) }} style={menuItemStyle}>↓ Move Down</button>
-                <button onClick={() => { deleteUnit(u.title, u.items); setCurriculumMenuOpenId(null) }} style={{ ...menuItemStyle, color: '#D61F31', borderTop: '1px solid #F0F4FA' }}>🗑 Delete Unit</button>
+                <button onClick={() => { renameUnit(u.title); setCurriculumMenuOpenId(null) }} style={menuItemStyle}>✏️ Rename Module</button>
+                <button onClick={() => { setModuleOrder(u.title); setCurriculumMenuOpenId(null) }} style={menuItemStyle}>🔢 Module Order</button>
+                <button onClick={() => { deleteUnit(u.title, u.items); setCurriculumMenuOpenId(null) }} style={{ ...menuItemStyle, color: '#D61F31', borderTop: '1px solid #F0F4FA' }}>🗑 Delete Module</button>
               </div>
             )}
           </td>
@@ -2913,19 +3118,20 @@ export function LMSPage() {
                 </td>
                 <td colSpan={4} />
                 <td style={{ padding: '8px 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                  <button onClick={openAddUnit} title="Add Unit" style={{ padding: '5px 9px', background: '#EEF3FF', color: '#1A365E', border: '1px solid #DDE6F0', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginRight: 6 }}>+ Unit</button>
-                  <button onClick={() => openAddItem(null)} title="Add Lesson" style={{ padding: '5px 9px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>+ Lesson</button>
+                  <button onClick={openAddUnit} title="Add Module" style={{ padding: '5px 9px', background: '#EEF3FF', color: '#1A365E', border: '1px solid #DDE6F0', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginRight: 6 }}>+ Module</button>
+                  <button onClick={() => openAddItem(null)} title="Add Lesson" style={{ padding: '5px 9px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginRight: 6 }}>+ Lesson</button>
+                  <button onClick={() => { setActiveCourseId(course.id); setPrefillUnit(null); setEditCaseStudyIdx(null); setShowCaseStudyModal(true) }} title="Add Case Study" style={{ padding: '5px 9px', background: '#FFF3D6', color: '#92400E', border: '1px solid #FDE68A', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>📚 + Case Study</button>
                 </td>
               </tr>
               {!content.length ? (
-                <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40, color: '#94A3B8', fontSize: 13 }}>No curriculum content yet. Add a unit or item above.</td></tr>
+                <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40, color: '#94A3B8', fontSize: 13 }}>No curriculum content yet. Add a module or item above.</td></tr>
               ) : (
                 <>
-                  {topLevel.map(item => renderContentRow(item, 0, topLevel, 'order'))}
+                  {topLevel.map(item => renderContentRow(item, 0, 'order'))}
                   {units.map(u => (
                     <Fragment key={u.title}>
                       {renderUnitRow(u)}
-                      {isExpanded('unit:' + u.title) && u.items.map(item => renderContentRow(item, 1, u.items, 'moduleOrder'))}
+                      {isExpanded('unit:' + u.title) && u.items.map(item => renderContentRow(item, 1, 'moduleOrder', u.title))}
                     </Fragment>
                   ))}
                 </>
@@ -3846,6 +4052,7 @@ export function LMSPage() {
     if (prefillUnit && !existingUnits.includes(prefillUnit)) existingUnits.push(prefillUnit)
     const [title, setTitle] = useState(item?.title ?? '')
     const [unitTitle, setUnitTitle] = useState(item?.unitTitle ?? prefillUnit ?? '')
+    const [newUnitTitle, setNewUnitTitle] = useState('')
     const [type, setType] = useState(item?.type ?? 'video' as LMSContent['type'])
     const [lessonSubType, setLessonSubType] = useState(item?.lessonSubType ?? '')
     const [url, setUrl] = useState(item?.url ?? item?.body ?? '')
@@ -3859,15 +4066,14 @@ export function LMSPage() {
     const [masteryTimeLimit, setMasteryTimeLimit] = useState(String(item?.masteryTimeLimit ?? ''))
     const [masteryShuffleQuestions, setMasteryShuffleQuestions] = useState(item?.masteryShuffleQuestions === true || item?.masteryShuffleQuestions === 'TRUE')
     const [masteryWeight, setMasteryWeight] = useState(String(item?.masteryWeight ?? 60))
-    const [moduleTitle, setModuleTitle] = useState(item?.moduleTitle ?? '')
-    const [moduleOrder, setModuleOrder] = useState(String(item?.moduleOrder ?? 1))
+    // Module (sub-grouping within a Unit) is legacy and no longer editable here — AWS courses
+    // go straight from Course to Unit ("Module" in the UI) to Lesson. moduleTitle passes
+    // through any pre-existing value unchanged so old content isn't disturbed. moduleOrder,
+    // however, is still the field that actually sorts lessons within a unit (see save()
+    // below), so it's computed from "Lesson Order" rather than left untouched.
+    const [moduleTitle] = useState(item?.moduleTitle ?? '')
     const [slideCount, setSlideCount] = useState(String(item?.slideCount ?? ''))
-    const [step, setStep] = useState<1 | 2 | 3>(1)
-    const [hasAssignment, setHasAssignment] = useState(hasAssignBool(item?.hasAssignment))
-    const [assignWeight, setAssignWeight] = useState(String(item?.assignWeight ?? 40))
-    const [caseStudyUrl, setCaseStudyUrl] = useState(item?.caseStudyUrl ?? '')
-    const [caseStudyFileName] = useState(item?.caseStudyFileName ?? '')
-    const [caseStudyFile, setCaseStudyFile] = useState<File | null>(null)
+    const [step, setStep] = useState<1 | 2>(1)
 
     // Mastery questions state
     interface MasteryQuestion { q: string; type: 'mcq' | 'short'; opts: string[]; ans: number }
@@ -3892,9 +4098,8 @@ export function LMSPage() {
       if (!title.trim()) { alert('Title is required'); return }
       let finalUnit = unitTitle
       if (unitTitle === '__new__') {
-        const ut = prompt('New unit title:')
-        if (!ut?.trim()) return
-        finalUnit = ut.trim()
+        if (!newUnitTitle.trim()) { alert('Enter a module title'); return }
+        finalUnit = newUnitTitle.trim()
       }
       let finalUrl = url.trim()
       if (contentFile) {
@@ -3903,18 +4108,6 @@ export function LMSPage() {
           finalUrl = await uploadFile(path, contentFile)
         } catch {
           alert('File upload failed. Please try again.')
-          return
-        }
-      }
-      let finalCaseStudyUrl = caseStudyUrl.trim()
-      let finalCaseStudyFileName = caseStudyFileName
-      if (caseStudyFile) {
-        try {
-          const path = `lms-case-study/${Date.now()}_${caseStudyFile.name}`
-          finalCaseStudyUrl = await uploadFile(path, caseStudyFile)
-          finalCaseStudyFileName = caseStudyFile.name
-        } catch {
-          alert('Case study file upload failed. Please try again.')
           return
         }
       }
@@ -3927,7 +4120,6 @@ export function LMSPage() {
         lessonSubType,
         url: finalUrl,
         estimatedMins: parseInt(estimatedMins) || undefined,
-        order: parseInt(order) || undefined,
         hasMastery,
         masteryPassMark: parseInt(masteryPassMark) || 80,
         masteryRetakes: parseInt(masteryRetakes) || 3,
@@ -3936,20 +4128,37 @@ export function LMSPage() {
         masteryShuffleQuestions,
         masteryWeight: parseInt(masteryWeight) || 60,
         moduleTitle: moduleTitle.trim() || undefined,
-        moduleOrder: parseInt(moduleOrder) || 1,
         slideCount: parseInt(slideCount) || undefined,
-        hasAssignment,
-        assignWeight: parseInt(assignWeight) || 40,
-        caseStudyUrl: finalCaseStudyUrl || undefined,
-        caseStudyFileName: finalCaseStudyFileName || undefined,
+        // Case Study Assignments are created and edited in their own modal now — carry
+        // through whatever this item already had (normally nothing, for a Tutorial/Mastery
+        // Test lesson) rather than exposing these fields here.
+        hasAssignment: item?.hasAssignment,
+        assignWeight: item?.assignWeight,
+        caseStudyUrl: item?.caseStudyUrl,
+        caseStudyFileName: item?.caseStudyFileName,
         masteryQuizJson: masteryQuestions.length ? JSON.stringify(masteryQuestions) : undefined,
       }
       const content = [...store.content]
       if (isNew) content.push(obj); else content[editLessonIdx!] = obj
-      persist({ ...store, content })
+
+      // "Lesson Order" is a 1-based target position among this lesson's siblings — the other
+      // top-level lessons, or (if it's in a unit) the other lessons in that same unit — mirroring
+      // what dragging the ⣿ handle does. A lesson inside a unit is sorted by moduleOrder first
+      // (order is only a tiebreaker there), so that's the field a manual position must update.
+      const field: 'order' | 'moduleOrder' = finalUnit ? 'moduleOrder' : 'order'
+      const siblings = content
+        .filter(c => c.id !== obj.id && c.courseId === courseId && (finalUnit ? c.unitTitle === finalUnit : !c.unitTitle))
+        .sort((a, b) => (a[field] ?? 0) - (b[field] ?? 0))
+      const requested = parseInt(order)
+      const targetIdx = requested > 0 ? Math.min(requested - 1, siblings.length) : siblings.length
+      siblings.splice(targetIdx, 0, obj)
+      const orderMap = new Map(siblings.map((c, i) => [c.id, i]))
+      const renumbered = content.map(c => orderMap.has(c.id) ? { ...c, [field]: orderMap.get(c.id) as number } : c)
+
+      persist({ ...store, content: renumbered })
       setShowLessonModal(false)
     }
-    const STEP_LABELS: Record<1 | 2 | 3, string> = { 1: 'Content', 2: 'Mastery Test', 3: 'Assignment' }
+    const STEP_LABELS: Record<1 | 2, string> = { 1: 'Tutorial', 2: 'Mastery Test' }
     const canLeaveStep1 = title.trim().length > 0
 
     return (
@@ -3958,7 +4167,7 @@ export function LMSPage() {
           <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '18px 24px', borderRadius: '18px 18px 0 0', position: 'sticky', top: 0, zIndex: 10 }}>
             <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', marginBottom: 12 }}>📄 {isNew ? 'New Lesson' : 'Edit Lesson'}</div>
             <div style={{ display: 'flex', gap: 6 }}>
-              {([1, 2, 3] as const).map(s => (
+              {([1, 2] as const).map(s => (
                 <button
                   key={s}
                   type="button"
@@ -3983,12 +4192,15 @@ export function LMSPage() {
                 <div><label style={labelStyle}>Lesson Title *</label><input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Introduction to Ratios" style={inputStyle} /></div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   <div>
-                    <label style={labelStyle}>Unit</label>
+                    <label style={labelStyle}>Module</label>
                     <select value={unitTitle} onChange={e => setUnitTitle(e.target.value)} style={selectStyle}>
-                      <option value="">Default Unit</option>
+                      <option value="">Default Module</option>
                       {existingUnits.map(u => <option key={u} value={u}>{u}</option>)}
-                      <option value="__new__">+ New unit...</option>
+                      <option value="__new__">+ New module...</option>
                     </select>
+                    {unitTitle === '__new__' && (
+                      <input value={newUnitTitle} onChange={e => setNewUnitTitle(e.target.value)} placeholder="e.g. Module 1: Business Writing Fundamentals & Persuasive Memos" style={{ ...inputStyle, marginTop: 6 }} />
+                    )}
                   </div>
                   <div>
                     <label style={labelStyle}>Content Type</label>
@@ -4021,8 +4233,6 @@ export function LMSPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   <div><label style={labelStyle}>Est. Minutes</label><input value={estimatedMins} onChange={e => setEstimatedMins(e.target.value)} type="number" min={1} placeholder="15" style={inputStyle} /></div>
                   <div><label style={labelStyle}>Lesson Order</label><input value={order} onChange={e => setOrder(e.target.value)} type="number" min={1} style={inputStyle} /></div>
-                  <div><label style={labelStyle}>Module (optional)</label><input value={moduleTitle} onChange={e => setModuleTitle(e.target.value)} placeholder="e.g. Module 1: Foundations" style={inputStyle} /></div>
-                  <div><label style={labelStyle}>Module Order</label><input value={moduleOrder} onChange={e => setModuleOrder(e.target.value)} type="number" min={1} style={inputStyle} /></div>
                   <div><label style={labelStyle}>Slide Count (presentations)</label><input value={slideCount} onChange={e => setSlideCount(e.target.value)} type="number" min={1} placeholder="e.g. 15" style={inputStyle} /></div>
                 </div>
               </>
@@ -4121,48 +4331,15 @@ export function LMSPage() {
               </div>
             )}
 
-            {step === 3 && (
-              <div style={{ background: '#F7F9FC', borderRadius: 10, padding: 14 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 600, color: '#3D5475', cursor: 'pointer', marginBottom: hasAssignment ? 10 : 0 }}>
-                  <input type="checkbox" checked={hasAssignment} onChange={e => setHasAssignment(e.target.checked)} /> 📚 Include Case Study Assignment
-                </label>
-                {hasAssignment && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <div style={{ padding: 10, background: '#EEF3FF', borderRadius: 8, border: '1px solid #C7D9FF' }}>
-                      <label style={labelStyle}>Assignment Weight (%) <span style={{ fontWeight: 400, color: '#94A3B8' }}>— Composite Grade = (Mastery × weight) + (Assignment × weight); weights should total 100%</span></label>
-                      <input value={assignWeight} onChange={e => setAssignWeight(e.target.value)} type="number" min={0} max={100} style={inputStyle} />
-                    </div>
-                    <div style={{ padding: 12, background: '#FFF9F0', borderRadius: 10, border: '1px solid #FDE68A', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      <div style={{ fontSize: 10, fontWeight: 800, color: '#92400E', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 2 }}>📚 Case Study Document</div>
-                      <div style={{ fontSize: 10, color: '#7A92B0', marginBottom: 2 }}>
-                        Students will view this case study, then work through a fixed 7-section flow (Case Study → Notes Score → Discussion Post → Socratic Debate Score → OMR Test Score → Presentation Upload → Presentation Score). Scoring happens per-student in the Gradebook — the rubric is fixed and not editable here.
-                      </div>
-                      <div>
-                        <label style={labelStyle}>Case Study URL (Google Slides, Drive link)</label>
-                        <textarea value={caseStudyUrl} onChange={e => { setCaseStudyUrl(e.target.value); if (e.target.value) setCaseStudyFile(null) }} rows={2} placeholder="Google Slides URL or Drive link..." style={taStyle} />
-                        <div style={{ marginTop: 8 }}>
-                          <label style={{ ...labelStyle, marginBottom: 4 }}>— Or upload a file (PDF, PPT) —</label>
-                          <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 8, border: `2px dashed ${caseStudyFile ? '#059669' : '#CBD5E0'}`, background: caseStudyFile ? '#F0FDF4' : '#F8FAFC', cursor: 'pointer', fontSize: 12, color: caseStudyFile ? '#059669' : '#7A92B0', fontWeight: caseStudyFile ? 700 : 400 }}>
-                            <input type="file" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) { setCaseStudyFile(f); setCaseStudyUrl('') } }} />
-                            {caseStudyFile ? `✅ ${caseStudyFile.name}` : caseStudyFileName ? `📎 ${caseStudyFileName} (uploaded — choose a new file to replace)` : '+ Choose file'}
-                          </label>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
             <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', marginTop: 6 }}>
               <div>
-                {step > 1 && <button onClick={() => setStep(prev => (prev - 1) as 1 | 2 | 3)} style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>← Back</button>}
+                {step > 1 && <button onClick={() => setStep(prev => (prev - 1) as 1 | 2)} style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>← Back</button>}
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={() => setShowLessonModal(false)} style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-                {step < 3 ? (
+                {step < 2 ? (
                   <button
-                    onClick={() => { if (step === 1 && !canLeaveStep1) { alert('Title is required'); return } setStep(prev => (prev + 1) as 1 | 2 | 3) }}
+                    onClick={() => { if (step === 1 && !canLeaveStep1) { alert('Title is required'); return } setStep(prev => (prev + 1) as 1 | 2) }}
                     style={{ padding: '9px 20px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
                   >
                     Next →
@@ -4171,6 +4348,113 @@ export function LMSPage() {
                   <button onClick={save} style={{ padding: '9px 20px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>💾 Save Lesson</button>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ─── CASE STUDY MODAL ───────────────────────────────────────────────────────
+  // A Case Study Assignment is its own item, separate from the Tutorial/Mastery Test
+  // lesson editor above — one per module, conventionally that module's final lesson.
+  function CaseStudyModal() {
+    const courseId = activeCourseId || (store.courses[0]?.id ?? '')
+    const item = editCaseStudyIdx !== null ? store.content[editCaseStudyIdx] : undefined
+    const isNew = editCaseStudyIdx === null
+    const existingUnits = [...new Set(store.content.filter(x => x.courseId === courseId).map(x => x.unitTitle).filter(Boolean))] as string[]
+    if (prefillUnit && !existingUnits.includes(prefillUnit)) existingUnits.push(prefillUnit)
+    const [title, setTitle] = useState(item?.title ?? 'Case Study Launch')
+    const [unitTitle, setUnitTitle] = useState(item?.unitTitle ?? prefillUnit ?? '')
+    const [newUnitTitle, setNewUnitTitle] = useState('')
+    const [caseStudyUrl, setCaseStudyUrl] = useState(item?.caseStudyUrl ?? '')
+    const [caseStudyFileName] = useState(item?.caseStudyFileName ?? '')
+    const [caseStudyFile, setCaseStudyFile] = useState<File | null>(null)
+
+    const save = async () => {
+      if (!title.trim()) { alert('Title is required'); return }
+      let finalUnit = unitTitle
+      if (unitTitle === '__new__') {
+        if (!newUnitTitle.trim()) { alert('Enter a module title'); return }
+        finalUnit = newUnitTitle.trim()
+      }
+      if (!caseStudyUrl.trim() && !caseStudyFile && !caseStudyFileName) { alert('Add a case study document — a URL or an uploaded file'); return }
+      let finalCaseStudyUrl = caseStudyUrl.trim()
+      let finalCaseStudyFileName = caseStudyFileName
+      if (caseStudyFile) {
+        try {
+          const path = `lms-case-study/${Date.now()}_${caseStudyFile.name}`
+          finalCaseStudyUrl = await uploadFile(path, caseStudyFile)
+          finalCaseStudyFileName = caseStudyFile.name
+        } catch {
+          alert('Case study file upload failed. Please try again.')
+          return
+        }
+      }
+      // New case studies land after every other item in their module, so they sort as
+      // that module's final lesson — matching how AWS actually orders "Case Study Launch".
+      const siblingOrders = store.content
+        .filter(c => c.courseId === courseId && (c.unitTitle || '') === finalUnit && c.id !== item?.id)
+        .map(c => c.order ?? 0)
+      const order = item?.order ?? (siblingOrders.length ? Math.max(...siblingOrders) + 1 : 1)
+      const obj: LMSContent = {
+        id: item?.id ?? lmsId(),
+        courseId,
+        title: title.trim(),
+        unitTitle: finalUnit,
+        type: (caseStudyFile || finalCaseStudyFileName) ? 'file' : 'link',
+        order,
+        hasMastery: false,
+        hasAssignment: true,
+        caseStudyUrl: finalCaseStudyUrl || undefined,
+        caseStudyFileName: finalCaseStudyFileName || undefined,
+        url: finalCaseStudyUrl || undefined,
+      }
+      const content = [...store.content]
+      if (isNew) content.push(obj); else content[editCaseStudyIdx!] = obj
+      persist({ ...store, content })
+      setShowCaseStudyModal(false)
+    }
+
+    return (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 400, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto', backdropFilter: 'blur(4px)' }} onClick={e => { if (e.target === e.currentTarget) setShowCaseStudyModal(false) }}>
+        <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 560, maxHeight: '94vh', overflowY: 'auto', boxShadow: '0 24px 60px rgba(0,0,0,.3)', margin: 'auto' }}>
+          <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '18px 24px', borderRadius: '18px 18px 0 0' }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>📚 {isNew ? 'New Case Study' : 'Edit Case Study'}</div>
+          </div>
+          <div style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div><label style={labelStyle}>Case Study Title</label><input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Case Study Launch" style={inputStyle} /></div>
+            <div>
+              <label style={labelStyle}>Module</label>
+              <select value={unitTitle} onChange={e => setUnitTitle(e.target.value)} style={selectStyle}>
+                <option value="">Default Module</option>
+                {existingUnits.map(u => <option key={u} value={u}>{u}</option>)}
+                <option value="__new__">+ New module...</option>
+              </select>
+              {unitTitle === '__new__' && (
+                <input value={newUnitTitle} onChange={e => setNewUnitTitle(e.target.value)} placeholder="e.g. Module 1: Business Writing Fundamentals & Persuasive Memos" style={{ ...inputStyle, marginTop: 6 }} />
+              )}
+            </div>
+            <div style={{ padding: 12, background: '#FFF9F0', borderRadius: 10, border: '1px solid #FDE68A', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: '#92400E', textTransform: 'uppercase', letterSpacing: '.5px' }}>📚 Case Study Document</div>
+              <div style={{ fontSize: 10, color: '#7A92B0' }}>
+                Students will view this case study, then work through a fixed 7-section flow (Case Study → Notes Score → Discussion Post → Socratic Debate Score → OMR Test Score → Presentation Upload → Presentation Score). Scoring happens per-student in the Gradebook — the rubric is fixed and not editable here.
+              </div>
+              <div>
+                <label style={labelStyle}>Case Study URL (Google Slides, Drive link)</label>
+                <textarea value={caseStudyUrl} onChange={e => { setCaseStudyUrl(e.target.value); if (e.target.value) setCaseStudyFile(null) }} rows={2} placeholder="Google Slides URL or Drive link..." style={taStyle} />
+                <div style={{ marginTop: 8 }}>
+                  <label style={{ ...labelStyle, marginBottom: 4 }}>— Or upload a file (PDF, PPT) —</label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 8, border: `2px dashed ${caseStudyFile ? '#059669' : '#CBD5E0'}`, background: caseStudyFile ? '#F0FDF4' : '#F8FAFC', cursor: 'pointer', fontSize: 12, color: caseStudyFile ? '#059669' : '#7A92B0', fontWeight: caseStudyFile ? 700 : 400 }}>
+                    <input type="file" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) { setCaseStudyFile(f); setCaseStudyUrl('') } }} />
+                    {caseStudyFile ? `✅ ${caseStudyFile.name}` : caseStudyFileName ? `📎 ${caseStudyFileName} (uploaded — choose a new file to replace)` : '+ Choose file'}
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6 }}>
+              <button onClick={() => setShowCaseStudyModal(false)} style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+              <button onClick={save} style={{ padding: '9px 20px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>💾 Save Case Study</button>
             </div>
           </div>
         </div>
@@ -4197,7 +4481,10 @@ export function LMSPage() {
       {showCourseModal && <CourseModal />}
       {showNewSectionFlow && <NewSectionFlow />}
       {showLessonModal && <LessonModal />}
+      {showCaseStudyModal && <CaseStudyModal />}
       {showEnrolModal && <EnrolModal courses={store.courses} students={students} cohorts={cohorts} onSave={enrolment => persist({ ...store, enrolments: [...store.enrolments, enrolment] })} onClose={() => setShowEnrolModal(false)} />}
+      {confirmDialog && <ConfirmDialog state={confirmDialog} onClose={() => setConfirmDialog(null)} />}
+      {promptDialog && <PromptDialog state={promptDialog} onClose={() => setPromptDialog(null)} />}
       {notesSectionId && (
         <SectionNotesModal
           sectionId={notesSectionId}

@@ -19,7 +19,7 @@ function todayDay() {
 
 interface BadgeRow { name: string; earned_at: string }
 interface AttRow { status: string }
-interface BlockRow { id: string; day: string; period: string; time: string; subject: string; room: string }
+interface BlockRow { id: string; day: string; period: string; time: string; subject: string; room: string; sessionType: string; meetLink: string }
 interface GradeRow { subject: string; grade: number; letter_grade: string }
 
 const SUBJECT_EMOJI: Record<string, string> = {
@@ -51,12 +51,12 @@ export function K5DashboardPage() {
     void Promise.all([
       supabase.from('badge_awards').select('name,earned_at').eq('student_id', session.dbId).order('earned_at', { ascending: false }),
       supabase.from('attendance').select('status').eq('student_id', session.dbId),
-      supabase.from('timetable_blocks').select('id,day,period,time,subject,room').eq('cohort', session.cohort).order('created_at', { ascending: true }),
+      supabase.from('timetable_blocks').select('id,day,period,time,subject,room,session_type,meet_link,student_id').or(`cohort.eq."${session.cohort ?? ''}",student_id.eq.${session.dbId}`).order('created_at', { ascending: true }),
       supabase.from('grades').select('subject,grade,letter_grade').eq('student_id', session.dbId),
     ]).then(([b, a, bl, g]) => {
       setBadges((b.data ?? []).map((r: Record<string, unknown>) => ({ name: (r.name as string) ?? '', earned_at: (r.earned_at as string) ?? '' })))
       setAttendance((a.data ?? []).map((r: Record<string, unknown>) => ({ status: (r.status as string) ?? '' })))
-      setBlocks((bl.data ?? []).map((r: Record<string, unknown>) => ({ id: r.id as string, day: (r.day as string) ?? '', period: (r.period as string) ?? '', time: (r.time as string) ?? '', subject: (r.subject as string) ?? '', room: (r.room as string) ?? '' })))
+      setBlocks((bl.data ?? []).map((r: Record<string, unknown>) => ({ id: r.id as string, day: (r.day as string) ?? '', period: (r.period as string) ?? '', time: (r.time as string) ?? '', subject: (r.subject as string) ?? '', room: (r.room as string) ?? '', sessionType: (r.session_type as string) ?? 'Live Session', meetLink: (r.meet_link as string) ?? '' })))
       setGrades((g.data ?? []).map((r: Record<string, unknown>) => ({ subject: (r.subject as string) ?? '', grade: Number(r.grade ?? 0), letter_grade: (r.letter_grade as string) ?? '' })))
     })
   }, [session])
@@ -138,8 +138,11 @@ export function K5DashboardPage() {
                     <span style={{ fontSize: 18 }}>{subjectEmoji(b.subject)}</span>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 12, fontWeight: 700, color: NAVY }}>{b.subject}</div>
-                      <div style={{ fontSize: 10, color: '#64748B' }}>{b.time || b.period}</div>
+                      <div style={{ fontSize: 10, color: '#64748B' }}>{b.time || b.period}{b.sessionType === 'Self-Paced Mastery' ? ' · 📗 Self-Paced' : ''}</div>
                     </div>
+                    {b.sessionType === 'Live Session' && b.meetLink && (
+                      <a href={b.meetLink} target="_blank" rel="noreferrer" style={{ fontSize: 9, fontWeight: 800, background: isNow ? GREEN : '#E0F2FE', color: isNow ? '#fff' : '#0369A1', padding: '4px 9px', borderRadius: 6, textDecoration: 'none' }}>🔗 Join</a>
+                    )}
                     {isNow && <span style={{ fontSize: 9, fontWeight: 800, background: '#DCFCE7', color: GREEN, padding: '2px 7px', borderRadius: 5 }}>NOW</span>}
                   </div>
                 )

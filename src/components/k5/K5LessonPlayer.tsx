@@ -1,18 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
-import { Document, Page, pdfjs } from 'react-pdf'
 import { supabase } from '@/lib/supabase'
-import 'react-pdf/dist/Page/AnnotationLayer.css'
-import 'react-pdf/dist/Page/TextLayer.css'
 import type {
   K5Lesson, K5Slide,
   IntroSlide, FourSlide, JourneySlide, PartsSlide, GiveSlide, ReadySlide,
 } from '@/types/k5Lesson'
 import { K5CertificateFrame } from './K5Certificate'
 import { downloadCertificateImage } from '@/lib/downloadCertificate'
-
-// @ts-ignore — Vite ?url import for pdfjs worker
-import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
-pdfjs.GlobalWorkerOptions.workerSrc = workerSrc as string
+import { PdfSinglePage } from '@/components/pdf/PdfViewer'
 
 const NAVY  = '#1A365E'
 const GOLD  = '#FAC600'
@@ -141,35 +135,6 @@ function renderJsonSlide(slide: K5Slide, onStartQuiz: () => void) {
     case 'give':    return <GiveContent slide={slide} />
     case 'ready':   return <ReadyContent slide={slide} onStartQuiz={onStartQuiz} />
   }
-}
-
-// ─── PDF page viewer ──────────────────────────────────────────────────────────
-
-function PdfViewer({ url, page, width, onLoad, onPageLoad }: { url: string; page: number; width: number; onLoad: (n: number) => void; onPageLoad: (aspect: number) => void }) {
-  return (
-    <Document
-      file={url}
-      onLoadSuccess={({ numPages }) => onLoad(numPages)}
-      loading={
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%' }}>
-          <div style={{ width:32, height:32, borderRadius:'50%', border:`3px solid rgba(255,255,255,.2)`, borderTopColor:GOLD, animation:'spin 0.7s linear infinite' }} />
-        </div>
-      }
-      error={
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', color:'rgba(255,255,255,.6)', fontSize:14 }}>
-          ⚠️ Could not load PDF. Check your internet connection.
-        </div>
-      }
-    >
-      <Page
-        pageNumber={page}
-        width={width}
-        renderTextLayer={false}
-        renderAnnotationLayer={false}
-        onLoadSuccess={p => onPageLoad(p.width / p.height)}
-      />
-    </Document>
-  )
 }
 
 // ─── Main player ──────────────────────────────────────────────────────────────
@@ -374,7 +339,7 @@ export function K5LessonPlayer({ lesson, studentName, onClose, onComplete }: Pro
         {isPdf ? (
           <div ref={pdfContainerRef} style={{ flex:1, background:'#F1F5F9', overflow:'hidden', display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
             {pdfSignedUrl ? (
-              <PdfViewer
+              <PdfSinglePage
                 url={pdfSignedUrl}
                 page={slideIdx + 1}
                 width={pdfWidth}

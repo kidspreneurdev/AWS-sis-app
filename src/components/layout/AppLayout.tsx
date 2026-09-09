@@ -21,7 +21,7 @@ import {
   BarChart, Clock, Target, FileCheck, StickyNote, Printer,
   PlusSquare, Activity, CheckSquare, FileBarChart, Telescope, Flag,
   Library, BookMarked, BookCopy, UserCog, BarChart3, LayoutList, Inbox,
-  ShieldCheck, ListChecks, Puzzle,
+  ShieldCheck, ListChecks, Puzzle, FolderArchive,
 } from 'lucide-react'
 import { PageHeaderProvider, useSetActionsTarget } from '@/contexts/PageHeaderContext'
 
@@ -49,6 +49,8 @@ const NAV: NavGroup[] = [
       { title: 'Waitlist', icon: UserPlus, to: '/students/waitlist' },
       { title: 'Cohorts', icon: Layers, to: '/students/cohorts' },
       { title: 'Documents', icon: FileText, to: '/students/documents' },
+      { title: 'Student Records', icon: FolderArchive, to: '/students/records' },
+      { title: 'Onboarding', icon: ListChecks, to: '/students/onboarding' },
       { title: 'Student Goals', icon: Flag, to: '/students/goals' },
       { title: 'Student 360°', icon: Telescope, to: '/students/360' },
     ],

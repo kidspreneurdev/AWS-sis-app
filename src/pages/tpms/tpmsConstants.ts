@@ -166,6 +166,12 @@ export interface TpmsEvent {
   description: string
 }
 
+export const TPMS_SESSION_TYPES = ['Live Session', 'Self-Paced Mastery'] as const
+export type TpmsSessionType = (typeof TPMS_SESSION_TYPES)[number]
+
+export const TPMS_ASSIGNMENT_TYPES = ['cohort', 'student'] as const
+export type TpmsAssignmentType = (typeof TPMS_ASSIGNMENT_TYPES)[number]
+
 export interface TpmsBlock {
   id: string
   name: string
@@ -174,11 +180,14 @@ export interface TpmsBlock {
   time: string
   duration: number
   subject: string
+  sessionType: TpmsSessionType
+  meetLink: string
+  assignmentType: TpmsAssignmentType
   cohort: string
+  studentId: string
   coachId: string
   managerId: string
   room: string
-  maxStudents: number
   notes: string
 }
 

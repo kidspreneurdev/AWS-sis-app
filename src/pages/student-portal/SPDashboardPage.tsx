@@ -5,6 +5,7 @@ import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
 import { useParentPortal } from '@/contexts/ParentPortalContext'
 import { toLegacyStudentGradeValue } from '@/types/student'
+import { calcGPA, calcWeightedGPA, type CourseType, type GpaCourse, type GpaTransfer } from '@/lib/grading/gpa'
 import { K5DashboardPage } from '@/pages/student-portal/K5DashboardPage'
 
 const card: React.CSSProperties = {
@@ -45,11 +46,8 @@ interface Assignment {
   status: string
 }
 
-interface Grade {
-  subject: string
-  grade: number
-  term: string
-}
+type CourseRow = GpaCourse
+type TransferRow = GpaTransfer
 
 interface Badge {
   name: string
@@ -60,11 +58,6 @@ interface AttendanceRow {
   status: string
 }
 
-interface FeeRow {
-  amount: number
-  paid: boolean
-}
-
 interface BlockRow {
   id: string
   day: string
@@ -73,6 +66,8 @@ interface BlockRow {
   subject: string
   cohort: string
   room: string
+  sessionType: string
+  meetLink: string
 }
 
 interface CorrectionRow {
@@ -111,23 +106,10 @@ function spCard(label: string, value: string, sub: string, color: string, icon: 
   )
 }
 
-function percentToGpa(avg: number) {
-  if (avg >= 97) return 4
-  if (avg >= 93) return 4
-  if (avg >= 90) return 3.7
-  if (avg >= 87) return 3.3
-  if (avg >= 83) return 3
-  if (avg >= 80) return 2.7
-  if (avg >= 77) return 2.3
-  if (avg >= 73) return 2
-  if (avg >= 70) return 1.7
-  if (avg >= 67) return 1.3
-  if (avg >= 65) return 1
-  return 0
-}
-
 function parseGradeLevel(value: string) {
-  const n = Number.parseInt(value, 10)
+  const match = value.match(/\d+/)
+  if (!match) return null
+  const n = Number.parseInt(match[0], 10)
   return Number.isNaN(n) ? null : n
 }
 
@@ -142,13 +124,14 @@ export function SPDashboardPage() {
   const navigate = useNavigate()
 
   const [assignments, setAssignments] = useState<Assignment[]>([])
-  const [grades, setGrades] = useState<Grade[]>([])
+  const [courses, setCourses] = useState<CourseRow[]>([])
+  const [transfers, setTransfers] = useState<TransferRow[]>([])
   const [badges, setBadges] = useState<Badge[]>([])
   const [attendance, setAttendance] = useState<AttendanceRow[]>([])
-  const [fees, setFees] = useState<FeeRow[]>([])
   const [blocks, setBlocks] = useState<BlockRow[]>([])
   const [corrections, setCorrections] = useState<CorrectionRow[]>([])
   const [coachReport, setCoachReport] = useState<CoachReportRow | null>(null)
+  const [blocksError, setBlocksError] = useState<string | null>(null)
 
   if (!session) return null
   const gradeNum = toLegacyStudentGradeValue(session.grade)
@@ -160,23 +143,31 @@ export function SPDashboardPage() {
       const [
         subRes,
         assignRes,
-        gradesRes,
         badgesRes,
         attendanceRes,
-        feesRes,
         blocksRes,
         correctionsRes,
         coachReportRes,
+        coursesRes,
+        transfersRes,
       ] = await Promise.all([
         supabase.from('at_submissions').select('assignment_id,status').eq('student_id', studentSession.dbId),
         supabase.from('at_assignments').select('id,title,subject,due_date').order('due_date'),
-        supabase.from('grades').select('subject,grade,term').eq('student_id', studentSession.dbId),
         supabase.from('badge_awards').select('name,earned_at').eq('student_id', studentSession.dbId).order('earned_at', { ascending: false }).limit(8),
         supabase.from('attendance').select('status').eq('student_id', studentSession.dbId),
-        supabase.from('fees').select('amount,paid').eq('student_id', studentSession.dbId),
-        supabase.from('timetable_blocks').select('id,day,period,time,subject,cohort,room').eq('cohort', studentSession.cohort).order('created_at', { ascending: true }),
+        (() => {
+          const orClauses = [`student_id.eq.${studentSession.dbId}`]
+          if (studentSession.cohort) orClauses.unshift(`cohort.eq."${studentSession.cohort}"`)
+          return supabase
+            .from('timetable_blocks')
+            .select('id,day,period,time,subject,cohort,room,session_type,meet_link,student_id')
+            .or(orClauses.join(','))
+            .order('created_at', { ascending: true })
+        })(),
         supabase.from('at_corrections').select('id,subject,instructions,status,deadline').eq('student_id', studentSession.dbId).order('deadline', { ascending: true }),
         supabase.from('at_reports').select('week,coach_note,generated_at').eq('student_id', studentSession.dbId).order('generated_at', { ascending: false }).limit(1),
+        supabase.from('courses').select('grade_letter,type,credits').eq('student_id', studentSession.dbId),
+        supabase.from('transfer_credits').select('*').eq('student_id', studentSession.dbId),
       ])
 
       const submissionMap = Object.fromEntries(
@@ -192,10 +183,16 @@ export function SPDashboardPage() {
       }))
 
       setAssignments(mappedAssignments)
-      setGrades((((gradesRes.data as Record<string, unknown>[] | null) ?? []).map((row) => ({
-        subject: (row.subject as string) ?? '',
-        grade: Number(row.grade ?? 0),
-        term: (row.term as string) ?? '',
+      setCourses((((coursesRes.data as Record<string, unknown>[] | null) ?? []).map((row) => ({
+        grade_letter: (row.grade_letter as string) ?? null,
+        type: ((row.type as CourseType) ?? 'STD'),
+        credits: Number(row.credits ?? 0),
+      }))))
+      setTransfers((((transfersRes.data as Record<string, unknown>[] | null) ?? []).map((row) => ({
+        grade_letter: (row.grade_letter as string) ?? null,
+        type: (row.type as string) ?? null,
+        credits: Number(row.credits ?? 0),
+        status: (row.status as string) ?? null,
       }))))
       setBadges((((badgesRes.data as Record<string, unknown>[] | null) ?? []).map((row) => ({
         name: (row.name as string) ?? '',
@@ -204,10 +201,7 @@ export function SPDashboardPage() {
       setAttendance((((attendanceRes.data as Record<string, unknown>[] | null) ?? []).map((row) => ({
         status: (row.status as string) ?? '',
       }))))
-      setFees((((feesRes.data as Record<string, unknown>[] | null) ?? []).map((row) => ({
-        amount: Number(row.amount ?? 0),
-        paid: Boolean(row.paid),
-      }))))
+      setBlocksError(blocksRes.error?.message ?? null)
       setBlocks((((blocksRes.data as Record<string, unknown>[] | null) ?? []).map((row) => ({
         id: row.id as string,
         day: (row.day as string) ?? '',
@@ -216,6 +210,8 @@ export function SPDashboardPage() {
         subject: (row.subject as string) ?? '',
         cohort: (row.cohort as string) ?? '',
         room: (row.room as string) ?? '',
+        sessionType: (row.session_type as string) ?? 'Live Session',
+        meetLink: (row.meet_link as string) ?? '',
       }))))
       setCorrections((((correctionsRes.data as Record<string, unknown>[] | null) ?? []).map((row) => ({
         id: row.id as string,
@@ -242,12 +238,11 @@ export function SPDashboardPage() {
     : (session?.fullName.split(' ')[0] ?? 'Student')
   const gradeLevel = parseGradeLevel(session?.grade ?? '')
   const isHS = gradeLevel !== null && gradeLevel >= 9
-  const avgGrade = grades.length ? grades.reduce((sum, row) => sum + row.grade, 0) / grades.length : null
-  const gpa = avgGrade !== null ? percentToGpa(avgGrade) : null
-  const weightedGpa = gpa !== null ? Math.min(4, gpa + 0.2) : null
+  const hasGpaData = courses.length > 0 || transfers.some((t) => t.status === 'Approved')
+  const gpa = hasGpaData ? calcGPA(courses, transfers) : null
+  const weightedGpa = hasGpaData ? calcWeightedGPA(courses, transfers) : null
   const attPresent = attendance.filter((row) => row.status === 'Present').length
   const attRate = attendance.length ? Math.round((attPresent / attendance.length) * 100) : 0
-  const outstandingFees = fees.filter((row) => !row.paid).reduce((sum, row) => sum + row.amount, 0)
   const todayIso = new Date().toISOString().slice(0, 10)
   const now = new Date()
   const nowMs = now.getTime()
@@ -324,14 +319,22 @@ export function SPDashboardPage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
-        {spCard('Attendance', `${attRate}%`, 'This term', attRate >= 85 ? SP_GREEN : attRate >= 70 ? SP_GOLD : SP_RED, '📅')}
-        {spCard('Pending', String(pending.length), 'assignments', pending.length > 0 ? SP_GOLD : SP_GREEN, '📝')}
-        {isHS
-          ? spCard('GPA', gpa !== null ? gpa.toFixed(2) : '—', weightedGpa !== null ? `Weighted: ${weightedGpa.toFixed(2)}` : 'Weighted: —', gpa !== null && gpa >= 3.5 ? SP_GREEN : gpa !== null && gpa >= 2.5 ? SP_GOLD : SP_RED, '🎓')
-          : spCard('Term', '2025-26', 'Active', SP_NAVY, '📚')}
-        {spCard('Fees Due', outstandingFees > 0 ? `$${outstandingFees.toLocaleString()}` : 'Clear', outstandingFees > 0 ? 'outstanding' : 'No outstanding fees', outstandingFees > 0 ? SP_RED : SP_GREEN, '💳')}
-      </div>
+      {(() => {
+        const statCards = [
+          spCard('Attendance', `${attRate}%`, 'This term', attRate >= 85 ? SP_GREEN : attRate >= 70 ? SP_GOLD : SP_RED, '📅'),
+          pending.length > 0
+            ? spCard('Pending', String(pending.length), 'assignments', SP_GOLD, '📝')
+            : null,
+          isHS
+            ? spCard('GPA', gpa !== null ? gpa.toFixed(2) : '—', weightedGpa !== null ? `Weighted: ${weightedGpa.toFixed(2)}` : 'Weighted: —', gpa !== null && gpa >= 3.5 ? SP_GREEN : gpa !== null && gpa >= 2.5 ? SP_GOLD : SP_RED, '🎓')
+            : spCard('Term', '2025-26', 'Active', SP_NAVY, '📚'),
+        ].filter(Boolean)
+        return (
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${statCards.length},1fr)`, gap: 12 }}>
+            {statCards}
+          </div>
+        )
+      })()}
 
       <div style={{ ...card, padding: '14px 18px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
@@ -339,7 +342,15 @@ export function SPDashboardPage() {
             <div style={{ fontSize: 10, color: '#7A92B0' }}>{todayLabel()}</div>
           </div>
           {todayBlocks.length === 0 ? (
-            <div style={emptyState}>No timetable data is available from Supabase for today's schedule yet.</div>
+            <div style={emptyState}>
+              {blocksError
+                ? `Couldn't load your timetable: ${blocksError}`
+                : blocks.length === 0
+                  ? (studentSession.cohort
+                      ? `No timetable blocks are assigned to your cohort (${studentSession.cohort}) or to you yet. Ask your coach to add them in Teaching & Planning → Blocks.`
+                      : "You're not assigned to a cohort yet, so no cohort timetable can be shown. Ask your coach to set your cohort.")
+                  : `No classes are scheduled for ${new Date().toLocaleDateString('en-US', { weekday: 'long' })}.`}
+            </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {todayBlocks.map((row) => {
@@ -356,8 +367,12 @@ export function SPDashboardPage() {
                     <div style={{ fontSize: 10, fontWeight: 700, color: '#7A92B0', minWidth: 86, flexShrink: 0 }}>{row.time || row.period}</div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 12, fontWeight: 700, color: SP_NAVY }}>{row.subject || 'Class'}</div>
+                      <div style={{ fontSize: 10, color: row.sessionType === 'Live Session' ? '#DC2626' : '#7C3AED', fontWeight: 700 }}>{row.sessionType === 'Live Session' ? '🔴 Live Session' : '📗 Self-Paced Mastery'}</div>
                       {row.room && <div style={{ fontSize: 10, color: '#7A92B0' }}>📍 {row.room}</div>}
                     </div>
+                    {row.sessionType === 'Live Session' && row.meetLink && !isPast && (
+                      <a href={row.meetLink} target="_blank" rel="noreferrer" style={{ fontSize: 9, fontWeight: 800, background: isNow ? '#059669' : '#E0F2FE', color: isNow ? '#fff' : '#0369A1', padding: '4px 10px', borderRadius: 6, textDecoration: 'none', flexShrink: 0 }}>🔗 Join</a>
+                    )}
                     {isNow && <span style={{ fontSize: 9, fontWeight: 800, background: '#DCFCE7', color: '#059669', padding: '2px 8px', borderRadius: 5 }}>NOW</span>}
                     {isPast && <span style={{ fontSize: 9, color: '#94A3B8' }}>Done</span>}
                   </div>

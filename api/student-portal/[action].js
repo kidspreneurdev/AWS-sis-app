@@ -15,6 +15,20 @@ const DISPUTABLE_SUBJECT_TYPES = ['debate', 'discussion', 'how', 'capstone']
 // this file can't import from src/.
 const LMS_SCORE_COMPONENT_TYPES = ['notes', 'discussion', 'debate', 'omr', 'presentation']
 
+// Student Records module — must match src/types/studentRecord.ts (api/ can't import from src/).
+const STUDENT_RECORD_TYPES = [
+  'course_confirmation', 'weekly_schedule', 'edmentum_credentials', 'assessment_instructions',
+  'math_diagnostic', 'ela_diagnostic', 'reading_diagnostic', 'psychometric',
+]
+const STUDENT_RECORD_BUCKET = 'student-records'
+
+// Onboarding module — must match src/types/onboarding.ts (api/ can't import from src/).
+const ONBOARDING_STEP_KEYS = [
+  'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9', 'A10',
+  'A11', 'A12', 'A13', 'A14', 'A15', 'A16', 'A17',
+  'B1', 'B2', 'B3', 'B4', 'B5',
+]
+
 function json(res, status, body) {
   res.status(status).setHeader('Content-Type', 'application/json')
   res.send(JSON.stringify(body))
@@ -938,8 +952,117 @@ async function lmsFileAppeal(req, res, adminClient) {
   return json(res, 200, { appeal })
 }
 
+async function listMyRecords(req, res, adminClient) {
+  if (req.method !== 'GET') {
+    res.setHeader('Allow', 'GET')
+    return json(res, 405, { error: 'Method not allowed' })
+  }
+
+  const studentDbId = requireStudentToken(req, res, json)
+  if (!studentDbId) return
+
+  const { data: rows, error } = await adminClient
+    .from('student_records')
+    .select('record_type,source,status,file_name,file_size,uploaded_at,generated_at,storage_path,data')
+    .eq('student_id', studentDbId)
+
+  if (error) return json(res, 500, { error: error.message })
+
+  const records = (rows ?? []).map((r) => ({
+    recordType: r.record_type,
+    source: r.source,
+    status: r.status,
+    fileName: r.file_name,
+    fileSize: r.file_size,
+    uploadedAt: r.uploaded_at,
+    generatedAt: r.generated_at,
+    hasFile: !!r.storage_path,
+    // Generated documents (course confirmation / weekly schedule) render from this JSON.
+    data: r.source === 'generated' ? r.data : undefined,
+  }))
+
+  return json(res, 200, { records })
+}
+
+async function recordSignedUrl(req, res, adminClient) {
+  if (req.method !== 'GET') {
+    res.setHeader('Allow', 'GET')
+    return json(res, 405, { error: 'Method not allowed' })
+  }
+
+  const studentDbId = requireStudentToken(req, res, json)
+  if (!studentDbId) return
+
+  const recordType = req.query?.recordType
+  if (!STUDENT_RECORD_TYPES.includes(recordType)) {
+    return json(res, 400, { error: 'Unknown record type.' })
+  }
+
+  const { data: row, error } = await adminClient
+    .from('student_records')
+    .select('storage_path,file_name')
+    .eq('student_id', studentDbId)
+    .eq('record_type', recordType)
+    .maybeSingle()
+
+  if (error) return json(res, 500, { error: error.message })
+  if (!row || !row.storage_path) {
+    return json(res, 404, { error: 'This document is not available yet.' })
+  }
+
+  const { data: signed, error: signErr } = await adminClient
+    .storage
+    .from(STUDENT_RECORD_BUCKET)
+    .createSignedUrl(row.storage_path, 3600)
+
+  if (signErr || !signed?.signedUrl) {
+    return json(res, 500, { error: signErr?.message || 'Could not generate a link for this document.' })
+  }
+
+  return json(res, 200, { url: signed.signedUrl, fileName: row.file_name })
+}
+
+async function listMyOnboarding(req, res, adminClient) {
+  if (req.method !== 'GET') {
+    res.setHeader('Allow', 'GET')
+    return json(res, 405, { error: 'Method not allowed' })
+  }
+
+  const studentDbId = requireStudentToken(req, res, json)
+  if (!studentDbId) return
+
+  const [{ data: stepRows, error: stepError }, { data: metaRow, error: metaError }] = await Promise.all([
+    adminClient
+      .from('student_onboarding')
+      .select('step_key,completed,note,completed_at')
+      .eq('student_id', studentDbId),
+    adminClient
+      .from('student_onboarding_meta')
+      .select('transferring_credits')
+      .eq('student_id', studentDbId)
+      .maybeSingle(),
+  ])
+
+  if (stepError) return json(res, 500, { error: stepError.message })
+  if (metaError) return json(res, 500, { error: metaError.message })
+
+  const steps = (stepRows ?? [])
+    .filter((r) => ONBOARDING_STEP_KEYS.includes(r.step_key))
+    .map((r) => ({
+      stepKey: r.step_key,
+      completed: !!r.completed,
+      note: r.note ?? null,
+      completedAt: r.completed_at ?? null,
+    }))
+
+  return json(res, 200, { steps, transferringCredits: !!metaRow?.transferring_credits })
+}
+
 const ACTIONS = {
   login,
+  'list-my-records': listMyRecords,
+  'record-signed-url': recordSignedUrl,
+  'list-my-onboarding': listMyOnboarding,
   'list-my-components': listMyComponents,
   'submit-discussion-post': submitDiscussionPost,
   'list-my-how-scores': listMyHowScores,

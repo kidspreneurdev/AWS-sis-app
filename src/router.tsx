@@ -13,6 +13,8 @@ import { WaitlistPage } from '@/pages/students/WaitlistPage'
 import { AlumniPage } from '@/pages/students/AlumniPage'
 import { CohortsPage } from '@/pages/students/CohortsPage'
 import { DocumentsPage } from '@/pages/students/DocumentsPage'
+import { StudentRecordsPage } from '@/pages/students/StudentRecordsPage'
+import { StudentOnboardingPage } from '@/pages/students/StudentOnboardingPage'
 import { StudentGoalsPage } from '@/pages/students/StudentGoalsPage'
 import { Student360Page } from '@/pages/students/Student360Page'
 import { AttendancePage } from '@/pages/academic/AttendancePage'
@@ -83,6 +85,7 @@ import { StudentPortalLoginPage } from '@/pages/student-portal/StudentPortalLogi
 import { SPDashboardPage } from '@/pages/student-portal/SPDashboardPage'
 import { SPGradesPage } from '@/pages/student-portal/SPGradesPage'
 import { SPAttendancePage } from '@/pages/student-portal/SPAttendancePage'
+import { SPTimetablePage } from '@/pages/student-portal/SPTimetablePage'
 import { SPAssignmentsPage } from '@/pages/student-portal/SPAssignmentsPage'
 import { SPMyLearningPage } from '@/pages/student-portal/SPMyLearningPage'
 import { SPProjectPage } from '@/pages/student-portal/SPProjectPage'
@@ -92,8 +95,9 @@ import { SPSkillsPage } from '@/pages/student-portal/SPSkillsPage'
 import { SPWellnessPage } from '@/pages/student-portal/SPWellnessPage'
 import { SPInnovationLabPage } from '@/pages/student-portal/SPInnovationLabPage'
 import { SPRealWorldLogPage } from '@/pages/student-portal/SPRealWorldLogPage'
-import { SPFeesPage } from '@/pages/student-portal/SPFeesPage'
 import { SPDocumentsPage } from '@/pages/student-portal/SPDocumentsPage'
+import { SPStudentRecordsPage } from '@/pages/student-portal/SPStudentRecordsPage'
+import { SPOnboardingPage } from '@/pages/student-portal/SPOnboardingPage'
 import { SPBadgesPage } from '@/pages/student-portal/SPBadgesPage'
 import { K5CertificatesPage } from '@/pages/student-portal/K5CertificatesPage'
 import { SPProfilePage } from '@/pages/student-portal/SPProfilePage'
@@ -122,6 +126,7 @@ export const router = createBrowserRouter([
       { path: '/parent/dashboard',   element: <SPDashboardPage /> },
       { path: '/parent/grades',      element: <SPGradesPage /> },
       { path: '/parent/attendance',  element: <SPAttendancePage /> },
+      { path: '/parent/timetable',   element: <SPTimetablePage /> },
       { path: '/parent/assignments', element: <SPAssignmentsPage /> },
       { path: '/parent/learning',    element: <SPMyLearningPage /> },
       { path: '/parent/project',     element: <SPProjectPage /> },
@@ -132,6 +137,8 @@ export const router = createBrowserRouter([
       { path: '/parent/lab',         element: <SPInnovationLabPage /> },
       { path: '/parent/rwlog',       element: <SPRealWorldLogPage /> },
       { path: '/parent/documents',   element: <SPDocumentsPage /> },
+      { path: '/parent/records',     element: <SPStudentRecordsPage /> },
+      { path: '/parent/onboarding',  element: <SPOnboardingPage /> },
       { path: '/parent/badges',      element: <SPBadgesPage /> },
       { path: '/parent/messages',    element: <PPCommunicationsPage /> },
       { path: '/parent/requests',    element: <PPRequestsPage /> },
@@ -150,6 +157,7 @@ export const router = createBrowserRouter([
       { path: '/portal/dashboard', element: <SPDashboardPage /> },
       { path: '/portal/grades', element: <SPGradesPage /> },
       { path: '/portal/attendance', element: <SPAttendancePage /> },
+      { path: '/portal/timetable', element: <SPTimetablePage /> },
       { path: '/portal/assignments', element: <SPAssignmentsPage /> },
       { path: '/portal/learning', element: <SPMyLearningPage /> },
       { path: '/portal/project', element: <SPProjectPage /> },
@@ -159,8 +167,9 @@ export const router = createBrowserRouter([
       { path: '/portal/wellness', element: <SPWellnessPage /> },
       { path: '/portal/lab', element: <SPInnovationLabPage /> },
       { path: '/portal/rwlog', element: <SPRealWorldLogPage /> },
-      { path: '/portal/fees', element: <SPFeesPage /> },
       { path: '/portal/documents', element: <SPDocumentsPage /> },
+      { path: '/portal/records', element: <SPStudentRecordsPage /> },
+      { path: '/portal/onboarding', element: <SPOnboardingPage /> },
       { path: '/portal/badges', element: <SPBadgesPage /> },
       { path: '/portal/k5-certificates', element: <K5CertificatesPage /> },
       { path: '/portal/profile', element: <SPProfilePage /> },
@@ -185,6 +194,8 @@ export const router = createBrowserRouter([
         { path: '/students/alumni', element: <Lazy><AlumniPage /></Lazy> },
         { path: '/students/cohorts', element: <Lazy><CohortsPage /></Lazy> },
         { path: '/students/documents', element: <Lazy><DocumentsPage /></Lazy> },
+        { path: '/students/records', element: <Lazy><StudentRecordsPage /></Lazy> },
+        { path: '/students/onboarding', element: <Lazy><StudentOnboardingPage /></Lazy> },
         { path: '/students/goals', element: <Lazy><StudentGoalsPage /></Lazy> },
         { path: '/students/360', element: <Lazy><Student360Page /></Lazy> },
 

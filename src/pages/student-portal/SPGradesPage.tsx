@@ -485,6 +485,23 @@ export function SPGradesPage() {
       `
     }).join('')
 
+    const residencyBox = hasTransferCredits ? `
+      <div style="margin-top:16px;border-radius:8px;padding:12px 16px;border-left:4px solid ${residencyMet ? SP_GREEN : '#D97706'};background:${residencyMet ? '#F0FDF4' : '#FEF3C7'}">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+          <div style="font-size:12px;font-weight:700;color:${residencyMet ? '#166534' : '#92400E'}">${residencyMet ? '✅' : '⚠️'} American World School Credit Requirement</div>
+          <div style="font-size:11px;font-weight:700;color:#7A92B0">${awsCreditsEarned} / ${awsResidencyCredits} cr required at AWS</div>
+        </div>
+        <div style="font-size:11px;color:#3D5475">
+          <strong>${awsCreditsEarned} cr</strong> earned directly through American World School coursework &middot; <strong>${transferCreditsEarned} cr</strong> from external transfer credit
+        </div>
+        <div style="font-size:11px;margin-top:4px;color:${residencyMet ? '#166534' : '#92400E'};font-weight:${residencyMet ? 400 : 600}">
+          ${residencyMet
+            ? `At least 25% of the ${graduationCreditsRequired}-credit diploma (${awsResidencyCredits} credits) has been completed through American World School, satisfying WASC (Western Association of Schools and Colleges) accreditation requirements.`
+            : `To satisfy WASC (Western Association of Schools and Colleges) accreditation requirements, a student must complete at least 25% of their credits with us — at least ${awsResidencyCredits} credits must be earned in our school. ${residencyRemaining} more AWS credit${residencyRemaining === 1 ? '' : 's'} needed.`}
+        </div>
+      </div>
+    ` : ''
+
     popup.document.write(`
       <!doctype html>
       <html>
@@ -531,6 +548,7 @@ export function SPGradesPage() {
             </thead>
             <tbody>${requirementRows}</tbody>
           </table>
+          ${residencyBox}
         </body>
       </html>
     `)
@@ -728,7 +746,7 @@ export function SPGradesPage() {
             <div style={{ background: residencyMet ? '#F0FDF4' : '#FEF3C7', borderLeft: `4px solid ${residencyMet ? SP_GREEN : '#D97706'}`, borderRadius: 8, padding: '12px 16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, flexWrap: 'wrap', gap: 6 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: residencyMet ? '#166534' : '#92400E' }}>
-                  {residencyMet ? '✅' : '⚠️'} American World School Residency Requirement
+                  {residencyMet ? '✅' : '⚠️'} American World School Credit Requirement
                 </div>
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#7A92B0' }}>{awsCreditsEarned} / {awsResidencyCredits} cr required at AWS</div>
               </div>
@@ -740,11 +758,11 @@ export function SPGradesPage() {
               </div>
               {residencyMet ? (
                 <div style={{ fontSize: 11, color: '#166534', marginTop: 4 }}>
-                  At least 25% of the {graduationCreditsRequired}-credit diploma ({awsResidencyCredits} credits) has been completed through American World School — requirement met.
+                  At least 25% of the {graduationCreditsRequired}-credit diploma ({awsResidencyCredits} credits) has been completed through American World School, satisfying WASC (Western Association of Schools and Colleges) accreditation requirements.
                 </div>
               ) : (
                 <div style={{ fontSize: 11, color: '#92400E', marginTop: 4, fontWeight: 600 }}>
-                  At least {awsResidencyCredits} credits (25% of the {graduationCreditsRequired}-credit diploma) must be fulfilled with American World School coursework. {residencyRemaining} more AWS credit{residencyRemaining === 1 ? '' : 's'} needed.
+                  To satisfy WASC (Western Association of Schools and Colleges) accreditation requirements, a student must complete at least 25% of their credits with us — at least {awsResidencyCredits} credits must be earned in our school. {residencyRemaining} more AWS credit{residencyRemaining === 1 ? '' : 's'} needed.
                 </div>
               )}
             </div>

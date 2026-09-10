@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { uploadFile, downloadUrl } from '@/lib/uploadFile'
+import { StudentCombobox } from '@/components/shared/StudentCombobox'
 import { PTM, PTQD, PTSTAT, PTDELIV, STAT_META, mapAssignment, type PTAssignment, type PTMethodology } from './ptConstants'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 16 }
@@ -266,10 +267,15 @@ export function PTAssignPage() {
           {mode === 'individual' && (
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: '#7A92B0' }}>Student:</span>
-              <select value={selStudent} onChange={e => setSelStudent(e.target.value)} style={{ padding: '7px 12px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 12, fontWeight: 600, flex: 1, maxWidth: 320 }}>
-                <option value="">— Select student —</option>
-                {students.map(s => <option key={s.id} value={s.id}>{s.fullName}</option>)}
-              </select>
+              <StudentCombobox
+                students={students}
+                value={selStudent}
+                onChange={setSelStudent}
+                getLabel={s => s.fullName}
+                getMeta={s => s.cohort || undefined}
+                placeholder="— Select student —"
+                style={{ padding: '7px 12px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 12, fontWeight: 600, flex: 1, maxWidth: 320 }}
+              />
             </div>
           )}
 

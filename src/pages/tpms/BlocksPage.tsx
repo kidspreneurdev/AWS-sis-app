@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/lib/toast'
+import { StudentCombobox } from '@/components/shared/StudentCombobox'
 import {
   TPMS_SUBJECTS, DAYS, PERIODS, TPMS_SESSION_TYPES,
   type TpmsBlock, type TpmsSessionType, type TpmsAssignmentType,
@@ -56,7 +57,7 @@ function mapBlock(r: Record<string, unknown>): TpmsBlock {
     meetLink: (r.meet_link as string) ?? '',
     assignmentType: ((r.assignment_type as string) as TpmsAssignmentType) || 'cohort',
     cohort: (r.cohort as string) ?? '',
-    studentId: (r.student_id as string) ?? '',
+    studentIds: Array.isArray(r.student_ids) ? (r.student_ids as string[]).filter(Boolean) : [],
     coachId: (r.coach_id as string) ?? '',
     managerId: (r.manager_id as string) ?? '',
     room: (r.room as string) ?? '',
@@ -87,7 +88,7 @@ function BlockModal({ block, cohorts, coaches, students, onClose, onSave, onDele
     meetLink: block?.meetLink ?? '',
     assignmentType: (block?.assignmentType ?? 'cohort') as TpmsAssignmentType,
     cohort: block?.cohort ?? '',
-    studentId: block?.studentId ?? '',
+    studentIds: block?.studentIds ?? [],
     coachId: block?.coachId ?? '',
     managerId: block?.managerId ?? '',
     room: block?.room ?? '',
@@ -95,6 +96,8 @@ function BlockModal({ block, cohorts, coaches, students, onClose, onSave, onDele
   })
   const [saving, setSaving] = useState(false)
   const set = (k: string, v: string | number) => setForm(p => ({ ...p, [k]: v }))
+  const addStudent = (id: string) => setForm(p => (p.studentIds.includes(id) ? p : { ...p, studentIds: [...p.studentIds, id] }))
+  const removeStudent = (id: string) => setForm(p => ({ ...p, studentIds: p.studentIds.filter(s => s !== id) }))
 
   const start24 = to24(form.startHour, parseInt(form.startMin) || 0, form.startAmPm)
   const end24 = addMinutes(start24, form.duration)
@@ -102,8 +105,8 @@ function BlockModal({ block, cohorts, coaches, students, onClose, onSave, onDele
 
   async function handleSave() {
     if (!form.subject && !form.name) { alert('Block needs a subject or name'); return }
-    if (form.assignmentType === 'cohort' && !form.cohort) { alert('Select a cohort or switch to an individual student'); return }
-    if (form.assignmentType === 'student' && !form.studentId) { alert('Select a student'); return }
+    if (form.assignmentType === 'cohort' && !form.cohort) { alert('Select a cohort or switch to individual students'); return }
+    if (form.assignmentType === 'student' && form.studentIds.length === 0) { alert('Select at least one student'); return }
     if (isLive && form.meetLink && !/^https?:\/\//i.test(form.meetLink.trim())) { alert('Meet link must start with http:// or https://'); return }
     setSaving(true)
     const payload: Omit<TpmsBlock, 'id'> = {
@@ -117,7 +120,7 @@ function BlockModal({ block, cohorts, coaches, students, onClose, onSave, onDele
       meetLink: isLive ? form.meetLink.trim() : '',
       assignmentType: form.assignmentType,
       cohort: form.assignmentType === 'cohort' ? form.cohort : '',
-      studentId: form.assignmentType === 'student' ? form.studentId : '',
+      studentIds: form.assignmentType === 'student' ? form.studentIds : [],
       coachId: form.coachId,
       managerId: form.managerId,
       room: form.room,
@@ -133,7 +136,7 @@ function BlockModal({ block, cohorts, coaches, students, onClose, onSave, onDele
       <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 620, boxShadow: '0 24px 60px rgba(0,0,0,.3)', margin: 'auto' }}>
         <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '18px 24px', borderRadius: '18px 18px 0 0' }}>
           <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>🟦 {block ? 'Edit' : 'New'} Block</div>
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,.4)', marginTop: 2 }}>Configure block schedule · assign cohort or student</div>
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,.4)', marginTop: 2 }}>Configure block schedule · assign cohort or students</div>
         </div>
         <div style={{ padding: '22px 24px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div style={{ gridColumn: 'span 2' }}><label style={lbl}>Block Name / Label</label><input value={form.name} onChange={e => set('name', e.target.value)} style={inp} placeholder="e.g. Morning Science Block" /></div>
@@ -200,7 +203,7 @@ function BlockModal({ block, cohorts, coaches, students, onClose, onSave, onDele
             </div>
           )}
 
-          {/* Assignment target — cohort or individual student */}
+          {/* Assignment target — cohort or one-or-more individual students */}
           <div style={{ gridColumn: 'span 2', background: '#F0FFF4', borderRadius: 8, padding: 10 }}>
             <label style={{ ...lbl, color: '#059669' }}>👥 Assign To</label>
             <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
@@ -210,7 +213,7 @@ function BlockModal({ block, cohorts, coaches, students, onClose, onSave, onDele
                   border: `1.5px solid ${form.assignmentType === at ? '#059669' : '#D1FAE5'}`,
                   background: form.assignmentType === at ? '#059669' : '#fff',
                   color: form.assignmentType === at ? '#fff' : '#059669',
-                }}>{at === 'cohort' ? 'Whole Cohort' : 'Individual Student'}</button>
+                }}>{at === 'cohort' ? 'Whole Cohort' : 'Individual Students'}</button>
               ))}
             </div>
             {form.assignmentType === 'cohort' ? (
@@ -219,10 +222,31 @@ function BlockModal({ block, cohorts, coaches, students, onClose, onSave, onDele
                 {cohorts.map(c => <option key={c}>{c}</option>)}
               </select>
             ) : (
-              <select value={form.studentId} onChange={e => set('studentId', e.target.value)} style={{ ...inp, borderColor: '#D1FAE5' }}>
-                <option value="">— Select student —</option>
-                {students.map(s => <option key={s.id} value={s.id}>{s.name}{s.cohort ? ` · ${s.cohort}` : ''}</option>)}
-              </select>
+              <>
+                <StudentCombobox
+                  students={students.filter(s => !form.studentIds.includes(s.id))}
+                  value=""
+                  onChange={id => { if (id) addStudent(id) }}
+                  getLabel={s => s.name}
+                  getMeta={s => s.cohort || undefined}
+                  placeholder={form.studentIds.length ? '+ Add another student' : '— Select students —'}
+                  style={{ ...inp, borderColor: '#D1FAE5' }}
+                />
+                {form.studentIds.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                    {form.studentIds.map(id => {
+                      const s = students.find(x => x.id === id)
+                      return (
+                        <span key={id} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#D1FAE5', color: '#065F46', borderRadius: 999, padding: '3px 6px 3px 10px', fontSize: 11, fontWeight: 700 }}>
+                          {s ? s.name : 'Unknown student'}
+                          <button type="button" onClick={() => removeStudent(id)} aria-label={`Remove ${s?.name ?? 'student'}`} style={{ border: 'none', background: 'rgba(6,95,70,.15)', color: '#065F46', borderRadius: 999, width: 16, height: 16, lineHeight: '14px', fontSize: 11, cursor: 'pointer', padding: 0 }}>×</button>
+                        </span>
+                      )
+                    })}
+                  </div>
+                )}
+                <div style={{ fontSize: 10, color: '#059669', marginTop: 6 }}>{form.studentIds.length} student{form.studentIds.length === 1 ? '' : 's'} assigned</div>
+              </>
             )}
           </div>
 
@@ -291,7 +315,7 @@ export function BlocksPage() {
     const row = {
       name: data.name, day: data.day, period: data.period, time: data.time, duration: data.duration,
       subject: data.subject, session_type: data.sessionType, meet_link: data.meetLink || null,
-      assignment_type: data.assignmentType, cohort: data.cohort || null, student_id: data.studentId || null,
+      assignment_type: data.assignmentType, cohort: data.cohort || null, student_ids: data.studentIds,
       coach_id: data.coachId || null, manager_id: data.managerId || null, room: data.room, notes: data.notes,
     }
     if (id) {
@@ -313,11 +337,14 @@ export function BlocksPage() {
   const cohortSet = useMemo(() => new Set(blocks.map(b => b.cohort).filter(Boolean)), [blocks])
   const coachSet = useMemo(() => new Set(blocks.map(b => b.coachId).filter(Boolean)), [blocks])
 
-  // Group by assignment target for cards (cohort name, or individual student)
-  const groupLabel = (b: TpmsBlock) =>
-    b.assignmentType === 'student'
-      ? `👤 ${studentName[b.studentId] || 'Student'}`
-      : b.cohort || '(No Cohort)'
+  // Group by assignment target for cards (cohort name, or individual students)
+  const groupLabel = (b: TpmsBlock) => {
+    if (b.assignmentType !== 'student') return b.cohort || '(No Cohort)'
+    const names = b.studentIds.map(id => studentName[id] || 'Student')
+    if (names.length === 0) return '👤 Individual Students'
+    if (names.length <= 2) return `👤 ${names.join(', ')}`
+    return `👤 ${names.slice(0, 2).join(', ')} +${names.length - 2}`
+  }
   const byCohort = useMemo(() => {
     const g: Record<string, TpmsBlock[]> = {}
     blocks.forEach(b => { const k = groupLabel(b); if (!g[k]) g[k] = []; g[k].push(b) })

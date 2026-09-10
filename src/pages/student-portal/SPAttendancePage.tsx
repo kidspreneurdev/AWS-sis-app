@@ -175,7 +175,7 @@ export function SPAttendancePage() {
       {months.length === 0 ? (
         <div style={card}>
           <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, marginBottom: 12 }}>📅 Attendance Calendar</div>
-          <div style={emptyState}>No attendance records are available from Supabase for this section yet.</div>
+          <div style={emptyState}>No attendance records yet.</div>
         </div>
       ) : (
         months.map((monthKey) => {

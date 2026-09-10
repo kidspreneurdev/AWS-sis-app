@@ -18,15 +18,24 @@ const LMS_SCORE_COMPONENT_TYPES = ['notes', 'discussion', 'debate', 'omr', 'pres
 // Student Records module — must match src/types/studentRecord.ts (api/ can't import from src/).
 const STUDENT_RECORD_TYPES = [
   'course_confirmation', 'weekly_schedule', 'edmentum_credentials', 'assessment_instructions',
-  'math_diagnostic', 'ela_diagnostic', 'reading_diagnostic', 'psychometric',
+  'psychometric', 'stock_market_game',
+  'math_diagnostic', 'reading_diagnostic', 'ela_diagnostic', 'diagnostic_summary_s1',
+  'math_diagnostic_s2', 'reading_diagnostic_s2', 'ela_diagnostic_s2', 'diagnostic_summary_s2',
+  'math_diagnostic_s3', 'reading_diagnostic_s3', 'ela_diagnostic_s3', 'diagnostic_summary_s3',
 ]
 const STUDENT_RECORD_BUCKET = 'student-records'
 
 // Onboarding module — must match src/types/onboarding.ts (api/ can't import from src/).
 const ONBOARDING_STEP_KEYS = [
-  'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9', 'A10',
-  'A11', 'A12', 'A13', 'A14', 'A15', 'A16', 'A17',
+  'A1', 'A2', 'A3', 'A4', 'A18', 'A5', 'A6', 'A7', 'A8', 'A9', 'A10',
+  'A12', 'A13', 'A15',
   'B1', 'B2', 'B3', 'B4', 'B5',
+]
+
+// Policy Documents module — must match src/types/policyDocument.ts.
+const POLICY_DOC_KEYS = [
+  'academic_integrity', 'graduation_requirements', 'repeated_courses',
+  'student_attendance', 'transcript_revision',
 ]
 
 function json(res, status, body) {
@@ -963,7 +972,7 @@ async function listMyRecords(req, res, adminClient) {
 
   const { data: rows, error } = await adminClient
     .from('student_records')
-    .select('record_type,source,status,file_name,file_size,uploaded_at,generated_at,storage_path,data')
+    .select('record_type,source,status,file_name,file_size,uploaded_at,generated_at,storage_path,data,signed_file_url,signed_file_name,signed_submitted_at,signed_status,signed_review_note')
     .eq('student_id', studentDbId)
 
   if (error) return json(res, 500, { error: error.message })
@@ -979,9 +988,58 @@ async function listMyRecords(req, res, adminClient) {
     hasFile: !!r.storage_path,
     // Generated documents (course confirmation / weekly schedule) render from this JSON.
     data: r.source === 'generated' ? r.data : undefined,
+    // Signed-return flow (course_confirmation / weekly_schedule only).
+    signedFileUrl: r.source === 'generated' ? (r.signed_file_url ?? null) : undefined,
+    signedFileName: r.source === 'generated' ? (r.signed_file_name ?? null) : undefined,
+    signedSubmittedAt: r.source === 'generated' ? (r.signed_submitted_at ?? null) : undefined,
+    signedStatus: r.source === 'generated' ? (r.signed_status ?? null) : undefined,
+    signedReviewNote: r.source === 'generated' ? (r.signed_review_note ?? null) : undefined,
   }))
 
   return json(res, 200, { records })
+}
+
+const SIGNED_RETURN_RECORD_TYPES = ['course_confirmation', 'weekly_schedule']
+
+async function submitRecordSigned(req, res, adminClient) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST')
+    return json(res, 405, { error: 'Method not allowed' })
+  }
+
+  const studentDbId = requireStudentToken(req, res, json)
+  if (!studentDbId) return
+
+  const { recordType, fileUrl, fileName } = req.body || {}
+  if (!SIGNED_RETURN_RECORD_TYPES.includes(recordType)) return json(res, 400, { error: 'This document does not support signed returns.' })
+  if (typeof fileUrl !== 'string' || !fileUrl.trim()) return json(res, 400, { error: 'fileUrl is required.' })
+
+  const { data: row, error: rowError } = await adminClient
+    .from('student_records')
+    .select('id,data,signed_status')
+    .eq('student_id', studentDbId)
+    .eq('record_type', recordType)
+    .maybeSingle()
+  if (rowError) return json(res, 500, { error: rowError.message })
+  if (!row || !row.data) return json(res, 404, { error: 'This document has not been generated yet.' })
+  if (row.signed_status === 'approved') return json(res, 409, { error: 'Your signed copy has already been approved.' })
+
+  const { error: updateError } = await adminClient
+    .from('student_records')
+    .update({
+      signed_file_url: fileUrl.trim(),
+      signed_file_name: typeof fileName === 'string' && fileName.trim() ? fileName.trim() : 'signed-document.pdf',
+      signed_status: 'submitted',
+      signed_submitted_at: new Date().toISOString(),
+      signed_review_note: null,
+      signed_reviewed_by: null,
+      signed_reviewed_at: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', row.id)
+  if (updateError) return json(res, 500, { error: updateError.message })
+
+  return json(res, 200, { ok: true })
 }
 
 async function recordSignedUrl(req, res, adminClient) {
@@ -1058,11 +1116,86 @@ async function listMyOnboarding(req, res, adminClient) {
   return json(res, 200, { steps, transferringCredits: !!metaRow?.transferring_credits })
 }
 
+async function listMyPolicyDocuments(req, res, adminClient) {
+  if (req.method !== 'GET') {
+    res.setHeader('Allow', 'GET')
+    return json(res, 405, { error: 'Method not allowed' })
+  }
+
+  const studentDbId = requireStudentToken(req, res, json)
+  if (!studentDbId) return
+
+  const { data: rows, error } = await adminClient
+    .from('student_policy_documents')
+    .select('policy_key,status,signed_file_url,signed_file_name,submitted_at,review_note,requested_at')
+    .eq('student_id', studentDbId)
+
+  if (error) return json(res, 500, { error: error.message })
+
+  const policies = (rows ?? [])
+    .filter((r) => POLICY_DOC_KEYS.includes(r.policy_key))
+    .map((r) => ({
+      policyKey: r.policy_key,
+      status: r.status,
+      signedFileUrl: r.signed_file_url ?? null,
+      signedFileName: r.signed_file_name ?? null,
+      submittedAt: r.submitted_at ?? null,
+      reviewNote: r.review_note ?? null,
+      requestedAt: r.requested_at ?? null,
+    }))
+
+  return json(res, 200, { policies })
+}
+
+async function submitPolicyDocument(req, res, adminClient) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST')
+    return json(res, 405, { error: 'Method not allowed' })
+  }
+
+  const studentDbId = requireStudentToken(req, res, json)
+  if (!studentDbId) return
+
+  const { policyKey, fileUrl, fileName } = req.body || {}
+  if (!POLICY_DOC_KEYS.includes(policyKey)) return json(res, 400, { error: 'Unknown policy.' })
+  if (typeof fileUrl !== 'string' || !fileUrl.trim()) return json(res, 400, { error: 'fileUrl is required.' })
+
+  const { data: row, error: rowError } = await adminClient
+    .from('student_policy_documents')
+    .select('id,status')
+    .eq('student_id', studentDbId)
+    .eq('policy_key', policyKey)
+    .maybeSingle()
+  if (rowError) return json(res, 500, { error: rowError.message })
+  if (!row) return json(res, 404, { error: 'This policy has not been requested.' })
+  if (row.status === 'approved') return json(res, 409, { error: 'This policy has already been approved.' })
+
+  const { error: updateError } = await adminClient
+    .from('student_policy_documents')
+    .update({
+      signed_file_url: fileUrl.trim(),
+      signed_file_name: typeof fileName === 'string' && fileName.trim() ? fileName.trim() : 'signed-policy.pdf',
+      status: 'submitted',
+      submitted_at: new Date().toISOString(),
+      review_note: null,
+      reviewed_by: null,
+      reviewed_at: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', row.id)
+  if (updateError) return json(res, 500, { error: updateError.message })
+
+  return json(res, 200, { ok: true })
+}
+
 const ACTIONS = {
   login,
   'list-my-records': listMyRecords,
   'record-signed-url': recordSignedUrl,
+  'submit-record-signed': submitRecordSigned,
   'list-my-onboarding': listMyOnboarding,
+  'list-my-policy-documents': listMyPolicyDocuments,
+  'submit-policy-document': submitPolicyDocument,
   'list-my-components': listMyComponents,
   'submit-discussion-post': submitDiscussionPost,
   'list-my-how-scores': listMyHowScores,

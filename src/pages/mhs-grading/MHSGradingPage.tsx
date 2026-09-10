@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/auth.store'
 import { applyGradeOverride } from '@/lib/grading/mhsRollup'
+import { StudentCombobox } from '@/components/shared/StudentCombobox'
 import { MHSGateOverridePanel } from './MHSGateOverridePanel'
 import { MHSHowScorer } from './MHSHowScorer'
 import { MHSNotesScorer } from './MHSNotesScorer'
@@ -441,12 +442,14 @@ export function MHSGradingPage() {
             {selectedLesson && roster.length > 0 && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <label style={{ ...label, marginBottom: 0 }}>Student</label>
-                <select value={rosterStudentId ?? ''} onChange={(e) => setRosterStudentId(e.target.value || null)} style={{ ...input, width: 'auto', minWidth: 220 }}>
-                  <option value="">All students ({roster.length})</option>
-                  {roster.map((r) => (
-                    <option key={r.studentId} value={r.studentId}>{r.studentName}</option>
-                  ))}
-                </select>
+                <StudentCombobox
+                  students={roster.map((r) => ({ id: r.studentId, label: r.studentName }))}
+                  value={rosterStudentId ?? ''}
+                  onChange={(id) => setRosterStudentId(id || null)}
+                  getLabel={(x) => x.label}
+                  allOption={`All students (${roster.length})`}
+                  style={{ ...input, width: 220, minWidth: 220 }}
+                />
               </div>
             )}
 

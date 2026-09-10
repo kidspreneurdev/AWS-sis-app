@@ -15,6 +15,7 @@ import { CohortsPage } from '@/pages/students/CohortsPage'
 import { DocumentsPage } from '@/pages/students/DocumentsPage'
 import { StudentRecordsPage } from '@/pages/students/StudentRecordsPage'
 import { StudentOnboardingPage } from '@/pages/students/StudentOnboardingPage'
+import { StudentPolicyDocumentsPage } from '@/pages/students/StudentPolicyDocumentsPage'
 import { StudentGoalsPage } from '@/pages/students/StudentGoalsPage'
 import { Student360Page } from '@/pages/students/Student360Page'
 import { AttendancePage } from '@/pages/academic/AttendancePage'
@@ -40,6 +41,7 @@ import { AdminRequestsPage } from '@/pages/admin/AdminRequestsPage'
 
 // ─── Calendar & Teaching/Planning ─────────────────────────────────────────────
 import { CalendarPage } from '@/pages/academic/CalendarPage'
+import { AcademicCalendarPage } from '@/pages/academic/AcademicCalendarPage'
 import { TPMSDashboardPage } from '@/pages/tpms/TPMSDashboardPage'
 import { LessonPlansPage } from '@/pages/tpms/LessonPlansPage'
 import { UnitPlansPage } from '@/pages/tpms/UnitPlansPage'
@@ -98,6 +100,8 @@ import { SPRealWorldLogPage } from '@/pages/student-portal/SPRealWorldLogPage'
 import { SPDocumentsPage } from '@/pages/student-portal/SPDocumentsPage'
 import { SPStudentRecordsPage } from '@/pages/student-portal/SPStudentRecordsPage'
 import { SPOnboardingPage } from '@/pages/student-portal/SPOnboardingPage'
+import { SPPolicyDocumentsPage } from '@/pages/student-portal/SPPolicyDocumentsPage'
+import { SPAcademicCalendarPage } from '@/pages/student-portal/SPAcademicCalendarPage'
 import { SPBadgesPage } from '@/pages/student-portal/SPBadgesPage'
 import { K5CertificatesPage } from '@/pages/student-portal/K5CertificatesPage'
 import { SPProfilePage } from '@/pages/student-portal/SPProfilePage'
@@ -139,6 +143,8 @@ export const router = createBrowserRouter([
       { path: '/parent/documents',   element: <SPDocumentsPage /> },
       { path: '/parent/records',     element: <SPStudentRecordsPage /> },
       { path: '/parent/onboarding',  element: <SPOnboardingPage /> },
+      { path: '/parent/policy-documents', element: <SPPolicyDocumentsPage /> },
+      { path: '/parent/academic-calendar', element: <SPAcademicCalendarPage /> },
       { path: '/parent/badges',      element: <SPBadgesPage /> },
       { path: '/parent/messages',    element: <PPCommunicationsPage /> },
       { path: '/parent/requests',    element: <PPRequestsPage /> },
@@ -170,6 +176,8 @@ export const router = createBrowserRouter([
       { path: '/portal/documents', element: <SPDocumentsPage /> },
       { path: '/portal/records', element: <SPStudentRecordsPage /> },
       { path: '/portal/onboarding', element: <SPOnboardingPage /> },
+      { path: '/portal/policy-documents', element: <SPPolicyDocumentsPage /> },
+      { path: '/portal/academic-calendar', element: <SPAcademicCalendarPage /> },
       { path: '/portal/badges', element: <SPBadgesPage /> },
       { path: '/portal/k5-certificates', element: <K5CertificatesPage /> },
       { path: '/portal/profile', element: <SPProfilePage /> },
@@ -196,6 +204,7 @@ export const router = createBrowserRouter([
         { path: '/students/documents', element: <Lazy><DocumentsPage /></Lazy> },
         { path: '/students/records', element: <Lazy><StudentRecordsPage /></Lazy> },
         { path: '/students/onboarding', element: <Lazy><StudentOnboardingPage /></Lazy> },
+        { path: '/students/policy-documents', element: <Lazy><StudentPolicyDocumentsPage /></Lazy> },
         { path: '/students/goals', element: <Lazy><StudentGoalsPage /></Lazy> },
         { path: '/students/360', element: <Lazy><Student360Page /></Lazy> },
 
@@ -209,6 +218,7 @@ export const router = createBrowserRouter([
         { path: '/admissions/communications', element: <Lazy><CommunicationsPage /></Lazy> },
         { path: '/admissions/reportcards', element: <Lazy><ReportCardsPage /></Lazy> },
         { path: '/academic/calendar', element: <Lazy><CalendarPage /></Lazy> },
+        { path: '/academic/academic-calendar', element: <Lazy><AcademicCalendarPage /></Lazy> },
 
         // Teaching & Planning
         { path: '/tpms/dashboard', element: <Lazy><TPMSDashboardPage /></Lazy> },

@@ -1186,7 +1186,7 @@ export function SPMyLearningPage() {
             <div style={{ ...card, padding: 48, textAlign: 'center' }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>📚</div>
               <div style={{ fontSize: 14, fontWeight: 700, color: '#1A365E' }}>No courses assigned yet</div>
-              <div style={{ fontSize: 12, color: '#7A92B0', marginTop: 6 }}>No learning data is available from Supabase for this section yet.</div>
+              <div style={{ fontSize: 12, color: '#7A92B0', marginTop: 6 }}>Once courses are assigned, they will appear here.</div>
             </div>
           ) : filteredCourses.length === 0 ? (
             <div style={{ ...card, ...emptyState, textAlign: 'center' }}>No courses match your search right now.</div>
@@ -1314,11 +1314,11 @@ export function SPMyLearningPage() {
           {selectedCourse.description ? (
             <div style={{ ...card, padding: '14px 16px', fontSize: 12, color: '#5A7290', lineHeight: 1.6 }}>{selectedCourse.description}</div>
           ) : (
-            <div style={{ ...card, ...emptyState }}>No course description is available from Supabase for this course yet.</div>
+            <div style={{ ...card, ...emptyState }}>No course description is available yet.</div>
           )}
 
           {courseItems.length === 0 ? (
-            <div style={{ ...card, ...emptyState }}>No lessons or learning content are available from Supabase for this course yet.</div>
+            <div style={{ ...card, ...emptyState }}>No lessons or learning content are available for this course yet.</div>
           ) : (
             groupedModules.map((module, moduleIdx) => (
               <div key={`${module.label || 'default'}-${moduleIdx}`} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

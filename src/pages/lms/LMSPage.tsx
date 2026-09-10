@@ -7,6 +7,7 @@ import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { useCampuses } from '@/hooks/useCampuses'
 import { useAuthStore } from '@/store/auth.store'
 import { GRADES } from '@/types/student'
+import { StudentCombobox } from '@/components/shared/StudentCombobox'
 import {
   loadLMS, saveLMS, loadLMSFromDB, deleteLMSCourse, deleteLMSContent, deleteLMSEnrolment,
   lmsId, fmtTime, hasMasteryBool, hasAssignBool, isActiveBool,
@@ -186,10 +187,15 @@ function EnrolModal({ courses, students, cohorts, onSave, onClose }: EnrolModalP
           {targetType === 'student' && (
             <div>
               <label style={labelStyle}>Student ({students.length} loaded)</label>
-              <select value={studentId} onChange={e => setStudentId(e.target.value)} style={selectStyle}>
-                {students.length === 0 && <option value="">No students found</option>}
-                {students.map(s => <option key={s.id} value={s.id}>{s.fullName}</option>)}
-              </select>
+              <StudentCombobox
+                students={students}
+                value={studentId}
+                onChange={setStudentId}
+                getLabel={s => s.fullName}
+                getMeta={s => [s.grade && `Grade ${s.grade}`, s.cohort].filter(Boolean).join(' · ') || undefined}
+                placeholder={students.length === 0 ? 'No students found' : 'Search students…'}
+                style={selectStyle}
+              />
             </div>
           )}
           {targetType === 'grade' && <div><label style={labelStyle}>Grade Level</label><select value={grade} onChange={e => setGrade(e.target.value)} style={selectStyle}>{GRADE_LEVELS.filter(g => g !== 'All Grades').map(g => <option key={g}>{g}</option>)}</select></div>}

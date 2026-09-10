@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { supabase } from '@/lib/supabase'
 import { downloadUrl } from '@/lib/uploadFile'
+import { StudentCombobox } from '@/components/shared/StudentCombobox'
 
 const AT_LATE_REASONS = ['Absent', 'Technical Issues', 'Family Circumstance', 'Medical', 'Forgot', 'No Reason Given', 'Other']
 
@@ -118,10 +119,14 @@ export function ATLatePage() {
 
       {/* Student filter */}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', background: '#F7F9FC', padding: '10px 14px', borderRadius: 10, border: '1px solid #E4EAF2' }}>
-        <select value={filterStu} onChange={e => setFilterStu(e.target.value)} style={{ ...iStyle, flex: 1 }}>
-          <option value="">All Students</option>
-          {students.map(s => <option key={s.id} value={s.id}>{s.fullName}</option>)}
-        </select>
+        <StudentCombobox
+          students={students}
+          value={filterStu}
+          onChange={setFilterStu}
+          getLabel={s => s.fullName}
+          allOption="All Students"
+          style={{ ...iStyle, flex: 1 }}
+        />
       </div>
 
       {lateRecords.length === 0 ? (

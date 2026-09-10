@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { toast } from '@/lib/toast'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
+import { StudentCombobox } from '@/components/shared/StudentCombobox'
 
 const TYPES = [
   'Positive Recognition', 'Tardiness', 'Disruption', 'Conflict', 'Academic Concern',
@@ -60,10 +61,15 @@ function BehaviourModal({ entry, students, onClose, onSave, onDelete }: {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <label style={lbl}>Student</label>
-              <select value={form.studentId} onChange={e => set('studentId', e.target.value)} style={inp}>
-                <option value="">Select…</option>
-                {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
+              <StudentCombobox
+                students={students}
+                value={form.studentId}
+                onChange={id => set('studentId', id)}
+                getLabel={s => s.name}
+                getMeta={s => (s.grade ? `Grade ${s.grade}` : undefined)}
+                placeholder="Select…"
+                style={inp}
+              />
             </div>
             <div><label style={lbl}>Type</label><select value={form.type} onChange={e => set('type', e.target.value)} style={inp}>{TYPES.map(t => <option key={t}>{t}</option>)}</select></div>
           </div>

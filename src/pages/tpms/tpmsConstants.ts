@@ -184,7 +184,7 @@ export interface TpmsBlock {
   meetLink: string
   assignmentType: TpmsAssignmentType
   cohort: string
-  studentId: string
+  studentIds: string[]
   coachId: string
   managerId: string
   room: string

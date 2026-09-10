@@ -156,11 +156,11 @@ export function SPDashboardPage() {
         supabase.from('badge_awards').select('name,earned_at').eq('student_id', studentSession.dbId).order('earned_at', { ascending: false }).limit(8),
         supabase.from('attendance').select('status').eq('student_id', studentSession.dbId),
         (() => {
-          const orClauses = [`student_id.eq.${studentSession.dbId}`]
+          const orClauses = [`student_ids.cs.{${studentSession.dbId}}`]
           if (studentSession.cohort) orClauses.unshift(`cohort.eq."${studentSession.cohort}"`)
           return supabase
             .from('timetable_blocks')
-            .select('id,day,period,time,subject,cohort,room,session_type,meet_link,student_id')
+            .select('id,day,period,time,subject,cohort,room,session_type,meet_link,student_ids')
             .or(orClauses.join(','))
             .order('created_at', { ascending: true })
         })(),
@@ -388,7 +388,7 @@ export function SPDashboardPage() {
           </div>
           {overdue.length === 0 ? (
             <div style={{ ...emptyState, textAlign: 'left', padding: 0, background: 'transparent', border: 'none' }}>
-              No overdue assignment data is available from Supabase for this section yet.
+              No overdue assignments.
             </div>
           ) : (
             overdue.slice(0, 3).map((row) => (
@@ -409,7 +409,7 @@ export function SPDashboardPage() {
             </div>
           ) : (
             <div style={{ ...emptyState, textAlign: 'left', padding: 0, background: 'transparent', border: 'none' }}>
-              No coach report data is available from Supabase for this section yet.
+              No coach report has been shared yet.
             </div>
           )}
         </div>
@@ -420,7 +420,7 @@ export function SPDashboardPage() {
           </div>
           {pendingCorrections.length === 0 ? (
             <div style={{ ...emptyState, textAlign: 'left', padding: 0, background: 'transparent', border: 'none' }}>
-              No correction-task data is available from Supabase for this section yet.
+              No correction tasks assigned.
             </div>
           ) : (
             <>
@@ -486,7 +486,7 @@ export function SPDashboardPage() {
             </button>
           </div>
           {badges.length === 0 ? (
-            <div style={emptyState}>No badge data is available from Supabase for this section yet.</div>
+            <div style={emptyState}>No badges earned yet.</div>
           ) : (
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               {badges.slice(0, 4).map((badge) => (

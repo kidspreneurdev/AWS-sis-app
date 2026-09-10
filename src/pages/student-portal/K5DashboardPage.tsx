@@ -51,7 +51,7 @@ export function K5DashboardPage() {
     void Promise.all([
       supabase.from('badge_awards').select('name,earned_at').eq('student_id', session.dbId).order('earned_at', { ascending: false }),
       supabase.from('attendance').select('status').eq('student_id', session.dbId),
-      supabase.from('timetable_blocks').select('id,day,period,time,subject,room,session_type,meet_link,student_id').or(`cohort.eq."${session.cohort ?? ''}",student_id.eq.${session.dbId}`).order('created_at', { ascending: true }),
+      supabase.from('timetable_blocks').select('id,day,period,time,subject,room,session_type,meet_link,student_ids').or(`cohort.eq."${session.cohort ?? ''}",student_ids.cs.{${session.dbId}}`).order('created_at', { ascending: true }),
       supabase.from('grades').select('subject,grade,letter_grade').eq('student_id', session.dbId),
     ]).then(([b, a, bl, g]) => {
       setBadges((b.data ?? []).map((r: Record<string, unknown>) => ({ name: (r.name as string) ?? '', earned_at: (r.earned_at as string) ?? '' })))

@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { toast } from '@/lib/toast'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
+import { StudentCombobox } from '@/components/shared/StudentCombobox'
 import {
   ONBOARDING_SECTIONS,
   visibleOnboardingSections,
@@ -147,18 +148,16 @@ export function StudentOnboardingPage() {
   const selectedStudent = useMemo(() => students.find(s => s.id === selectedId) ?? null, [students, selectedId])
 
   const headerPortal = useHeaderActions(
-    <select
+    <StudentCombobox
+      students={students}
       value={selectedId}
-      onChange={e => setSelectedId(e.target.value)}
-      style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #E4EAF2', fontSize: 13, color: '#1A365E', background: '#fff', maxWidth: 260 }}
-    >
-      {students.length === 0 && <option value="">No students</option>}
-      {students.map(s => (
-        <option key={s.id} value={s.id}>
-          {s.lastName}, {s.firstName}{s.grade ? ` (Gr ${s.grade})` : ''}
-        </option>
-      ))}
-    </select>,
+      onChange={setSelectedId}
+      getLabel={s => `${s.firstName} ${s.lastName}`}
+      getMeta={s => (s.grade ? `Grade ${s.grade}` : undefined)}
+      getStatus={s => s.status || undefined}
+      placeholder={students.length === 0 ? 'No students' : 'Search students…'}
+      style={{ width: 260, maxWidth: 260 }}
+    />,
   )
 
   function stateFor(key: string): StepState {

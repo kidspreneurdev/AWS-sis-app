@@ -20,6 +20,8 @@ const PP_NAV = [
   { id: 'pp_docs',     icon: '📄', label: 'Documents',          to: '/parent/documents' },
   { id: 'pp_records',  icon: '📁', label: 'Records',            to: '/parent/records' },
   { id: 'pp_onboard',  icon: '✅', label: 'Onboarding',         to: '/parent/onboarding' },
+  { id: 'pp_policy',   icon: '📜', label: 'Policy Documents',   to: '/parent/policy-documents' },
+  { id: 'pp_calendar', icon: '📆', label: 'Academic Calendar',  to: '/parent/academic-calendar' },
   { id: 'pp_badges',   icon: '🏅', label: 'Badges',             to: '/parent/badges' },
   { id: 'pp_msgs',     icon: '💬', label: 'Messages',           to: '/parent/messages' },
   { id: 'pp_requests', icon: '📬', label: 'Requests',           to: '/parent/requests' },

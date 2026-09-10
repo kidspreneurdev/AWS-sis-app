@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { supabase } from '@/lib/supabase'
+import { StudentCombobox } from '@/components/shared/StudentCombobox'
 
 const AT_NOTE_TYPES = ['Academic Observation', 'Misconception', 'Participation', 'Behaviour', 'Positive Highlight', 'Other']
 const AT_SUBJECTS = ['Mathematics', 'English Language Arts', 'Reading', 'Science', 'Social Studies', 'Entrepreneurship', 'Art', 'World Language', 'Physical Education', 'Computer Science', 'Other']
@@ -50,10 +51,14 @@ function NoteModal({ students, onClose, onSave }: {
         </div>
         <div style={{ padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div><label style={lbl}>Student *</label>
-            <select value={form.studentId} onChange={e => set('studentId', e.target.value)} style={inp}>
-              <option value="">— Select —</option>
-              {students.map(s => <option key={s.id} value={s.id}>{s.fullName}</option>)}
-            </select>
+            <StudentCombobox
+              students={students}
+              value={form.studentId}
+              onChange={id => set('studentId', id)}
+              getLabel={s => s.fullName}
+              placeholder="— Select —"
+              style={inp}
+            />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div><label style={lbl}>Note Type *</label>

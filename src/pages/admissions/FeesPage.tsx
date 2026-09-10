@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { toast } from '@/lib/toast'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
+import { StudentCombobox } from '@/components/shared/StudentCombobox'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type FeeStatus = 'Paid' | 'Partial' | 'Unpaid' | 'Waived'
@@ -90,10 +91,14 @@ function FeeModal({ students, fee, onClose, onSave }: {
         <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
             <label style={lbl}>Student</label>
-            <select value={form.studentId} onChange={e => set('studentId', e.target.value)} style={inp}>
-              <option value="">Select student…</option>
-              {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
+            <StudentCombobox
+              students={students}
+              value={form.studentId}
+              onChange={id => set('studentId', id)}
+              getLabel={s => s.name}
+              placeholder="Select student…"
+              style={inp}
+            />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>

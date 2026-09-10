@@ -21,7 +21,7 @@ import {
   BarChart, Clock, Target, FileCheck, StickyNote, Printer,
   PlusSquare, Activity, CheckSquare, FileBarChart, Telescope, Flag,
   Library, BookMarked, BookCopy, UserCog, BarChart3, LayoutList, Inbox,
-  ShieldCheck, ListChecks, Puzzle, FolderArchive,
+  ShieldCheck, ListChecks, Puzzle, FolderArchive, CalendarDays,
 } from 'lucide-react'
 import { PageHeaderProvider, useSetActionsTarget } from '@/contexts/PageHeaderContext'
 
@@ -51,6 +51,7 @@ const NAV: NavGroup[] = [
       { title: 'Documents', icon: FileText, to: '/students/documents' },
       { title: 'Student Records', icon: FolderArchive, to: '/students/records' },
       { title: 'Onboarding', icon: ListChecks, to: '/students/onboarding' },
+      { title: 'Policy Documents', icon: FileCheck, to: '/students/policy-documents' },
       { title: 'Student Goals', icon: Flag, to: '/students/goals' },
       { title: 'Student 360°', icon: Telescope, to: '/students/360' },
     ],
@@ -67,6 +68,7 @@ const NAV: NavGroup[] = [
       { title: 'Communications', icon: MessageSquare, to: '/admissions/communications' },
       { title: 'Report Cards', icon: FileText, to: '/admissions/reportcards' },
       { title: 'Calendar', icon: Calendar, to: '/academic/calendar' },
+      { title: 'Academic Calendar', icon: CalendarDays, to: '/academic/academic-calendar' },
     ],
   },
   {
@@ -179,6 +181,9 @@ const ROUTE_TITLES: Record<string, string> = (() => {
 })()
 
 // ─── Global Search ────────────────────────────────────────────────────────────
+
+// Toggle to re-enable the top-bar student search (jumps to Student 360°).
+const GLOBAL_SEARCH_ENABLED = false
 
 interface SearchResult { id: string; name: string; grade: string | null; cohort: string | null; status: string }
 
@@ -321,7 +326,7 @@ function Topbar() {
         </div>
       )}
 
-      <GlobalSearch />
+      {GLOBAL_SEARCH_ENABLED ? <GlobalSearch /> : <div style={{ flex: 1 }} />}
 
       {/* Portal target — pages render their action buttons here */}
       <div

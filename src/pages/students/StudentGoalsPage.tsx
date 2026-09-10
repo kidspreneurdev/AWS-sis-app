@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { formatStudentGrade, normalizeStudentGrade } from '@/types/student'
+import { StudentCombobox } from '@/components/shared/StudentCombobox'
 
 interface Goal {
   id: string
@@ -155,14 +156,15 @@ export function StudentGoalsPage() {
           placeholder="Search objectives…"
           style={{ ...iStyle, width: 220 }}
         />
-        <select value={filterStudent} onChange={e => setFilterStudent(e.target.value)} style={iStyle}>
-          <option value="">All Students</option>
-          {students.map(s => (
-            <option key={s.id} value={s.id}>
-              {[s.firstName, s.lastName].filter(Boolean).join(' ')} {s.grade ? `(${formatStudentGrade(s.grade)})` : ''}
-            </option>
-          ))}
-        </select>
+        <StudentCombobox
+          students={students}
+          value={filterStudent}
+          onChange={setFilterStudent}
+          getLabel={s => [s.firstName, s.lastName].filter(Boolean).join(' ')}
+          getMeta={s => (s.grade ? `Grade ${formatStudentGrade(s.grade)}` : undefined)}
+          allOption="All Students"
+          style={{ ...iStyle, width: 220 }}
+        />
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={iStyle}>
           <option value="All">All Statuses</option>
           {['On Track', 'At Risk', 'Achieved', 'Paused', 'Not Started'].map(s => (

@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { toast } from '@/lib/toast'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
+import { StudentCombobox } from '@/components/shared/StudentCombobox'
 
 interface HealthRec {
   id: string; studentId: string; studentName: string; grade: string
@@ -43,10 +44,16 @@ function HealthModal({ rec, students, onClose, onSave, onDelete }: {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <label style={lbl}>Student</label>
-              <select value={form.studentId} onChange={e => set('studentId', e.target.value)} style={inp} disabled={!!rec}>
-                <option value="">Select student…</option>
-                {students.map(s => <option key={s.id} value={s.id}>{s.name} (Grade {s.grade})</option>)}
-              </select>
+              <StudentCombobox
+                students={students}
+                value={form.studentId}
+                onChange={id => set('studentId', id)}
+                getLabel={s => s.name}
+                getMeta={s => (s.grade ? `Grade ${s.grade}` : undefined)}
+                placeholder="Select student…"
+                disabled={!!rec}
+                style={inp}
+              />
             </div>
             <div><label style={lbl}>Blood Group</label><select value={form.bloodGroup} onChange={e => set('bloodGroup', e.target.value)} style={inp}><option value="">—</option>{BLOOD_GROUPS.map(g => <option key={g}>{g}</option>)}</select></div>
           </div>

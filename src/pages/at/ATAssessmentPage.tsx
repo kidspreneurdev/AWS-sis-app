@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { supabase } from '@/lib/supabase'
+import { StudentCombobox } from '@/components/shared/StudentCombobox'
 
 const AT_SUBJECTS = ['Mathematics', 'English Language Arts', 'Reading', 'Science', 'Social Studies']
 
@@ -108,10 +109,15 @@ export function ATAssessmentPage() {
         <span style={{ fontSize: 12, fontWeight: 800, color: '#1A365E' }}>📈 Weekly Assessments — {monday}</span>
         <button onClick={() => setWeekOffset(p => p + 1)} style={{ padding: '5px 10px', background: '#E4EAF2', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 700 }}>▶</button>
         <button onClick={() => setWeekOffset(0)} style={{ padding: '5px 12px', background: '#7C3AED', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>This Week</button>
-        <select value={selStu} onChange={e => setSelStu(e.target.value)} style={{ ...iStyle, flex: 1, minWidth: 180 }}>
-          <option value="">— All Students —</option>
-          {students.map(s => <option key={s.id} value={s.id}>{s.fullName}</option>)}
-        </select>
+        <StudentCombobox
+          students={students}
+          value={selStu}
+          onChange={setSelStu}
+          getLabel={s => s.fullName}
+          getMeta={s => [s.grade && `Grade ${s.grade}`, s.cohort].filter(Boolean).join(' · ') || undefined}
+          allOption="— All Students —"
+          style={{ ...iStyle, flex: 1, minWidth: 180 }}
+        />
       </div>
 
       {/* Per-student cards */}

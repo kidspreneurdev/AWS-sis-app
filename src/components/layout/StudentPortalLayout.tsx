@@ -21,6 +21,8 @@ const SP_NAV = [
   { id: 'sp_docs',     icon: '📄', label: 'My Documents',        to: '/portal/documents' },
   { id: 'sp_records',  icon: '📁', label: 'My Records',           to: '/portal/records' },
   { id: 'sp_onboard',  icon: '✅', label: 'Onboarding',            to: '/portal/onboarding' },
+  { id: 'sp_policy',   icon: '📜', label: 'Policy Documents',      to: '/portal/policy-documents' },
+  { id: 'sp_calendar', icon: '📆', label: 'Academic Calendar',     to: '/portal/academic-calendar' },
   { id: 'sp_badges',   icon: '🏅', label: 'My Badges',           to: '/portal/badges' },
   { id: 'sp_profile',  icon: '👤', label: 'My Profile',          to: '/portal/profile' },
 ]
@@ -33,6 +35,7 @@ const K5_NAV = [
   { id: 'k5_attend',  icon: '📅', label: 'Attendance',   to: '/portal/attendance' },
   { id: 'k5_timetable', icon: '🗓️', label: 'My Timetable', to: '/portal/timetable' },
   { id: 'k5_certs',   icon: '🏆', label: 'Certificates', to: '/portal/k5-certificates' },
+  { id: 'k5_calendar', icon: '📆', label: 'Calendar',    to: '/portal/academic-calendar' },
   { id: 'k5_port',    icon: '🎨', label: 'My Portfolio', to: '/portal/portfolio' },
   { id: 'k5_profile', icon: '👤', label: 'My Profile',   to: '/portal/profile' },
 ]

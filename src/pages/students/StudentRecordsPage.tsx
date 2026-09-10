@@ -6,6 +6,8 @@ import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
 import { downloadUrl } from '@/lib/uploadFile'
 import { PdfScrollViewer } from '@/components/pdf/PdfViewer'
+import { StudentCombobox } from '@/components/shared/StudentCombobox'
+import { CollapsibleSection } from '@/components/shared/CollapsibleSection'
 import { CourseConfirmationDocument } from '@/components/records/CourseConfirmationDocument'
 import { CourseConfirmationForm } from '@/components/records/CourseConfirmationForm'
 import { WeeklyScheduleDocument } from '@/components/records/WeeklyScheduleDocument'
@@ -37,9 +39,14 @@ import {
 } from '@/types/assessmentInstructions'
 import {
   STUDENT_RECORD_DEFS,
+  RECORD_CATEGORIES,
+  recordDefsForCategory,
+  diagnosticDefsBySemester,
   MAX_RECORD_FILE_BYTES,
+  SIGNED_STATUS_META,
   sanitizeRecordFileName,
   rowToStudentRecord,
+  recordSupportsSignedReturn,
   formatFileSize,
   type StudentRecord,
   type StudentRecordDef,
@@ -217,9 +224,67 @@ function DocPreviewModal({
   )
 }
 
+// ─── Signed-return review strip (admin) ──────────────────────────────────────
+function SignedReturnStrip({
+  record, busy, onApprove, onReject, onClear,
+}: {
+  record: StudentRecord | undefined
+  busy: boolean
+  onApprove: () => void
+  onReject: () => void
+  onClear: () => void
+}) {
+  const status = record?.signedStatus ?? null
+  const meta = status ? SIGNED_STATUS_META[status] : null
+
+  return (
+    <div style={{ marginTop: 10, background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 10, padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: '#1A365E' }}>Signed copy</div>
+        {meta && (
+          <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: meta.bg, color: meta.fg }}>{meta.label}</span>
+        )}
+      </div>
+
+      {!status ? (
+        <div style={{ fontSize: 12, color: '#7A92B0' }}>Awaiting signed copy from the student.</div>
+      ) : (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ fontSize: 12, color: '#7A92B0', minWidth: 0 }}>
+              📄 {record?.signedFileName || 'signed-document.pdf'}
+              {record?.signedSubmittedAt ? ` · ${new Date(record.signedSubmittedAt).toLocaleDateString()}` : ''}
+            </div>
+            {record?.signedFileUrl && (
+              <button onClick={() => void downloadUrl(record.signedFileUrl!, record.signedFileName || 'signed-document.pdf')} style={btn('#1A365E')}>
+                View signed file
+              </button>
+            )}
+          </div>
+          {status === 'rejected' && record?.signedReviewNote && (
+            <div style={{ fontSize: 12, color: '#991B1B' }}>Rejected: {record.signedReviewNote}</div>
+          )}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {status === 'submitted' && (
+              <>
+                <button onClick={onApprove} disabled={busy} style={btn('#0E6B3B')}>Approve</button>
+                <button onClick={onReject} disabled={busy} style={btn('#FFF0F1', '#D61F31')}>Reject</button>
+              </>
+            )}
+            {(status === 'approved' || status === 'rejected') && (
+              <button onClick={onClear} disabled={busy} style={btn('#fff', '#1A365E')}>Clear</button>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 // ─── Generated-document card (admin) ──────────────────────────────────────────
 function GeneratedDocCard({
   def, record, has, busy, onCreate, onEdit, onPreview, onDelete,
+  onApproveSigned, onRejectSigned, onClearSigned,
 }: {
   def: StudentRecordDef
   record: StudentRecord | undefined
@@ -229,7 +294,11 @@ function GeneratedDocCard({
   onEdit: () => void
   onPreview: () => void
   onDelete: () => void
+  onApproveSigned?: () => void
+  onRejectSigned?: () => void
+  onClearSigned?: () => void
 }) {
+  const showSigned = has && recordSupportsSignedReturn(def.type)
   return (
     <div style={{ ...card, background: has ? '#fff' : '#F7F9FC' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
@@ -260,6 +329,16 @@ function GeneratedDocCard({
         <button onClick={onCreate} disabled={busy} style={{ marginTop: 12, ...btn('#1A365E') }}>
           {busy ? 'Working…' : `Create ${def.label}`}
         </button>
+      )}
+
+      {showSigned && (
+        <SignedReturnStrip
+          record={record}
+          busy={busy}
+          onApprove={() => onApproveSigned?.()}
+          onReject={() => onRejectSigned?.()}
+          onClear={() => onClearSigned?.()}
+        />
       )}
     </div>
   )
@@ -376,18 +455,16 @@ export function StudentRecordsPage() {
   }, [selectedStudent?.cohort])
 
   const headerPortal = useHeaderActions(
-    <select
+    <StudentCombobox
+      students={students}
       value={selectedId}
-      onChange={e => setSelectedId(e.target.value)}
-      style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #E4EAF2', fontSize: 13, color: '#1A365E', background: '#fff', maxWidth: 260 }}
-    >
-      {students.length === 0 && <option value="">No students</option>}
-      {students.map(s => (
-        <option key={s.id} value={s.id}>
-          {s.lastName}, {s.firstName}{s.grade ? ` (Gr ${s.grade})` : ''}
-        </option>
-      ))}
-    </select>,
+      onChange={setSelectedId}
+      getLabel={s => `${s.firstName} ${s.lastName}`}
+      getMeta={s => [s.grade && `Grade ${s.grade}`, s.cohort].filter(Boolean).join(' · ') || undefined}
+      getStatus={s => s.status || undefined}
+      placeholder={students.length === 0 ? 'No students' : 'Search students…'}
+      style={{ width: 260, maxWidth: 260 }}
+    />,
   )
 
   async function handleUpload(def: StudentRecordDef, file: File) {
@@ -555,8 +632,161 @@ export function StudentRecordsPage() {
     }
   }
 
+  async function refreshRecord(recordType: StudentRecordType) {
+    if (!selectedId) return
+    const { data: fresh } = await supabase.from('student_records').select('*').eq('student_id', selectedId).eq('record_type', recordType).single()
+    if (fresh) setRecords(prev => ({ ...prev, [recordType]: rowToStudentRecord(fresh as Record<string, unknown>) }))
+  }
+
+  async function reviewSigned(recordType: StudentRecordType, decision: 'approved' | 'rejected') {
+    if (!selectedId) return
+    let note: string | null = null
+    if (decision === 'rejected') {
+      const reason = window.prompt('Reason for rejecting this signed copy:')
+      if (reason == null) return
+      note = reason.trim() || null
+    }
+    setBusyType(recordType)
+    try {
+      const { data: user } = await supabase.auth.getUser()
+      const { error } = await supabase.from('student_records').update({
+        signed_status: decision,
+        signed_reviewed_by: user.user?.id ?? null,
+        signed_reviewed_at: new Date().toISOString(),
+        signed_review_note: note,
+        updated_at: new Date().toISOString(),
+      }).eq('student_id', selectedId).eq('record_type', recordType)
+      if (error) { toast(toStorageErrorMessage(error), 'err'); return }
+      await refreshRecord(recordType)
+      toast(decision === 'approved' ? 'Signed copy approved' : 'Signed copy rejected', 'ok')
+    } finally {
+      setBusyType(null)
+    }
+  }
+
+  async function clearSigned(recordType: StudentRecordType) {
+    if (!selectedId) return
+    if (!confirm('Clear the submitted signed copy? The student will be able to upload a new one.')) return
+    setBusyType(recordType)
+    try {
+      const { error } = await supabase.from('student_records').update({
+        signed_file_url: null,
+        signed_file_name: null,
+        signed_submitted_at: null,
+        signed_status: null,
+        signed_review_note: null,
+        signed_reviewed_by: null,
+        signed_reviewed_at: null,
+        updated_at: new Date().toISOString(),
+      }).eq('student_id', selectedId).eq('record_type', recordType)
+      if (error) { toast(toStorageErrorMessage(error), 'err'); return }
+      await refreshRecord(recordType)
+    } finally {
+      setBusyType(null)
+    }
+  }
+
   const uploadedCount = STUDENT_RECORD_DEFS.filter(d => d.source === 'upload' && records[d.type]?.storagePath).length
   const uploadTotal = STUDENT_RECORD_DEFS.filter(d => d.source === 'upload').length
+
+  function renderRecordCard(def: StudentRecordDef) {
+    if (def.source === 'upload') {
+      return (
+        <UploadRecordCard
+          key={def.type}
+          def={def}
+          record={records[def.type]}
+          busy={busyType === def.type}
+          onUpload={file => void handleUpload(def, file)}
+          onView={() => void handleView(def)}
+          onDelete={() => void handleDelete(def)}
+        />
+      )
+    }
+
+    const signedHandlers = recordSupportsSignedReturn(def.type)
+      ? {
+          onApproveSigned: () => void reviewSigned(def.type, 'approved'),
+          onRejectSigned: () => void reviewSigned(def.type, 'rejected'),
+          onClearSigned: () => void clearSigned(def.type),
+        }
+      : {}
+
+    switch (def.type) {
+      case 'course_confirmation':
+        return (
+          <GeneratedDocCard
+            key={def.type}
+            def={def}
+            record={records[def.type]}
+            has={isCourseConfirmationData(records.course_confirmation?.data)}
+            busy={busyType === 'course_confirmation'}
+            onCreate={openCourseConfirmationForm}
+            onEdit={openCourseConfirmationForm}
+            onPreview={() => {
+              const data = records.course_confirmation?.data
+              if (isCourseConfirmationData(data)) setCcPreview(data)
+            }}
+            onDelete={() => void handleDelete(def)}
+            {...signedHandlers}
+          />
+        )
+      case 'weekly_schedule':
+        return (
+          <GeneratedDocCard
+            key={def.type}
+            def={def}
+            record={records[def.type]}
+            has={isWeeklyScheduleData(records.weekly_schedule?.data)}
+            busy={busyType === 'weekly_schedule'}
+            onCreate={openWeeklyScheduleForm}
+            onEdit={openWeeklyScheduleForm}
+            onPreview={() => {
+              const data = records.weekly_schedule?.data
+              if (isWeeklyScheduleData(data)) setWsPreview(data)
+            }}
+            onDelete={() => void handleDelete(def)}
+            {...signedHandlers}
+          />
+        )
+      case 'edmentum_credentials':
+        return (
+          <GeneratedDocCard
+            key={def.type}
+            def={def}
+            record={records[def.type]}
+            has={isEdmentumCredentialsData(records.edmentum_credentials?.data)}
+            busy={busyType === 'edmentum_credentials'}
+            onCreate={openEdmentumForm}
+            onEdit={openEdmentumForm}
+            onPreview={() => {
+              const data = records.edmentum_credentials?.data
+              if (isEdmentumCredentialsData(data)) setEdPreview(data)
+            }}
+            onDelete={() => void handleDelete(def)}
+          />
+        )
+      case 'assessment_instructions':
+        return (
+          <GeneratedDocCard
+            key={def.type}
+            def={def}
+            record={records[def.type]}
+            has={isAssessmentInstructionsData(records.assessment_instructions?.data)}
+            busy={busyType === 'assessment_instructions'}
+            onCreate={openAssessmentForm}
+            onEdit={openAssessmentForm}
+            onPreview={() => {
+              const data = records.assessment_instructions?.data
+              if (isAssessmentInstructionsData(data)) setAiPreview(data)
+            }}
+            onDelete={() => void handleDelete(def)}
+          />
+        )
+      default:
+        return null
+    }
+  }
 
   return (
     <>
@@ -583,94 +813,17 @@ export function StudentRecordsPage() {
         ) : !selectedStudent ? (
           <div style={{ ...card, textAlign: 'center', color: '#7A92B0' }}>No students found.</div>
         ) : (
-          STUDENT_RECORD_DEFS.map(def => {
-            if (def.source === 'upload') {
-              return (
-                <UploadRecordCard
-                  key={def.type}
-                  def={def}
-                  record={records[def.type]}
-                  busy={busyType === def.type}
-                  onUpload={file => void handleUpload(def, file)}
-                  onView={() => void handleView(def)}
-                  onDelete={() => void handleDelete(def)}
-                />
-              )
-            }
-            if (def.type === 'course_confirmation') {
-              return (
-                <GeneratedDocCard
-                  key={def.type}
-                  def={def}
-                  record={records[def.type]}
-                  has={isCourseConfirmationData(records.course_confirmation?.data)}
-                  busy={busyType === 'course_confirmation'}
-                  onCreate={openCourseConfirmationForm}
-                  onEdit={openCourseConfirmationForm}
-                  onPreview={() => {
-                    const data = records.course_confirmation?.data
-                    if (isCourseConfirmationData(data)) setCcPreview(data)
-                  }}
-                  onDelete={() => void handleDelete(def)}
-                />
-              )
-            }
-            if (def.type === 'weekly_schedule') {
-              return (
-                <GeneratedDocCard
-                  key={def.type}
-                  def={def}
-                  record={records[def.type]}
-                  has={isWeeklyScheduleData(records.weekly_schedule?.data)}
-                  busy={busyType === 'weekly_schedule'}
-                  onCreate={openWeeklyScheduleForm}
-                  onEdit={openWeeklyScheduleForm}
-                  onPreview={() => {
-                    const data = records.weekly_schedule?.data
-                    if (isWeeklyScheduleData(data)) setWsPreview(data)
-                  }}
-                  onDelete={() => void handleDelete(def)}
-                />
-              )
-            }
-            if (def.type === 'edmentum_credentials') {
-              return (
-                <GeneratedDocCard
-                  key={def.type}
-                  def={def}
-                  record={records[def.type]}
-                  has={isEdmentumCredentialsData(records.edmentum_credentials?.data)}
-                  busy={busyType === 'edmentum_credentials'}
-                  onCreate={openEdmentumForm}
-                  onEdit={openEdmentumForm}
-                  onPreview={() => {
-                    const data = records.edmentum_credentials?.data
-                    if (isEdmentumCredentialsData(data)) setEdPreview(data)
-                  }}
-                  onDelete={() => void handleDelete(def)}
-                />
-              )
-            }
-            if (def.type === 'assessment_instructions') {
-              return (
-                <GeneratedDocCard
-                  key={def.type}
-                  def={def}
-                  record={records[def.type]}
-                  has={isAssessmentInstructionsData(records.assessment_instructions?.data)}
-                  busy={busyType === 'assessment_instructions'}
-                  onCreate={openAssessmentForm}
-                  onEdit={openAssessmentForm}
-                  onPreview={() => {
-                    const data = records.assessment_instructions?.data
-                    if (isAssessmentInstructionsData(data)) setAiPreview(data)
-                  }}
-                  onDelete={() => void handleDelete(def)}
-                />
-              )
-            }
-            return null
-          })
+          RECORD_CATEGORIES.map(cat => (
+            <CollapsibleSection key={cat.key} level="category" title={cat.label} subtitle={cat.note} defaultOpen>
+              {cat.key === 'diagnostics'
+                ? ([1, 2, 3] as const).map(sem => (
+                    <CollapsibleSection key={sem} level="sub" title={`Semester ${sem}`} defaultOpen>
+                      {diagnosticDefsBySemester()[sem].map(renderRecordCard)}
+                    </CollapsibleSection>
+                  ))
+                : recordDefsForCategory(cat.key).map(renderRecordCard)}
+            </CollapsibleSection>
+          ))
         )}
       </div>
 
@@ -703,8 +856,8 @@ export function StudentRecordsPage() {
       )}
       {wsPreview && (
         <DocPreviewModal
-          title="Weekly Schedule — Preview"
-          printTitle={`Weekly Schedule — ${wsPreview.studentName}`}
+          title="Weekly Course Schedule — Preview"
+          printTitle={`Weekly Course Schedule — ${wsPreview.studentName}`}
           onClose={() => setWsPreview(null)}
           renderDoc={ref => <WeeklyScheduleDocument ref={ref} data={wsPreview} />}
         />
@@ -735,8 +888,8 @@ export function StudentRecordsPage() {
       )}
       {aiPreview && (
         <DocPreviewModal
-          title="Assessment Instructions — Preview"
-          printTitle={`Assessment Instructions — ${aiPreview.studentName}`}
+          title="Psychometric Assessment Login Information — Preview"
+          printTitle={`Psychometric Assessment Login Information — ${aiPreview.studentName}`}
           onClose={() => setAiPreview(null)}
           renderDoc={ref => <AssessmentInstructionsDocument ref={ref} data={aiPreview} />}
         />

@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { downloadUrl } from '@/lib/uploadFile'
+import { StudentCombobox } from '@/components/shared/StudentCombobox'
 import { PTM, PTQD, PTSTAT, STAT_META, mapAssignment, mapEvaluation, ptSUM, ptQST, ptScoreBadge, type PTAssignment, type PTEvaluation } from './ptConstants'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)' }
@@ -56,10 +57,15 @@ export function PTTrackPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {/* Filter bar */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', background: '#F7F9FC', padding: '10px 14px', borderRadius: 10, border: '1px solid #E4EAF2' }}>
-        <select value={selS} onChange={e => setSelS(e.target.value)} style={{ ...iStyle, flex: 1, minWidth: 180 }}>
-          <option value="">All Students</option>
-          {students.map(s => <option key={s.id} value={s.id}>{s.fullName}</option>)}
-        </select>
+        <StudentCombobox
+          students={students}
+          value={selS}
+          onChange={setSelS}
+          getLabel={s => s.fullName}
+          getMeta={s => [s.grade && `Grade ${s.grade}`, s.cohort].filter(Boolean).join(' · ') || undefined}
+          allOption="All Students"
+          style={{ ...iStyle, flex: 1, minWidth: 180 }}
+        />
         <select value={selQ} onChange={e => setSelQ(e.target.value)} style={iStyle}>
           {['All', 'Q1', 'Q2', 'Q3', 'Q4'].map(q => <option key={q}>{q}</option>)}
         </select>

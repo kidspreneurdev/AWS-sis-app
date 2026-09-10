@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { supabase } from '@/lib/supabase'
+import { StudentCombobox } from '@/components/shared/StudentCombobox'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 20 }
 
@@ -209,10 +210,15 @@ export function ATReportsPage() {
           </div>
           <div>
             <label style={{ fontSize: 11, fontWeight: 600, color: '#7A92B0', display: 'block', marginBottom: 3 }}>Student</label>
-            <select value={selStu} onChange={e => { setSelStu(e.target.value); setPreview(false) }} style={{ ...iStyle, width: '100%' }}>
-              <option value="">— Select Student —</option>
-              {students.map(s => <option key={s.id} value={s.id}>{s.fullName}</option>)}
-            </select>
+            <StudentCombobox
+              students={students}
+              value={selStu}
+              onChange={id => { setSelStu(id); setPreview(false) }}
+              getLabel={s => s.fullName}
+              getMeta={s => [s.grade && `Grade ${s.grade}`, s.cohort].filter(Boolean).join(' · ') || undefined}
+              placeholder="— Select Student —"
+              style={{ ...iStyle, width: '100%' }}
+            />
           </div>
         </div>
 

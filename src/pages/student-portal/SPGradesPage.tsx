@@ -830,7 +830,7 @@ export function SPGradesPage() {
             <div style={{ ...card, padding: 18, borderLeft: `4px solid ${SP_GOLD}`, background: '#FFFDF5' }}>
               <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, marginBottom: 6 }}>Graduation requirements are not configured</div>
               <div style={{ fontSize: 12, color: '#7A92B0' }}>
-                The student portal is now reading graduation policy from Supabase. Add requirement records in the database to populate this audit.
+                Graduation requirements have not been set up yet. Once they are configured, this audit will populate automatically.
               </div>
             </div>
           )}
@@ -864,7 +864,7 @@ export function SPGradesPage() {
                   })}
                 </div>
               ) : (
-                <div style={emptyState}>No distinction data has been configured in Supabase for this section yet.</div>
+                <div style={emptyState}>No graduation distinctions have been configured yet.</div>
               )}
             </div>
 
@@ -887,7 +887,7 @@ export function SPGradesPage() {
                     </div>
                   </>
                 ) : (
-                  <div style={emptyState}>No associate degree credit target has been configured in Supabase for this section yet.</div>
+                  <div style={emptyState}>No associate degree credit target has been configured yet.</div>
                 )}
               </div>
           </div>
@@ -967,7 +967,7 @@ export function SPGradesPage() {
               )}
 
               {approvedTransfers.length === 0 && pendingTransfers.length === 0 && ecdeCredits.length === 0 && (
-                <div style={emptyState}>No transfer or EC/DE credit data is available from Supabase for this section yet.</div>
+                <div style={emptyState}>No transfer or EC/DE credits have been recorded yet.</div>
               )}
             </div>
 
@@ -1090,7 +1090,7 @@ export function SPGradesPage() {
               </table>
             </div>
           ) : (
-            <div style={{ ...card, ...emptyState }}>No report card grade data is available from Supabase for this section yet.</div>
+            <div style={{ ...card, ...emptyState }}>No report card grades have been published yet.</div>
           )}
 
           {Object.keys(bySubject).length > 0 && !isHS && (
@@ -1112,7 +1112,7 @@ export function SPGradesPage() {
           )}
 
           {!isHS && Object.keys(bySubject).length === 0 && (
-            <div style={{ ...card, ...emptyState }}>No subject summary data is available from Supabase for this section yet.</div>
+            <div style={{ ...card, ...emptyState }}>No subject summaries are available yet.</div>
           )}
 
           {remarks.length > 0 ? (
@@ -1131,7 +1131,7 @@ export function SPGradesPage() {
               </div>
             </div>
           ) : (
-            <div style={{ ...card, ...emptyState }}>No teacher remarks are available from Supabase for this section yet.</div>
+            <div style={{ ...card, ...emptyState }}>No teacher remarks have been added yet.</div>
           )}
 
           <div style={{ ...card, padding: '12px 20px', background: '#F7F9FC', display: 'flex', gap: 20, flexWrap: 'wrap' }}>

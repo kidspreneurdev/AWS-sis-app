@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { downloadUrl } from '@/lib/uploadFile'
+import { StudentCombobox } from '@/components/shared/StudentCombobox'
 import { PTM, PTQD, mapAssignment, mapEvaluation, ptSUM, ptQST, ptScoreBadge, type PTAssignment, type PTEvaluation } from './ptConstants'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 18 }
@@ -66,9 +67,14 @@ export function PTReportsPage() {
         <div style={{ fontSize: 13, fontWeight: 800, color: '#1A365E', marginBottom: 14 }}>📄 Generate Family Progress Report</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
           <div><label style={lb}>Student</label>
-            <select value={selS} onChange={e => { setSelS(e.target.value); setShowPrev(false) }} style={fi}>
-              {students.map(s => <option key={s.id} value={s.id}>{s.fullName}</option>)}
-            </select>
+            <StudentCombobox
+              students={students}
+              value={selS}
+              onChange={id => { setSelS(id); setShowPrev(false) }}
+              getLabel={s => s.fullName}
+              getMeta={s => [s.grade && `Grade ${s.grade}`, s.cohort].filter(Boolean).join(' · ') || undefined}
+              style={fi}
+            />
           </div>
           <div><label style={lb}>Report Type</label>
             <select value={rType} onChange={e => setRType(e.target.value)} style={fi}>

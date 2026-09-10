@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/lib/toast'
+import { StudentCombobox } from '@/components/shared/StudentCombobox'
 
 const STATUSES = ['Not Started', 'In Progress', 'Submitted', 'Graded']
 const STATUS_META: Record<string, { bg: string; tc: string }> = {
@@ -51,10 +52,15 @@ function ProjectModal({ project, students, onClose, onSave, onDelete }: {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <label style={lbl}>Student</label>
-              <select value={form.studentId} onChange={e => handleStudentChange(e.target.value)} style={inp}>
-                <option value="">Select…</option>
-                {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
+              <StudentCombobox
+                students={students}
+                value={form.studentId}
+                onChange={handleStudentChange}
+                getLabel={s => s.name}
+                getMeta={s => [s.grade && `Grade ${s.grade}`, s.cohort].filter(Boolean).join(' · ') || undefined}
+                placeholder="Select…"
+                style={inp}
+              />
             </div>
             <div><label style={lbl}>Cohort</label><input value={form.cohort} onChange={e => set('cohort', e.target.value)} style={inp} /></div>
           </div>

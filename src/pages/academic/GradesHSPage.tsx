@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
+import { StudentCombobox } from '@/components/shared/StudentCombobox'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { MHSDiplomaProgress } from '@/pages/mhs-grading/MHSDiplomaProgress'
 import { MHSTrendChart } from '@/pages/mhs-grading/MHSTrendChart'
@@ -1385,10 +1386,14 @@ export function GradesHSPage() {
 
   const headerPortal = useHeaderActions(
     <div style={{ display: tab === 'overview' ? 'none' : 'flex', gap:8, alignItems:'center' }}>
-      <select value={selectedId} onChange={e => setSelectedId(e.target.value)}
-        style={{ padding:'6px 10px', borderRadius:8, border:'1px solid #E4EAF2', fontSize:13, color:'#1A365E', background:'#fff', maxWidth:220 }}>
-        {students.map(s => <option key={s.id} value={s.id}>{s.name} (Gr {s.grade})</option>)}
-      </select>
+      <StudentCombobox
+        students={students}
+        value={selectedId}
+        onChange={setSelectedId}
+        getLabel={s => s.name}
+        getMeta={s => [s.grade && `Grade ${s.grade}`, s.cohort].filter(Boolean).join(' · ') || undefined}
+        style={{ width: 220, maxWidth: 220 }}
+      />
     </div>
   )
 

@@ -82,8 +82,8 @@ export function SPTimetablePage() {
     async function load() {
       const { data } = await supabase
         .from('timetable_blocks')
-        .select('id,name,day,period,time,subject,room,session_type,meet_link,coach_id,cohort,student_id')
-        .or(`cohort.eq."${session!.cohort ?? ''}",student_id.eq.${session!.dbId}`)
+        .select('id,name,day,period,time,subject,room,session_type,meet_link,coach_id,cohort,student_ids')
+        .or(`cohort.eq."${session!.cohort ?? ''}",student_ids.cs.{${session!.dbId}}`)
         .order('created_at', { ascending: true })
       if (cancelled) return
 
@@ -98,7 +98,7 @@ export function SPTimetablePage() {
         sessionType: (row.session_type as string) ?? 'Live Session',
         meetLink: (row.meet_link as string) ?? '',
         coachId: (row.coach_id as string) ?? '',
-        assignedToMe: !!row.student_id,
+        assignedToMe: Array.isArray(row.student_ids) && (row.student_ids as string[]).length > 0,
       }))
       setBlocks(mapped)
       setLoaded(true)

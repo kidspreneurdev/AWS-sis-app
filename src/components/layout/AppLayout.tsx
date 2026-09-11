@@ -20,7 +20,7 @@ import {
   Settings, Bell, Shield, Briefcase, LogOut, UserPlus,
   BarChart, Clock, Target, FileCheck, StickyNote, Printer,
   PlusSquare, Activity, CheckSquare, FileBarChart, Telescope, Flag,
-  Library, BookMarked, BookCopy, UserCog, BarChart3, LayoutList, Inbox,
+  Library, UserCog, BarChart3, LayoutList, Inbox,
   ShieldCheck, ListChecks, Puzzle, FolderArchive, CalendarDays,
 } from 'lucide-react'
 import { PageHeaderProvider, useSetActionsTarget } from '@/contexts/PageHeaderContext'
@@ -127,8 +127,6 @@ const NAV: NavGroup[] = [
           { title: 'Overview', icon: BarChart2, to: '/lms/overview' },
           { title: 'Manage Courses', icon: LayoutList, to: '/lms/manage' },
           { title: 'Manage Students', icon: Users, to: '/lms/students' },
-          { title: 'Courses', icon: BookMarked, to: '/lms/courses' },
-          { title: 'Content Library', icon: BookCopy, to: '/lms/content' },
           { title: 'Assign Courses', icon: UserCog, to: '/lms/assign' },
           { title: 'Gradebook', icon: BarChart3, to: '/lms/gradebook' },
           { title: 'Curriculum', icon: Puzzle, to: '/lms/curriculum' },

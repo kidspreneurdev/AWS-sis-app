@@ -1,43 +1,51 @@
 import { Outlet, NavLink, Navigate, useNavigate } from 'react-router-dom'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { toLegacyStudentGradeValue } from '@/types/student'
+import {
+  Home, GraduationCap, UserCheck, CalendarRange, ClipboardList, Puzzle,
+  MessageSquare, BookOpen, Rocket, FolderKanban, Target, Brain, HeartPulse,
+  Lightbulb, Globe, FileText, FolderArchive, ListChecks, FileCheck, CalendarDays,
+  Medal, UserCircle, Star, Trophy, Palette, type LucideIcon,
+} from 'lucide-react'
 
-const SP_NAV = [
-  { id: 'sp_dash',     icon: '🏠', label: 'Dashboard',          to: '/portal/dashboard' },
-  { id: 'sp_grades',   icon: '📊', label: 'My Grades',           to: '/portal/grades' },
-  { id: 'sp_attend',   icon: '📅', label: 'Attendance',          to: '/portal/attendance' },
-  { id: 'sp_timetable',icon: '🗓️', label: 'My Timetable',         to: '/portal/timetable' },
-  { id: 'sp_assign',   icon: '📝', label: 'Assignments',         to: '/portal/assignments' },
-  { id: 'sp_mhs_quiz', icon: '🧩', label: 'My Quizzes',           to: '/portal/mhs-quiz' },
-  { id: 'sp_mhs_disc', icon: '💬', label: 'Share it',             to: '/portal/mhs-discussion' },
-  { id: 'sp_learning', icon: '📚', label: 'My Learning',         to: '/portal/learning' },
-  { id: 'sp_project',  icon: '🚀', label: 'My Project',          to: '/portal/project' },
-  { id: 'sp_portfolio',icon: '🗂️', label: 'Portfolio',           to: '/portal/portfolio' },
-  { id: 'sp_goals',    icon: '🎯', label: 'Goals & Reflections', to: '/portal/goals' },
-  { id: 'sp_skills',   icon: '🧠', label: 'Skill Graph',         to: '/portal/skills' },
-  { id: 'sp_wellness', icon: '💚', label: 'Wellness',            to: '/portal/wellness' },
-  { id: 'sp_lab',      icon: '💡', label: 'Innovation Lab',      to: '/portal/lab' },
-  { id: 'sp_rwlog',    icon: '🌍', label: 'Real-World Log',      to: '/portal/rwlog' },
-  { id: 'sp_docs',     icon: '📄', label: 'My Documents',        to: '/portal/documents' },
-  { id: 'sp_records',  icon: '📁', label: 'My Records',           to: '/portal/records' },
-  { id: 'sp_onboard',  icon: '✅', label: 'Onboarding',            to: '/portal/onboarding' },
-  { id: 'sp_policy',   icon: '📜', label: 'Policy Documents',      to: '/portal/policy-documents' },
-  { id: 'sp_calendar', icon: '📆', label: 'Academic Calendar',     to: '/portal/academic-calendar' },
-  { id: 'sp_badges',   icon: '🏅', label: 'My Badges',           to: '/portal/badges' },
-  { id: 'sp_profile',  icon: '👤', label: 'My Profile',          to: '/portal/profile' },
+type SpNavItem = { id: string; icon: LucideIcon; label: string; to: string }
+
+const SP_NAV: SpNavItem[] = [
+  { id: 'sp_dash',     icon: Home,          label: 'Dashboard',          to: '/portal/dashboard' },
+  { id: 'sp_grades',   icon: GraduationCap, label: 'My Grades',           to: '/portal/grades' },
+  { id: 'sp_attend',   icon: UserCheck,     label: 'Attendance',          to: '/portal/attendance' },
+  { id: 'sp_timetable',icon: CalendarRange, label: 'My Timetable',         to: '/portal/timetable' },
+  { id: 'sp_assign',   icon: ClipboardList, label: 'Assignments',         to: '/portal/assignments' },
+  { id: 'sp_mhs_quiz', icon: Puzzle,        label: 'My Quizzes',           to: '/portal/mhs-quiz' },
+  { id: 'sp_mhs_disc', icon: MessageSquare, label: 'Share it',             to: '/portal/mhs-discussion' },
+  { id: 'sp_learning', icon: BookOpen,      label: 'My Learning',         to: '/portal/learning' },
+  { id: 'sp_project',  icon: Rocket,        label: 'My Project',          to: '/portal/project' },
+  { id: 'sp_portfolio',icon: FolderKanban,  label: 'Portfolio',           to: '/portal/portfolio' },
+  { id: 'sp_goals',    icon: Target,        label: 'Goals & Reflections', to: '/portal/goals' },
+  { id: 'sp_skills',   icon: Brain,         label: 'Skill Graph',         to: '/portal/skills' },
+  { id: 'sp_wellness', icon: HeartPulse,    label: 'Wellness',            to: '/portal/wellness' },
+  { id: 'sp_lab',      icon: Lightbulb,     label: 'Innovation Lab',      to: '/portal/lab' },
+  { id: 'sp_rwlog',    icon: Globe,         label: 'Real-World Log',      to: '/portal/rwlog' },
+  { id: 'sp_docs',     icon: FileText,      label: 'My Documents',        to: '/portal/documents' },
+  { id: 'sp_records',  icon: FolderArchive, label: 'My Records',           to: '/portal/records' },
+  { id: 'sp_onboard',  icon: ListChecks,    label: 'Onboarding',            to: '/portal/onboarding' },
+  { id: 'sp_policy',   icon: FileCheck,     label: 'Policy Documents',      to: '/portal/policy-documents' },
+  { id: 'sp_calendar', icon: CalendarDays,  label: 'Academic Calendar',     to: '/portal/academic-calendar' },
+  { id: 'sp_badges',   icon: Medal,         label: 'My Badges',           to: '/portal/badges' },
+  { id: 'sp_profile',  icon: UserCircle,    label: 'My Profile',          to: '/portal/profile' },
 ]
 
-const K5_NAV = [
-  { id: 'k5_dash',    icon: '🏠', label: 'My Home',      to: '/portal/dashboard' },
-  { id: 'k5_learn',   icon: '📚', label: 'My Lessons',   to: '/portal/learning' },
-  { id: 'k5_stars',   icon: '⭐', label: 'My Stars',     to: '/portal/badges' },
-  { id: 'k5_grades',  icon: '📊', label: 'My Grades',    to: '/portal/grades' },
-  { id: 'k5_attend',  icon: '📅', label: 'Attendance',   to: '/portal/attendance' },
-  { id: 'k5_timetable', icon: '🗓️', label: 'My Timetable', to: '/portal/timetable' },
-  { id: 'k5_certs',   icon: '🏆', label: 'Certificates', to: '/portal/k5-certificates' },
-  { id: 'k5_calendar', icon: '📆', label: 'Calendar',    to: '/portal/academic-calendar' },
-  { id: 'k5_port',    icon: '🎨', label: 'My Portfolio', to: '/portal/portfolio' },
-  { id: 'k5_profile', icon: '👤', label: 'My Profile',   to: '/portal/profile' },
+const K5_NAV: SpNavItem[] = [
+  { id: 'k5_dash',    icon: Home,          label: 'My Home',      to: '/portal/dashboard' },
+  { id: 'k5_learn',   icon: BookOpen,      label: 'My Lessons',   to: '/portal/learning' },
+  { id: 'k5_stars',   icon: Star,          label: 'My Stars',     to: '/portal/badges' },
+  { id: 'k5_grades',  icon: GraduationCap, label: 'My Grades',    to: '/portal/grades' },
+  { id: 'k5_attend',  icon: UserCheck,     label: 'Attendance',   to: '/portal/attendance' },
+  { id: 'k5_timetable', icon: CalendarRange, label: 'My Timetable', to: '/portal/timetable' },
+  { id: 'k5_certs',   icon: Trophy,        label: 'Certificates', to: '/portal/k5-certificates' },
+  { id: 'k5_calendar', icon: CalendarDays, label: 'Calendar',    to: '/portal/academic-calendar' },
+  { id: 'k5_port',    icon: Palette,       label: 'My Portfolio', to: '/portal/portfolio' },
+  { id: 'k5_profile', icon: UserCircle,    label: 'My Profile',   to: '/portal/profile' },
 ]
 
 export function StudentPortalLayout() {
@@ -150,7 +158,9 @@ export function StudentPortalLayout() {
                   fontFamily: 'Poppins, sans-serif',
                   transition: 'background 160ms, color 160ms',
                 }}>
-                  <span style={{ fontSize: isK5 ? 16 : 15, lineHeight: 1, width: 18, textAlign: 'center', flexShrink: 0 }}>{item.icon}</span>
+                  <span style={{ width: 18, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <item.icon size={isK5 ? 16 : 15} strokeWidth={2} />
+                  </span>
                   <span>{item.label}</span>
                 </div>
               )}
@@ -185,7 +195,7 @@ export function StudentPortalLayout() {
         <header style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', height: 48, display: 'flex', alignItems: 'center', padding: '0 20px', flexShrink: 0, gap: 10 }}>
           {isK5 ? (
             <>
-              <span style={{ fontSize: 16 }}>⭐</span>
+              <Star size={16} color="#FAC600" fill="#FAC600" />
               <span style={{ fontSize: 13, fontWeight: 700, color: '#FAC600' }}>K–5 Learning Portal</span>
               <span style={{ fontSize: 10, color: 'rgba(255,255,255,.3)', marginLeft: 4 }}>2025–26</span>
             </>

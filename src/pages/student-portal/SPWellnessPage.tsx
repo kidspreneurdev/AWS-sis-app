@@ -1,16 +1,17 @@
 import { useEffect, useState } from 'react'
+import { Laugh, Smile, Meh, Annoyed, Frown, Eye, Check, type LucideIcon } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 20 }
 
-const MOODS = [
-  { level: 5, emoji: '😄', label: 'Great' },
-  { level: 4, emoji: '🙂', label: 'Good' },
-  { level: 3, emoji: '😐', label: 'Okay' },
-  { level: 2, emoji: '😔', label: 'Low' },
-  { level: 1, emoji: '😢', label: 'Struggling' },
+const MOODS: { level: number; icon: LucideIcon; label: string }[] = [
+  { level: 5, icon: Laugh, label: 'Great' },
+  { level: 4, icon: Smile, label: 'Good' },
+  { level: 3, icon: Meh, label: 'Okay' },
+  { level: 2, icon: Annoyed, label: 'Low' },
+  { level: 1, icon: Frown, label: 'Struggling' },
 ]
 const CATEGORIES = ['Physical Health', 'Mental Wellbeing', 'Social', 'Sleep', 'Stress', 'Nutrition', 'Other']
 
@@ -41,7 +42,7 @@ export function SPWellnessPage() {
   }
 
   const avgMood = logs.length > 0 ? Math.round(logs.reduce((s, l) => s + l.mood, 0) / logs.length * 10) / 10 : null
-  const moodEmoji = MOODS.find(m => m.level === Math.round(avgMood ?? 3))
+  const moodAvg = MOODS.find(m => m.level === Math.round(avgMood ?? 3))
 
   const inp: React.CSSProperties = { width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #E4EAF2', fontSize: 13, color: '#1A365E', background: '#fff', boxSizing: 'border-box' }
 
@@ -54,7 +55,7 @@ export function SPWellnessPage() {
 
       {avgMood !== null && (
         <div style={{ ...card, display: 'flex', alignItems: 'center', gap: 16 }}>
-          <span style={{ fontSize: 40 }}>{moodEmoji?.emoji}</span>
+          {moodAvg ? <moodAvg.icon size={40} color="#D61F31" /> : null}
           <div>
             <div style={{ fontSize: 24, fontWeight: 800, color: '#1A365E' }}>{avgMood}/5</div>
             <div style={{ fontSize: 13, color: '#7A92B0' }}>Average mood over {logs.length} check-in{logs.length !== 1 ? 's' : ''}</div>
@@ -65,7 +66,7 @@ export function SPWellnessPage() {
       {/* Check-in */}
       {readOnly && (
         <div style={{ background: '#FAF5FF', border: '1px solid #DDD6FE', borderRadius: 10, padding: '10px 16px', fontSize: 12, color: '#6D28D9', fontWeight: 600 }}>
-          👁️ View-only access — check-in not available
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Eye size={14} /> View-only access — check-in not available</span>
         </div>
       )}
       <div style={{ ...card, opacity: readOnly ? 0.6 : 1, pointerEvents: readOnly ? 'none' : 'auto' }}>
@@ -74,8 +75,8 @@ export function SPWellnessPage() {
           <div style={{ fontSize: 12, fontWeight: 600, color: '#7A92B0', marginBottom: 8 }}>How are you feeling?</div>
           <div style={{ display: 'flex', gap: 8 }}>
             {MOODS.map(m => (
-              <button key={m.level} onClick={() => setMood(m.level)} style={{ flex: 1, padding: '10px 4px', borderRadius: 10, border: mood === m.level ? '2px solid #D61F31' : '2px solid #E4EAF2', background: mood === m.level ? '#FEE2E2' : '#F7F9FC', cursor: 'pointer', fontSize: 22, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                {m.emoji}
+              <button key={m.level} onClick={() => setMood(m.level)} style={{ flex: 1, padding: '10px 4px', borderRadius: 10, border: mood === m.level ? '2px solid #D61F31' : '2px solid #E4EAF2', background: mood === m.level ? '#FEE2E2' : '#F7F9FC', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, color: mood === m.level ? '#D61F31' : '#7A92B0' }}>
+                <m.icon size={22} />
                 <span style={{ fontSize: 10, color: mood === m.level ? '#D61F31' : '#7A92B0', fontWeight: 600 }}>{m.label}</span>
               </button>
             ))}
@@ -92,7 +93,7 @@ export function SPWellnessPage() {
           </div>
         </div>
         <button onClick={checkin} disabled={saving} style={{ padding: '9px 24px', borderRadius: 8, border: 'none', background: saved ? '#10B981' : '#D61F31', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
-          {saved ? '✓ Logged!' : saving ? 'Saving…' : 'Log Check-In'}
+          {saved ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Check size={14} strokeWidth={3} /> Logged!</span> : saving ? 'Saving…' : 'Log Check-In'}
         </button>
       </div>
 
@@ -104,7 +105,7 @@ export function SPWellnessPage() {
             const m = MOODS.find(m => m.level === l.mood)
             return (
               <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 18px', borderBottom: '1px solid #F0F4F8' }}>
-                <span style={{ fontSize: 24 }}>{m?.emoji}</span>
+                {m ? <m.icon size={24} color="#7A92B0" /> : null}
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#1A365E' }}>{m?.label} · {l.category}</div>
                   <div style={{ fontSize: 11, color: '#7A92B0' }}>{new Date(l.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</div>

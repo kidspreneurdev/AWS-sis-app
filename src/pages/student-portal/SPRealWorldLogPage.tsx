@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { X, MapPin } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
@@ -22,7 +23,7 @@ function Modal({ onClose, onSave }: { onClose: () => void; onSave: (f: typeof EM
       <div style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 500, boxShadow: '0 20px 60px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
         <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>Log Real-World Activity</div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#9EB3C8', cursor: 'pointer', fontSize: 20 }}>✕</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#9EB3C8', cursor: 'pointer', display: 'inline-flex', padding: 0 }}><X size={20} /></button>
         </div>
         <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -89,7 +90,7 @@ export function SPRealWorldLogPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <span style={{ padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: cm.bg, color: cm.tc }}>{l.type}</span>
-                  {l.location && <span style={{ fontSize: 12, color: '#7A92B0' }}>📍 {l.location}</span>}
+                  {l.location && <span style={{ fontSize: 12, color: '#7A92B0', display: 'inline-flex', alignItems: 'center', gap: 4 }}><MapPin size={12} /> {l.location}</span>}
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   {l.hours > 0 && <span style={{ fontSize: 12, fontWeight: 600, color: '#10B981' }}>{l.hours}h</span>}

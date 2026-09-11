@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Trophy, ScrollText, X, Download } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { K5CertificateFrame } from '@/components/k5/K5Certificate'
@@ -96,7 +97,7 @@ export function K5CertificatesPage() {
 
       {/* Header */}
       <div style={{ background:`linear-gradient(135deg,${NAVY},#2A4A7E)`, borderRadius:16, padding:'20px 22px' }}>
-        <div style={{ fontSize:20, fontWeight:800, color:'#fff', marginBottom:4 }}>🏆 My Certificates</div>
+        <div style={{ fontSize:20, fontWeight:800, color:'#fff', marginBottom:4, display:'flex', alignItems:'center', gap:8 }}><Trophy size={20} /> My Certificates</div>
         <div style={{ fontSize:12, color:'rgba(255,255,255,.55)' }}>Certificates you've earned by completing lessons</div>
       </div>
 
@@ -106,7 +107,7 @@ export function K5CertificatesPage() {
         </div>
       ) : lessons.length === 0 ? (
         <div style={{ background:'#fff', border:'1.5px solid #E2E8F0', borderRadius:14, padding:'40px 20px', textAlign:'center' }}>
-          <div style={{ fontSize:52, marginBottom:12 }}>📜</div>
+          <div style={{ display:'flex', justifyContent:'center', marginBottom:12, color:'#94A3B8' }}><ScrollText size={52} /></div>
           <div style={{ fontSize:15, fontWeight:800, color:NAVY, marginBottom:6 }}>No certificates yet</div>
           <div style={{ fontSize:12, color:'#64748B', lineHeight:1.7 }}>
             Complete a lesson and pass the quiz to earn your first certificate!
@@ -152,9 +153,9 @@ export function K5CertificatesPage() {
             >
               <button
                 onClick={() => setExpanded(null)}
-                style={{ position:'absolute', top:-14, right:-14, width:32, height:32, borderRadius:'50%', border:'none', background:'#d2d2d2ff', color:NAVY, fontSize:16, fontWeight:800, cursor:'pointer', zIndex:1 }}
+                style={{ position:'absolute', top:-14, right:-14, width:32, height:32, borderRadius:'50%', border:'none', background:'#d2d2d2ff', color:NAVY, cursor:'pointer', zIndex:1, display:'inline-flex', alignItems:'center', justifyContent:'center' }}
               >
-                ✕
+                <X size={16} />
               </button>
 
               <K5CertificateFrame
@@ -173,7 +174,7 @@ export function K5CertificatesPage() {
                 disabled={downloading}
                 style={{ width:'100%', marginTop:16, background:GOLD, color:NAVY, border:'none', borderRadius:10, padding:'12px 22px', fontSize:14, fontWeight:800, cursor: downloading ? 'default' : 'pointer', fontFamily:'inherit', opacity: downloading ? 0.7 : 1 }}
               >
-                {downloading ? 'Preparing…' : '📥 Download certificate'}
+                {downloading ? 'Preparing…' : <span style={{ display:'inline-flex', alignItems:'center', gap:8 }}><Download size={16} /> Download certificate</span>}
               </button>
             </div>
           </div>

@@ -7,6 +7,12 @@ import { useParentPortal } from '@/contexts/ParentPortalContext'
 import { toLegacyStudentGradeValue } from '@/types/student'
 import { calcGPA, calcWeightedGPA, type CourseType, type GpaCourse, type GpaTransfer } from '@/lib/grading/gpa'
 import { K5DashboardPage } from '@/pages/student-portal/K5DashboardPage'
+import {
+  ClipboardList, Target, FolderKanban, HeartPulse, Lightbulb, Hand, Users,
+  UserCheck, GraduationCap, BookOpen, CalendarDays, Radio, Book, MapPin, Link2,
+  AlertTriangle, FileText, Pencil, Clock, CheckCircle2, Zap, Medal, ArrowRight,
+  type LucideIcon,
+} from 'lucide-react'
 
 const card: React.CSSProperties = {
   background: '#fff',
@@ -89,7 +95,7 @@ function getGreeting() {
   return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'
 }
 
-function spCard(label: string, value: string, sub: string, color: string, icon: string) {
+function spCard(label: string, value: string, sub: string, color: string, Icon: LucideIcon) {
   return (
     <div key={label} style={{ ...card, padding: '16px 18px' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
@@ -98,8 +104,8 @@ function spCard(label: string, value: string, sub: string, color: string, icon: 
           <div style={{ fontSize: 26, fontWeight: 900, color, marginTop: 8, lineHeight: 1 }}>{value}</div>
           <div style={{ fontSize: 11, color: '#7A92B0', marginTop: 6 }}>{sub}</div>
         </div>
-        <div style={{ width: 38, height: 38, borderRadius: 11, background: `${color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
-          {icon}
+        <div style={{ width: 38, height: 38, borderRadius: 11, background: `${color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', color }}>
+          <Icon size={18} />
         </div>
       </div>
     </div>
@@ -280,12 +286,12 @@ export function SPDashboardPage() {
       .sort((a, b) => (a.time || '').localeCompare(b.time || ''))
   }, [blocks])
 
-  const quickActions = [
-    { icon: '📝', label: 'Submit Assignment', to: '/portal/assignments', color: SP_RED },
-    { icon: '🎯', label: 'Update My Goals', to: '/portal/goals', color: SP_NAVY },
-    { icon: '🗂️', label: 'Add to Portfolio', to: '/portal/portfolio', color: SP_PURPLE },
-    { icon: '💚', label: 'Wellness Check-in', to: '/portal/wellness', color: SP_GREEN },
-    { icon: '💡', label: 'Innovation Lab', to: '/portal/lab', color: SP_GOLD },
+  const quickActions: { icon: LucideIcon; label: string; to: string; color: string }[] = [
+    { icon: ClipboardList, label: 'Submit Assignment', to: '/portal/assignments', color: SP_RED },
+    { icon: Target, label: 'Update My Goals', to: '/portal/goals', color: SP_NAVY },
+    { icon: FolderKanban, label: 'Add to Portfolio', to: '/portal/portfolio', color: SP_PURPLE },
+    { icon: HeartPulse, label: 'Wellness Check-in', to: '/portal/wellness', color: SP_GREEN },
+    { icon: Lightbulb, label: 'Innovation Lab', to: '/portal/lab', color: SP_GOLD },
   ]
 
   return (
@@ -296,8 +302,8 @@ export function SPDashboardPage() {
           <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,.4)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 6 }}>
             Student Portal · 2025-2026
           </div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', marginBottom: 4 }}>
-            {greeting}, {firstName}! {readOnly ? '👨‍👩‍👧' : '👋'}
+          <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+            {greeting}, {firstName}! {readOnly ? <Users size={20} /> : <Hand size={20} />}
           </div>
           {readOnly ? (
             <div style={{ fontSize: 12, color: 'rgba(255,255,255,.5)' }}>
@@ -321,13 +327,13 @@ export function SPDashboardPage() {
 
       {(() => {
         const statCards = [
-          spCard('Attendance', `${attRate}%`, 'This term', attRate >= 85 ? SP_GREEN : attRate >= 70 ? SP_GOLD : SP_RED, '📅'),
+          spCard('Attendance', `${attRate}%`, 'This term', attRate >= 85 ? SP_GREEN : attRate >= 70 ? SP_GOLD : SP_RED, UserCheck),
           pending.length > 0
-            ? spCard('Pending', String(pending.length), 'assignments', SP_GOLD, '📝')
+            ? spCard('Pending', String(pending.length), 'assignments', SP_GOLD, ClipboardList)
             : null,
           isHS
-            ? spCard('GPA', gpa !== null ? gpa.toFixed(2) : '—', weightedGpa !== null ? `Weighted: ${weightedGpa.toFixed(2)}` : 'Weighted: —', gpa !== null && gpa >= 3.5 ? SP_GREEN : gpa !== null && gpa >= 2.5 ? SP_GOLD : SP_RED, '🎓')
-            : spCard('Term', '2025-26', 'Active', SP_NAVY, '📚'),
+            ? spCard('GPA', gpa !== null ? gpa.toFixed(2) : '—', weightedGpa !== null ? `Weighted: ${weightedGpa.toFixed(2)}` : 'Weighted: —', gpa !== null && gpa >= 3.5 ? SP_GREEN : gpa !== null && gpa >= 2.5 ? SP_GOLD : SP_RED, GraduationCap)
+            : spCard('Term', '2025-26', 'Active', SP_NAVY, BookOpen),
         ].filter(Boolean)
         return (
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${statCards.length},1fr)`, gap: 12 }}>
@@ -338,7 +344,7 @@ export function SPDashboardPage() {
 
       <div style={{ ...card, padding: '14px 18px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY }}>📅 Today's Schedule</div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 6 }}><CalendarDays size={13} /> Today's Schedule</div>
             <div style={{ fontSize: 10, color: '#7A92B0' }}>{todayLabel()}</div>
           </div>
           {todayBlocks.length === 0 ? (
@@ -367,11 +373,11 @@ export function SPDashboardPage() {
                     <div style={{ fontSize: 10, fontWeight: 700, color: '#7A92B0', minWidth: 86, flexShrink: 0 }}>{row.time || row.period}</div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 12, fontWeight: 700, color: SP_NAVY }}>{row.subject || 'Class'}</div>
-                      <div style={{ fontSize: 10, color: row.sessionType === 'Live Session' ? '#DC2626' : '#7C3AED', fontWeight: 700 }}>{row.sessionType === 'Live Session' ? '🔴 Live Session' : '📗 Self-Paced Mastery'}</div>
-                      {row.room && <div style={{ fontSize: 10, color: '#7A92B0' }}>📍 {row.room}</div>}
+                      <div style={{ fontSize: 10, color: row.sessionType === 'Live Session' ? '#DC2626' : '#7C3AED', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>{row.sessionType === 'Live Session' ? <><Radio size={10} /> Live Session</> : <><Book size={10} /> Self-Paced Mastery</>}</div>
+                      {row.room && <div style={{ fontSize: 10, color: '#7A92B0', display: 'flex', alignItems: 'center', gap: 4 }}><MapPin size={10} /> {row.room}</div>}
                     </div>
                     {row.sessionType === 'Live Session' && row.meetLink && !isPast && (
-                      <a href={row.meetLink} target="_blank" rel="noreferrer" style={{ fontSize: 9, fontWeight: 800, background: isNow ? '#059669' : '#E0F2FE', color: isNow ? '#fff' : '#0369A1', padding: '4px 10px', borderRadius: 6, textDecoration: 'none', flexShrink: 0 }}>🔗 Join</a>
+                      <a href={row.meetLink} target="_blank" rel="noreferrer" style={{ fontSize: 9, fontWeight: 800, background: isNow ? '#059669' : '#E0F2FE', color: isNow ? '#fff' : '#0369A1', padding: '4px 10px', borderRadius: 6, textDecoration: 'none', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Link2 size={10} /> Join</a>
                     )}
                     {isNow && <span style={{ fontSize: 9, fontWeight: 800, background: '#DCFCE7', color: '#059669', padding: '2px 8px', borderRadius: 5 }}>NOW</span>}
                     {isPast && <span style={{ fontSize: 9, color: '#94A3B8' }}>Done</span>}
@@ -383,8 +389,8 @@ export function SPDashboardPage() {
         </div>
 
       <div style={{ background: overdue.length > 0 ? '#FFF0F1' : '#FFF7F7', borderLeft: `4px solid ${SP_RED}`, borderRadius: 8, padding: '12px 16px' }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: SP_RED, marginBottom: 6 }}>
-            ⚠️ {overdue.length} Overdue Assignment{overdue.length > 1 ? 's' : ''}
+          <div style={{ fontSize: 12, fontWeight: 700, color: SP_RED, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <AlertTriangle size={12} /> {overdue.length} Overdue Assignment{overdue.length > 1 ? 's' : ''}
           </div>
           {overdue.length === 0 ? (
             <div style={{ ...emptyState, textAlign: 'left', padding: 0, background: 'transparent', border: 'none' }}>
@@ -392,16 +398,16 @@ export function SPDashboardPage() {
             </div>
           ) : (
             overdue.slice(0, 3).map((row) => (
-              <div key={row.id} style={{ fontSize: 11, color: '#3D5475', marginBottom: 3 }}>
-                📝 {row.title} — Due {row.dueDate || '?'} · {row.subject || ''}
+              <div key={row.id} style={{ fontSize: 11, color: '#3D5475', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <FileText size={11} /> {row.title} — Due {row.dueDate || '?'} · {row.subject || ''}
               </div>
             ))
           )}
         </div>
 
       <div style={{ background: '#F0FDF4', borderLeft: '4px solid #059669', borderRadius: 8, padding: '12px 16px' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 4 }}>
-            📋 Latest Coach Report {coachReport?.week ? `· Week of ${coachReport.week}` : ''}
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <ClipboardList size={11} /> Latest Coach Report {coachReport?.week ? `· Week of ${coachReport.week}` : ''}
           </div>
           {coachReport?.coach_note ? (
             <div style={{ fontSize: 12, color: SP_NAVY, lineHeight: 1.6 }}>
@@ -415,8 +421,8 @@ export function SPDashboardPage() {
         </div>
 
       <div style={{ background: '#FFF7ED', borderLeft: '4px solid #D97706', borderRadius: 8, padding: '12px 16px' }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#92400E', marginBottom: 6 }}>
-            ✏️ {pendingCorrections.length} Correction Task{pendingCorrections.length > 1 ? 's' : ''} Assigned
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#92400E', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Pencil size={12} /> {pendingCorrections.length} Correction Task{pendingCorrections.length > 1 ? 's' : ''} Assigned
           </div>
           {pendingCorrections.length === 0 ? (
             <div style={{ ...emptyState, textAlign: 'left', padding: 0, background: 'transparent', border: 'none' }}>
@@ -429,8 +435,8 @@ export function SPDashboardPage() {
                   · {row.subject || ''} — {row.instructions.slice(0, 60)}{row.instructions.length > 60 ? '…' : ''}{row.deadline ? ` (due ${row.deadline})` : ''}
                 </div>
               ))}
-              <button onClick={() => navigate('/portal/assignments')} style={{ marginTop: 6, fontSize: 10, color: '#D97706', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontFamily: 'Poppins,sans-serif', padding: 0 }}>
-                View all →
+              <button onClick={() => navigate('/portal/assignments')} style={{ marginTop: 6, fontSize: 10, color: '#D97706', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontFamily: 'Poppins,sans-serif', padding: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                View all <ArrowRight size={10} />
               </button>
             </>
           )}
@@ -438,9 +444,9 @@ export function SPDashboardPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
         <div style={{ ...card, padding: 18 }}>
-          <div style={{ fontSize: 12, fontWeight: 800, color: SP_NAVY, marginBottom: 12 }}>⏰ Upcoming Deadlines</div>
+          <div style={{ fontSize: 12, fontWeight: 800, color: SP_NAVY, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}><Clock size={12} /> Upcoming Deadlines</div>
           {upcomingDeadlines.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 16, color: '#7A92B0', fontSize: 12 }}>✅ No assignments due in the next 7 days</div>
+            <div style={{ textAlign: 'center', padding: 16, color: '#7A92B0', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><CheckCircle2 size={12} /> No assignments due in the next 7 days</div>
           ) : (
             upcomingDeadlines.map((row) => {
               const due = new Date(`${row.dueDate}T00:00:00`)
@@ -448,7 +454,7 @@ export function SPDashboardPage() {
               const color = daysLeft <= 1 ? SP_RED : daysLeft <= 3 ? SP_GOLD : SP_NAVY
               return (
                 <div key={row.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid #F0F4FA' }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 8, background: `${color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>📝</div>
+                  <div style={{ width: 36, height: 36, borderRadius: 8, background: `${color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', color }}><FileText size={14} /></div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: SP_NAVY }}>{row.title}</div>
                     <div style={{ fontSize: 10, color: '#7A92B0' }}>{row.subject || ''}</div>
@@ -463,16 +469,16 @@ export function SPDashboardPage() {
         </div>
 
         <div style={{ ...card, padding: 18 }}>
-          <div style={{ fontSize: 12, fontWeight: 800, color: SP_NAVY, marginBottom: 12 }}>⚡ Quick Actions</div>
+          <div style={{ fontSize: 12, fontWeight: 800, color: SP_NAVY, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}><Zap size={12} /> Quick Actions</div>
           {quickActions.map((action) => (
             <button
               key={action.label}
               onClick={() => navigate(action.to)}
               style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 10px', marginBottom: 6, background: `${action.color}10`, border: `1.5px solid ${action.color}25`, borderRadius: 9, cursor: 'pointer', fontFamily: 'Poppins,sans-serif' }}
             >
-              <span style={{ fontSize: 16 }}>{action.icon}</span>
+              <span style={{ display: 'inline-flex', color: action.color }}><action.icon size={16} /></span>
               <span style={{ fontSize: 12, fontWeight: 600, color: SP_NAVY }}>{action.label}</span>
-              <span style={{ marginLeft: 'auto', color: '#7A92B0', fontSize: 12 }}>→</span>
+              <span style={{ marginLeft: 'auto', color: '#7A92B0', display: 'inline-flex' }}><ArrowRight size={12} /></span>
             </button>
           ))}
         </div>
@@ -480,9 +486,9 @@ export function SPDashboardPage() {
 
       <div style={{ ...card, padding: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: SP_NAVY }}>🏅 My Badges</div>
-            <button onClick={() => navigate('/portal/badges')} style={{ fontSize: 11, color: SP_RED, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Poppins,sans-serif' }}>
-              View all →
+            <div style={{ fontSize: 12, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 6 }}><Medal size={12} /> My Badges</div>
+            <button onClick={() => navigate('/portal/badges')} style={{ fontSize: 11, color: SP_RED, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Poppins,sans-serif', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              View all <ArrowRight size={11} />
             </button>
           </div>
           {badges.length === 0 ? (
@@ -491,7 +497,7 @@ export function SPDashboardPage() {
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               {badges.slice(0, 4).map((badge) => (
                 <div key={`${badge.name}-${badge.earned_at}`} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: '#F7F9FC', borderRadius: 20, border: '1px solid #E4EAF2' }}>
-                  <span style={{ fontSize: 18 }}>🏅</span>
+                  <Medal size={18} color={SP_GOLD} />
                   <span style={{ fontSize: 11, fontWeight: 700, color: SP_NAVY }}>{badge.name}</span>
                 </div>
               ))}

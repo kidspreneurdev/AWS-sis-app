@@ -1,15 +1,21 @@
 import { Outlet, NavLink, Navigate, useNavigate } from 'react-router-dom'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
+import {
+  Home, BookOpen, Star, GraduationCap, UserCheck, Trophy, Palette, UserCircle,
+  type LucideIcon,
+} from 'lucide-react'
 
-const K5_NAV = [
-  { id: 'k5_dash',   icon: '🏠', label: 'My Home',      to: '/portal/dashboard' },
-  { id: 'k5_learn',  icon: '📚', label: 'My Lessons',   to: '/portal/learning' },
-  { id: 'k5_stars',  icon: '⭐', label: 'My Stars',     to: '/portal/badges' },
-  { id: 'k5_grades', icon: '📊', label: 'My Grades',    to: '/portal/grades' },
-  { id: 'k5_attend', icon: '📅', label: 'Attendance',   to: '/portal/attendance' },
-  { id: 'k5_certs',  icon: '🏆', label: 'Certificates', to: '/portal/documents' },
-  { id: 'k5_port',   icon: '🎨', label: 'My Portfolio', to: '/portal/portfolio' },
-  { id: 'k5_profile',icon: '👤', label: 'My Profile',   to: '/portal/profile' },
+type K5NavItem = { id: string; icon: LucideIcon; label: string; to: string }
+
+const K5_NAV: K5NavItem[] = [
+  { id: 'k5_dash',   icon: Home,          label: 'My Home',      to: '/portal/dashboard' },
+  { id: 'k5_learn',  icon: BookOpen,      label: 'My Lessons',   to: '/portal/learning' },
+  { id: 'k5_stars',  icon: Star,          label: 'My Stars',     to: '/portal/badges' },
+  { id: 'k5_grades', icon: GraduationCap, label: 'My Grades',    to: '/portal/grades' },
+  { id: 'k5_attend', icon: UserCheck,     label: 'Attendance',   to: '/portal/attendance' },
+  { id: 'k5_certs',  icon: Trophy,        label: 'Certificates', to: '/portal/documents' },
+  { id: 'k5_port',   icon: Palette,       label: 'My Portfolio', to: '/portal/portfolio' },
+  { id: 'k5_profile',icon: UserCircle,    label: 'My Profile',   to: '/portal/profile' },
 ]
 
 export function StudentPortalK5Layout() {
@@ -89,7 +95,9 @@ export function StudentPortalK5Layout() {
                   cursor: 'pointer',
                   transition: 'background .15s, color .15s',
                 }}>
-                  <span style={{ fontSize: 16, lineHeight: 1 }}>{item.icon}</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <item.icon size={16} strokeWidth={2} />
+                  </span>
                   <span>{item.label}</span>
                 </div>
               )}
@@ -120,7 +128,7 @@ export function StudentPortalK5Layout() {
           height: 46, display: 'flex', alignItems: 'center', padding: '0 20px',
           flexShrink: 0, gap: 10,
         }}>
-          <span style={{ fontSize: 16 }}>⭐</span>
+          <Star size={16} color="#FAC600" fill="#FAC600" />
           <span style={{ fontSize: 13, fontWeight: 700, color: '#FAC600' }}>K–5 Learning Portal</span>
           <span style={{ fontSize: 10, color: 'rgba(255,255,255,.3)', marginLeft: 4 }}>2025–26</span>
         </header>

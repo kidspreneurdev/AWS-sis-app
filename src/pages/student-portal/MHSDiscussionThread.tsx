@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { X } from 'lucide-react'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 16 }
@@ -181,7 +182,7 @@ export function MHSDiscussionThread() {
           <div style={card}>
             {replyTo && (
               <div style={{ fontSize: 11, color: '#7A92B0', marginBottom: 6 }}>
-                Replying to {replyTo.authorName} <button onClick={() => setReplyTo(null)} style={{ background: 'none', border: 'none', color: '#DC2626', cursor: 'pointer', fontSize: 11 }}>✕</button>
+                Replying to {replyTo.authorName} <button onClick={() => setReplyTo(null)} style={{ background: 'none', border: 'none', color: '#DC2626', cursor: 'pointer', display: 'inline-flex', verticalAlign: 'middle', padding: 0 }}><X size={12} /></button>
               </div>
             )}
             {editingPostId && <div style={{ fontSize: 11, color: '#D97706', marginBottom: 6 }}>Editing your post — this will be flagged as edited-after-submission.</div>}

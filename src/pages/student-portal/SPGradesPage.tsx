@@ -1,4 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
+import {
+  Check, RotateCw, ClipboardList, Circle, X, BarChart3, GraduationCap, BookOpen,
+  FileText, AlertTriangle, CheckCircle2, PartyPopper, Trophy, Medal, Landmark,
+  Hourglass, Printer, CalendarDays, School, Star, ArrowRight, type LucideIcon,
+} from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { toLegacyStudentGradeValue } from '@/types/student'
@@ -123,12 +128,12 @@ function weightedPts(grade: string | null, type: CourseType): number | null {
   return Math.min(base + (TYPE_WEIGHT[type] ?? 0), 5)
 }
 
-const STATUS_STYLE: Record<string, { bg: string; color: string; icon: string }> = {
-  'Completed':   { bg: '#DCFCE7', color: '#166534', icon: '✓' },
-  'In Progress': { bg: '#DBEAFE', color: '#1E40AF', icon: '↻' },
-  'Assigned':    { bg: '#FEF9C3', color: '#854D0E', icon: '📋' },
-  'Not Started': { bg: '#F1F5F9', color: '#64748B', icon: '○' },
-  'Withdrawn':   { bg: '#FEE2E2', color: '#991B1B', icon: '✕' },
+const STATUS_STYLE: Record<string, { bg: string; color: string; icon: LucideIcon }> = {
+  'Completed':   { bg: '#DCFCE7', color: '#166534', icon: Check },
+  'In Progress': { bg: '#DBEAFE', color: '#1E40AF', icon: RotateCw },
+  'Assigned':    { bg: '#FEF9C3', color: '#854D0E', icon: ClipboardList },
+  'Not Started': { bg: '#F1F5F9', color: '#64748B', icon: Circle },
+  'Withdrawn':   { bg: '#FEE2E2', color: '#991B1B', icon: X },
 }
 
 function letterGrade(pct: number) {
@@ -473,6 +478,12 @@ export function SPGradesPage() {
     const popup = window.open('', '_blank', 'width=980,height=780,scrollbars=yes,resizable=yes')
     if (!popup) return
 
+    // Inline lucide SVGs (React components can't render into the print popup)
+    const svg = (paths: string, color: string) =>
+      `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px">${paths}</svg>`
+    const iconCheckCircle = (color: string) => svg('<path d="M21.801 10A10 10 0 1 1 17 3.335"/><path d="m9 11 3 3L22 4"/>', color)
+    const iconAlertTriangle = (color: string) => svg('<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>', color)
+
     const requirementRows = requirements.map((req) => {
       const earned = Math.round((creditState[req.key] || 0) * 10) / 10
       return `
@@ -488,7 +499,7 @@ export function SPGradesPage() {
     const residencyBox = hasTransferCredits ? `
       <div style="margin-top:16px;border-radius:8px;padding:12px 16px;border-left:4px solid ${residencyMet ? SP_GREEN : '#D97706'};background:${residencyMet ? '#F0FDF4' : '#FEF3C7'}">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px">
-          <div style="font-size:12px;font-weight:700;color:${residencyMet ? '#166534' : '#92400E'}">${residencyMet ? '✅' : '⚠️'} American World School Credit Requirement</div>
+          <div style="font-size:12px;font-weight:700;color:${residencyMet ? '#166534' : '#92400E'}">${residencyMet ? iconCheckCircle('#166534') : iconAlertTriangle('#92400E')} American World School Credit Requirement</div>
           <div style="font-size:11px;font-weight:700;color:#7A92B0">${awsCreditsEarned} / ${awsResidencyCredits} cr required at AWS</div>
         </div>
         <div style="font-size:11px;color:#3D5475">
@@ -564,10 +575,10 @@ export function SPGradesPage() {
     return map
   }, [grades])
 
-  const tabs = [
-    { key: 'audit' as const, label: '🎓 Graduation Audit' },
-    { key: 'courses' as const, label: '📚 Course Records' },
-    { key: 'remark' as const, label: '📝 Report Card' },
+  const tabs: { key: 'audit' | 'courses' | 'remark'; label: string; icon: LucideIcon }[] = [
+    { key: 'audit', label: 'Graduation Audit', icon: GraduationCap },
+    { key: 'courses', label: 'Course Records', icon: BookOpen },
+    { key: 'remark', label: 'Report Card', icon: FileText },
   ]
 
   // ─── Breakdown modal data ───────────────────────────────────────────────────
@@ -603,7 +614,7 @@ export function SPGradesPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ fontSize: 18, fontWeight: 800, color: SP_NAVY }}>📊 My Grades</div>
+      <div style={{ fontSize: 18, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 8 }}><BarChart3 size={18} /> My Grades</div>
 
       {/* ─── Credit Breakdown Modal ─────────────────────────────────────── */}
       {breakdownData && (
@@ -619,7 +630,7 @@ export function SPGradesPage() {
             <div style={{ padding: '16px 20px', borderBottom: '1px solid #E4EAF2', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
                 <div style={{ fontSize: 16, fontWeight: 800, color: SP_NAVY }}>
-                  {breakdownData.req.icon} {breakdownData.req.label} Credit Breakdown
+                  {breakdownData.req.label} Credit Breakdown
                 </div>
                 <div style={{ fontSize: 12, color: '#7A92B0', marginTop: 3 }}>
                   Required: {breakdownData.req.required_credits} cr · Earned: {breakdownData.earned} cr · Still Needed: {breakdownData.stillNeeded} cr
@@ -627,8 +638,8 @@ export function SPGradesPage() {
               </div>
               <button
                 onClick={() => setBreakdownReq(null)}
-                style={{ background: '#F0F4F8', border: 'none', borderRadius: 8, width: 32, height: 32, fontSize: 16, cursor: 'pointer', color: '#7A92B0', flexShrink: 0 }}
-              >✕</button>
+                style={{ background: '#F0F4F8', border: 'none', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', color: '#7A92B0', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+              ><X size={16} /></button>
             </div>
 
             {/* Stats */}
@@ -698,9 +709,10 @@ export function SPGradesPage() {
               fontFamily: 'Poppins,sans-serif',
               background: tab === item.key ? SP_NAVY : '#F7F9FC',
               color: tab === item.key ? '#fff' : '#7A92B0',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
             }}
           >
-            {item.label}
+            <item.icon size={12} /> {item.label}
           </button>
         ))}
       </div>
@@ -708,12 +720,12 @@ export function SPGradesPage() {
       {tab === 'audit' && (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
-            {[
-              { label: 'Unweighted GPA', value: uwGpa.toFixed(2), sub: '4.0 scale', color: gpaColor(uwGpa), icon: '📊' },
-              { label: 'Weighted GPA', value: wGpa.toFixed(2), sub: distinction || 'No distinction yet', color: SP_PURPLE, icon: '⭐' },
-              { label: 'Credits Earned', value: `${totalEarned} / ${graduationCreditsRequired || '—'}`, sub: `${pctDone}% complete`, color: pctDone >= 100 ? SP_GREEN : SP_GOLD, icon: '📚' },
-              { label: 'Status', value: allMet ? 'On Track' : 'In Progress', sub: allMet ? 'All requirements met' : 'Keep going!', color: allMet ? SP_GREEN : SP_GOLD, icon: '🎓' },
-            ].map((item) => (
+            {([
+              { label: 'Unweighted GPA', value: uwGpa.toFixed(2), sub: '4.0 scale', color: gpaColor(uwGpa), icon: BarChart3 },
+              { label: 'Weighted GPA', value: wGpa.toFixed(2), sub: distinction || 'No distinction yet', color: SP_PURPLE, icon: Star },
+              { label: 'Credits Earned', value: `${totalEarned} / ${graduationCreditsRequired || '—'}`, sub: `${pctDone}% complete`, color: pctDone >= 100 ? SP_GREEN : SP_GOLD, icon: BookOpen },
+              { label: 'Status', value: allMet ? 'On Track' : 'In Progress', sub: allMet ? 'All requirements met' : 'Keep going!', color: allMet ? SP_GREEN : SP_GOLD, icon: GraduationCap },
+            ] as { label: string; value: string; sub: string; color: string; icon: LucideIcon }[]).map((item) => (
               <div key={item.label} style={{ ...card, padding: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                   <div>
@@ -721,7 +733,7 @@ export function SPGradesPage() {
                     <div style={{ fontSize: 26, fontWeight: 900, color: item.color, marginTop: 8 }}>{item.value}</div>
                     <div style={{ fontSize: 11, color: '#7A92B0', marginTop: 6 }}>{item.sub}</div>
                   </div>
-                  <div style={{ width: 38, height: 38, borderRadius: 10, background: `${item.color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>{item.icon}</div>
+                  <div style={{ width: 38, height: 38, borderRadius: 10, background: `${item.color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: item.color }}><item.icon size={18} /></div>
                 </div>
               </div>
             ))}
@@ -729,8 +741,8 @@ export function SPGradesPage() {
 
           {failedCourses.length > 0 && (
             <div style={{ background: '#FEE2E2', borderLeft: `4px solid ${SP_RED}`, borderRadius: 8, padding: '12px 16px' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#7F1D1D', marginBottom: 6 }}>
-                ⚠️ Failed Course{failedCourses.length > 1 ? 's' : ''} - No Credit Awarded
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#7F1D1D', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <AlertTriangle size={12} /> Failed Course{failedCourses.length > 1 ? 's' : ''} - No Credit Awarded
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {failedCourses.map((course) => (
@@ -745,8 +757,8 @@ export function SPGradesPage() {
           {hasTransferCredits && (
             <div style={{ background: residencyMet ? '#F0FDF4' : '#FEF3C7', borderLeft: `4px solid ${residencyMet ? SP_GREEN : '#D97706'}`, borderRadius: 8, padding: '12px 16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, flexWrap: 'wrap', gap: 6 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: residencyMet ? '#166534' : '#92400E' }}>
-                  {residencyMet ? '✅' : '⚠️'} American World School Credit Requirement
+                <div style={{ fontSize: 12, fontWeight: 700, color: residencyMet ? '#166534' : '#92400E', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {residencyMet ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />} American World School Credit Requirement
                 </div>
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#7A92B0' }}>{awsCreditsEarned} / {awsResidencyCredits} cr required at AWS</div>
               </div>
@@ -791,7 +803,7 @@ export function SPGradesPage() {
                   <div style={{ fontSize: 12, color: '#7A92B0' }}>{totalEarned} of {graduationCreditsRequired || '—'} cr</div>
                 </div>
               </div>
-              {allMet && <div style={{ fontSize: 12, fontWeight: 800, color: SP_GREEN, marginTop: 6 }}>🎉 Graduation Requirements Met!</div>}
+              {allMet && <div style={{ fontSize: 12, fontWeight: 800, color: SP_GREEN, marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><PartyPopper size={13} /> Graduation Requirements Met!</div>}
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -809,12 +821,12 @@ export function SPGradesPage() {
                   >
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 16 }}>{req.icon ?? '•'}</span>
+                        {req.icon ? <span style={{ fontSize: 16 }}>{req.icon}</span> : <Circle size={8} fill="#94A3B8" color="#94A3B8" />}
                         <span style={{ fontSize: 12, fontWeight: 700, color: SP_NAVY }}>{req.label}</span>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ fontSize: 12, fontWeight: 800, color }}>{earned} / {req.required_credits} cr {pct >= 100 ? '✅' : ''}</span>
-                        <span style={{ fontSize: 10, color: '#94A3B8' }}>View breakdown →</span>
+                        <span style={{ fontSize: 12, fontWeight: 800, color, display: 'inline-flex', alignItems: 'center', gap: 4 }}>{earned} / {req.required_credits} cr {pct >= 100 ? <CheckCircle2 size={12} /> : null}</span>
+                        <span style={{ fontSize: 10, color: '#94A3B8', display: 'inline-flex', alignItems: 'center', gap: 3 }}>View breakdown <ArrowRight size={10} /></span>
                       </div>
                     </div>
                     <div style={{ background: '#E4EAF2', borderRadius: 4, height: 8 }}>
@@ -837,7 +849,7 @@ export function SPGradesPage() {
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }}>
             <div style={{ ...card, padding: 18 }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, marginBottom: 12 }}>🏆 Graduation Distinctions</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}><Trophy size={13} /> Graduation Distinctions</div>
               {distinctions.length > 0 ? (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
                   {distinctions.map((item) => {
@@ -853,11 +865,11 @@ export function SPGradesPage() {
                           textAlign: 'center',
                         }}
                       >
-                        <div style={{ fontSize: 24, marginBottom: 6 }}>{item.icon ?? '🏅'}</div>
+                        <div style={{ fontSize: 24, marginBottom: 6, display: 'flex', justifyContent: 'center', color: achieved ? (item.color ?? SP_NAVY) : '#7A92B0' }}>{item.icon ?? <Medal size={24} />}</div>
                         <div style={{ fontSize: 11, fontWeight: 800, color: achieved ? SP_NAVY : '#7A92B0' }}>{item.label}</div>
                         <div style={{ fontSize: 10, color: '#7A92B0', marginTop: 3 }}>WGPA ≥ {item.weighted_gpa_required.toFixed(1)}</div>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: achieved ? SP_GREEN : SP_RED, marginTop: 6 }}>
-                          {achieved ? '✅ Achieved' : `Current: ${wGpa.toFixed(2)}`}
+                        <div style={{ fontSize: 11, fontWeight: 700, color: achieved ? SP_GREEN : SP_RED, marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                          {achieved ? <><CheckCircle2 size={11} /> Achieved</> : `Current: ${wGpa.toFixed(2)}`}
                         </div>
                       </div>
                     )
@@ -869,7 +881,7 @@ export function SPGradesPage() {
             </div>
 
             <div style={{ ...card, padding: 18, borderLeft: `4px solid ${SP_PURPLE}` }}>
-                <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, marginBottom: 10 }}>🎓 Associate Degree Track</div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}><GraduationCap size={13} /> Associate Degree Track</div>
                 {associateDegreeCreditsRequired > 0 ? (
                   <>
                     <div style={{ fontSize: 11, color: '#3D5475', marginBottom: 12 }}>
@@ -893,12 +905,12 @@ export function SPGradesPage() {
           </div>
 
           <div style={{ ...card, padding: 18, borderLeft: '4px solid #0A6B64' }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, marginBottom: 10 }}>🏛️ Transfer & EC Credits</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}><Landmark size={13} /> Transfer &amp; EC Credits</div>
 
               {approvedTransfers.length > 0 && (
                 <div style={{ marginBottom: 10 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: SP_GREEN, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
-                    ✅ Approved ({approvedTransfers.length} record{approvedTransfers.length !== 1 ? 's' : ''})
+                  <div style={{ fontSize: 10, fontWeight: 700, color: SP_GREEN, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <CheckCircle2 size={11} /> Approved ({approvedTransfers.length} record{approvedTransfers.length !== 1 ? 's' : ''})
                   </div>
                   {approvedTransfers.map((item) => (
                     <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderBottom: '1px solid #F0F4FA' }}>
@@ -925,8 +937,8 @@ export function SPGradesPage() {
 
               {ecdeCredits.length > 0 && (
                 <div style={{ marginBottom: pendingTransfers.length > 0 ? 12 : 0 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: SP_PURPLE, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
-                    🎓 EC / DE Credit ({ecdeCredits.length} record{ecdeCredits.length !== 1 ? 's' : ''})
+                  <div style={{ fontSize: 10, fontWeight: 700, color: SP_PURPLE, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <GraduationCap size={11} /> EC / DE Credit ({ecdeCredits.length} record{ecdeCredits.length !== 1 ? 's' : ''})
                   </div>
                   {ecdeCredits.map((item) => (
                     <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderBottom: '1px solid #F0F4FA' }}>
@@ -948,8 +960,8 @@ export function SPGradesPage() {
 
               {pendingTransfers.length > 0 && (
                 <div style={{ background: '#FEF3C7', borderRadius: 8, padding: '10px 14px', marginTop: 6 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: '#92400E', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
-                    ⏳ Pending Approval ({pendingTransfers.length} record{pendingTransfers.length !== 1 ? 's' : ''})
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#92400E', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Hourglass size={11} /> Pending Approval ({pendingTransfers.length} record{pendingTransfers.length !== 1 ? 's' : ''})
                   </div>
                   <div style={{ fontSize: 11, color: '#7A5100', marginBottom: 8 }}>
                     These credits are not yet counted toward your graduation total. Ask your admin to mark them as approved.
@@ -986,7 +998,7 @@ export function SPGradesPage() {
                 fontFamily: 'Poppins,sans-serif',
               }}
             >
-              🖨 Print Graduation Audit
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Printer size={13} /> Print Graduation Audit</span>
             </button>
           </div>
         </>
@@ -996,7 +1008,7 @@ export function SPGradesPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {courses.length === 0 ? (
             <div style={{ ...card, padding: 30, textAlign: 'center' }}>
-              <div style={{ fontSize: 32, marginBottom: 8 }}>📚</div>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8, color: '#94A3B8' }}><BookOpen size={32} /></div>
               <div style={{ fontWeight: 700, color: SP_NAVY, marginBottom: 6 }}>No course records yet</div>
               <div style={{ fontSize: 12, color: '#7A92B0' }}>Your high school course records will appear here.</div>
             </div>
@@ -1020,9 +1032,9 @@ export function SPGradesPage() {
                           <span style={{ background: '#F7F9FC', color: '#7A92B0', padding: '2px 8px', borderRadius: 6, fontSize: 9, fontWeight: 700 }}>{course.type}</span>
                         </div>
                         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: 11, color: '#7A92B0' }}>📚 {course.area}</span>
-                          {course.term && <span style={{ fontSize: 11, color: '#7A92B0' }}>🗓 {course.term}</span>}
-                          <span style={{ fontSize: 11, color: '#7A92B0' }}>🏫 {course.academic_year}</span>
+                          <span style={{ fontSize: 11, color: '#7A92B0', display: 'inline-flex', alignItems: 'center', gap: 4 }}><BookOpen size={11} /> {course.area}</span>
+                          {course.term && <span style={{ fontSize: 11, color: '#7A92B0', display: 'inline-flex', alignItems: 'center', gap: 4 }}><CalendarDays size={11} /> {course.term}</span>}
+                          <span style={{ fontSize: 11, color: '#7A92B0', display: 'inline-flex', alignItems: 'center', gap: 4 }}><School size={11} /> {course.academic_year}</span>
                         </div>
                       </div>
 
@@ -1040,8 +1052,8 @@ export function SPGradesPage() {
                         ))}
                         <div style={{ textAlign: 'center', padding: '6px 16px' }}>
                           <div style={{ fontSize: 9, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>STATUS</div>
-                          <span style={{ background: ss.bg, color: ss.color, padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
-                            {ss.icon} {status}
+                          <span style={{ background: ss.bg, color: ss.color, padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <ss.icon size={11} /> {status}
                           </span>
                         </div>
                       </div>
@@ -1117,7 +1129,7 @@ export function SPGradesPage() {
 
           {remarks.length > 0 ? (
             <div style={{ ...card, padding: 18 }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, marginBottom: 12 }}>📝 Teacher Remarks</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}><FileText size={13} /> Teacher Remarks</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {remarks.map((remark) => (
                   <div key={remark.id} style={{ background: '#F7F9FC', borderRadius: 10, padding: '12px 14px', borderLeft: `4px solid ${SP_NAVY}` }}>

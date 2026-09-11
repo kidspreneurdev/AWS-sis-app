@@ -1,4 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
+import {
+  CheckCircle2, XCircle, Clock, ClipboardList, Minus, Sparkles, Smile,
+  Dumbbell, CalendarDays, ChevronLeft, ChevronRight, type LucideIcon,
+} from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 
@@ -9,12 +13,12 @@ const GREEN = '#16A34A'
 
 interface AttRow { id: string; date: string; status: string }
 
-function attColor(status: string) {
-  if (status === 'Present' || status === 'Remote') return { bg: '#DCFCE7', border: '#22C55E', text: GREEN, icon: '✅' }
-  if (status === 'Absent') return { bg: '#FEE2E2', border: '#F87171', text: RED, icon: '❌' }
-  if (status === 'Late') return { bg: '#FEF3C7', border: '#FAC600', text: '#92400E', icon: '⏰' }
-  if (status === 'Excused') return { bg: '#E0F2FE', border: '#38BDF8', text: '#0369A1', icon: '📋' }
-  return { bg: '#F1F5F9', border: '#CBD5E1', text: '#64748B', icon: '—' }
+function attColor(status: string): { bg: string; border: string; text: string; icon: LucideIcon } {
+  if (status === 'Present' || status === 'Remote') return { bg: '#DCFCE7', border: '#22C55E', text: GREEN, icon: CheckCircle2 }
+  if (status === 'Absent') return { bg: '#FEE2E2', border: '#F87171', text: RED, icon: XCircle }
+  if (status === 'Late') return { bg: '#FEF3C7', border: '#FAC600', text: '#92400E', icon: Clock }
+  if (status === 'Excused') return { bg: '#E0F2FE', border: '#38BDF8', text: '#0369A1', icon: ClipboardList }
+  return { bg: '#F1F5F9', border: '#CBD5E1', text: '#64748B', icon: Minus }
 }
 
 function rateColor(rate: number) {
@@ -23,10 +27,10 @@ function rateColor(rate: number) {
   return RED
 }
 
-function rateMessage(rate: number) {
-  if (rate >= 95) return { text: 'Outstanding! Keep it up! 🌟', bg: '#DCFCE7', color: '#166534' }
-  if (rate >= 85) return { text: 'Good job! Try to come every day! 😊', bg: '#FEF3C7', color: '#92400E' }
-  return { text: 'We miss you in class! 💪', bg: '#FEE2E2', color: '#991B1B' }
+function rateMessage(rate: number): { text: string; bg: string; color: string; icon: LucideIcon } {
+  if (rate >= 95) return { text: 'Outstanding! Keep it up!', bg: '#DCFCE7', color: '#166534', icon: Sparkles }
+  if (rate >= 85) return { text: 'Good job! Try to come every day!', bg: '#FEF3C7', color: '#92400E', icon: Smile }
+  return { text: 'We miss you in class!', bg: '#FEE2E2', color: '#991B1B', icon: Dumbbell }
 }
 
 function buildCalendar(year: number, month: number, records: AttRow[]) {
@@ -108,7 +112,7 @@ export function K5AttendancePage() {
 
       {/* Header */}
       <div style={{ background: `linear-gradient(135deg,${NAVY},#2A4A7E)`, borderRadius: 16, padding: '20px 22px' }}>
-        <div style={{ fontSize: 20, fontWeight: 800, color: '#fff', marginBottom: 4 }}>📅 Attendance</div>
+        <div style={{ fontSize: 20, fontWeight: 800, color: '#fff', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}><CalendarDays size={20} /> Attendance</div>
         <div style={{ fontSize: 12, color: 'rgba(255,255,255,.55)', marginBottom: 14 }}>How often you come to school</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
           {[
@@ -126,16 +130,16 @@ export function K5AttendancePage() {
 
       {/* Encouragement message */}
       <div style={{ background: msg.bg, borderRadius: 12, padding: '12px 16px', border: `1.5px solid ${rateColor(stats.rate)}40` }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: msg.color }}>{msg.text}</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: msg.color, display: 'flex', alignItems: 'center', gap: 8 }}><msg.icon size={16} /> {msg.text}</div>
       </div>
 
       {/* Calendar */}
       <div style={{ background: '#fff', border: '1.5px solid #E2E8F0', borderRadius: 14, padding: 16 }}>
         {/* Month nav */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-          <button onClick={prevMonth} style={{ width: 32, height: 32, borderRadius: 8, border: '1.5px solid #E2E8F0', background: '#fff', cursor: 'pointer', fontSize: 14 }}>◀</button>
+          <button onClick={prevMonth} style={{ width: 32, height: 32, borderRadius: 8, border: '1.5px solid #E2E8F0', background: '#fff', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><ChevronLeft size={16} /></button>
           <div style={{ fontSize: 14, fontWeight: 800, color: NAVY }}>{monthName}</div>
-          <button onClick={nextMonth} style={{ width: 32, height: 32, borderRadius: 8, border: '1.5px solid #E2E8F0', background: '#fff', cursor: 'pointer', fontSize: 14 }}>▶</button>
+          <button onClick={nextMonth} style={{ width: 32, height: 32, borderRadius: 8, border: '1.5px solid #E2E8F0', background: '#fff', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><ChevronRight size={16} /></button>
         </div>
 
         {/* Day headers */}
@@ -197,7 +201,7 @@ export function K5AttendancePage() {
               const col = attColor(r.status)
               return (
                 <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: col.bg, borderRadius: 9 }}>
-                  <span style={{ fontSize: 16 }}>{col.icon}</span>
+                  <col.icon size={16} color={col.text} />
                   <div style={{ flex: 1, fontSize: 12, fontWeight: 700, color: NAVY }}>
                     {new Date(r.date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
                   </div>

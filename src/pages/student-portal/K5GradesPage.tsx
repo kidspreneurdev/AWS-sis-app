@@ -1,4 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
+import {
+  Calculator, BookOpen, FlaskConical, Palette, Dumbbell, Music, Globe, Library,
+  BarChart3, MessageSquare, Sparkles, Smile, ThumbsUp, type LucideIcon,
+} from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 
@@ -7,18 +11,18 @@ const RED = '#D61F31'
 const GOLD = '#FAC600'
 const GREEN = '#16A34A'
 
-const SUBJECT_EMOJI: Record<string, string> = {
-  maths: '🔢', math: '🔢', mathematics: '🔢',
-  english: '📖', 'language arts': '📖', reading: '📖',
-  science: '🔬',
-  art: '🎨',
-  pe: '⚽', 'physical education': '⚽',
-  music: '🎵',
-  'social studies': '🌍',
+const SUBJECT_ICON: Record<string, LucideIcon> = {
+  maths: Calculator, math: Calculator, mathematics: Calculator,
+  english: BookOpen, 'language arts': BookOpen, reading: BookOpen,
+  science: FlaskConical,
+  art: Palette,
+  pe: Dumbbell, 'physical education': Dumbbell,
+  music: Music,
+  'social studies': Globe,
 }
 
-function subjectEmoji(s: string) {
-  return SUBJECT_EMOJI[s.toLowerCase()] ?? '📚'
+function subjectIcon(s: string): LucideIcon {
+  return SUBJECT_ICON[s.toLowerCase()] ?? Library
 }
 
 const TILE_COLORS = [
@@ -51,11 +55,11 @@ function letterFromPct(pct: number) {
   return 'D'
 }
 
-function gradeEmoji(pct: number) {
-  if (pct >= 90) return '🌟'
-  if (pct >= 80) return '😊'
-  if (pct >= 70) return '👍'
-  return '💪'
+function gradeIcon(pct: number): LucideIcon {
+  if (pct >= 90) return Sparkles
+  if (pct >= 80) return Smile
+  if (pct >= 70) return ThumbsUp
+  return Dumbbell
 }
 
 interface GradeRow { id: string; subject: string; grade: number; letter_grade: string; term: string }
@@ -113,11 +117,11 @@ export function K5GradesPage() {
 
       {/* Header */}
       <div style={{ background: `linear-gradient(135deg,${NAVY},#2A4A7E)`, borderRadius: 16, padding: '20px 22px' }}>
-        <div style={{ fontSize: 20, fontWeight: 800, color: '#fff', marginBottom: 4 }}>📊 My Grades</div>
+        <div style={{ fontSize: 20, fontWeight: 800, color: '#fff', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}><BarChart3 size={20} /> My Grades</div>
         <div style={{ fontSize: 12, color: 'rgba(255,255,255,.55)' }}>How you are doing in each subject</div>
         {avgPct !== null && (
           <div style={{ marginTop: 12, display: 'inline-flex', alignItems: 'center', gap: 10, background: 'rgba(255,255,255,.1)', borderRadius: 12, padding: '8px 16px' }}>
-            <span style={{ fontSize: 22 }}>{gradeEmoji(avgPct)}</span>
+            {(() => { const GI = gradeIcon(avgPct); return <GI size={22} color={GOLD} /> })()}
             <div>
               <div style={{ fontSize: 18, fontWeight: 900, color: GOLD }}>{avgPct}%</div>
               <div style={{ fontSize: 10, color: 'rgba(255,255,255,.5)' }}>Overall average</div>
@@ -146,7 +150,7 @@ export function K5GradesPage() {
       {/* Subject tiles */}
       {filteredGrades.length === 0 ? (
         <div style={{ background: '#fff', border: '1.5px solid #E2E8F0', borderRadius: 14, padding: 32, textAlign: 'center' }}>
-          <div style={{ fontSize: 36, marginBottom: 10 }}>📚</div>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10, color: '#94A3B8' }}><Library size={36} /></div>
           <div style={{ fontSize: 13, color: '#64748B' }}>No grade data available yet.</div>
         </div>
       ) : (
@@ -158,8 +162,8 @@ export function K5GradesPage() {
             return (
               <div key={g.id} style={{ background: col.bg, border: `2px solid ${col.accent}40`, borderRadius: 14, padding: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                  <div style={{ width: 42, height: 42, borderRadius: 11, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>
-                    {subjectEmoji(g.subject)}
+                  <div style={{ width: 42, height: 42, borderRadius: 11, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: col.accent }}>
+                    {(() => { const SI = subjectIcon(g.subject); return <SI size={22} /> })()}
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 13, fontWeight: 800, color: NAVY }}>{g.subject}</div>
@@ -173,7 +177,9 @@ export function K5GradesPage() {
                 <div style={{ background: 'rgba(255,255,255,.6)', borderRadius: 6, height: 8, overflow: 'hidden' }}>
                   <div style={{ width: `${Math.min(100, pct)}%`, height: '100%', background: gradeColor(pct), borderRadius: 6, transition: 'width .4s' }} />
                 </div>
-                <div style={{ marginTop: 6, fontSize: 11, color: '#64748B', textAlign: 'right' }}>{gradeEmoji(pct)}</div>
+                <div style={{ marginTop: 6, display: 'flex', justifyContent: 'flex-end', color: gradeColor(pct) }}>
+                  {(() => { const GI = gradeIcon(pct); return <GI size={14} /> })()}
+                </div>
               </div>
             )
           })}
@@ -183,7 +189,7 @@ export function K5GradesPage() {
       {/* Teacher notes */}
       {termRemarks.length > 0 && (
         <div style={{ background: '#fff', border: '1.5px solid #E2E8F0', borderRadius: 14, padding: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: NAVY, marginBottom: 12 }}>💬 Teacher Notes</div>
+          <div style={{ fontSize: 13, fontWeight: 800, color: NAVY, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}><MessageSquare size={14} /> Teacher Notes</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {termRemarks.map(r => (
               <div key={r.id} style={{ background: '#F0F7FF', border: '1.5px solid #BFDBFE', borderRadius: 10, padding: '12px 14px' }}>
@@ -202,13 +208,13 @@ export function K5GradesPage() {
         <div style={{ fontSize: 11, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Grade Guide</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {[
-            { range: '90–100%', letter: 'A', color: GREEN, emoji: '🌟' },
-            { range: '80–89%', letter: 'B', color: '#0EA5E9', emoji: '😊' },
-            { range: '70–79%', letter: 'C', color: GOLD, emoji: '👍' },
-            { range: 'Below 70%', letter: 'D/F', color: RED, emoji: '💪' },
+            { range: '90–100%', letter: 'A', color: GREEN, Icon: Sparkles },
+            { range: '80–89%', letter: 'B', color: '#0EA5E9', Icon: Smile },
+            { range: '70–79%', letter: 'C', color: GOLD, Icon: ThumbsUp },
+            { range: 'Below 70%', letter: 'D/F', color: RED, Icon: Dumbbell },
           ].map(g => (
             <div key={g.letter} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', background: '#fff', borderRadius: 20, border: '1px solid #E2E8F0' }}>
-              <span style={{ fontSize: 14 }}>{g.emoji}</span>
+              <g.Icon size={14} color={g.color} />
               <span style={{ fontSize: 12, fontWeight: 800, color: g.color }}>{g.letter}</span>
               <span style={{ fontSize: 10, color: '#94A3B8' }}>{g.range}</span>
             </div>

@@ -256,8 +256,6 @@ export const router = createBrowserRouter([
         { path: '/lms/manage', element: <Lazy><LMSPage /></Lazy> },
         { path: '/lms/students', element: <Lazy><LMSPage /></Lazy> },
         { path: '/lms/student-section', element: <Lazy><LMSPage /></Lazy> },
-        { path: '/lms/courses', element: <Lazy><LMSPage /></Lazy> },
-        { path: '/lms/content', element: <Lazy><LMSPage /></Lazy> },
         { path: '/lms/assign', element: <Lazy><LMSPage /></Lazy> },
         { path: '/lms/gradebook', element: <Lazy><LMSPage /></Lazy> },
         { path: '/lms/curriculum', element: <Lazy><LMSPage /></Lazy> },

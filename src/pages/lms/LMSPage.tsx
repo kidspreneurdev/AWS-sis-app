@@ -9,16 +9,21 @@ import { useAuthStore } from '@/store/auth.store'
 import { GRADES } from '@/types/student'
 import { StudentCombobox } from '@/components/shared/StudentCombobox'
 import {
-  loadLMS, saveLMS, loadLMSFromDB, deleteLMSCourse, deleteLMSContent, deleteLMSEnrolment,
+  loadLMS, saveLMS, loadLMSFromDB, deleteLMSCourse, deleteLMSCourseGroup, deleteLMSContent, deleteLMSEnrolment,
   lmsId, fmtTime, hasMasteryBool, hasAssignBool, isActiveBool,
   lmsCompositeScore, lmsCourseComposite, gradeLabel,
-  SUBJECT_COLORS, SUBJECTS, GRADE_LEVELS, TYPE_ICONS, TYPE_COLORS,
+  SUBJECT_COLORS, SUBJECTS, GRADE_LEVELS, TYPE_ICONS,
   type LMSCourse, type LMSContent, type LMSEnrolment, type LMSProgress, type LMSStore, type LMSCourseGroup
 } from './lmsStore'
 import { CASE_STUDY_RUBRIC, SCORE_COMPONENT_TYPES, categorySubtotal, finalGrade, type ScoreComponentType } from '@/lib/lms/caseStudyRubric'
 
 interface Student { id: string; lastName: string; firstName: string; fullName: string; cohort: string; grade: string; studentId: string; campus: string; status: string }
 type LMSSubmissionRow = Record<string, unknown>
+
+// Curriculum, progress and submissions all belong to the Course (group). A section
+// (LMSCourse row) resolves to its curriculum through group_id. Enrolments stay
+// section-scoped and must NOT use this. `?? co.id` covers the pre-migration window.
+const groupKey = (co: { id: string; groupId?: string | null }) => co.groupId ?? co.id
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 13, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)' }
 const iStyle: React.CSSProperties = { padding: '7px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 12, color: '#1A365E', fontFamily: 'inherit', outline: 'none', background: '#fff' }
@@ -108,8 +113,6 @@ const TAB_PATHS: Record<string, string> = {
   '/lms/overview': 'overview',
   '/lms/manage': 'manage',
   '/lms/students': 'students',
-  '/lms/courses': 'courses',
-  '/lms/content': 'content',
   '/lms/assign': 'assign',
   '/lms/gradebook': 'gradebook',
   '/lms/curriculum': 'curriculum',
@@ -124,8 +127,6 @@ const TABS = [
   { v: 'overview', path: '/lms/overview', l: '📊 Overview' },
   { v: 'manage', path: '/lms/manage', l: '📋 Manage' },
   { v: 'students', path: '/lms/students', l: '👨‍🎓 Students' },
-  { v: 'courses', path: '/lms/courses', l: '📘 Courses' },
-  { v: 'content', path: '/lms/content', l: '📄 Content' },
   { v: 'assign', path: '/lms/assign', l: '👥 Assign' },
   { v: 'gradebook', path: '/lms/gradebook', l: '📊 Gradebook' },
   { v: 'curriculum', path: '/lms/curriculum', l: '🧩 Curriculum' },
@@ -830,7 +831,6 @@ export function LMSPage() {
   const reportsMenuRef = useRef<HTMLDivElement>(null)
   const usageSectionRef = useRef<HTMLDivElement>(null)
   const performanceSectionRef = useRef<HTMLDivElement>(null)
-  const [showCourseModal, setShowCourseModal] = useState(false)
   const [editCourseIdx, setEditCourseIdx] = useState<number | null>(null)
   const [newSectionGroupId, setNewSectionGroupId] = useState<string | null>(null)
   const [showNewSectionFlow, setShowNewSectionFlow] = useState(false)
@@ -997,11 +997,6 @@ export function LMSPage() {
     if (err) alert('Save failed: ' + err)
   }, [])
 
-  function closeCourseModal() {
-    setShowCourseModal(false)
-    setNewSectionGroupId(null)
-  }
-
   // Case Study Assignments are edited in their own modal, not the Tutorial/Mastery Test
   // lesson editor — route to whichever one actually owns this item's fields.
   function openEditItem(item: LMSContent, idx: number, courseId: string) {
@@ -1032,8 +1027,8 @@ export function LMSPage() {
     bucket: 'active' | 'completed' | 'dropped'
   }
   function calcStudentCourseStats(sid: string, course: LMSCourse, enrol: LMSEnrolment | undefined): StuCourseStat {
-    const content = store.content.filter(x => x.courseId === course.id)
-    const myProg = store.progress.filter(p => p.courseId === course.id && p.studentId === sid)
+    const content = store.content.filter(x => x.courseId === groupKey(course))
+    const myProg = store.progress.filter(p => p.courseId === groupKey(course) && p.studentId === sid)
     const comp = myProg.filter(p => p.status === 'completed').length
     const pct = content.length ? Math.round(comp / content.length * 100) : 0
     const mastRows = myProg.filter(p => p.masteryScore != null && !isNaN(Number(p.masteryScore)))
@@ -1080,6 +1075,22 @@ export function LMSPage() {
     if (t) navigate(t.path)
   }
 
+  // The real Courses for pickers — course-group rows, plus a synthesized entry for
+  // any section whose group_id row hasn't loaded (pre-migration).
+  function curriculumCourses(): LMSCourseGroup[] {
+    const map = new Map<string, LMSCourseGroup>()
+    store.courseGroups.forEach(g => map.set(g.id, g))
+    store.courses.forEach(co => {
+      const k = groupKey(co)
+      if (!map.has(k)) map.set(k, {
+        id: k, title: co.title, subject: co.subject, gradeLevel: co.gradeLevel,
+        description: co.description, creditHours: co.creditHours,
+        requiredHours: co.requiredHours, passMark: co.passMark,
+      })
+    })
+    return [...map.values()].sort((a, b) => a.title.localeCompare(b.title))
+  }
+
   // ─── TAB NAV ────────────────────────────────────────────────────────────────
   function renderNav() {
     return (
@@ -1093,180 +1104,6 @@ export function LMSPage() {
             </button>
           )
         })}
-      </div>
-    )
-  }
-
-  // ─── COURSES TAB ────────────────────────────────────────────────────────────
-  function renderCourses() {
-    const courses = store.courses
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E' }}>📘 LMS Courses</div>
-            <div style={{ fontSize: 11, color: '#7A92B0', marginTop: 2 }}>{courses.length} courses · Self-paced learning</div>
-          </div>
-          <button onClick={() => { setEditCourseIdx(null); setShowCourseModal(true) }}
-            style={{ padding: '9px 18px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-            + New Course
-          </button>
-        </div>
-        {renderNav()}
-        {!courses.length ? (
-          <div style={{ textAlign: 'center', padding: '60px 20px', color: '#94A3B8' }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>📚</div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: '#1A365E' }}>No courses yet</div>
-            <div style={{ fontSize: 12, marginTop: 6 }}>Create your first course to get started</div>
-          </div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: 12 }}>
-            {courses.map((course, idx) => {
-              const col = SUBJECT_COLORS[course.subject] || '#6B7280'
-              const contentItems = store.content.filter(x => x.courseId === course.id)
-              const unitSet = new Set(contentItems.map(x => x.unitTitle).filter(Boolean))
-              const statusCol = course.status === 'Published' ? '#059669' : '#D97706'
-              return (
-                <div key={course.id} style={{ ...card, padding: 0, overflow: 'hidden' }}>
-                  <div style={{ height: 8, background: col }} />
-                  <div style={{ padding: '14px 16px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                      <div style={{ fontSize: 13, fontWeight: 800, color: '#1A365E', flex: 1, marginRight: 8 }}>{course.title}</div>
-                      <span style={{ fontSize: 9, fontWeight: 700, color: statusCol, background: statusCol + '18', padding: '2px 8px', borderRadius: 5, whiteSpace: 'nowrap' }}>{course.status || 'Draft'}</span>
-                    </div>
-                    <div style={{ fontSize: 11, color: '#7A92B0', marginBottom: 8 }}>{course.subject}{course.gradeLevel ? ' · ' + course.gradeLevel : ''}</div>
-                    {course.description && <div style={{ fontSize: 11, color: '#3D5475', marginBottom: 10, lineHeight: 1.5 }}>{course.description.substring(0, 100)}{course.description.length > 100 ? '…' : ''}</div>}
-                    <div style={{ display: 'flex', gap: 12, fontSize: 10, color: '#7A92B0', marginBottom: 12 }}>
-                      <span>📂 {unitSet.size} module{unitSet.size !== 1 ? 's' : ''}</span>
-                      <span>📄 {contentItems.length} lesson{contentItems.length !== 1 ? 's' : ''}</span>
-                      <span>🎯 Pass: {course.passMark || 80}%</span>
-                    </div>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button onClick={() => { setEditCourseIdx(idx); setShowCourseModal(true) }}
-                        style={{ flex: 1, padding: 7, background: '#EEF3FF', color: '#1A365E', border: 'none', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>✏️ Edit</button>
-                      <button onClick={() => { setActiveCourseId(course.id); navTab('content') }}
-                        style={{ flex: 1, padding: 7, background: '#E8FBF0', color: '#059669', border: 'none', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>📄 Content</button>
-                      <button onClick={() => setConfirmDialog({
-                        title: 'Delete Course',
-                        message: 'Delete this course and all its content? This cannot be undone.',
-                        danger: true,
-                        confirmLabel: 'Delete',
-                        onConfirm: async () => {
-                          await deleteLMSCourse(course.id)
-                          const updated = { ...store, courses: store.courses.filter((_, i) => i !== idx), content: store.content.filter(x => x.courseId !== course.id) }
-                          setStore(updated)
-                        },
-                      })} style={{ padding: '7px 10px', background: '#FFF0F1', color: '#D61F31', border: '1px solid #F5C2C7', borderRadius: 7, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>🗑</button>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  // ─── CONTENT TAB ────────────────────────────────────────────────────────────
-  function renderContent() {
-    const courseId = activeCourseId || (store.courses[0]?.id ?? '')
-    const course = store.courses.find(x => x.id === courseId)
-    const items = store.content.filter(x => x.courseId === courseId)
-      .sort((a, b) => ((a.unitOrder ?? 0) - (b.unitOrder ?? 0)) || ((a.order ?? 0) - (b.order ?? 0)))
-    const units: string[] = []
-    const unitMap: Record<string, LMSContent[]> = {}
-    items.forEach(item => {
-      const ut = item.unitTitle || 'Default Module'
-      if (!unitMap[ut]) { unitMap[ut] = []; units.push(ut) }
-      unitMap[ut].push(item)
-    })
-    const courseOpts = store.courses.map(co => ({ value: co.id, label: co.title }))
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E' }}>📄 Content Library</div>
-            <div style={{ fontSize: 11, color: '#7A92B0', marginTop: 2 }}>{items.length} lesson{items.length !== 1 ? 's' : ''} · {units.length} module{units.length !== 1 ? 's' : ''}</div>
-          </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <select value={courseId} onChange={e => setActiveCourseId(e.target.value)} style={iStyle}>
-              {courseOpts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-            <button onClick={() => setPromptDialog({
-              title: 'New Module',
-              label: 'Module title',
-              placeholder: 'e.g. Module 1: Business Writing Fundamentals & Persuasive Memos',
-              confirmLabel: 'Continue',
-              onConfirm: (ut) => { setPrefillUnit(ut); setEditLessonIdx(null); setShowLessonModal(true) },
-            })} style={{ padding: '9px 14px', background: '#EEF3FF', color: '#1A365E', border: '1px solid #DDE6F0', borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>+ Module</button>
-            <button onClick={() => { setPrefillUnit(null); setEditLessonIdx(null); setShowLessonModal(true) }}
-              style={{ padding: '9px 18px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>+ Lesson</button>
-            <button onClick={() => { setActiveCourseId(courseId); setPrefillUnit(null); setEditCaseStudyIdx(null); setShowCaseStudyModal(true) }}
-              style={{ padding: '9px 14px', background: '#FFF3D6', color: '#92400E', border: '1px solid #FDE68A', borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>📚 + Case Study</button>
-          </div>
-        </div>
-        {renderNav()}
-        {!store.courses.length ? (
-          <div style={{ textAlign: 'center', padding: 40, color: '#94A3B8' }}>Create a course first before adding content.</div>
-        ) : !items.length ? (
-          <div style={{ textAlign: 'center', padding: '60px 20px', color: '#94A3B8' }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>📄</div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: '#1A365E' }}>No content yet</div>
-            <div style={{ fontSize: 12, marginTop: 6 }}>Add a module then add lessons inside it</div>
-          </div>
-        ) : units.map(unitTitle => {
-          const unitItems = unitMap[unitTitle]
-          return (
-            <div key={unitTitle} style={{ background: '#fff', border: '1px solid #E4EAF2', borderRadius: 13, overflow: 'hidden' }}>
-              <div style={{ background: '#F7F9FC', padding: '10px 16px', borderBottom: '1px solid #E4EAF2', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ fontSize: 12, fontWeight: 800, color: '#1A365E' }}>📂 {unitTitle}</div>
-                <span style={{ fontSize: 10, color: '#7A92B0' }}>{unitItems.length} lesson{unitItems.length !== 1 ? 's' : ''}</span>
-              </div>
-              <div style={{ padding: 8 }}>
-                {unitItems.map((item, i) => {
-                  const realIdx = store.content.indexOf(item)
-                  const typeCol = TYPE_COLORS[item.type] || '#6B7280'
-                  return (
-                    <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 8, background: i % 2 === 0 ? '#fff' : '#FAFBFF', border: '1px solid #F0F4FA', marginBottom: 4 }}>
-                      <span style={{ fontSize: 16, flexShrink: 0 }}>{TYPE_ICONS[item.type] || '📄'}</span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: '#1A365E', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.title || 'Untitled'}</div>
-                        <div style={{ display: 'flex', gap: 8, fontSize: 10, color: '#7A92B0', marginTop: 2, flexWrap: 'wrap' }}>
-                          <span style={{ color: typeCol, fontWeight: 700 }}>{item.type}</span>
-                          {item.estimatedMins && <span>⏱ {item.estimatedMins} min</span>}
-                          {hasMasteryBool(item.hasMastery) && <span style={{ color: '#059669', fontWeight: 700 }}>✓ Mastery test</span>}
-                          {hasAssignBool(item.hasAssignment) && <span style={{ background: '#EEF3FF', color: '#1A365E', fontWeight: 700, fontSize: 9, padding: '2px 7px', borderRadius: 4, border: '1px solid #C7D9FF' }}>📚 Case Study Assignment</span>}
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                        <button onClick={() => setPreviewItem(item)} title="Preview as student" style={{ padding: '5px 10px', background: '#F0FFF4', color: '#1DBD6A', border: '1px solid #BBF7D0', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>👁</button>
-                        <button onClick={() => openEditItem(item, realIdx, courseId)}
-                          style={{ padding: '5px 10px', background: '#EEF3FF', color: '#1A365E', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>✏️</button>
-                        <button onClick={() => setConfirmDialog({
-                          title: 'Delete Lesson',
-                          message: 'Delete this lesson? This cannot be undone.',
-                          danger: true,
-                          confirmLabel: 'Delete',
-                          onConfirm: async () => {
-                            await deleteLMSContent(item.id)
-                            const updated = { ...store, content: store.content.filter((_, j) => j !== realIdx) }
-                            setStore(updated)
-                          },
-                        })} style={{ padding: '5px 8px', background: '#FFF0F1', color: '#D61F31', border: '1px solid #F5C2C7', borderRadius: 6, fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}>🗑</button>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )
-        })}
-        {(course?.announcement) && (
-          <div style={{ background: '#FFF9F0', border: '1px solid #FDE68A', borderRadius: 10, padding: '10px 14px', fontSize: 12, color: '#92400E' }}>
-            📢 <strong>Announcement:</strong> {course.announcement}
-          </div>
-        )}
       </div>
     )
   }
@@ -1350,7 +1187,7 @@ export function LMSPage() {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
           <select value={progFilterCourse} onChange={e => setProgFilterCourse(e.target.value)} style={iStyle}>
             <option value="">All Courses</option>
-            {store.courses.map(co => <option key={co.id} value={co.id}>{co.title}</option>)}
+            {curriculumCourses().map(co => <option key={co.id} value={co.id}>{co.title}</option>)}
           </select>
         </div>
         {!Object.keys(grouped).length ? (
@@ -1362,7 +1199,7 @@ export function LMSPage() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {Object.values(grouped).map(g => {
-              const course = store.courses.find(x => x.id === g.courseId)
+              const course = store.courseGroups.find(x => x.id === g.courseId)
               const stu = students.find(s => s.id === g.studentId)
               const total = store.content.filter(x => x.courseId === g.courseId).length
               const completed = g.items.filter(p => p.status === 'completed').length
@@ -1407,9 +1244,9 @@ export function LMSPage() {
         else if (en.targetType === 'grade') students.filter(s => s.grade === en.targetValue).forEach(s => enrolledIds.add(s.id))
       })
       totalEnrollments += enrolledIds.size
-      const courseProg = store.progress.filter(p => p.courseId === co.id)
+      const courseProg = store.progress.filter(p => p.courseId === groupKey(co))
       const timeMins = courseProg.reduce((s, p) => s + (p.timeSpentMins || 0), 0)
-      const content = store.content.filter(x => x.courseId === co.id)
+      const content = store.content.filter(x => x.courseId === groupKey(co))
       const creditsEarned = [...enrolledIds].reduce((sum, sid) => {
         const myProg = courseProg.filter(p => p.studentId === sid)
         const comp = myProg.filter(p => p.status === 'completed').length
@@ -1561,9 +1398,9 @@ export function LMSPage() {
         else if (en.targetType === 'grade') students.filter(s => s.grade === en.targetValue).forEach(s => enrolledIds.add(s.id))
       })
       const enrollCount = enrolledIds.size
-      const courseProg = store.progress.filter(p => p.courseId === co.id)
+      const courseProg = store.progress.filter(p => p.courseId === groupKey(co))
       const timeMins = courseProg.reduce((s, p) => s + (p.timeSpentMins || 0), 0)
-      const content = store.content.filter(x => x.courseId === co.id)
+      const content = store.content.filter(x => x.courseId === groupKey(co))
       const creditsEarned = [...enrolledIds].reduce((sum, sid) => {
         const myProg = courseProg.filter(p => p.studentId === sid)
         const comp = myProg.filter(p => p.status === 'completed').length
@@ -1581,8 +1418,13 @@ export function LMSPage() {
       if (g.groupId) { openNewSection(g.groupId); return }
       // Ungrouped standalone course — create a real Course using its current title, reassign it, then lock the new section to it
       const newGroupId = crypto.randomUUID()
-      const newGroup: LMSCourseGroup = { id: newGroupId, title: g.title }
-      const courses = store.courses.map(c => c.id === g.sections[0].id ? { ...c, groupId: newGroupId } : c)
+      const src = g.sections[0]
+      const newGroup: LMSCourseGroup = {
+        id: newGroupId, title: g.title, subject: src.subject, gradeLevel: src.gradeLevel,
+        description: src.description, creditHours: src.creditHours, requiredHours: src.requiredHours,
+        passMark: src.passMark,
+      }
+      const courses = store.courses.map(c => c.id === src.id ? { ...c, groupId: newGroupId } : c)
       persist({ ...store, courses, courseGroups: [...store.courseGroups, newGroup] })
       openNewSection(newGroupId)
     }
@@ -1611,7 +1453,26 @@ export function LMSPage() {
         confirmLabel: 'Delete',
         onConfirm: async () => {
           await deleteLMSCourse(co.id)
-          setStore(prev => ({ ...prev, courses: prev.courses.filter(c => c.id !== co.id), content: prev.content.filter(x => x.courseId !== co.id) }))
+          setStore(prev => ({ ...prev, courses: prev.courses.filter(c => c.id !== co.id) }))
+        },
+      })
+    }
+    function deleteCourse(g: CourseGroupRow) {
+      if (!g.groupId) { deleteSection(g.sections[0]); return }
+      setConfirmDialog({
+        title: 'Delete Course',
+        message: `Delete "${g.title}" — its curriculum and all ${g.sections.length} section${g.sections.length !== 1 ? 's' : ''}? This cannot be undone.`,
+        danger: true,
+        confirmLabel: 'Delete Course',
+        onConfirm: async () => {
+          for (const s of g.sections) await deleteLMSCourse(s.id)
+          await deleteLMSCourseGroup(g.groupId as string)
+          setStore(prev => ({
+            ...prev,
+            courses: prev.courses.filter(c => c.groupId !== g.groupId),
+            courseGroups: prev.courseGroups.filter(cg => cg.id !== g.groupId),
+            content: prev.content.filter(x => x.courseId !== g.groupId),
+          }))
         },
       })
     }
@@ -1720,7 +1581,9 @@ export function LMSPage() {
                   <div style={{ textAlign: 'center' }}>{enrollCount > 0 ? <div style={{ fontSize: 20, fontWeight: 900, color: '#059669' }}>{creditsEarned}</div> : <div style={{ fontSize: 16, color: '#94A3B8' }}>—</div>}</div>
                   <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                     <button onClick={() => navigate('/lms/overview')} title="Reports" style={{ ...actionBtnStyle, background: '#EEF3FF' }}>📊</button>
+                    <button onClick={() => { setCurriculumCourseId(g.key); navTab('curriculum') }} title="Curriculum" style={{ ...actionBtnStyle, background: '#F0F4FA' }}>🧩</button>
                     <button onClick={() => addSectionToGroupRow(g)} title="Add Section" style={{ ...actionBtnStyle, background: '#E8FBF0', color: '#059669' }}>📑➕</button>
+                    <button onClick={() => deleteCourse(g)} title="Delete Course" style={{ ...actionBtnStyle, background: '#FFF0F1', color: '#D61F31' }}>🗑</button>
                   </div>
                 </div>
                 {isExpanded && (
@@ -1751,7 +1614,7 @@ export function LMSPage() {
                                 title="Section Notes" style={{ ...actionBtnStyle, background: '#EEF3FF' }}>📝</button>
                               <button onClick={() => { setGbCourseId(co.id); navTab('gradebook') }}
                                 title="Gradebook" style={{ ...actionBtnStyle, background: '#FFF4E5' }}>🅰️➕</button>
-                              <button onClick={() => { setCurriculumCourseId(co.id); navTab('curriculum') }}
+                              <button onClick={() => { setCurriculumCourseId(groupKey(co)); navTab('curriculum') }}
                                 title="View Curriculum" style={{ ...actionBtnStyle, background: '#F0F4FA' }}>🔍</button>
                               <button onClick={() => setSectionMenuOpenId(prev => prev === co.id ? null : co.id)}
                                 title="More actions" style={{ ...actionBtnStyle, background: '#F7F9FC' }}>⋯</button>
@@ -1982,8 +1845,8 @@ export function LMSPage() {
     ))
     const stat = calcStudentCourseStats(sid, course, enrol)
     const passMark = course.passMark || 80
-    const content = store.content.filter(x => x.courseId === course.id)
-    const myProg = store.progress.filter(p => p.courseId === course.id && p.studentId === sid)
+    const content = store.content.filter(x => x.courseId === groupKey(course))
+    const myProg = store.progress.filter(p => p.courseId === groupKey(course) && p.studentId === sid)
     const topLevel = content.filter(x => !x.unitTitle).sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
     const unitTitles = [...new Set(content.filter(x => x.unitTitle).map(x => x.unitTitle as string))]
     const units = unitTitles.map(t => {
@@ -2188,7 +2051,7 @@ export function LMSPage() {
         <div style={{ textAlign: 'center', padding: 60, color: '#94A3B8' }}>No courses yet.</div>
       </div>
     )
-    const content = store.content.filter(x => x.courseId === course.id)
+    const content = store.content.filter(x => x.courseId === groupKey(course))
       .sort((a, b) => ((a.unitOrder ?? 0) - (b.unitOrder ?? 0)) || ((a.order ?? 0) - (b.order ?? 0)))
     const enrolments = store.enrolments.filter(en => en.courseId === course.id && isActiveBool(en.active))
     const enrolledIds = new Set<string>()
@@ -2214,7 +2077,7 @@ export function LMSPage() {
     let ahead = 0, onP = 0, off = 0, done = 0, needsScoring = 0, atRisk = 0
     enrolled.forEach(s => {
       const sid = s.id
-      const myProg = allProg.filter(p => p.courseId === course.id && p.studentId === sid)
+      const myProg = allProg.filter(p => p.courseId === groupKey(course) && p.studentId === sid)
       const comp = myProg.filter(p => p.status === 'completed').length
       const pct = content.length ? Math.round(comp / content.length * 100) : 0
       if (pct === 100) { done++; return }
@@ -2249,7 +2112,7 @@ export function LMSPage() {
     const exportCSV = () => {
       const hdr = ['Student', 'Grade', 'Cohort', 'Completion %', 'Avg Mastery %', 'Avg Assignment %', 'Composite %', 'Time (mins)', 'Credits', 'At Risk', ...content.map(c => c.title + ' (Composite)')]
       const rows = enrolled.map(s => {
-        const myProg = allProg.filter(p => p.courseId === course.id && p.studentId === s.id)
+        const myProg = allProg.filter(p => p.courseId === groupKey(course) && p.studentId === s.id)
         const comp = myProg.filter(p => p.status === 'completed').length
         const pctV = content.length ? Math.round(comp / content.length * 100) : 0
         const mRows = myProg.filter(p => p.masteryScore != null && !isNaN(Number(p.masteryScore)))
@@ -2277,7 +2140,7 @@ export function LMSPage() {
     const openScoreModal = (studentId: string, studentName: string, contentId: string, lessonTitle: string) => {
       const lessonItem = store.content.find(x => x.id === contentId)
       setScoreModal({
-        studentId, studentName, contentId, courseId: course.id, lessonTitle,
+        studentId, studentName, contentId, courseId: groupKey(course), lessonTitle,
         caseStudyUrl: lessonItem?.caseStudyUrl,
       })
     }
@@ -2346,7 +2209,7 @@ export function LMSPage() {
               <tbody>
                 {enrolled.map((s, rowIdx) => {
                   const sid = s.id
-                  const myProg = allProg.filter(p => p.courseId === course.id && p.studentId === sid)
+                  const myProg = allProg.filter(p => p.courseId === groupKey(course) && p.studentId === sid)
                   const comp = myProg.filter(p => p.status === 'completed').length
                   const pct = content.length ? Math.round(comp / content.length * 100) : 0
                   const mastRows = myProg.filter(p => p.masteryScore != null && !isNaN(Number(p.masteryScore)))
@@ -2444,11 +2307,11 @@ export function LMSPage() {
                     let totM = 0, cntM = 0, totA = 0, cntA = 0, totC = 0, cntC = 0
                     enrolled.forEach(s => {
                       const sid = s.id
-                      const mr = allProg.filter(p => p.courseId === course.id && p.studentId === sid && p.masteryScore != null && !isNaN(Number(p.masteryScore)))
+                      const mr = allProg.filter(p => p.courseId === groupKey(course) && p.studentId === sid && p.masteryScore != null && !isNaN(Number(p.masteryScore)))
                       if (mr.length) { totM += Math.round(mr.reduce((s, p) => s + Number(p.masteryScore), 0) / mr.length); cntM++ }
-                      const ar = allProg.filter(p => p.courseId === course.id && p.studentId === sid && p.assignScore != null && !isNaN(Number(p.assignScore)))
+                      const ar = allProg.filter(p => p.courseId === groupKey(course) && p.studentId === sid && p.assignScore != null && !isNaN(Number(p.assignScore)))
                       if (ar.length) { totA += Math.round(ar.reduce((s, p) => s + Number(p.assignScore), 0) / ar.length); cntA++ }
-                      const myP = allProg.filter(p => p.courseId === course.id && p.studentId === sid)
+                      const myP = allProg.filter(p => p.courseId === groupKey(course) && p.studentId === sid)
                       const cv = lmsCourseComposite(myP, content, passMark)
                       if (cv !== null) { totC += cv; cntC++ }
                     })
@@ -2461,7 +2324,7 @@ export function LMSPage() {
                     </>
                   })()}
                   {content.map((item, ci) => {
-                    const lessonProgs = allProg.filter(p => p.courseId === course.id && p.contentId === item.id)
+                    const lessonProgs = allProg.filter(p => p.courseId === groupKey(course) && p.contentId === item.id)
                     const csArr = lessonProgs.map(p => lmsCompositeScore(p, item, passMark)).filter(v => v !== null) as number[]
                     const avgCS = csArr.length ? Math.round(csArr.reduce((s, v) => s + v, 0) / csArr.length) : null
                     const borderL = ci > 0 && content[ci - 1]?.unitTitle !== item.unitTitle ? '2px solid #D0D7E4' : '1px solid #E4EAF2'
@@ -2525,15 +2388,15 @@ export function LMSPage() {
     const student = students.find(s => s.id === sid)
     const studentProgress = store.progress.filter(p => p.studentId === sid)
     const pickedCourse = store.courses.find(c => c.id === studentDetailCid)
-    const fallbackCourse = store.courses.find(c => studentProgress.some(p => p.courseId === c.id))
+    const fallbackCourse = store.courses.find(c => studentProgress.some(p => p.courseId === groupKey(c)))
     const course = pickedCourse || fallbackCourse || store.courses[0]
     const passMark = course?.passMark || 80
     const courseContent = course
       ? store.content
-        .filter(x => x.courseId === course.id)
+        .filter(x => x.courseId === groupKey(course))
         .sort((a, b) => ((a.unitOrder ?? 0) - (b.unitOrder ?? 0)) || ((a.order ?? 0) - (b.order ?? 0)))
       : []
-    const myProg = course ? studentProgress.filter(p => p.courseId === course.id) : studentProgress
+    const myProg = course ? studentProgress.filter(p => p.courseId === groupKey(course)) : studentProgress
     const hasSubmissionForContent = (contentId: string) =>
       studentSubmissions.some(r => String(r.content_id ?? '') === contentId)
     const completed = courseContent.length
@@ -2744,10 +2607,17 @@ export function LMSPage() {
   }
 
   // ─── CURRICULUM TAB ─────────────────────────────────────────────────────────
+  // The curriculum is owned by the Course (group), shared by all its sections. Pick
+  // one representative section per Course; content edits inside renderCurriculum are
+  // written against groupKey() so every section sees them. curriculumCourseId holds
+  // a group key.
   function renderCurriculumPage() {
-    const allCourses = store.courses.filter(co => co.status === 'Published' || co.status === 'Draft')
-    const cid = (allCourses.find(co => co.id === curriculumCourseId) ? curriculumCourseId : '') || (allCourses[0]?.id ?? '')
-    const course = allCourses.find(co => co.id === cid)
+    const sections = store.courses.filter(co => co.status === 'Published' || co.status === 'Draft')
+    const seen = new Set<string>()
+    const reps = sections.filter(co => { const k = groupKey(co); if (seen.has(k)) return false; seen.add(k); return true })
+    const titleFor = (co: LMSCourse) => store.courseGroups.find(g => g.id === co.groupId)?.title || co.title
+    const cid = (reps.find(co => groupKey(co) === curriculumCourseId) ? curriculumCourseId : '') || (reps[0] ? groupKey(reps[0]) : '')
+    const course = reps.find(co => groupKey(co) === cid)
     if (!course) return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div style={{ fontSize: 16, fontWeight: 900, color: '#1A365E' }}>🧩 Curriculum</div>
@@ -2760,11 +2630,11 @@ export function LMSPage() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
           <div>
             <div style={{ fontSize: 16, fontWeight: 900, color: '#1A365E' }}>🧩 Curriculum</div>
-            <div style={{ fontSize: 11, color: '#7A92B0', marginTop: 2 }}>{course.title} · {course.subject}{course.gradeLevel ? ' · ' + course.gradeLevel : ''}</div>
+            <div style={{ fontSize: 11, color: '#7A92B0', marginTop: 2 }}>{titleFor(course)} · {course.subject}{course.gradeLevel ? ' · ' + course.gradeLevel : ''} · shared by {sections.filter(s => groupKey(s) === cid).length} section{sections.filter(s => groupKey(s) === cid).length !== 1 ? 's' : ''}</div>
           </div>
-          {allCourses.length > 1 && (
+          {reps.length > 1 && (
             <select value={cid} onChange={e => setCurriculumCourseId(e.target.value)} style={iStyle}>
-              {allCourses.map(co => <option key={co.id} value={co.id}>{co.title}</option>)}
+              {reps.map(co => <option key={groupKey(co)} value={groupKey(co)}>{titleFor(co)}</option>)}
             </select>
           )}
         </div>
@@ -2776,7 +2646,7 @@ export function LMSPage() {
 
   // ─── CURRICULUM OUTLINE (used by the Curriculum tab) ────────────────────────
   function renderCurriculum(course: LMSCourse) {
-    const content = store.content.filter(x => x.courseId === course.id)
+    const content = store.content.filter(x => x.courseId === groupKey(course))
     const topLevel = content.filter(x => !x.unitTitle).sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
     const unitTitles = [...new Set(content.filter(x => x.unitTitle).map(x => x.unitTitle as string))]
     const units = unitTitles.map(t => {
@@ -2897,7 +2767,7 @@ export function LMSPage() {
       setCurriculumMenuOpenId(null)
     }
     function openAddItem(unitTitle: string | null) {
-      setActiveCourseId(course.id)
+      setActiveCourseId(groupKey(course))
       setPrefillUnit(unitTitle)
       setEditLessonIdx(null)
       setShowLessonModal(true)
@@ -2912,7 +2782,7 @@ export function LMSPage() {
       })
     }
     function openEdit(item: LMSContent) {
-      openEditItem(item, store.content.indexOf(item), course.id)
+      openEditItem(item, store.content.indexOf(item), groupKey(course))
       setCurriculumMenuOpenId(null)
     }
 
@@ -3126,7 +2996,7 @@ export function LMSPage() {
                 <td style={{ padding: '8px 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                   <button onClick={openAddUnit} title="Add Module" style={{ padding: '5px 9px', background: '#EEF3FF', color: '#1A365E', border: '1px solid #DDE6F0', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginRight: 6 }}>+ Module</button>
                   <button onClick={() => openAddItem(null)} title="Add Lesson" style={{ padding: '5px 9px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginRight: 6 }}>+ Lesson</button>
-                  <button onClick={() => { setActiveCourseId(course.id); setPrefillUnit(null); setEditCaseStudyIdx(null); setShowCaseStudyModal(true) }} title="Add Case Study" style={{ padding: '5px 9px', background: '#FFF3D6', color: '#92400E', border: '1px solid #FDE68A', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>📚 + Case Study</button>
+                  <button onClick={() => { setActiveCourseId(groupKey(course)); setPrefillUnit(null); setEditCaseStudyIdx(null); setShowCaseStudyModal(true) }} title="Add Case Study" style={{ padding: '5px 9px', background: '#FFF3D6', color: '#92400E', border: '1px solid #FDE68A', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>📚 + Case Study</button>
                 </td>
               </tr>
               {!content.length ? (
@@ -3161,7 +3031,7 @@ export function LMSPage() {
     )
     const cid = sectionCourseId || courses[0].id
     const course = courses.find(co => co.id === cid) || courses[0]
-    const content = store.content.filter(x => x.courseId === course.id)
+    const content = store.content.filter(x => x.courseId === groupKey(course))
     const allProg = store.progress
     const enrolRows = store.enrolments.filter(en => en.courseId === course.id && isActiveBool(en.active))
     const enrolledIds = new Set<string>()
@@ -3182,7 +3052,7 @@ export function LMSPage() {
     }
     function calcStats(s: Student): StuStat {
       const sid = s.id
-      const myProg = allProg.filter(p => p.courseId === course.id && p.studentId === sid)
+      const myProg = allProg.filter(p => p.courseId === groupKey(course) && p.studentId === sid)
       const comp = myProg.filter(p => p.status === 'completed').length
       const pct = content.length ? Math.round(comp / content.length * 100) : 0
       const mastRows = myProg.filter(p => p.masteryScore != null && !isNaN(Number(p.masteryScore)))
@@ -3282,7 +3152,7 @@ export function LMSPage() {
         {/* Gradebook / View Curriculum */}
         <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
           <button style={{ padding: '9px 18px', borderRadius: 10, border: 'none', background: '#1A365E', color: '#fff', fontSize: 11, fontWeight: 800, cursor: 'default', letterSpacing: '.5px', fontFamily: 'inherit' }}>📊 GRADEBOOK</button>
-          <button onClick={() => { setCurriculumCourseId(course.id); navTab('curriculum') }}
+          <button onClick={() => { setCurriculumCourseId(groupKey(course)); navTab('curriculum') }}
             style={{ padding: '9px 18px', borderRadius: 10, border: '1.5px solid #E4EAF2', background: '#fff', color: '#5A7290', fontSize: 11, fontWeight: 800, cursor: 'pointer', letterSpacing: '.5px', fontFamily: 'inherit' }}>🔍 CURRICULUM</button>
         </div>
 
@@ -3332,7 +3202,7 @@ export function LMSPage() {
                   const curMCol = stat.avgMastery !== null ? (stat.avgMastery >= passMark ? '#059669' : '#D61F31') : '#7A92B0'
                   const crsCol = stat.pct >= passMark ? '#059669' : stat.pct > 0 ? '#D97706' : '#94A3B8'
                   const hasCourseAssign = content.some(it => hasAssignBool(it.hasAssignment))
-                  const compSec = hasCourseAssign ? lmsCourseComposite(allProg.filter(p => p.courseId === course.id && p.studentId === stat.sid), content, passMark) : null
+                  const compSec = hasCourseAssign ? lmsCourseComposite(allProg.filter(p => p.courseId === groupKey(course) && p.studentId === stat.sid), content, passMark) : null
                   return (
                     <tr key={stat.sid} style={{ background: rowBg, borderBottom: '1px solid #F0F4FA' }}>
                       <td style={{ padding: '10px 8px', textAlign: 'center' }}><input type="checkbox" style={{ cursor: 'pointer' }} /></td>
@@ -3378,126 +3248,6 @@ export function LMSPage() {
                 })}
               </tbody>
             </table>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // ─── COURSE MODAL (creates/edits a Section) ────────────────────────────────
-  function CourseModal() {
-    const course = editCourseIdx !== null ? store.courses[editCourseIdx] : undefined
-    const isNew = editCourseIdx === null
-    const locked = isNew && newSectionGroupId !== null
-    const lockedGroup = locked ? store.courseGroups.find(g => g.id === newSectionGroupId) : undefined
-    const [title, setTitle] = useState(course?.title ?? '')
-    const [subject, setSubject] = useState(course?.subject ?? SUBJECTS[0])
-    const [gradeLevel, setGradeLevel] = useState(course?.gradeLevel ?? GRADE_LEVELS[0])
-    const [description, setDescription] = useState(course?.description ?? '')
-    const [passMark, setPassMark] = useState(String(course?.passMark ?? 80))
-    const [creditHours, setCreditHours] = useState(String(course?.creditHours ?? 1))
-    const [requiredHours, setRequiredHours] = useState(String(course?.requiredHours ?? ''))
-    const [status, setStatus] = useState<'Draft' | 'Published'>(course?.status ?? 'Draft')
-    const [announcement, setAnnouncement] = useState(course?.announcement ?? '')
-    const [startDate, setStartDate] = useState(course?.startDate ?? '')
-    const [endDate, setEndDate] = useState(course?.endDate ?? '')
-    const [groupMode, setGroupMode] = useState<'none' | 'existing' | 'new'>(locked || course?.groupId ? 'existing' : 'none')
-    const [groupId, setGroupId] = useState(course?.groupId ?? newSectionGroupId ?? '')
-    const [newGroupTitle, setNewGroupTitle] = useState('')
-    const save = () => {
-      if (!title.trim()) { alert('Section title is required'); return }
-      let finalGroupId: string | null = null
-      const newGroupsToAdd: LMSCourseGroup[] = []
-      if (groupMode === 'existing') {
-        finalGroupId = groupId || null
-      } else if (groupMode === 'new') {
-        if (!newGroupTitle.trim()) { alert('Enter a name for the new course'); return }
-        const newId = crypto.randomUUID()
-        finalGroupId = newId
-        newGroupsToAdd.push({ id: newId, title: newGroupTitle.trim() })
-      }
-      const obj: LMSCourse = {
-        ...course,
-        id: course?.id ?? lmsId(),
-        title: title.trim(), subject, gradeLevel, description: description.trim(),
-        passMark: parseInt(passMark) || 80,
-        creditHours: parseFloat(creditHours) || 1,
-        requiredHours: parseFloat(requiredHours) || 0,
-        status, announcement: announcement.trim(),
-        createdBy: course?.createdBy ?? 'Admin',
-        createdAt: course?.createdAt ?? new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        groupId: finalGroupId,
-        startDate: startDate || null,
-        endDate: endDate || null,
-      }
-      const courses = [...store.courses]
-      if (isNew) courses.push(obj); else courses[editCourseIdx!] = obj
-      persist({ ...store, courses, courseGroups: [...store.courseGroups, ...newGroupsToAdd] })
-      closeCourseModal()
-    }
-    return (
-      <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 400, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto', backdropFilter: 'blur(4px)' }} onClick={e => { if (e.target === e.currentTarget) closeCourseModal() }}>
-        <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 560, boxShadow: '0 24px 60px rgba(0,0,0,.3)', margin: 'auto' }}>
-          <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '18px 24px', borderRadius: '18px 18px 0 0' }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>📘 {isNew ? 'New Section' : 'Edit Section'}</div>
-          </div>
-          <div style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div>
-              <label style={labelStyle}>Course</label>
-              {locked ? (
-                <div style={{ ...inputStyle, background: '#F7F9FC', color: '#5A7290', boxSizing: 'border-box' }}>{lockedGroup?.title ?? 'Untitled Course'}</div>
-              ) : (
-                <>
-                  <select
-                    value={groupMode === 'new' ? '__new__' : (groupMode === 'existing' ? groupId : '')}
-                    onChange={e => {
-                      const v = e.target.value
-                      if (v === '__new__') setGroupMode('new')
-                      else if (v === '') setGroupMode('none')
-                      else { setGroupMode('existing'); setGroupId(v) }
-                    }}
-                    style={selectStyle}>
-                    <option value="">— No Course (standalone section) —</option>
-                    {store.courseGroups.map(g => <option key={g.id} value={g.id}>{g.title}</option>)}
-                    <option value="__new__">+ Create New Course…</option>
-                  </select>
-                  {groupMode === 'new' && (
-                    <input value={newGroupTitle} onChange={e => setNewGroupTitle(e.target.value)} placeholder="e.g. Accelerate to Algebra 1" style={{ ...inputStyle, marginTop: 6 }} />
-                  )}
-                </>
-              )}
-            </div>
-            <div><label style={labelStyle}>Section Title *</label><input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Introduction to Entrepreneurship" style={inputStyle} /></div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <div><label style={labelStyle}>Subject</label><select value={subject} onChange={e => setSubject(e.target.value)} style={selectStyle}>{SUBJECTS.map(s => <option key={s}>{s}</option>)}</select></div>
-              <div><label style={labelStyle}>Grade Level</label><select value={gradeLevel} onChange={e => setGradeLevel(e.target.value)} style={selectStyle}>{GRADE_LEVELS.map(g => <option key={g}>{g}</option>)}</select></div>
-            </div>
-            <div><label style={labelStyle}>Description</label><textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} placeholder="What will students learn in this course?" style={taStyle} /></div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <div><label style={labelStyle}>Start Date</label><input value={startDate} onChange={e => setStartDate(e.target.value)} type="date" style={inputStyle} /></div>
-              <div><label style={labelStyle}>End Date (optional)</label><input value={endDate} onChange={e => setEndDate(e.target.value)} type="date" style={inputStyle} /></div>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-              <div><label style={labelStyle}>Pass Mark (%)</label><input value={passMark} onChange={e => setPassMark(e.target.value)} type="number" min={1} max={100} style={inputStyle} /></div>
-              <div><label style={labelStyle}>Credit Hours</label><input value={creditHours} onChange={e => setCreditHours(e.target.value)} type="number" min={0} max={10} step={0.5} style={inputStyle} /></div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label style={labelStyle}>Required Study Hours (optional)</label>
-                <input value={requiredHours} onChange={e => setRequiredHours(e.target.value)} type="number" min={0} step={0.5} placeholder="e.g. 60" style={inputStyle} />
-                <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 3 }}>Leave blank for no time requirement. If set, the certificate will only be issued after the student has spent this many hours on the course.</div>
-              </div>
-              <div><label style={labelStyle}>Status</label><select value={status} onChange={e => setStatus(e.target.value as 'Draft' | 'Published')} style={selectStyle}><option>Draft</option><option>Published</option></select></div>
-            </div>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6, alignItems: 'flex-end' }}>
-              <div style={{ flex: 1 }}>
-                <label style={labelStyle}>📢 Announcement <span style={{ fontWeight: 400, color: '#94A3B8' }}>(optional)</span></label>
-                <textarea value={announcement} onChange={e => setAnnouncement(e.target.value)} rows={2} placeholder="e.g. Quiz rescheduled to Friday…" style={{ ...taStyle, fontSize: 11 }} />
-              </div>
-              <div style={{ display: 'flex', gap: 8, flexShrink: 0, paddingBottom: 1 }}>
-                <button onClick={closeCourseModal} style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-                <button onClick={save} style={{ padding: '9px 20px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>💾 Save Section</button>
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -3663,6 +3413,15 @@ export function LMSPage() {
         id: lmsId(), courseId: newSection.id, targetType: 'student', targetValue: sid,
         assignedBy: 'Admin', assignedAt: new Date().toISOString(), active: true,
       }))
+      // A brand-new Course (group) owns the curriculum — seed its metadata from this first section.
+      if (newGroupsToAdd.length) {
+        newGroupsToAdd[0] = {
+          ...newGroupsToAdd[0],
+          subject: newSection.subject, gradeLevel: newSection.gradeLevel,
+          description: newSection.description, creditHours: newSection.creditHours,
+          requiredHours: newSection.requiredHours, passMark: newSection.passMark,
+        }
+      }
       await persist({
         ...store,
         courses: [...coursesBase, newSection],
@@ -4051,7 +3810,7 @@ export function LMSPage() {
 
   // ─── LESSON MODAL ───────────────────────────────────────────────────────────
   function LessonModal() {
-    const courseId = activeCourseId || (store.courses[0]?.id ?? '')
+    const courseId = activeCourseId || (store.courses[0] ? groupKey(store.courses[0]) : '')
     const item = editLessonIdx !== null ? store.content[editLessonIdx] : undefined
     const isNew = editLessonIdx === null
     const existingUnits = [...new Set(store.content.filter(x => x.courseId === courseId).map(x => x.unitTitle).filter(Boolean))] as string[]
@@ -4365,7 +4124,7 @@ export function LMSPage() {
   // A Case Study Assignment is its own item, separate from the Tutorial/Mastery Test
   // lesson editor above — one per module, conventionally that module's final lesson.
   function CaseStudyModal() {
-    const courseId = activeCourseId || (store.courses[0]?.id ?? '')
+    const courseId = activeCourseId || (store.courses[0] ? groupKey(store.courses[0]) : '')
     const item = editCaseStudyIdx !== null ? store.content[editCaseStudyIdx] : undefined
     const isNew = editCaseStudyIdx === null
     const existingUnits = [...new Set(store.content.filter(x => x.courseId === courseId).map(x => x.unitTitle).filter(Boolean))] as string[]
@@ -4475,8 +4234,6 @@ export function LMSPage() {
       {activeTab === 'manage' && renderManage()}
       {activeTab === 'students' && renderManageStudents()}
       {activeTab === 'student-section' && renderStudentSectionDetail()}
-      {activeTab === 'courses' && renderCourses()}
-      {activeTab === 'content' && renderContent()}
       {activeTab === 'assign' && renderAssign()}
       {activeTab === 'gradebook' && renderGradebook()}
       {activeTab === 'curriculum' && renderCurriculumPage()}
@@ -4484,7 +4241,6 @@ export function LMSPage() {
       {activeTab === 'student' && renderStudentDetail()}
       {activeTab === 'section' && renderSection()}
       {activeTab === 'progress' && renderProgress()}
-      {showCourseModal && <CourseModal />}
       {showNewSectionFlow && <NewSectionFlow />}
       {showLessonModal && <LessonModal />}
       {showCaseStudyModal && <CaseStudyModal />}

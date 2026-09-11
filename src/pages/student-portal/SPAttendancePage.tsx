@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { CalendarDays, AlertTriangle, CheckCircle2, XCircle, Clock, ClipboardList, type LucideIcon } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { toLegacyStudentGradeValue } from '@/types/student'
@@ -122,7 +123,7 @@ export function SPAttendancePage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ fontSize: 18, fontWeight: 800, color: SP_NAVY }}>📅 My Attendance</div>
+      <div style={{ fontSize: 18, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 8 }}><CalendarDays size={18} /> My Attendance</div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: 14 }}>
         <div style={{ ...card, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
@@ -150,21 +151,21 @@ export function SPAttendancePage() {
             </text>
           </svg>
           {stats.rate < 90 && (
-            <div style={{ fontSize: 10, color: SP_RED, fontWeight: 700, textAlign: 'center', marginTop: 4 }}>
-              ⚠️ Below 90% threshold
+            <div style={{ fontSize: 10, color: SP_RED, fontWeight: 700, textAlign: 'center', marginTop: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+              <AlertTriangle size={11} /> Below 90% threshold
             </div>
           )}
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, alignContent: 'start' }}>
-          {[
-            { label: 'Present', value: stats.present, color: SP_GREEN, icon: '✅' },
-            { label: 'Absent', value: stats.absent, color: SP_RED, icon: '❌' },
-            { label: 'Tardy', value: stats.tardy, color: SP_GOLD, icon: '⏰' },
-            { label: 'Excused', value: stats.excused, color: SP_SLATE, icon: '📋' },
-          ].map((item) => (
+          {([
+            { label: 'Present', value: stats.present, color: SP_GREEN, icon: CheckCircle2 },
+            { label: 'Absent', value: stats.absent, color: SP_RED, icon: XCircle },
+            { label: 'Tardy', value: stats.tardy, color: SP_GOLD, icon: Clock },
+            { label: 'Excused', value: stats.excused, color: SP_SLATE, icon: ClipboardList },
+          ] as { label: string; value: number; color: string; icon: LucideIcon }[]).map((item) => (
             <div key={item.label} style={{ ...card, padding: 14, textAlign: 'center' }}>
-              <div style={{ fontSize: 24, marginBottom: 4 }}>{item.icon}</div>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 4, color: item.color }}><item.icon size={24} /></div>
               <div style={{ fontSize: 24, fontWeight: 800, color: item.color }}>{item.value}</div>
               <div style={{ fontSize: 10, color: SP_SLATE, fontWeight: 600 }}>{item.label}</div>
             </div>
@@ -174,7 +175,7 @@ export function SPAttendancePage() {
 
       {months.length === 0 ? (
         <div style={card}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, marginBottom: 12 }}>📅 Attendance Calendar</div>
+          <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}><CalendarDays size={13} /> Attendance Calendar</div>
           <div style={emptyState}>No attendance records yet.</div>
         </div>
       ) : (
@@ -186,7 +187,7 @@ export function SPAttendancePage() {
 
           return (
             <div key={monthKey} style={{ ...card, padding: 18 }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, marginBottom: 12 }}>📅 {label}</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}><CalendarDays size={13} /> {label}</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 4 }}>
                 {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
                   <div key={day} style={{ textAlign: 'center', fontSize: 9, fontWeight: 700, color: SP_SLATE, padding: '4px 0' }}>

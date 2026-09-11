@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { CalendarRange, CalendarDays, CalendarClock, Radio, Book, MapPin, Circle, Link2, Clock } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 
@@ -148,7 +149,7 @@ export function SPTimetablePage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div>
-        <div style={{ fontSize: 18, fontWeight: 800, color: SP_NAVY }}>🗓️ My Timetable</div>
+        <div style={{ fontSize: 18, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 8 }}><CalendarRange size={18} /> My Timetable</div>
         <div style={{ fontSize: 12, color: SP_SLATE, marginTop: 2 }}>
           Your weekly class blocks{session?.cohort ? ` · ${session.cohort}` : ''}
         </div>
@@ -157,7 +158,7 @@ export function SPTimetablePage() {
       {/* Today */}
       <div style={{ ...card, padding: '14px 18px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY }}>📅 Today · {today}</div>
+          <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 6 }}><CalendarDays size={13} /> Today · {today}</div>
           <div style={{ fontSize: 10, color: SP_SLATE }}>{todayBlocks.length} {todayBlocks.length === 1 ? 'class' : 'classes'}</div>
         </div>
         {!loaded ? (
@@ -174,14 +175,16 @@ export function SPTimetablePage() {
                     {b.name || b.subject || 'Class'}
                     {b.assignedToMe && <span style={{ fontSize: 9, fontWeight: 700, color: '#059669', marginLeft: 6 }}>• for you</span>}
                   </div>
-                  <div style={{ fontSize: 10, color: SP_SLATE }}>
-                    {b.sessionType === 'Live Session' ? '🔴 Live Session' : '📗 Self-Paced Mastery'}
-                    {b.room ? ` · 📍 ${b.room}` : ''}
-                    {coachNames[b.coachId] ? ` · 🟢 ${coachNames[b.coachId]}` : ''}
+                  <div style={{ fontSize: 10, color: SP_SLATE, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                    {b.sessionType === 'Live Session'
+                      ? <><Radio size={10} /> Live Session</>
+                      : <><Book size={10} /> Self-Paced Mastery</>}
+                    {b.room ? <>· <MapPin size={10} /> {b.room}</> : ''}
+                    {coachNames[b.coachId] ? <>· <Circle size={8} fill="#16A34A" color="#16A34A" /> {coachNames[b.coachId]}</> : ''}
                   </div>
                 </div>
                 {b.sessionType === 'Live Session' && b.meetLink && (
-                  <a href={b.meetLink} target="_blank" rel="noreferrer" style={{ fontSize: 9, fontWeight: 800, background: '#059669', color: '#fff', padding: '5px 12px', borderRadius: 6, textDecoration: 'none', flexShrink: 0 }}>🔗 Join</a>
+                  <a href={b.meetLink} target="_blank" rel="noreferrer" style={{ fontSize: 9, fontWeight: 800, background: '#059669', color: '#fff', padding: '5px 12px', borderRadius: 6, textDecoration: 'none', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Link2 size={10} /> Join</a>
                 )}
               </div>
             ))}
@@ -192,7 +195,7 @@ export function SPTimetablePage() {
       {/* Weekly grid */}
       <div style={card}>
         <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '12px 16px' }}>
-          <div style={{ fontSize: 12, fontWeight: 800, color: '#fff' }}>📆 Weekly Overview</div>
+          <div style={{ fontSize: 12, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 6 }}><CalendarClock size={12} /> Weekly Overview</div>
         </div>
         {!loaded ? (
           <div style={{ padding: 18 }}><div style={emptyState}>Loading…</div></div>
@@ -222,13 +225,13 @@ export function SPTimetablePage() {
                           {cell.map(b => (
                             <div key={b.id} style={{ background: colorFor[b.subject || b.name || b.id], borderRadius: 6, padding: '6px 8px', marginBottom: 3, border: '1px solid rgba(0,0,0,.06)' }}>
                               <div style={{ fontSize: 10, fontWeight: 800, color: SP_NAVY }}>{b.name || b.subject || '—'}</div>
-                              {b.time && <div style={{ fontSize: 9, color: '#5A6B85' }}>⏰ {timeRange(b.time)}</div>}
-                              <div style={{ fontSize: 9, color: b.sessionType === 'Live Session' ? SP_RED : '#7C3AED', fontWeight: 700 }}>
-                                {b.sessionType === 'Live Session' ? '🔴 Live' : '📗 Self-Paced'}
+                              {b.time && <div style={{ fontSize: 9, color: '#5A6B85', display: 'flex', alignItems: 'center', gap: 3 }}><Clock size={9} /> {timeRange(b.time)}</div>}
+                              <div style={{ fontSize: 9, color: b.sessionType === 'Live Session' ? SP_RED : '#7C3AED', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 3 }}>
+                                {b.sessionType === 'Live Session' ? <><Radio size={9} /> Live</> : <><Book size={9} /> Self-Paced</>}
                               </div>
-                              {b.room && <div style={{ fontSize: 9, color: SP_SLATE }}>📍 {b.room}</div>}
+                              {b.room && <div style={{ fontSize: 9, color: SP_SLATE, display: 'flex', alignItems: 'center', gap: 3 }}><MapPin size={9} /> {b.room}</div>}
                               {b.sessionType === 'Live Session' && b.meetLink && (
-                                <a href={b.meetLink} target="_blank" rel="noreferrer" style={{ fontSize: 9, fontWeight: 700, color: '#0369A1' }}>🔗 Join</a>
+                                <a href={b.meetLink} target="_blank" rel="noreferrer" style={{ fontSize: 9, fontWeight: 700, color: '#0369A1', display: 'inline-flex', alignItems: 'center', gap: 3 }}><Link2 size={9} /> Join</a>
                               )}
                             </div>
                           ))}

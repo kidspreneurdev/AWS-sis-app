@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Check } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import {
@@ -120,7 +121,7 @@ export function SPOnboardingPage() {
                         background: done ? '#E8FBF0' : '#F0F3F8', color: done ? '#0E6B3B' : '#9EB3C8',
                         border: `1px solid ${done ? '#A7E3C0' : '#E4EAF2'}`,
                       }}>
-                        {done ? '✓' : ''}
+                        {done ? <Check size={12} strokeWidth={3} /> : ''}
                       </span>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13, fontWeight: 600, color: done ? '#0E6B3B' : '#1A365E' }}>{step.task}</div>

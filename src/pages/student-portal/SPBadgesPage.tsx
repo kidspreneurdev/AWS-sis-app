@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Medal } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { toLegacyStudentGradeValue } from '@/types/student'
@@ -34,7 +35,7 @@ export function SPBadgesPage() {
 
       {badges.length > 0 && (
         <div style={{ ...card, display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ fontSize: 40 }}>🏅</div>
+          <div style={{ display: 'flex', color: '#D61F31' }}><Medal size={40} /></div>
           <div>
             <div style={{ fontSize: 28, fontWeight: 800, color: '#1A365E' }}>{badges.length}</div>
             <div style={{ fontSize: 13, color: '#7A92B0' }}>badge{badges.length !== 1 ? 's' : ''} earned</div>
@@ -49,7 +50,7 @@ export function SPBadgesPage() {
           return (
             <div key={b.id} style={{ ...card, background: bg, border: `1px solid ${tc}30` }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                <div style={{ width: 36, height: 36, borderRadius: 9, background: tc, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🏅</div>
+                <div style={{ width: 36, height: 36, borderRadius: 9, background: tc, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Medal size={18} /></div>
                 <span style={{ fontSize: 11, color: tc, fontWeight: 600 }}>{new Date(b.earned_at).toLocaleDateString()}</span>
               </div>
               <div style={{ fontSize: 15, fontWeight: 700, color: '#1A365E', marginBottom: 4 }}>{b.name}</div>

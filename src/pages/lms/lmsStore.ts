@@ -28,12 +28,20 @@ export interface LMSCourse {
   instructorIds?: string[]
 }
 
-// A "Course Group" is the parent "Course" shown on the Manage Courses page —
-// it groups one or more lms_courses rows ("Sections") together. Ungrouped
-// courses (groupId null) render as their own standalone Course with 1 Section.
+// A "Course Group" is the real "Course" (e.g. "Business English 2.0"). It owns the
+// curriculum — lms_content.course_id points here — which is shared by every
+// lms_courses row ("Section") grouped under it. Sections differ only in roster,
+// schedule, instructor, pacing and self-enroll. Every section has a group_id
+// (backfilled by 20260914_lms_curriculum_at_course_level.sql).
 export interface LMSCourseGroup {
   id: string
   title: string
+  subject?: string
+  gradeLevel?: string
+  description?: string
+  creditHours?: number
+  requiredHours?: number
+  passMark?: number
   createdAt?: string
 }
 
@@ -46,7 +54,7 @@ export interface LMSQuestion {
 
 export interface LMSContent {
   id: string
-  courseId: string
+  courseId: string // course-group id (lms_course_groups.id) — the Course this lesson belongs to
   title: string
   type: 'video' | 'article' | 'link' | 'file' | 'quiz' | 'presentation'
   lessonSubType?: string
@@ -101,7 +109,7 @@ export interface LMSEnrolment {
 export interface LMSProgress {
   id?: string
   studentId: string
-  courseId: string
+  courseId: string // course-group id (lms_course_groups.id); the section is recoverable via enrolments
   contentId: string
   status: 'not_started' | 'in_progress' | 'completed'
   masteryScore?: number | null
@@ -154,6 +162,12 @@ function rowToLMSCourseGroup(r: Record<string, unknown>): LMSCourseGroup {
   return {
     id: r.id as string,
     title: (r.title as string) ?? '',
+    subject: (r.subject as string) ?? '',
+    gradeLevel: (r.grade_level as string) ?? '',
+    description: (r.description as string) ?? '',
+    creditHours: r.credit_hours != null ? Number(r.credit_hours) : 1,
+    requiredHours: r.required_hours != null ? Number(r.required_hours) : 0,
+    passMark: r.pass_mark != null ? Number(r.pass_mark) : 80,
     createdAt: (r.created_at as string) ?? '',
   }
 }
@@ -273,6 +287,26 @@ const OPTIONAL_COURSE_COLUMNS = [
   'student_instructions', 'instructor_ids',
 ]
 
+// Course-level columns added by 20260914_lms_curriculum_at_course_level.sql
+const OPTIONAL_GROUP_COLUMNS = [
+  'subject', 'grade_level', 'description', 'credit_hours', 'required_hours', 'pass_mark',
+]
+
+async function upsertLmsCourseGroups(payloads: Record<string, unknown>[]): Promise<string | null> {
+  let rows = payloads
+  let remainingOptional = [...OPTIONAL_GROUP_COLUMNS]
+  for (let attempt = 0; attempt <= OPTIONAL_GROUP_COLUMNS.length; attempt++) {
+    const { error } = await supabase.from('lms_course_groups').upsert(rows, { onConflict: 'id' })
+    if (!error) return null
+    const missingCol = remainingOptional.find(c => (error.message ?? '').includes(c))
+    if (!missingCol) return error.message
+    console.warn(`lms_course_groups.${missingCol} column missing — retrying without it (apply the pending LMS migrations):`, error)
+    rows = rows.map(row => { const clone = { ...row }; delete clone[missingCol]; return clone })
+    remainingOptional = remainingOptional.filter(c => c !== missingCol)
+  }
+  return 'lms_course_groups save failed after removing all optional columns'
+}
+
 async function upsertLmsCourses(payloads: Record<string, unknown>[]): Promise<string | null> {
   let rows = payloads
   let remainingOptional = [...OPTIONAL_COURSE_COLUMNS]
@@ -290,12 +324,15 @@ async function upsertLmsCourses(payloads: Record<string, unknown>[]): Promise<st
 
 export async function saveLMS(store: LMSStore): Promise<string | null> {
   if (store.courseGroups.length) {
-    const { error } = await supabase.from('lms_course_groups').upsert(
-      store.courseGroups.map(g => ({ id: g.id, title: g.title })),
-      { onConflict: 'id' }
-    )
+    const err = await upsertLmsCourseGroups(store.courseGroups.map(g => ({
+      id: g.id, title: g.title,
+      subject: g.subject ?? null, grade_level: g.gradeLevel ?? null,
+      description: g.description ?? null,
+      credit_hours: g.creditHours ?? 1, required_hours: g.requiredHours || null,
+      pass_mark: g.passMark ?? 80,
+    })))
     // lms_course_groups may not exist yet until the migration is applied — degrade gracefully
-    if (error) console.warn('lms_course_groups save error (migration may not be applied yet):', error)
+    if (err) console.warn('lms_course_groups save error (migration may not be applied yet):', err)
   }
   if (store.courses.length) {
     const payloads = store.courses.map(c => ({
@@ -377,8 +414,14 @@ export async function saveLMS(store: LMSStore): Promise<string | null> {
 
 // ─── Individual deletes ───────────────────────────────────────────────────────
 export async function deleteLMSCourse(id: string) {
-  // cascade deletes content and enrolments
+  // Deletes one Section. Cascades its enrolments; curriculum now belongs to the
+  // Course (group), so it is left intact for the remaining sections.
   await supabase.from('lms_courses').delete().eq('id', id)
+}
+export async function deleteLMSCourseGroup(id: string) {
+  // Deletes a whole Course — cascades its curriculum (lms_content), progress and
+  // submissions. Detach or delete its sections separately first if needed.
+  await supabase.from('lms_course_groups').delete().eq('id', id)
 }
 export async function deleteLMSContent(id: string) {
   await supabase.from('lms_content').delete().eq('id', id)

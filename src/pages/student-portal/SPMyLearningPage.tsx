@@ -1,9 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
+import {
+  CheckCircle2, Circle, Rabbit, Footprints, Turtle, Hourglass, ClipboardList,
+  Check, Target, Timer, Lock, BookOpen, MessageSquare, Rocket, Scale, Calculator,
+  Upload, Link2, Trophy, Flag, FileText, CalendarDays, Megaphone, FolderKanban,
+  FolderOpen, PartyPopper, Frown, RefreshCw, X, Play, Video, Link as LinkIcon,
+  Paperclip, HelpCircle, MonitorPlay, ChevronDown, ChevronRight, type LucideIcon,
+} from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { uploadFile } from '@/lib/uploadFile'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
-import { TYPE_ICONS, SUBJECT_COLORS, isActiveBool, type LMSCourse, type LMSContent, type LMSEnrolment, type LMSProgress, type LMSQuestion } from '@/pages/lms/lmsStore'
+import { SUBJECT_COLORS, isActiveBool, type LMSCourse, type LMSContent, type LMSEnrolment, type LMSProgress, type LMSQuestion } from '@/pages/lms/lmsStore'
+
+const CONTENT_TYPE_ICONS: Record<string, LucideIcon> = {
+  video: Video, article: FileText, link: LinkIcon, file: Paperclip, quiz: HelpCircle, presentation: MonitorPlay,
+}
 import { CASE_STUDY_RUBRIC, SCORE_COMPONENT_TYPES, finalGrade, type ScoreComponentType } from '@/lib/lms/caseStudyRubric'
 import { toLegacyStudentGradeValue } from '@/types/student'
 import { K5MyLearningPage } from '@/pages/student-portal/K5MyLearningPage'
@@ -47,15 +58,15 @@ function paceMeta(progressPct: number, enrolment?: LMSEnrolment | null) {
     const daysPassed = (now - start) / 86400000
     const expectedPct = totalDays > 0 ? Math.min(100, Math.round((daysPassed / totalDays) * 100)) : 0
     const paceDiff = progressPct - expectedPct
-    if (progressPct === 100) return { label: 'Complete', icon: '✅', color: SP_GREEN, bg: '#DCFCE7', bucket: 'ahead' as const }
-    if (daysPassed < 0) return { label: 'Not Started', icon: '○', color: '#64748B', bg: '#F1F5F9', bucket: 'not_started' as const }
-    if (paceDiff >= 10) return { label: 'Ahead of Pace', icon: '🏃‍♂️', color: SP_GREEN, bg: '#DCFCE7', bucket: 'ahead' as const }
-    if (paceDiff >= -10) return { label: 'On Pace', icon: '🚶‍♂️', color: '#2563EB', bg: '#DBEAFE', bucket: 'on' as const }
-    return { label: 'Off Pace', icon: '🐢', color: SP_RED, bg: '#FEE2E2', bucket: 'off' as const }
+    if (progressPct === 100) return { label: 'Complete', icon: CheckCircle2, color: SP_GREEN, bg: '#DCFCE7', bucket: 'ahead' as const }
+    if (daysPassed < 0) return { label: 'Not Started', icon: Circle, color: '#64748B', bg: '#F1F5F9', bucket: 'not_started' as const }
+    if (paceDiff >= 10) return { label: 'Ahead of Pace', icon: Rabbit, color: SP_GREEN, bg: '#DCFCE7', bucket: 'ahead' as const }
+    if (paceDiff >= -10) return { label: 'On Pace', icon: Footprints, color: '#2563EB', bg: '#DBEAFE', bucket: 'on' as const }
+    return { label: 'Off Pace', icon: Turtle, color: SP_RED, bg: '#FEE2E2', bucket: 'off' as const }
   }
-  if (progressPct === 100) return { label: 'Complete', icon: '✅', color: SP_GREEN, bg: '#DCFCE7', bucket: 'ahead' as const }
-  if (progressPct === 0) return { label: 'Not Started', icon: '○', color: '#64748B', bg: '#F1F5F9', bucket: 'not_started' as const }
-  return { label: 'In Progress', icon: '⏳', color: '#0891B2', bg: '#E0F2FE', bucket: 'on' as const }
+  if (progressPct === 100) return { label: 'Complete', icon: CheckCircle2, color: SP_GREEN, bg: '#DCFCE7', bucket: 'ahead' as const }
+  if (progressPct === 0) return { label: 'Not Started', icon: Circle, color: '#64748B', bg: '#F1F5F9', bucket: 'not_started' as const }
+  return { label: 'In Progress', icon: Hourglass, color: '#0891B2', bg: '#E0F2FE', bucket: 'on' as const }
 }
 
 function contentStatus(item: LMSContent, progress: LMSProgress | undefined, passMark: number) {
@@ -67,24 +78,25 @@ function contentStatus(item: LMSContent, progress: LMSProgress | undefined, pass
 
   if (hasAssignment && assignScore !== null) {
     return {
-      text: `📋 ${assignScore}%`,
+      icon: ClipboardList as LucideIcon,
+      text: `${assignScore}%`,
       color: assignScore >= passMark ? SP_GREEN : SP_RED,
     }
   }
   if (hasAssignment && progress?.assignStatus === 'submitted') {
-    return { text: '📋 Awaiting score', color: '#D97706' }
+    return { icon: ClipboardList as LucideIcon, text: 'Awaiting score', color: '#D97706' }
   }
   if (hasAssignment) {
-    return { text: '📋 Assignment due', color: '#64748B' }
+    return { icon: ClipboardList as LucideIcon, text: 'Assignment due', color: '#64748B' }
   }
   if (hasMastery && masteryPassed) {
-    return { text: `✓ Mastery${progress?.masteryScore != null ? ` · ${progress.masteryScore}%` : ''}`, color: SP_GREEN }
+    return { icon: Check as LucideIcon, text: `Mastery${progress?.masteryScore != null ? ` · ${progress.masteryScore}%` : ''}`, color: SP_GREEN }
   }
   if (hasMastery) {
-    return { text: '🎯 Mastery test', color: '#D97706' }
+    return { icon: Target as LucideIcon, text: 'Mastery test', color: '#D97706' }
   }
   if (completed) {
-    return { text: '✅ Completed', color: SP_GREEN }
+    return { icon: CheckCircle2 as LucideIcon, text: 'Completed', color: SP_GREEN }
   }
   return null
 }
@@ -126,8 +138,8 @@ function MasteryQuiz({ item, prog, studentId, coursePassMark, onUpdate }: {
 
   if (!questions.length) {
     return (
-      <div style={{ padding: '14px 16px', background: '#F7F9FC', borderRadius: 10, border: '1px solid #E4EAF2', fontSize: 11, color: '#94A3B8' }}>
-        🎯 No mastery questions have been configured for this lesson yet.
+      <div style={{ padding: '14px 16px', background: '#F7F9FC', borderRadius: 10, border: '1px solid #E4EAF2', fontSize: 11, color: '#94A3B8', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <Target size={12} /> No mastery questions have been configured for this lesson yet.
       </div>
     )
   }
@@ -203,14 +215,14 @@ function MasteryQuiz({ item, prog, studentId, coursePassMark, onUpdate }: {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div style={{ background: result.passed ? 'linear-gradient(135deg,#059669,#047857)' : 'linear-gradient(135deg,#DC2626,#B91C1C)', borderRadius: 14, padding: '20px 22px', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', top: -20, right: -20, width: 100, height: 100, borderRadius: '50%', background: 'rgba(255,255,255,.07)' }} />
-          <div style={{ fontSize: 36, marginBottom: 8 }}>{result.passed ? '🎉' : '😔'}</div>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8, color: '#fff' }}>{result.passed ? <PartyPopper size={36} /> : <Frown size={36} />}</div>
           <div style={{ fontSize: 16, fontWeight: 900, color: '#fff', marginBottom: 4 }}>{result.passed ? 'Congratulations!' : 'Not quite there yet'}</div>
           <div style={{ fontSize: 12, color: 'rgba(255,255,255,.85)', marginBottom: 14 }}>
             {result.passed ? `You passed with ${result.score}%` : `You scored ${result.score}% — you need ${passMark}% to pass`}
           </div>
           {!result.passed && remainingRetakes > 0 && (
             <button onClick={retry} style={{ padding: '9px 20px', background: '#fff', color: '#DC2626', border: 'none', borderRadius: 9, fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
-              🔄 Try Again ({remainingRetakes} attempt{remainingRetakes !== 1 ? 's' : ''} left)
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><RefreshCw size={13} /> Try Again ({remainingRetakes} attempt{remainingRetakes !== 1 ? 's' : ''} left)</span>
             </button>
           )}
           {!result.passed && remainingRetakes <= 0 && (
@@ -218,15 +230,15 @@ function MasteryQuiz({ item, prog, studentId, coursePassMark, onUpdate }: {
           )}
         </div>
         <div style={{ background: '#fff', border: '1px solid #E4EAF2', borderRadius: 13, overflow: 'hidden' }}>
-          <div style={{ padding: '10px 14px', background: '#F7F9FC', borderBottom: '1px solid #E4EAF2', fontSize: 11, fontWeight: 800, color: '#1A365E' }}>📝 Answer Review</div>
+          <div style={{ padding: '10px 14px', background: '#F7F9FC', borderBottom: '1px solid #E4EAF2', fontSize: 11, fontWeight: 800, color: '#1A365E', display: 'flex', alignItems: 'center', gap: 6 }}><FileText size={12} /> Answer Review</div>
           {questions.map((q, qi) => {
             const isShort = q.type === 'short' || !q.opts?.length
             const studentAns = answers[qi]
             const correct = !isShort && studentAns === q.ans
             return (
               <div key={qi} style={{ padding: '12px 14px', borderBottom: qi < questions.length - 1 ? '1px solid #F0F4FA' : 'none', background: isShort ? '#F7F9FC' : correct ? '#F0FDF4' : '#FFF7F7' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#1A365E', marginBottom: 6 }}>
-                  {isShort ? '📝' : correct ? '✅' : '❌'} Q{qi + 1}: {q.q}
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#1A365E', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  {isShort ? <FileText size={11} /> : correct ? <CheckCircle2 size={11} color="#059669" /> : <X size={11} color="#DC2626" />} Q{qi + 1}: {q.q}
                 </div>
                 {isShort ? (
                   <>
@@ -258,7 +270,7 @@ function MasteryQuiz({ item, prog, studentId, coursePassMark, onUpdate }: {
     <div style={{ background: '#F7F9FC', borderRadius: 13, padding: 20, border: '1px solid #E4EAF2' }}>
       {timeLimitSecs > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', background: '#FFF7ED', border: '1px solid #FDE68A', borderRadius: 8, marginBottom: 10 }}>
-          <span style={{ fontSize: 18 }}>⏱</span>
+          <Timer size={18} color="#92400E" />
           <div>
             <div style={{ fontSize: 10, fontWeight: 700, color: '#92400E', textTransform: 'uppercase' }}>Time Remaining</div>
             <div style={{ fontSize: 18, fontWeight: 900, color: timeLeft < 60 ? SP_RED : '#D97706', fontVariantNumeric: 'tabular-nums' }}>
@@ -268,8 +280,8 @@ function MasteryQuiz({ item, prog, studentId, coursePassMark, onUpdate }: {
         </div>
       )}
       {timedOut && (
-        <div style={{ padding: '8px 12px', background: '#FEE2E2', borderRadius: 8, fontSize: 11, fontWeight: 700, color: SP_RED, marginBottom: 10 }}>
-          ⏱ Time's up! Please submit your answers.
+        <div style={{ padding: '8px 12px', background: '#FEE2E2', borderRadius: 8, fontSize: 11, fontWeight: 700, color: SP_RED, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Timer size={12} /> Time's up! Please submit your answers.
         </div>
       )}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
@@ -390,7 +402,7 @@ function CaseStudyPanel({ item, studentId, masteryPassed }: {
   if (locked) {
     return (
       <div style={{ padding: '14px 16px', background: '#F7F9FC', borderRadius: 10, border: '1px solid #E4EAF2', display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ fontSize: 24 }}>🔒</span>
+        <Lock size={24} color="#94A3B8" />
         <div>
           <div style={{ fontSize: 12, fontWeight: 700, color: '#7A92B0' }}>Case Study Assignment Locked</div>
           <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>Pass the mastery test first to unlock this assignment.</div>
@@ -475,7 +487,7 @@ function CaseStudyPanel({ item, studentId, masteryPassed }: {
     )
   }
 
-  function renderScoreBlock(type: ScoreComponentType, icon: string, title: string, order: number) {
+  function renderScoreBlock(type: ScoreComponentType, icon: LucideIcon, title: string, order: number) {
     return <CSScoreBlock type={type} icon={icon} title={title} order={order} score={scoreByType[type]} appealControl={renderAppealControl(type)} />
   }
 
@@ -485,7 +497,7 @@ function CaseStudyPanel({ item, studentId, masteryPassed }: {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ fontSize: 14, fontWeight: 800, color: '#1A365E' }}>📚 Case Study Assignment</div>
+      <div style={{ fontSize: 14, fontWeight: 800, color: '#1A365E', display: 'flex', alignItems: 'center', gap: 6 }}><BookOpen size={14} /> Case Study Assignment</div>
 
       <div style={{ background: '#fff', border: '1.5px solid #1A365E22', borderRadius: 12, padding: '12px 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
@@ -511,7 +523,7 @@ function CaseStudyPanel({ item, studentId, masteryPassed }: {
               <iframe src={getCaseStudyEmbedUrl(bundle.lesson.caseStudyUrl)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }} title="Case Study" loading="lazy" />
             </div>
             <div style={{ padding: '8px 16px', textAlign: 'right' }}>
-              <a href={bundle.lesson.caseStudyUrl} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#1A365E', fontWeight: 700 }}>↗ Open in new tab</a>
+              <a href={bundle.lesson.caseStudyUrl} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#1A365E', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Link2 size={11} /> Open in new tab</a>
             </div>
           </>
         ) : (
@@ -520,17 +532,17 @@ function CaseStudyPanel({ item, studentId, masteryPassed }: {
       </div>
 
       {/* 2. Notes Score */}
-      {renderScoreBlock('notes', '📝', 'Notes Score', 2)}
+      {renderScoreBlock('notes', FileText, 'Notes Score', 2)}
 
       {/* 3. Discussion Post */}
       <div style={{ background: '#fff', border: '1px solid #E4EAF2', borderRadius: 12, padding: '14px 16px' }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: '#1A365E', marginBottom: 8 }}>💬 3. Discussion Post</div>
+        <div style={{ fontSize: 13, fontWeight: 800, color: '#1A365E', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}><MessageSquare size={13} /> 3. Discussion Post</div>
         {!myTopLevelPost ? (
           <div style={{ background: '#F7F9FC', borderRadius: 10, padding: '12px 14px', border: '1px solid #E4EAF2' }}>
             <div style={{ fontSize: 9, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Share your thoughts on the case study</div>
             <textarea value={postBody} onChange={(e) => setPostBody(e.target.value)} rows={3} placeholder="What's your take on the case study?" style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 12, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
-              <button onClick={() => void submitPost(null)} disabled={readOnly || posting || !postBody.trim()} style={{ padding: '7px 18px', background: postBody.trim() ? '#1A365E' : '#E4EAF2', color: postBody.trim() ? '#fff' : '#94A3B8', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: postBody.trim() ? 'pointer' : 'not-allowed' }}>{posting ? 'Posting…' : '🚀 Post'}</button>
+              <button onClick={() => void submitPost(null)} disabled={readOnly || posting || !postBody.trim()} style={{ padding: '7px 18px', background: postBody.trim() ? '#1A365E' : '#E4EAF2', color: postBody.trim() ? '#fff' : '#94A3B8', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: postBody.trim() ? 'pointer' : 'not-allowed' }}>{posting ? 'Posting…' : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Rocket size={12} /> Post</span>}</button>
             </div>
           </div>
         ) : (
@@ -554,7 +566,7 @@ function CaseStudyPanel({ item, studentId, masteryPassed }: {
                     </div>
                   </div>
                 ) : (
-                  <button onClick={() => setReplyOpenFor(p.id)} style={{ marginTop: 4, padding: 0, background: 'none', border: 'none', color: '#5A7290', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>💬 Comment</button>
+                  <button onClick={() => setReplyOpenFor(p.id)} style={{ marginTop: 4, padding: 0, background: 'none', border: 'none', color: '#5A7290', fontSize: 10, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}><MessageSquare size={10} /> Comment</button>
                 )}
               </div>
             ))}
@@ -569,36 +581,36 @@ function CaseStudyPanel({ item, studentId, masteryPassed }: {
       </div>
 
       {/* 4. Socratic Debate Score */}
-      {renderScoreBlock('debate', '⚖️', 'Socratic Debate Score', 4)}
+      {renderScoreBlock('debate', Scale, 'Socratic Debate Score', 4)}
 
       {/* 5. OMR Test Score */}
-      {renderScoreBlock('omr', '🔢', 'OMR Test Score', 5)}
+      {renderScoreBlock('omr', Calculator, 'OMR Test Score', 5)}
 
       {/* 6. Presentation Upload */}
       <div style={{ background: '#fff', border: '1px solid #E4EAF2', borderRadius: 12, padding: '14px 16px' }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: '#1A365E', marginBottom: 8 }}>📤 6. Presentation Upload</div>
+        <div style={{ fontSize: 13, fontWeight: 800, color: '#1A365E', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}><Upload size={13} /> 6. Presentation Upload</div>
         {bundle.presentation ? (
           <div style={{ background: '#F0FDF4', borderRadius: 8, padding: '10px 12px', border: '1px solid #BBF7D0' }}>
-            <div style={{ fontSize: 11, color: '#059669', fontWeight: 700, marginBottom: 4 }}>✅ Submitted {new Date(bundle.presentation.submittedAt).toLocaleDateString()}</div>
+            <div style={{ fontSize: 11, color: '#059669', fontWeight: 700, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}><CheckCircle2 size={11} /> Submitted {new Date(bundle.presentation.submittedAt).toLocaleDateString()}</div>
             {bundle.presentation.note && <div style={{ fontSize: 11, color: '#3D5475', marginBottom: 4, whiteSpace: 'pre-wrap' }}>{bundle.presentation.note}</div>}
-            {bundle.presentation.linkUrl && <a href={bundle.presentation.linkUrl} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#1A365E', fontWeight: 700 }}>🔗 View your presentation</a>}
+            {bundle.presentation.linkUrl && <a href={bundle.presentation.linkUrl} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#1A365E', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Link2 size={11} /> View your presentation</a>}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <textarea rows={2} value={presNote} onChange={(e) => setPresNote(e.target.value)} placeholder="Notes for your teacher (optional)..." style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 11, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
             <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, border: `2px dashed ${presFile ? '#1DBD6A' : '#CBD5E0'}`, background: presFile ? '#F0FDF4' : '#F8FAFC', cursor: 'pointer', fontSize: 11, color: presFile ? '#1DBD6A' : '#7A92B0', fontWeight: presFile ? 700 : 400 }}>
               <input type="file" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) setPresFile(f) }} />
-              {presFile ? `✅ ${presFile.name}` : '+ Choose file (PDF, PPT…)'}
+              {presFile ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><CheckCircle2 size={12} /> {presFile.name}</span> : '+ Choose file (PDF, PPT…)'}
             </label>
             <button onClick={() => void submitPresentation()} disabled={readOnly || presSubmitting || !presFile} style={{ padding: '9px 16px', background: presFile && !readOnly ? '#1A365E' : '#E4EAF2', color: presFile && !readOnly ? '#fff' : '#94A3B8', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: presFile && !readOnly ? 'pointer' : 'not-allowed', alignSelf: 'flex-end' }}>
-              {presSubmitting ? '⏳ Uploading…' : '📤 Submit Presentation'}
+              {presSubmitting ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Hourglass size={12} /> Uploading…</span> : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Upload size={12} /> Submit Presentation</span>}
             </button>
           </div>
         )}
       </div>
 
       {/* 7. Presentation Score */}
-      {renderScoreBlock('presentation', '🏆', 'Presentation Score', 7)}
+      {renderScoreBlock('presentation', Trophy, 'Presentation Score', 7)}
     </div>
   )
 }
@@ -618,8 +630,8 @@ function CSAppealControl({ appeal, isOpen, draftText, filing, readOnly, onOpen, 
     return (
       <div style={{ marginTop: 8, padding: '8px 10px', background: appeal.status === 'open' ? '#FEF3C7' : '#F0FDF4', border: `1px solid ${appeal.status === 'open' ? '#FDE68A' : '#BBF7D0'}`, borderRadius: 8, fontSize: 11 }}>
         {appeal.status === 'open'
-          ? <span style={{ color: '#92400E', fontWeight: 700 }}>🚩 Appeal sent — pending review.</span>
-          : <span style={{ color: '#059669' }}><strong>✅ Appeal resolved:</strong> {appeal.adminReply}</span>}
+          ? <span style={{ color: '#92400E', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Flag size={11} /> Appeal sent — pending review.</span>
+          : <span style={{ color: '#059669', display: 'inline-flex', alignItems: 'center', gap: 4 }}><CheckCircle2 size={11} /> <strong>Appeal resolved:</strong> {appeal.adminReply}</span>}
       </div>
     )
   }
@@ -634,15 +646,15 @@ function CSAppealControl({ appeal, isOpen, draftText, filing, readOnly, onOpen, 
           </div>
         </div>
       ) : (
-        <button onClick={onOpen} disabled={readOnly} style={{ padding: '4px 10px', background: 'none', color: '#D97706', border: '1px solid #FDE68A', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: readOnly ? 'not-allowed' : 'pointer' }}>🚩 Appeal this score</button>
+        <button onClick={onOpen} disabled={readOnly} style={{ padding: '4px 10px', background: 'none', color: '#D97706', border: '1px solid #FDE68A', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: readOnly ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Flag size={10} /> Appeal this score</button>
       )}
     </div>
   )
 }
 
-function CSScoreBlock({ type, icon, title, order, score, appealControl }: {
+function CSScoreBlock({ type, icon: Icon, title, order, score, appealControl }: {
   type: ScoreComponentType
-  icon: string
+  icon: LucideIcon
   title: string
   order: number
   score: CSScoreData | undefined
@@ -653,10 +665,10 @@ function CSScoreBlock({ type, icon, title, order, score, appealControl }: {
   return (
     <div style={{ background: '#fff', border: '1px solid #E4EAF2', borderRadius: 12, padding: '14px 16px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: '#1A365E' }}>{icon} {order}. {title}</div>
+        <div style={{ fontSize: 13, fontWeight: 800, color: '#1A365E', display: 'flex', alignItems: 'center', gap: 6 }}><Icon size={13} /> {order}. {title}</div>
         {isScored
           ? <span style={{ background: '#DCFCE7', color: '#059669', fontSize: 12, fontWeight: 900, padding: '4px 12px', borderRadius: 20 }}>{score!.subtotal}/{cat.weight}</span>
-          : <span style={{ background: '#F0F4FA', color: '#7A92B0', fontSize: 10, fontWeight: 700, padding: '4px 10px', borderRadius: 20 }}>⏳ Pending</span>}
+          : <span style={{ background: '#F0F4FA', color: '#7A92B0', fontSize: 10, fontWeight: 700, padding: '4px 10px', borderRadius: 20, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Hourglass size={10} /> Pending</span>}
       </div>
       {isScored && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
@@ -811,8 +823,8 @@ function LessonPreviewContent({
             <div key={qi} style={{ background: '#F7F9FC', borderRadius: 10, padding: '12px 14px', border: '1px solid #E4EAF2' }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: '#1A365E', marginBottom: 8 }}>{qi + 1}. {q.q}</div>
               {q.opts && q.opts.map((opt, oi) => (
-                <div key={oi} style={{ padding: '6px 10px', marginBottom: 4, borderRadius: 6, background: oi === q.ans ? '#DCFCE7' : '#fff', border: `1px solid ${oi === q.ans ? '#86EFAC' : '#E4EAF2'}`, fontSize: 11, color: oi === q.ans ? '#15803D' : '#3D5475', fontWeight: oi === q.ans ? 700 : 400 }}>
-                  {String.fromCharCode(65 + oi)}. {opt}{oi === q.ans ? ' ✓' : ''}
+                <div key={oi} style={{ padding: '6px 10px', marginBottom: 4, borderRadius: 6, background: oi === q.ans ? '#DCFCE7' : '#fff', border: `1px solid ${oi === q.ans ? '#86EFAC' : '#E4EAF2'}`, fontSize: 11, color: oi === q.ans ? '#15803D' : '#3D5475', fontWeight: oi === q.ans ? 700 : 400, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  {String.fromCharCode(65 + oi)}. {opt}{oi === q.ans ? <Check size={11} strokeWidth={3} /> : null}
                 </div>
               ))}
             </div>
@@ -923,14 +935,19 @@ export function SPMyLearningPage() {
     }
 
     const courseIds = [...new Set(matched.map((entry) => entry.courseId))]
-    const [{ data: cData }, { data: coData }, { data: prData }] = await Promise.all([
+    const [{ data: cData }, { data: prData }] = await Promise.all([
       supabase.from('lms_courses').select('*').in('id', courseIds),
-      supabase.from('lms_content').select('*').in('course_id', courseIds).order('module_order').order('unit_order').order('order_idx'),
       supabase.from('lms_progress').select('*').eq('student_id', session.dbId),
     ])
 
+    // Curriculum belongs to the Course (group), shared by every section — load content by group_id.
+    const groupIds = [...new Set((cData ?? []).map((r: Record<string, unknown>) => (r.group_id as string) ?? (r.id as string)).filter(Boolean))]
+    const { data: coData } = await supabase.from('lms_content').select('*')
+      .in('course_id', groupIds).order('module_order').order('unit_order').order('order_idx')
+
     const mappedCourses: LMSCourse[] = (cData ?? []).map((r: Record<string, unknown>) => ({
       id: r.id as string,
+      groupId: (r.group_id as string) ?? null,
       title: (r.title as string) ?? '',
       subject: (r.subject as string) ?? '',
       gradeLevel: (r.grade_level as string) ?? '',
@@ -1065,8 +1082,8 @@ export function SPMyLearningPage() {
     return ['All', ...values]
   }, [courses])
 
-  const courseProgress = (courseId: string) => {
-    const items = content.filter((item) => item.courseId === courseId)
+  const courseProgress = (course: LMSCourse) => {
+    const items = content.filter((item) => item.courseId === (course.groupId ?? course.id))
     if (!items.length || !session) return 0
     const done = items.filter((item) => progress.find((entry) => entry.contentId === item.id && entry.studentId === session.dbId && entry.status === 'completed')).length
     return Math.round((done / items.length) * 100)
@@ -1089,7 +1106,7 @@ export function SPMyLearningPage() {
 
     courses.forEach((course) => {
       const enrolment = enrolments.find((entry) => entry.courseId === course.id)
-      const pct = courseProgress(course.id)
+      const pct = courseProgress(course)
       const meta = paceMeta(pct, enrolment)
       if (meta.bucket === 'ahead') ahead += 1
       else if (meta.bucket === 'on') on += 1
@@ -1105,7 +1122,7 @@ export function SPMyLearningPage() {
   const courseItems = useMemo(() => {
     if (!selectedCourse) return []
     return content
-      .filter((item) => item.courseId === selectedCourse.id)
+      .filter((item) => item.courseId === (selectedCourse.groupId ?? selectedCourse.id))
       .sort((a, b) => (a.moduleOrder ?? 0) - (b.moduleOrder ?? 0) || (a.unitOrder ?? 0) - (b.unitOrder ?? 0) || (a.order ?? 0) - (b.order ?? 0))
   }, [content, selectedCourse])
 
@@ -1175,16 +1192,16 @@ export function SPMyLearningPage() {
 
           {courses.length > 0 && (
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {paceSummary.ahead > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: '#DCFCE7', borderRadius: 10, border: '1px solid #059669' }}><span style={{ fontSize: 16 }}>🏃‍♂️</span><div><div style={{ fontSize: 11, fontWeight: 800, color: '#059669' }}>{paceSummary.ahead}</div><div style={{ fontSize: 9, color: '#059669' }}>Ahead of Pace</div></div></div>}
-              {paceSummary.on > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: '#DBEAFE', borderRadius: 10, border: '1px solid #2563EB' }}><span style={{ fontSize: 16 }}>🚶‍♂️</span><div><div style={{ fontSize: 11, fontWeight: 800, color: '#2563EB' }}>{paceSummary.on}</div><div style={{ fontSize: 9, color: '#2563EB' }}>On Pace</div></div></div>}
-              {paceSummary.off > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: '#FEE2E2', borderRadius: 10, border: '1px solid #D61F31' }}><span style={{ fontSize: 16 }}>🐢</span><div><div style={{ fontSize: 11, fontWeight: 800, color: '#D61F31' }}>{paceSummary.off}</div><div style={{ fontSize: 9, color: '#D61F31' }}>Off Pace</div></div></div>}
-              {paceSummary.notStarted > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: '#F1F5F9', borderRadius: 10, border: '1px solid #94A3B8' }}><span style={{ fontSize: 16 }}>○</span><div><div style={{ fontSize: 11, fontWeight: 800, color: '#64748B' }}>{paceSummary.notStarted}</div><div style={{ fontSize: 9, color: '#64748B' }}>Not Started</div></div></div>}
+              {paceSummary.ahead > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: '#DCFCE7', borderRadius: 10, border: '1px solid #059669' }}><Rabbit size={16} color="#059669" /><div><div style={{ fontSize: 11, fontWeight: 800, color: '#059669' }}>{paceSummary.ahead}</div><div style={{ fontSize: 9, color: '#059669' }}>Ahead of Pace</div></div></div>}
+              {paceSummary.on > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: '#DBEAFE', borderRadius: 10, border: '1px solid #2563EB' }}><Footprints size={16} color="#2563EB" /><div><div style={{ fontSize: 11, fontWeight: 800, color: '#2563EB' }}>{paceSummary.on}</div><div style={{ fontSize: 9, color: '#2563EB' }}>On Pace</div></div></div>}
+              {paceSummary.off > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: '#FEE2E2', borderRadius: 10, border: '1px solid #D61F31' }}><Turtle size={16} color="#D61F31" /><div><div style={{ fontSize: 11, fontWeight: 800, color: '#D61F31' }}>{paceSummary.off}</div><div style={{ fontSize: 9, color: '#D61F31' }}>Off Pace</div></div></div>}
+              {paceSummary.notStarted > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: '#F1F5F9', borderRadius: 10, border: '1px solid #94A3B8' }}><Circle size={16} color="#64748B" /><div><div style={{ fontSize: 11, fontWeight: 800, color: '#64748B' }}>{paceSummary.notStarted}</div><div style={{ fontSize: 9, color: '#64748B' }}>Not Started</div></div></div>}
             </div>
           )}
 
           {courses.length === 0 ? (
             <div style={{ ...card, padding: 48, textAlign: 'center' }}>
-              <div style={{ fontSize: 40, marginBottom: 12 }}>📚</div>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12, color: '#94A3B8' }}><BookOpen size={40} /></div>
               <div style={{ fontSize: 14, fontWeight: 700, color: '#1A365E' }}>No courses assigned yet</div>
               <div style={{ fontSize: 12, color: '#7A92B0', marginTop: 6 }}>Once courses are assigned, they will appear here.</div>
             </div>
@@ -1193,11 +1210,11 @@ export function SPMyLearningPage() {
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 12 }}>
               {filteredCourses.map((course) => {
-                const pct = courseProgress(course.id)
+                const pct = courseProgress(course)
                 const enrolment = enrolments.find((entry) => entry.courseId === course.id) ?? null
                 const pace = paceMeta(pct, enrolment)
                 const subjectCol = SUBJECT_COLORS[course.subject] || '#1A365E'
-                const courseContent = content.filter((item) => item.courseId === course.id)
+                const courseContent = content.filter((item) => item.courseId === (course.groupId ?? course.id))
                 const doneCount = courseContent.filter((item) => progress.find((entry) => entry.contentId === item.id && entry.studentId === session?.dbId && entry.status === 'completed')).length
                 const pendingAssignments = courseContent.filter((item) => {
                   const hasAssignment = item.hasAssignment === true || item.hasAssignment === 'TRUE'
@@ -1225,28 +1242,30 @@ export function SPMyLearningPage() {
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
                         <div style={{ display: 'flex', gap: 8, fontSize: 10, color: '#7A92B0', flexWrap: 'wrap' }}>
-                          <span>📄 {courseContent.length} lessons</span>
-                          {enrolment?.dueDate && <span>📅 Due: {enrolment.dueDate}</span>}
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><FileText size={10} /> {courseContent.length} lessons</span>
+                          {enrolment?.dueDate && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><CalendarDays size={10} /> Due: {enrolment.dueDate}</span>}
                         </div>
-                        <span style={{ fontSize: 10, fontWeight: 800, color: pace.color, background: pace.bg, padding: '4px 10px', borderRadius: 20, whiteSpace: 'nowrap', border: `1px solid ${pace.color}33` }}>
-                          {pace.icon} {pace.label}
+                        <span style={{ fontSize: 10, fontWeight: 800, color: pace.color, background: pace.bg, padding: '4px 10px', borderRadius: 20, whiteSpace: 'nowrap', border: `1px solid ${pace.color}33`, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <pace.icon size={11} /> {pace.label}
                         </span>
                       </div>
                       {pendingAssignments > 0 && (
                         <div style={{ marginBottom: 6, padding: '5px 10px', background: '#FEF3C7', borderRadius: 7, fontSize: 10, fontWeight: 700, color: '#92400E', display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span>📋</span><span>{pendingAssignments} assignment{pendingAssignments !== 1 ? 's' : ''} need attention</span>
+                          <ClipboardList size={12} /><span>{pendingAssignments} assignment{pendingAssignments !== 1 ? 's' : ''} need attention</span>
                         </div>
                       )}
                       {course.announcement?.trim() ? (
                         <div style={{ marginBottom: 8, padding: '7px 10px', background: '#1A365E0D', borderLeft: '3px solid #1A365E', borderRadius: '0 7px 7px 0', display: 'flex', alignItems: 'flex-start', gap: 7 }}>
-                          <span style={{ fontSize: 13, flexShrink: 0 }}>📢</span>
+                          <Megaphone size={13} color="#1A365E" style={{ flexShrink: 0 }} />
                           <div style={{ fontSize: 10, color: '#1A365E', lineHeight: 1.5 }}>{course.announcement.length > 80 ? `${course.announcement.slice(0, 80)}…` : course.announcement}</div>
                         </div>
                       ) : (
                         <div style={{ ...emptyState, marginBottom: 8, padding: '8px 10px' }}>No course announcement posted yet.</div>
                       )}
                       <div style={{ marginTop: 8, padding: '8px 12px', background: subjectCol, color: '#fff', borderRadius: 8, fontSize: 11, fontWeight: 700, textAlign: 'center' }}>
-                        {pct === 0 ? '▶ Start Course' : pct === 100 ? '🔁 Review' : '▶ Continue'}
+                        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                          {pct === 0 ? <><Play size={12} /> Start Course</> : pct === 100 ? <><RefreshCw size={12} /> Review</> : <><Play size={12} /> Continue</>}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -1261,7 +1280,7 @@ export function SPMyLearningPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {selectedCourse.announcement?.trim() ? (
             <div style={{ background: 'linear-gradient(135deg,#1A365E,#0F2240)', borderRadius: 11, padding: '12px 16px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-              <span style={{ fontSize: 20, flexShrink: 0 }}>📢</span>
+              <Megaphone size={20} color="#fff" style={{ flexShrink: 0 }} />
               <div>
                 <div style={{ fontSize: 10, fontWeight: 800, color: 'rgba(255,255,255,.6)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>Course Announcement</div>
                 <div style={{ fontSize: 12, color: '#fff', lineHeight: 1.6 }}>{selectedCourse.announcement}</div>
@@ -1287,16 +1306,16 @@ export function SPMyLearningPage() {
               <div style={{ fontSize: 11, fontWeight: 800, color: '#1A365E' }}>
                 {courseItems.filter((item) => progress.find((entry) => entry.contentId === item.id && entry.studentId === session?.dbId && entry.status === 'completed')).length} / {courseItems.length} lessons completed
               </div>
-              <div style={{ fontSize: 13, fontWeight: 900, color: courseProgress(selectedCourse.id) === 100 ? SP_GREEN : courseProgress(selectedCourse.id) >= 50 ? '#D97706' : SP_NAVY }}>{courseProgress(selectedCourse.id)}%</div>
+              <div style={{ fontSize: 13, fontWeight: 900, color: courseProgress(selectedCourse) === 100 ? SP_GREEN : courseProgress(selectedCourse) >= 50 ? '#D97706' : SP_NAVY }}>{courseProgress(selectedCourse)}%</div>
             </div>
             <div style={{ height: 8, background: '#F0F4FA', borderRadius: 4, overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `${courseProgress(selectedCourse.id)}%`, background: courseProgress(selectedCourse.id) === 100 ? SP_GREEN : courseProgress(selectedCourse.id) >= 50 ? '#D97706' : SP_NAVY, borderRadius: 4 }} />
+              <div style={{ height: '100%', width: `${courseProgress(selectedCourse)}%`, background: courseProgress(selectedCourse) === 100 ? SP_GREEN : courseProgress(selectedCourse) >= 50 ? '#D97706' : SP_NAVY, borderRadius: 4 }} />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginTop: 12 }}>
               <div style={{ ...emptyState, padding: '10px 12px' }}>
                 <strong style={{ color: '#1A365E' }}>Average mastery</strong><br />
                 {(() => {
-                  const mastery = progress.filter((entry) => entry.courseId === selectedCourse.id && entry.studentId === session?.dbId && entry.masteryScore != null)
+                  const mastery = progress.filter((entry) => entry.courseId === (selectedCourse.groupId ?? selectedCourse.id) && entry.studentId === session?.dbId && entry.masteryScore != null)
                   return mastery.length ? `${Math.round(mastery.reduce((sum, entry) => sum + Number(entry.masteryScore ?? 0), 0) / mastery.length)}%` : 'No mastery data available'
                 })()}
               </div>
@@ -1322,11 +1341,11 @@ export function SPMyLearningPage() {
           ) : (
             groupedModules.map((module, moduleIdx) => (
               <div key={`${module.label || 'default'}-${moduleIdx}`} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {module.label ? <div style={{ fontSize: 10, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: 1 }}>🗂 {module.label}</div> : null}
+                {module.label ? <div style={{ fontSize: 10, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 4 }}><FolderKanban size={11} /> {module.label}</div> : null}
                 {[...module.units.entries()].map(([unit, items]) => (
                   <div key={unit} style={{ ...card, overflow: 'hidden' }}>
-                    <div style={{ padding: '12px 18px', background: '#F7F9FC', borderBottom: '1px solid #E4EAF2', fontSize: 12, fontWeight: 800, color: '#1A365E' }}>
-                      📂 {unit}
+                    <div style={{ padding: '12px 18px', background: '#F7F9FC', borderBottom: '1px solid #E4EAF2', fontSize: 12, fontWeight: 800, color: '#1A365E', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <FolderOpen size={13} /> {unit}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                       {items.map((item, idx) => {
@@ -1343,8 +1362,8 @@ export function SPMyLearningPage() {
                               onClick={() => toggleLessonExpanded(item.id)}
                               style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 18px', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}
                             >
-                              <span style={{ width: 20, height: 20, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #E4EAF2', borderRadius: 4, background: '#fff', fontSize: 12, color: '#5A7290' }}>{expanded ? '−' : '+'}</span>
-                              <span style={{ fontSize: 16, flexShrink: 0 }}>{TYPE_ICONS[item.type] || '📄'}</span>
+                              <span style={{ width: 20, height: 20, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #E4EAF2', borderRadius: 4, background: '#fff', color: '#5A7290' }}>{expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</span>
+                              <span style={{ flexShrink: 0, display: 'inline-flex', color: '#5A7290' }}>{(() => { const TI = CONTENT_TYPE_ICONS[item.type] || FileText; return <TI size={16} /> })()}</span>
                               <span style={{ fontSize: 13, fontWeight: 700, color: '#1A365E', flex: 1, minWidth: 0 }}>{item.title}</span>
                             </button>
                             {expanded && (
@@ -1412,8 +1431,8 @@ export function SPMyLearningPage() {
                     <div style={{ fontSize: 12, fontWeight: 800, color: '#1A365E' }}>Lesson Progress</div>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 11, color: '#7A92B0' }}>
                       <span>{activeLesson.type.charAt(0).toUpperCase() + activeLesson.type.slice(1)}</span>
-                      {activeLesson.estimatedMins ? <span>⏱ {activeLesson.estimatedMins} min required</span> : <span>⏱ No minimum time</span>}
-                      {badge ? <span style={{ color: badge.color, fontWeight: 700 }}>{badge.text}</span> : null}
+                      {activeLesson.estimatedMins ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Timer size={11} /> {activeLesson.estimatedMins} min required</span> : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Timer size={11} /> No minimum time</span>}
+                      {badge ? <span style={{ color: badge.color, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}><badge.icon size={11} /> {badge.text}</span> : null}
                       {activeLesson.estimatedMins ? (
                         <span style={{ color: canMarkDone ? '#059669' : '#D97706', fontWeight: 700 }}>
                           {canMarkDone ? 'Timer complete' : `Remaining ${formatRemaining(remainingMs)}`}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { RotateCcw, Check, BarChart3 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
@@ -177,9 +178,10 @@ export function SPSkillsPage() {
                 style={{
                   padding: '9px 16px', borderRadius: 8, border: '1.5px solid #E4EAF2',
                   background: '#fff', color: '#1A365E', fontWeight: 600, fontSize: 13, cursor: 'pointer',
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
                 }}
               >
-                ↺ Retake
+                <RotateCcw size={14} /> Retake
               </button>
             )}
             <button
@@ -192,7 +194,7 @@ export function SPSkillsPage() {
                 transition: 'background 0.2s',
               }}
             >
-              {saved ? '✓ Saved' : saving ? 'Saving…' : 'Save Self-Assessment'}
+              {saved ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Check size={14} strokeWidth={3} /> Saved</span> : saving ? 'Saving…' : 'Save Self-Assessment'}
             </button>
           </div>
         )}
@@ -317,7 +319,7 @@ export function SPSkillsPage() {
                             fontSize: 11, fontWeight: 700,
                             color: diff > 0 ? '#F59E0B' : diff < 0 ? '#D61F31' : '#10B981',
                           }}>
-                            {diff > 0 ? `+${diff} self-rated higher` : diff < 0 ? `${Math.abs(diff)} below teacher` : '✓ Aligned'}
+                            {diff > 0 ? `+${diff} self-rated higher` : diff < 0 ? `${Math.abs(diff)} below teacher` : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Check size={12} strokeWidth={3} /> Aligned</span>}
                           </span>
                         )}
                       </div>
@@ -353,7 +355,7 @@ export function SPSkillsPage() {
       {/* No teacher scores yet */}
       {!hasTeacher && (
         <div style={{ ...card, textAlign: 'center', padding: '30px 20px' }}>
-          <div style={{ fontSize: 28, marginBottom: 10 }}>📊</div>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10, color: '#7A92B0' }}><BarChart3 size={28} /></div>
           <div style={{ fontSize: 14, fontWeight: 700, color: '#1A365E', marginBottom: 4 }}>Awaiting Teacher Assessment</div>
           <div style={{ fontSize: 12, color: '#7A92B0' }}>
             Once your teacher submits your competency scores, the comparison graph will appear here.

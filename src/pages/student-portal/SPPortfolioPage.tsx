@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { X, Paperclip, CheckCircle2, Hourglass, Download, ArrowRight } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { uploadFile, downloadUrl } from '@/lib/uploadFile'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
@@ -40,23 +41,23 @@ function Modal({ studentId, onClose, onSave }: { studentId: string; onClose: () 
       <div style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 500, boxShadow: '0 20px 60px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
         <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>Add Portfolio Item</div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#9EB3C8', cursor: 'pointer', fontSize: 20 }}>✕</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#9EB3C8', cursor: 'pointer', display: 'inline-flex', padding: 0 }}><X size={20} /></button>
         </div>
         <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div><label style={lbl}>Title</label><input value={form.title} onChange={e => set('title', e.target.value)} style={inp} /></div>
           <div><label style={lbl}>Category</label><select value={form.category} onChange={e => set('category', e.target.value)} style={inp}>{CATEGORIES.map(c => <option key={c}>{c}</option>)}</select></div>
           <div><label style={lbl}>Description</label><textarea value={form.description} onChange={e => set('description', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} /></div>
           <div>
-            <label style={lbl}>📎 Upload File</label>
+            <label style={{ ...lbl, display: 'flex', alignItems: 'center', gap: 6 }}><Paperclip size={12} /> Upload File</label>
             <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, border: `2px dashed ${file ? '#1DBD6A' : '#CBD5E0'}`, background: file ? '#F0FDF4' : '#F8FAFC', cursor: 'pointer', fontSize: 13, color: file ? '#1DBD6A' : '#7A92B0', fontWeight: file ? 700 : 400 }}>
               <input type="file" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) setFile(f) }} />
-              {file ? `✅ ${file.name}` : '+ Choose file (PDF, image, video…)'}
+              {file ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><CheckCircle2 size={13} /> {file.name}</span> : '+ Choose file (PDF, image, video…)'}
             </label>
           </div>
         </div>
         <div style={{ padding: '12px 20px', borderTop: '1px solid #E4EAF2', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
           <button onClick={onClose} style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid #E4EAF2', background: '#fff', color: '#7A92B0', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
-          <button onClick={handleSave} disabled={saving || !file || !form.title} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: '#D61F31', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer', opacity: (!file || !form.title) ? 0.5 : 1 }}>{saving ? '⏳ Uploading…' : 'Add'}</button>
+          <button onClick={handleSave} disabled={saving || !file || !form.title} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: '#D61F31', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer', opacity: (!file || !form.title) ? 0.5 : 1 }}>{saving ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Hourglass size={13} /> Uploading…</span> : 'Add'}</button>
         </div>
       </div>
     </div>
@@ -103,14 +104,14 @@ export function SPPortfolioPage() {
                 <span style={{ padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: cm.bg, color: cm.tc }}>{item.category}</span>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <span style={{ fontSize: 11, color: '#7A92B0' }}>{new Date(item.created_at).toLocaleDateString()}</span>
-                  {!readOnly && <button onClick={() => deleteItem(item.id)} style={{ background: 'none', border: 'none', color: '#D61F31', fontSize: 12, cursor: 'pointer' }}>✕</button>}
+                  {!readOnly && <button onClick={() => deleteItem(item.id)} style={{ background: 'none', border: 'none', color: '#D61F31', cursor: 'pointer', display: 'inline-flex', padding: 0 }}><X size={12} /></button>}
                 </div>
               </div>
               <div style={{ fontSize: 15, fontWeight: 700, color: '#1A365E', marginBottom: 6 }}>{item.title}</div>
               {item.description && <p style={{ fontSize: 12, color: '#7A92B0', lineHeight: 1.5, margin: 0 }}>{item.description}</p>}
               {item.url && <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
-                <a href={item.url} target="_blank" rel="noopener" style={{ fontSize: 12, color: '#D61F31', textDecoration: 'none', fontWeight: 600 }}>View →</a>
-                <button onClick={() => void downloadUrl(item.url)} style={{ fontSize: 12, color: '#059669', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontWeight: 600 }}>⬇ Download</button>
+                <a href={item.url} target="_blank" rel="noopener" style={{ fontSize: 12, color: '#D61F31', textDecoration: 'none', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>View <ArrowRight size={12} /></a>
+                <button onClick={() => void downloadUrl(item.url)} style={{ fontSize: 12, color: '#059669', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Download size={12} /> Download</button>
               </div>}
             </div>
           )

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
@@ -74,7 +75,7 @@ function PdfModal({ url, title, fileName, onClose }: { url: string; title: strin
           <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
             <button onClick={() => void downloadUrl(url, fileName)} style={{ fontSize: 12, color: '#9EB3C8', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer' }}>Download</button>
-            <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#9EB3C8', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>✕</button>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#9EB3C8', cursor: 'pointer', display: 'inline-flex', padding: 0 }}><X size={20} /></button>
           </div>
         </div>
         <div style={{ flex: 1, overflow: 'hidden' }}>
@@ -121,7 +122,7 @@ function GeneratedDocModal({ doc, onClose }: { doc: GenDoc; onClose: () => void 
             >
               Print / Save as PDF
             </button>
-            <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#9EB3C8', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>✕</button>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#9EB3C8', cursor: 'pointer', display: 'inline-flex', padding: 0 }}><X size={20} /></button>
           </div>
         </div>
         <div style={{ flex: 1, overflow: 'auto', background: '#EEF1F5', padding: '20px 0' }}>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { ArrowLeft, CheckCircle2, Flag, RotateCcw } from 'lucide-react'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 16 }
@@ -152,13 +153,19 @@ export function MHSQuizPlayer() {
 
   return (
     <div style={card}>
-      <button onClick={() => { setSelectedLessonId(null); setQuiz(null) }} style={{ background: 'none', border: 'none', color: '#0369A1', fontSize: 11, cursor: 'pointer', marginBottom: 10 }}>← Back to quiz list</button>
+      <button onClick={() => { setSelectedLessonId(null); setQuiz(null) }} style={{ background: 'none', border: 'none', color: '#0369A1', fontSize: 11, cursor: 'pointer', marginBottom: 10, display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={12} /> Back to quiz list</button>
       {error && <div style={{ color: '#DC2626', fontSize: 12, marginBottom: 8 }}>{error}</div>}
       {!quiz ? (
         <div style={{ fontSize: 12, color: '#7A92B0' }}>Loading…</div>
       ) : result ? (
         <div style={{ padding: 16, textAlign: 'center' }}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>{result.passed ? '✅' : result.flaggedForTeacher ? '🚩' : '↻'}</div>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
+            {result.passed
+              ? <CheckCircle2 size={32} color="#10B981" />
+              : result.flaggedForTeacher
+              ? <Flag size={32} color="#DC2626" />
+              : <RotateCcw size={32} color="#7A92B0" />}
+          </div>
           <div style={{ fontSize: 14, fontWeight: 800, color: '#1A365E' }}>Score: {result.scorePct}%</div>
           <div style={{ fontSize: 12, color: '#7A92B0', marginTop: 4 }}>
             {result.passed

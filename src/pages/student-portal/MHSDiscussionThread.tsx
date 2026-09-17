@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { X } from 'lucide-react'
+import { X, ArrowLeft } from 'lucide-react'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 16 }
@@ -134,7 +134,7 @@ export function MHSDiscussionThread() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <button onClick={() => { setSelectedLessonId(null); setThread(null) }} style={{ background: 'none', border: 'none', color: '#0369A1', fontSize: 11, cursor: 'pointer', alignSelf: 'flex-start' }}>← Back to Share it</button>
+      <button onClick={() => { setSelectedLessonId(null); setThread(null) }} style={{ background: 'none', border: 'none', color: '#0369A1', fontSize: 11, cursor: 'pointer', alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back to Share it</button>
       {error && <div style={{ color: '#DC2626', fontSize: 12 }}>{error}</div>}
       {!thread ? (
         <div style={card}>Loading…</div>

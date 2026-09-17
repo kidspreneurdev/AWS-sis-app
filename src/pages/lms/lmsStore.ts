@@ -1,5 +1,6 @@
 // LMS Data Store — Supabase-backed
 import { supabase } from '@/lib/supabase'
+import type { RubricOverrides } from '@/lib/lms/caseStudyRubric'
 
 export interface LMSCourse {
   id: string
@@ -86,6 +87,14 @@ export interface LMSContent {
   assignments?: string
   caseStudyUrl?: string
   caseStudyFileName?: string
+  // Module-level fields carried on the one hasAssignment "case study" item per Unit —
+  // that item stands in for the Module record (see Learn it / Master it restructure).
+  moduleDescription?: string
+  omrFormUrl?: string
+  socraticDate?: string
+  socraticBrief?: string
+  presentationBrief?: string
+  rubricOverrides?: RubricOverrides
   targetDate?: string | null
   locked?: boolean
   hidden?: boolean
@@ -208,6 +217,12 @@ function rowToLMSContent(r: Record<string, unknown>): LMSContent {
     assignments: extra.assignments as string | undefined,
     caseStudyUrl: extra.caseStudyUrl as string | undefined,
     caseStudyFileName: extra.caseStudyFileName as string | undefined,
+    moduleDescription: extra.moduleDescription as string | undefined,
+    omrFormUrl: extra.omrFormUrl as string | undefined,
+    socraticDate: extra.socraticDate as string | undefined,
+    socraticBrief: extra.socraticBrief as string | undefined,
+    presentationBrief: extra.presentationBrief as string | undefined,
+    rubricOverrides: extra.rubricOverrides as RubricOverrides | undefined,
     targetDate: (extra.targetDate as string) ?? null,
     locked: extra.locked === true,
     hidden: extra.hidden === true,
@@ -373,6 +388,9 @@ export async function saveLMS(store: LMSStore): Promise<string | null> {
           masteryWeight: c.masteryWeight, assignRubric: c.assignRubric,
           assignments: c.assignments,
           caseStudyUrl: c.caseStudyUrl, caseStudyFileName: c.caseStudyFileName,
+          moduleDescription: c.moduleDescription, omrFormUrl: c.omrFormUrl, socraticDate: c.socraticDate,
+          socraticBrief: c.socraticBrief, presentationBrief: c.presentationBrief,
+          rubricOverrides: c.rubricOverrides,
           targetDate: c.targetDate, locked: c.locked, hidden: c.hidden, excludedFromGrade: c.excludedFromGrade,
         },
       })),

@@ -764,9 +764,12 @@ async function submitQuizAttempt(req, res, adminClient) {
   })
 }
 
-/** A lms_submissions row counts as this content's Presentation Upload unless its note
- *  is tagged JSON metadata for something else (e.g. a mastery-quiz snapshot). */
+/** A lms_submissions row counts as this content's Presentation Upload if it's explicitly
+ *  tagged kind='presentation', or — for rows written before the `kind` column existed —
+ *  if its note isn't JSON metadata for something else (e.g. a mastery-quiz snapshot). */
 function isLmsPresentationRow(row) {
+  if (row.kind && row.kind !== 'presentation') return false
+  if (row.kind === 'presentation') return true
   if (typeof row.note !== 'string') return true
   const t = row.note.trim()
   if (!t.startsWith('{')) return true
@@ -807,7 +810,7 @@ async function lmsGetCaseStudy(req, res, adminClient) {
   const [scRes, dpRes, subRes, apRes] = await Promise.all([
     adminClient.from('lms_score_components').select('component_type,criteria_scores,subtotal,feedback,status').eq('content_id', contentId).eq('student_id', studentDbId),
     adminClient.from('lms_discussion_posts').select('id,student_id,parent_post_id,body,created_at').eq('content_id', contentId).order('created_at', { ascending: true }),
-    adminClient.from('lms_submissions').select('note,link_url,submitted_at').eq('content_id', contentId).eq('student_id', studentDbId).order('submitted_at', { ascending: false }),
+    adminClient.from('lms_submissions').select('kind,note,link_url,submitted_at').eq('content_id', contentId).eq('student_id', studentDbId).order('submitted_at', { ascending: false }),
     adminClient.from('lms_grade_appeals').select('id,component_type,message,status,admin_reply').eq('content_id', contentId).eq('student_id', studentDbId),
   ])
 
@@ -822,10 +825,21 @@ async function lmsGetCaseStudy(req, res, adminClient) {
   }
 
   const presentationRow = (subRes.data ?? []).find(isLmsPresentationRow) ?? null
+  const notesRow = (subRes.data ?? []).find((r) => r.kind === 'case_study_notes') ?? null
 
   return json(res, 200, {
-    lesson: { id: content.id, title: content.title, caseStudyUrl: extra.caseStudyUrl ?? null },
+    lesson: {
+      id: content.id,
+      title: content.title,
+      caseStudyUrl: extra.caseStudyUrl ?? null,
+      moduleDescription: extra.moduleDescription ?? null,
+      omrFormUrl: extra.omrFormUrl ?? null,
+      socraticDate: extra.socraticDate ?? null,
+      socraticBrief: extra.socraticBrief ?? null,
+      presentationBrief: extra.presentationBrief ?? null,
+    },
     scores: scRes.data ?? [],
+    notes: notesRow ? { note: notesRow.note, linkUrl: notesRow.link_url, submittedAt: notesRow.submitted_at } : null,
     discussion: {
       myStudentId: studentDbId,
       posts: posts.map((p) => ({
@@ -959,6 +973,81 @@ async function lmsFileAppeal(req, res, adminClient) {
   if (insertError || !appeal) return json(res, 500, { error: 'Failed to file appeal.' })
 
   return json(res, 200, { appeal })
+}
+
+const LMS_NOTES_KINDS = ['case_study_notes', 'lesson_notes']
+
+/** Student uploads their notes — either the case-study notes shown under a module's
+ *  "Learn it" block, or a single lesson's own notes under its "Show it" row. Mirrors
+ *  lmsSubmitPresentation; the two are told apart by `kind`. */
+async function lmsSubmitNotes(req, res, adminClient) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST')
+    return json(res, 405, { error: 'Method not allowed' })
+  }
+
+  const studentDbId = requireStudentToken(req, res, json)
+  if (!studentDbId) return
+
+  const { contentId, kind, fileUrl, note } = req.body || {}
+  if (typeof contentId !== 'string' || !contentId) return json(res, 400, { error: 'contentId is required.' })
+  if (!LMS_NOTES_KINDS.includes(kind)) return json(res, 400, { error: 'Invalid notes kind.' })
+  if (typeof fileUrl !== 'string' || !fileUrl.trim()) return json(res, 400, { error: 'fileUrl is required.' })
+
+  const { data: content, error: contentError } = await adminClient.from('lms_content').select('id,course_id').eq('id', contentId).single()
+  if (contentError || !content) return json(res, 404, { error: 'Lesson not found.' })
+
+  const { data: submission, error: insertError } = await adminClient
+    .from('lms_submissions')
+    .insert({
+      student_id: studentDbId,
+      course_id: content.course_id,
+      content_id: contentId,
+      kind,
+      note: typeof note === 'string' && note.trim() ? note.trim() : null,
+      link_url: fileUrl.trim(),
+      submitted_at: new Date().toISOString(),
+    })
+    .select('id,submitted_at')
+    .single()
+  if (insertError || !submission) return json(res, 500, { error: 'Failed to submit notes.' })
+
+  return json(res, 200, { submissionId: submission.id, submittedAt: submission.submitted_at })
+}
+
+/** Every lms_submissions row this student has for a course, in one call — used to
+ *  hydrate "already submitted" state for every lesson's Show-it-Notes row plus the
+ *  module's Learn-it-Notes row without a round trip per row. */
+async function lmsGetMySubmissions(req, res, adminClient) {
+  if (req.method !== 'GET') {
+    res.setHeader('Allow', 'GET')
+    return json(res, 405, { error: 'Method not allowed' })
+  }
+
+  const studentDbId = requireStudentToken(req, res, json)
+  if (!studentDbId) return
+
+  // courseId is optional — omit it to fetch every submission this student has across
+  // every enrolled course in one call (mirrors how lms_progress is loaded unscoped).
+  const courseId = req.query?.courseId
+  let query = adminClient
+    .from('lms_submissions')
+    .select('content_id,kind,note,link_url,submitted_at')
+    .eq('student_id', studentDbId)
+    .order('submitted_at', { ascending: false })
+  if (typeof courseId === 'string' && courseId) query = query.eq('course_id', courseId)
+  const { data, error } = await query
+  if (error) return json(res, 500, { error: error.message })
+
+  return json(res, 200, {
+    submissions: (data ?? []).map((r) => ({
+      contentId: r.content_id,
+      kind: r.kind,
+      note: r.note,
+      linkUrl: r.link_url,
+      submittedAt: r.submitted_at,
+    })),
+  })
 }
 
 async function listMyRecords(req, res, adminClient) {
@@ -1209,6 +1298,8 @@ const ACTIONS = {
   'lms-submit-discussion-post': lmsSubmitDiscussionPost,
   'lms-submit-presentation': lmsSubmitPresentation,
   'lms-file-appeal': lmsFileAppeal,
+  'lms-submit-notes': lmsSubmitNotes,
+  'lms-get-my-submissions': lmsGetMySubmissions,
 }
 
 export default async function handler(req, res) {

@@ -436,9 +436,9 @@ export function StudentRecordsPage() {
     ;(async () => {
       const { data: blocks } = await supabase
         .from('timetable_blocks')
-        .select('day,time,subject,coach_id')
+        .select('day,time,subject,coach_ids')
         .eq('cohort', cohort)
-      const coachIds = Array.from(new Set((blocks ?? []).map(b => b.coach_id).filter(Boolean))) as string[]
+      const coachIds = Array.from(new Set((blocks ?? []).flatMap(b => (Array.isArray(b.coach_ids) ? b.coach_ids : [])).filter(Boolean))) as string[]
       const { data: profiles } = coachIds.length
         ? await supabase.from('profiles').select('id,full_name').in('id', coachIds)
         : { data: [] as { id: string; full_name: string }[] }
@@ -448,7 +448,7 @@ export function StudentRecordsPage() {
         day: (b.day as string) ?? '',
         time: (b.time as string) ?? '',
         subject: (b.subject as string) ?? '',
-        teacher: b.coach_id ? (nameById.get(b.coach_id as string) ?? '') : '',
+        teacher: (Array.isArray(b.coach_ids) ? b.coach_ids : []).map((id: string) => nameById.get(id)).filter(Boolean).join(', '),
       })))
     })()
     return () => { cancelled = true }

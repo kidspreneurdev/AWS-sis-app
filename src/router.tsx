@@ -86,6 +86,9 @@ import { ParentPortalLayout } from '@/components/layout/ParentPortalLayout'
 import { StudentPortalLoginPage } from '@/pages/student-portal/StudentPortalLoginPage'
 import { SPDashboardPage } from '@/pages/student-portal/SPDashboardPage'
 import { SPGradesPage } from '@/pages/student-portal/SPGradesPage'
+import { SPGraduationAuditPage } from '@/pages/student-portal/SPGraduationAuditPage'
+import { SPCourseRecordsPage } from '@/pages/student-portal/SPCourseRecordsPage'
+import { SPReportCardPage } from '@/pages/student-portal/SPReportCardPage'
 import { SPAttendancePage } from '@/pages/student-portal/SPAttendancePage'
 import { SPTimetablePage } from '@/pages/student-portal/SPTimetablePage'
 import { SPAssignmentsPage } from '@/pages/student-portal/SPAssignmentsPage'
@@ -129,6 +132,9 @@ export const router = createBrowserRouter([
     children: [
       { path: '/parent/dashboard',   element: <SPDashboardPage /> },
       { path: '/parent/grades',      element: <SPGradesPage /> },
+      { path: '/parent/grades/audit', element: <SPGraduationAuditPage /> },
+      { path: '/parent/grades/courses', element: <SPCourseRecordsPage /> },
+      { path: '/parent/grades/report-card', element: <SPReportCardPage /> },
       { path: '/parent/attendance',  element: <SPAttendancePage /> },
       { path: '/parent/timetable',   element: <SPTimetablePage /> },
       { path: '/parent/assignments', element: <SPAssignmentsPage /> },
@@ -162,6 +168,9 @@ export const router = createBrowserRouter([
     children: [
       { path: '/portal/dashboard', element: <SPDashboardPage /> },
       { path: '/portal/grades', element: <SPGradesPage /> },
+      { path: '/portal/grades/audit', element: <SPGraduationAuditPage /> },
+      { path: '/portal/grades/courses', element: <SPCourseRecordsPage /> },
+      { path: '/portal/grades/report-card', element: <SPReportCardPage /> },
       { path: '/portal/attendance', element: <SPAttendancePage /> },
       { path: '/portal/timetable', element: <SPTimetablePage /> },
       { path: '/portal/assignments', element: <SPAssignmentsPage /> },

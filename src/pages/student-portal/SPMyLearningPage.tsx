@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   CheckCircle2, Circle, Rabbit, Footprints, Turtle, Hourglass, ClipboardList,
-  Check, Target, Timer, Lock, BookOpen, MessageSquare, Rocket, Scale, Calculator,
+  Check, Target, Timer, BookOpen, Scale, Calculator,
   Upload, Link2, Trophy, Flag, FileText, CalendarDays, Megaphone, FolderKanban,
   FolderOpen, PartyPopper, Frown, RefreshCw, X, Play, Video, Link as LinkIcon,
-  Paperclip, HelpCircle, MonitorPlay, ChevronDown, ChevronRight, type LucideIcon,
+  Paperclip, HelpCircle, MonitorPlay, ChevronDown, ChevronRight, Search,
+  ArrowLeft, ArrowRight, type LucideIcon,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { uploadFile } from '@/lib/uploadFile'
@@ -15,7 +16,7 @@ import { SUBJECT_COLORS, isActiveBool, type LMSCourse, type LMSContent, type LMS
 const CONTENT_TYPE_ICONS: Record<string, LucideIcon> = {
   video: Video, article: FileText, link: LinkIcon, file: Paperclip, quiz: HelpCircle, presentation: MonitorPlay,
 }
-import { CASE_STUDY_RUBRIC, SCORE_COMPONENT_TYPES, finalGrade, type ScoreComponentType } from '@/lib/lms/caseStudyRubric'
+import { ACTIVE_SCORE_COMPONENT_TYPES, getEffectiveRubric, finalGrade, type ScoreComponentType, type RubricOverrides } from '@/lib/lms/caseStudyRubric'
 import { toLegacyStudentGradeValue } from '@/types/student'
 import { K5MyLearningPage } from '@/pages/student-portal/K5MyLearningPage'
 
@@ -29,10 +30,22 @@ function getLessonTimerKey(studentId: string, lessonId: string) {
   return `sp_learning_started_${studentId}_${lessonId}`
 }
 
+// Tree row styles for the per-module outline (Learn It / Do It / Show It / Prove It /
+// Master It). sectionLabelStyle marks a category; partRowStyle is a clickable leaf one
+// level in; partRowStyleNested is a leaf under a lesson, one level deeper still.
+const sectionLabelStyle: React.CSSProperties = {
+  fontSize: 10, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: 1,
+  padding: '10px 18px 4px', display: 'flex', alignItems: 'center', gap: 4,
+}
 const partRowStyle: React.CSSProperties = {
-  display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 18px 6px 56px',
+  display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 18px 6px 40px',
   background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
-  fontSize: 11, color: '#5A7290',
+  fontSize: 12, color: '#3D5475', fontWeight: 600,
+}
+const partRowStyleNested: React.CSSProperties = { ...partRowStyle, padding: '6px 18px 6px 64px', fontSize: 11, color: '#5A7290', fontWeight: 400 }
+const lessonHeaderStyle: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 18px 8px 40px',
+  background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
 }
 
 
@@ -325,7 +338,7 @@ function MasteryQuiz({ item, prog, studentId, coursePassMark, onUpdate }: {
         title={readOnly ? 'View-only access' : undefined}
         style={{ width: '100%', padding: 11, background: saving ? '#94A3B8' : (answers[qIdx] !== undefined || timedOut) ? '#1A365E' : '#E4EAF2', color: (answers[qIdx] !== undefined || timedOut) ? '#fff' : '#94A3B8', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: readOnly || (answers[qIdx] === undefined && !timedOut) ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: readOnly ? 0.5 : 1 }}
       >
-        {saving ? 'Saving…' : readOnly ? 'View-only access' : (isLast || timedOut) ? `Submit Mastery Test (${questions.length} question${questions.length !== 1 ? 's' : ''})` : 'Next Question →'}
+        {saving ? 'Saving…' : readOnly ? 'View-only access' : (isLast || timedOut) ? `Submit Mastery Test (${questions.length} question${questions.length !== 1 ? 's' : ''})` : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>Next Question <ArrowRight size={13} /></span>}
       </button>
     </div>
   )
@@ -356,40 +369,27 @@ interface CSScoreData { componentType: string; criteriaScores: Record<string, nu
 interface CSPostData { id: string; studentId: string; authorName: string; isMine: boolean; body: string; parentPostId: string | null; createdAt: string }
 interface CSAppealData { id: string; componentType: string; message: string; status: 'open' | 'resolved'; adminReply: string | null }
 interface CaseStudyBundle {
-  lesson: { id: string; title: string; caseStudyUrl: string | null }
+  lesson: { id: string; title: string; caseStudyUrl: string | null; moduleDescription: string | null; omrFormUrl: string | null; socraticDate: string | null; socraticBrief: string | null; presentationBrief: string | null }
   scores: CSScoreData[]
   discussion: { myStudentId: string; posts: CSPostData[] }
   presentation: { note: string | null; linkUrl: string | null; submittedAt: string } | null
   appeals: CSAppealData[]
 }
 
-function CaseStudyPanel({ item, studentId, masteryPassed }: {
-  item: LMSContent
-  studentId: string
-  masteryPassed: boolean
-}) {
-  const { readOnly } = usePortalReadOnly()
-  const { getToken } = useStudentPortal()
-  const hasMastery = item.hasMastery === true || item.hasMastery === 'TRUE'
-  const locked = hasMastery && !masteryPassed
+interface MySubmission { contentId: string; kind: string; note: string | null; linkUrl: string | null; submittedAt: string }
 
+/** Loads the fixed-flow score/appeal bundle for one module's case-study carrier item.
+ *  Used by the Socratic/OMR/Presentation detail panels via useModuleScoring below. */
+function useCaseStudyBundle(contentId: string | null) {
+  const { getToken } = useStudentPortal()
   const [loading, setLoading] = useState(true)
   const [bundle, setBundle] = useState<CaseStudyBundle | null>(null)
-  const [postBody, setPostBody] = useState('')
-  const [replyBody, setReplyBody] = useState<Record<string, string>>({})
-  const [replyOpenFor, setReplyOpenFor] = useState<string | null>(null)
-  const [posting, setPosting] = useState(false)
-  const [presFile, setPresFile] = useState<File | null>(null)
-  const [presNote, setPresNote] = useState('')
-  const [presSubmitting, setPresSubmitting] = useState(false)
-  const [appealOpenFor, setAppealOpenFor] = useState<string | null>(null)
-  const [appealText, setAppealText] = useState<Record<string, string>>({})
-  const [filingAppeal, setFilingAppeal] = useState<string | null>(null)
 
   async function load() {
+    if (!contentId) { setLoading(false); return }
     setLoading(true)
     try {
-      const data = await studentPortalFetch(getToken(), `/api/student-portal/lms-get-case-study?contentId=${item.id}`)
+      const data = await studentPortalFetch(getToken(), `/api/student-portal/lms-get-case-study?contentId=${contentId}`)
       setBundle(data as CaseStudyBundle)
     } catch {
       setBundle(null)
@@ -397,61 +397,99 @@ function CaseStudyPanel({ item, studentId, masteryPassed }: {
     setLoading(false)
   }
 
-  useEffect(() => { if (!locked) void load() }, [item.id, locked]) // eslint-disable-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
+  useEffect(() => { void load() }, [contentId]) // eslint-disable-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
 
-  if (locked) {
+  return { loading, bundle, refresh: load }
+}
+
+/** Show it: Notes — a real student upload, used both for the module's case-study notes
+ *  ("Learn it") and each lesson's own notes ("Show it"). Ungraded — presence is enough. */
+function NotesUploadRow({ contentId, kind, studentId, submission, onSubmitted }: {
+  contentId: string
+  kind: 'case_study_notes' | 'lesson_notes'
+  studentId: string
+  submission: MySubmission | undefined
+  onSubmitted: (s: MySubmission) => void
+}) {
+  const { readOnly } = usePortalReadOnly()
+  const { getToken } = useStudentPortal()
+  const [file, setFile] = useState<File | null>(null)
+  const [note, setNote] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  async function submit() {
+    if (!file) return
+    setSubmitting(true)
+    try {
+      const path = `lms/${studentId}/${contentId}/${Date.now()}_${file.name}`
+      const fileUrl = await uploadFile(path, file)
+      await studentPortalFetch(getToken(), '/api/student-portal/lms-submit-notes', {
+        method: 'POST', body: JSON.stringify({ contentId, kind, fileUrl, note: note.trim() || undefined }),
+      })
+      onSubmitted({ contentId, kind, note: note.trim() || null, linkUrl: fileUrl, submittedAt: new Date().toISOString() })
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Upload failed. Please try again.')
+    }
+    setSubmitting(false)
+  }
+
+  if (submission) {
     return (
-      <div style={{ padding: '14px 16px', background: '#F7F9FC', borderRadius: 10, border: '1px solid #E4EAF2', display: 'flex', alignItems: 'center', gap: 10 }}>
-        <Lock size={24} color="#94A3B8" />
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#7A92B0' }}>Case Study Assignment Locked</div>
-          <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>Pass the mastery test first to unlock this assignment.</div>
-        </div>
+      <div style={{ background: '#F0FDF4', borderRadius: 8, padding: '10px 12px', border: '1px solid #BBF7D0' }}>
+        <div style={{ fontSize: 11, color: '#059669', fontWeight: 700, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}><CheckCircle2 size={11} /> Submitted {new Date(submission.submittedAt).toLocaleDateString()}</div>
+        {submission.note && <div style={{ fontSize: 11, color: '#3D5475', marginBottom: 4, whiteSpace: 'pre-wrap' }}>{submission.note}</div>}
+        {submission.linkUrl && <a href={submission.linkUrl} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#1A365E', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Link2 size={11} /> View your notes</a>}
       </div>
     )
   }
 
-  if (loading) {
-    return <div style={{ ...emptyState }}>Loading case study…</div>
-  }
-  if (!bundle) {
-    return <div style={{ ...emptyState }}>Couldn't load the case study assignment. Try reopening this lesson.</div>
-  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Notes for your teacher (optional)..." style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 11, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
+      <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, border: `2px dashed ${file ? '#1DBD6A' : '#CBD5E0'}`, background: file ? '#F0FDF4' : '#F8FAFC', cursor: 'pointer', fontSize: 11, color: file ? '#1DBD6A' : '#7A92B0', fontWeight: file ? 700 : 400 }}>
+        <input type="file" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) setFile(f) }} />
+        {file ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><CheckCircle2 size={12} /> {file.name}</span> : '+ Choose file (PDF, image…)'}
+      </label>
+      <button onClick={() => void submit()} disabled={readOnly || submitting || !file} style={{ padding: '9px 16px', background: file && !readOnly ? '#1A365E' : '#E4EAF2', color: file && !readOnly ? '#fff' : '#94A3B8', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: file && !readOnly ? 'pointer' : 'not-allowed', alignSelf: 'flex-end' }}>
+        {submitting ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Hourglass size={12} /> Uploading…</span> : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Upload size={12} /> Submit Notes</span>}
+      </button>
+    </div>
+  )
+}
 
-  const scoreByType = Object.fromEntries(bundle.scores.map((s) => [s.componentType, s])) as Record<string, CSScoreData | undefined>
-  const appealByType = Object.fromEntries(bundle.appeals.map((a) => [a.componentType, a])) as Record<string, CSAppealData | undefined>
+/** Case-study document viewer only — "Learn It › View case study". No fetch needed;
+ *  caseStudyUrl is already on the carrier item from the course-wide content load. */
+function CaseStudyDocPanel({ carrierItem }: { carrierItem: LMSContent }) {
+  const caseStudyUrl = carrierItem.caseStudyUrl ?? null
+  return (
+    <div style={{ ...card, overflow: 'hidden' }}>
+      <div style={{ padding: '10px 16px', background: '#F7F9FC', borderBottom: '1px solid #E4EAF2', fontSize: 12, fontWeight: 800, color: '#1A365E' }}>Explore the {carrierItem.title} case study</div>
+      {caseStudyUrl ? (
+        <>
+          <div style={{ position: 'relative', paddingBottom: '65%', height: 0 }}>
+            <iframe src={getCaseStudyEmbedUrl(caseStudyUrl)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }} title="Case Study" loading="lazy" />
+          </div>
+          <div style={{ padding: '8px 16px', textAlign: 'right' }}>
+            <a href={caseStudyUrl} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#1A365E', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Link2 size={11} /> Open in new tab</a>
+          </div>
+        </>
+      ) : (
+        <div style={{ padding: 20, color: '#94A3B8', fontSize: 12 }}>No case study document has been uploaded yet.</div>
+      )}
+    </div>
+  )
+}
 
-  async function submitPost(parentPostId: string | null) {
-    const body = parentPostId ? (replyBody[parentPostId] ?? '') : postBody
-    if (!body.trim()) return
-    setPosting(true)
-    try {
-      await studentPortalFetch(getToken(), '/api/student-portal/lms-submit-discussion-post', {
-        method: 'POST', body: JSON.stringify({ contentId: item.id, body: body.trim(), parentPostId: parentPostId || undefined }),
-      })
-      if (parentPostId) { setReplyBody((p) => ({ ...p, [parentPostId]: '' })); setReplyOpenFor(null) } else setPostBody('')
-      await load()
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to post.')
-    }
-    setPosting(false)
-  }
-
-  async function submitPresentation() {
-    if (!presFile) return
-    setPresSubmitting(true)
-    try {
-      const path = `lms/${studentId}/${item.id}/${Date.now()}_${presFile.name}`
-      const fileUrl = await uploadFile(path, presFile)
-      await studentPortalFetch(getToken(), '/api/student-portal/lms-submit-presentation', {
-        method: 'POST', body: JSON.stringify({ contentId: item.id, fileUrl, note: presNote.trim() || undefined }),
-      })
-      await load()
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Upload failed. Please try again.')
-    }
-    setPresSubmitting(false)
-  }
+/** Shared scoring/appeal plumbing for the Show It (Socratic), Prove It (OMR), and
+ *  Master It (Presentation) detail pages — each is its own page now, but all three
+ *  read from the same fixed-rubric bundle on the module's carrier item. */
+function useModuleScoring(carrierItem: LMSContent) {
+  const { readOnly } = usePortalReadOnly()
+  const { getToken } = useStudentPortal()
+  const { loading, bundle, refresh } = useCaseStudyBundle(carrierItem.id)
+  const [appealOpenFor, setAppealOpenFor] = useState<string | null>(null)
+  const [appealText, setAppealText] = useState<Record<string, string>>({})
+  const [filingAppeal, setFilingAppeal] = useState<string | null>(null)
 
   async function fileAppeal(componentType: string) {
     const message = appealText[componentType] ?? ''
@@ -459,15 +497,18 @@ function CaseStudyPanel({ item, studentId, masteryPassed }: {
     setFilingAppeal(componentType)
     try {
       await studentPortalFetch(getToken(), '/api/student-portal/lms-file-appeal', {
-        method: 'POST', body: JSON.stringify({ contentId: item.id, componentType, message: message.trim() }),
+        method: 'POST', body: JSON.stringify({ contentId: carrierItem.id, componentType, message: message.trim() }),
       })
       setAppealOpenFor(null)
-      await load()
+      await refresh()
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to file appeal.')
     }
     setFilingAppeal(null)
   }
+
+  const scoreByType = bundle ? Object.fromEntries(bundle.scores.map((s) => [s.componentType, s])) as Record<string, CSScoreData | undefined> : {}
+  const appealByType = bundle ? Object.fromEntries(bundle.appeals.map((a) => [a.componentType, a])) as Record<string, CSAppealData | undefined> : {}
 
   function renderAppealControl(type: ScoreComponentType) {
     const score = scoreByType[type]
@@ -487,108 +528,101 @@ function CaseStudyPanel({ item, studentId, masteryPassed }: {
     )
   }
 
-  function renderScoreBlock(type: ScoreComponentType, icon: LucideIcon, title: string, order: number) {
-    return <CSScoreBlock type={type} icon={icon} title={title} order={order} score={scoreByType[type]} appealControl={renderAppealControl(type)} />
+  return { loading, bundle, refresh, scoreByType, renderAppealControl }
+}
+
+/** Simple read-only rubric viewer — shows the fixed criteria/points for one score
+ *  component so students know what they're graded on even before it's scored. Basic
+ *  for now; may grow into something richer later. */
+function RubricViewer({ type, overrides }: { type: ScoreComponentType; overrides: RubricOverrides | undefined }) {
+  const cat = getEffectiveRubric(overrides, type)
+  return (
+    <div style={{ ...card, padding: '14px 16px' }}>
+      <div style={{ fontSize: 12, fontWeight: 800, color: '#1A365E', marginBottom: 8 }}>Rubric — {cat.label} ({cat.weight} pts)</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {cat.criteria.map((c) => (
+          <span key={c.key} style={{ fontSize: 11, fontWeight: 700, color: '#3D5475', background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 6, padding: '4px 8px' }}>{c.label}: {c.max} pts</span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** Show It — Socratic Seminar: activity brief, rubric, and score. */
+function SocraticPanel({ carrierItem }: { carrierItem: LMSContent }) {
+  const { loading, bundle, scoreByType, renderAppealControl } = useModuleScoring(carrierItem)
+  if (loading) return <div style={{ ...card, ...emptyState }}>Loading…</div>
+  if (!bundle) return <div style={{ ...card, ...emptyState }}>Couldn't load this. Try refreshing.</div>
+  return (
+    <>
+      {carrierItem.socraticBrief ? (
+        <div style={{ ...card, padding: '14px 16px', fontSize: 12, color: '#3D5475', lineHeight: 1.6 }}>{carrierItem.socraticBrief}</div>
+      ) : (
+        <div style={{ ...card, ...emptyState }}>No activity description has been added yet.</div>
+      )}
+      {carrierItem.socraticDate && (
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#7A92B0', display: 'flex', alignItems: 'center', gap: 4 }}><CalendarDays size={11} /> Scheduled {carrierItem.socraticDate}</div>
+      )}
+      <RubricViewer type="debate" overrides={carrierItem.rubricOverrides} />
+      <CSScoreBlock type="debate" overrides={carrierItem.rubricOverrides} icon={Scale} title="Socratic Seminar Score" order={1} score={scoreByType.debate} appealControl={renderAppealControl('debate')} />
+    </>
+  )
+}
+
+/** Prove It — OMR Test score, with the Google Form link if one's configured. */
+function OmrPanel({ carrierItem }: { carrierItem: LMSContent }) {
+  const { loading, bundle, scoreByType, renderAppealControl } = useModuleScoring(carrierItem)
+  if (loading) return <div style={{ ...card, ...emptyState }}>Loading…</div>
+  if (!bundle) return <div style={{ ...card, ...emptyState }}>Couldn't load this. Try refreshing.</div>
+  return (
+    <>
+      {carrierItem.omrFormUrl && (
+        <a href={carrierItem.omrFormUrl} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#1A365E', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Link2 size={11} /> Take the OMR Test (Google Form)</a>
+      )}
+      <CSScoreBlock type="omr" overrides={carrierItem.rubricOverrides} icon={Calculator} title="OMR Test" order={2} score={scoreByType.omr} appealControl={renderAppealControl('omr')} />
+    </>
+  )
+}
+
+/** Master It — final presentation upload + score, plus the module's overall grade
+ *  (computed across Notes / Socratic / OMR / Presentation — Discussion is parked). */
+function PresentationPanel({ carrierItem, studentId }: { carrierItem: LMSContent; studentId: string }) {
+  const { readOnly } = usePortalReadOnly()
+  const { getToken } = useStudentPortal()
+  const { loading, bundle, refresh, scoreByType, renderAppealControl } = useModuleScoring(carrierItem)
+  const [presFile, setPresFile] = useState<File | null>(null)
+  const [presNote, setPresNote] = useState('')
+  const [presSubmitting, setPresSubmitting] = useState(false)
+
+  async function submitPresentation() {
+    if (!presFile) return
+    setPresSubmitting(true)
+    try {
+      const path = `lms/${studentId}/${carrierItem.id}/${Date.now()}_${presFile.name}`
+      const fileUrl = await uploadFile(path, presFile)
+      await studentPortalFetch(getToken(), '/api/student-portal/lms-submit-presentation', {
+        method: 'POST', body: JSON.stringify({ contentId: carrierItem.id, fileUrl, note: presNote.trim() || undefined }),
+      })
+      await refresh()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Upload failed. Please try again.')
+    }
+    setPresSubmitting(false)
   }
 
-  const myTopLevelPost = bundle.discussion.posts.find((p) => p.isMine && !p.parentPostId)
-  const subtotalsByType = Object.fromEntries(SCORE_COMPONENT_TYPES.map((t) => [t, scoreByType[t]?.status === 'scored' ? scoreByType[t]!.subtotal : null])) as Partial<Record<ScoreComponentType, number | null>>
+  if (loading) return <div style={{ ...card, ...emptyState }}>Loading…</div>
+  if (!bundle) return <div style={{ ...card, ...emptyState }}>Couldn't load this. Try refreshing.</div>
+
+  const subtotalsByType = Object.fromEntries(ACTIVE_SCORE_COMPONENT_TYPES.map((t) => [t, scoreByType[t]?.status === 'scored' ? scoreByType[t]!.subtotal : null])) as Partial<Record<ScoreComponentType, number | null>>
   const overallFinalGrade = finalGrade(subtotalsByType)
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ fontSize: 14, fontWeight: 800, color: '#1A365E', display: 'flex', alignItems: 'center', gap: 6 }}><BookOpen size={14} /> Case Study Assignment</div>
-
-      <div style={{ background: '#fff', border: '1.5px solid #1A365E22', borderRadius: 12, padding: '12px 16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
-          {SCORE_COMPONENT_TYPES.map((t) => (
-            <div key={t} style={{ textAlign: 'center', flex: 1, minWidth: 64 }}>
-              <div style={{ fontSize: 8, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase' }}>{CASE_STUDY_RUBRIC[t].label}</div>
-              <div style={{ fontSize: 14, fontWeight: 900, color: subtotalsByType[t] != null ? '#1A365E' : '#94A3B8' }}>{subtotalsByType[t] != null ? `${subtotalsByType[t]}/${CASE_STUDY_RUBRIC[t].weight}` : '—'}</div>
-            </div>
-          ))}
-          <div style={{ textAlign: 'center', flex: 1, minWidth: 80, borderLeft: '1px solid #E4EAF2', paddingLeft: 12 }}>
-            <div style={{ fontSize: 8, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase' }}>Final Grade</div>
-            <div style={{ fontSize: 18, fontWeight: 900, color: overallFinalGrade !== null ? (overallFinalGrade >= 70 ? '#059669' : SP_RED) : '#94A3B8' }}>{overallFinalGrade !== null ? `${overallFinalGrade}/100` : '—'}</div>
-          </div>
-        </div>
-      </div>
-
-      {/* 1. Case Study */}
-      <div style={{ background: '#fff', border: '1px solid #E4EAF2', borderRadius: 12, overflow: 'hidden' }}>
-        <div style={{ padding: '10px 16px', background: '#F7F9FC', borderBottom: '1px solid #E4EAF2', fontSize: 12, fontWeight: 800, color: '#1A365E' }}>1. Case Study</div>
-        {bundle.lesson.caseStudyUrl ? (
-          <>
-            <div style={{ position: 'relative', paddingBottom: '65%', height: 0 }}>
-              <iframe src={getCaseStudyEmbedUrl(bundle.lesson.caseStudyUrl)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }} title="Case Study" loading="lazy" />
-            </div>
-            <div style={{ padding: '8px 16px', textAlign: 'right' }}>
-              <a href={bundle.lesson.caseStudyUrl} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#1A365E', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Link2 size={11} /> Open in new tab</a>
-            </div>
-          </>
-        ) : (
-          <div style={{ padding: 20, color: '#94A3B8', fontSize: 12 }}>No case study document has been uploaded yet.</div>
-        )}
-      </div>
-
-      {/* 2. Notes Score */}
-      {renderScoreBlock('notes', FileText, 'Notes Score', 2)}
-
-      {/* 3. Discussion Post */}
-      <div style={{ background: '#fff', border: '1px solid #E4EAF2', borderRadius: 12, padding: '14px 16px' }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: '#1A365E', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}><MessageSquare size={13} /> 3. Discussion Post</div>
-        {!myTopLevelPost ? (
-          <div style={{ background: '#F7F9FC', borderRadius: 10, padding: '12px 14px', border: '1px solid #E4EAF2' }}>
-            <div style={{ fontSize: 9, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Share your thoughts on the case study</div>
-            <textarea value={postBody} onChange={(e) => setPostBody(e.target.value)} rows={3} placeholder="What's your take on the case study?" style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 12, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
-              <button onClick={() => void submitPost(null)} disabled={readOnly || posting || !postBody.trim()} style={{ padding: '7px 18px', background: postBody.trim() ? '#1A365E' : '#E4EAF2', color: postBody.trim() ? '#fff' : '#94A3B8', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: postBody.trim() ? 'pointer' : 'not-allowed' }}>{posting ? 'Posting…' : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Rocket size={12} /> Post</span>}</button>
-            </div>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 4 }}>
-            {bundle.discussion.posts.filter((p) => !p.parentPostId).map((p) => (
-              <div key={p.id} style={{ background: p.isMine ? '#EEF3FF' : '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 10, padding: '10px 12px' }}>
-                <div style={{ fontSize: 10, fontWeight: 800, color: '#1A365E', marginBottom: 4 }}>{p.authorName}</div>
-                <div style={{ fontSize: 12, color: '#3D5475', whiteSpace: 'pre-wrap', marginBottom: 6 }}>{p.body}</div>
-                {bundle.discussion.posts.filter((r) => r.parentPostId === p.id).map((r) => (
-                  <div key={r.id} style={{ marginLeft: 16, marginTop: 6, background: '#fff', border: '1px solid #E4EAF2', borderRadius: 8, padding: '7px 10px' }}>
-                    <div style={{ fontSize: 9, fontWeight: 800, color: '#1A365E', marginBottom: 2 }}>{r.authorName}</div>
-                    <div style={{ fontSize: 11, color: '#3D5475', whiteSpace: 'pre-wrap' }}>{r.body}</div>
-                  </div>
-                ))}
-                {replyOpenFor === p.id ? (
-                  <div style={{ marginLeft: 16, marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <textarea rows={2} value={replyBody[p.id] ?? ''} onChange={(e) => setReplyBody((prev) => ({ ...prev, [p.id]: e.target.value }))} placeholder="Write a comment..." style={{ width: '100%', padding: '6px 8px', border: '1.5px solid #E4EAF2', borderRadius: 6, fontSize: 11, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button onClick={() => void submitPost(p.id)} disabled={posting} style={{ padding: '4px 10px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>Reply</button>
-                      <button onClick={() => setReplyOpenFor(null)} style={{ padding: '4px 10px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
-                    </div>
-                  </div>
-                ) : (
-                  <button onClick={() => setReplyOpenFor(p.id)} style={{ marginTop: 4, padding: 0, background: 'none', border: 'none', color: '#5A7290', fontSize: 10, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}><MessageSquare size={10} /> Comment</button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-        <div style={{ marginTop: 10 }}>{renderAppealControl('discussion')}{scoreByType.discussion?.status === 'scored' && (
-          <div style={{ marginTop: 4 }}>
-            <span style={{ background: '#DCFCE7', color: '#059669', fontSize: 11, fontWeight: 900, padding: '3px 10px', borderRadius: 20 }}>Discussion Board: {scoreByType.discussion!.subtotal}/{CASE_STUDY_RUBRIC.discussion.weight}</span>
-            {scoreByType.discussion!.feedback && <div style={{ fontSize: 11, color: '#3D5475', marginTop: 6 }}><strong>Teacher feedback:</strong> {scoreByType.discussion!.feedback}</div>}
-          </div>
-        )}</div>
-      </div>
-
-      {/* 4. Socratic Debate Score */}
-      {renderScoreBlock('debate', Scale, 'Socratic Debate Score', 4)}
-
-      {/* 5. OMR Test Score */}
-      {renderScoreBlock('omr', Calculator, 'OMR Test Score', 5)}
-
-      {/* 6. Presentation Upload */}
-      <div style={{ background: '#fff', border: '1px solid #E4EAF2', borderRadius: 12, padding: '14px 16px' }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: '#1A365E', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}><Upload size={13} /> 6. Presentation Upload</div>
+    <>
+      {carrierItem.presentationBrief && (
+        <div style={{ ...card, padding: '14px 16px', fontSize: 12, color: '#3D5475', lineHeight: 1.6 }}>{carrierItem.presentationBrief}</div>
+      )}
+      <div style={{ ...card, padding: '14px 16px' }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: '#1A365E', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}><Upload size={13} /> Submit Final Presentation</div>
         {bundle.presentation ? (
           <div style={{ background: '#F0FDF4', borderRadius: 8, padding: '10px 12px', border: '1px solid #BBF7D0' }}>
             <div style={{ fontSize: 11, color: '#059669', fontWeight: 700, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}><CheckCircle2 size={11} /> Submitted {new Date(bundle.presentation.submittedAt).toLocaleDateString()}</div>
@@ -609,9 +643,13 @@ function CaseStudyPanel({ item, studentId, masteryPassed }: {
         )}
       </div>
 
-      {/* 7. Presentation Score */}
-      {renderScoreBlock('presentation', Trophy, 'Presentation Score', 7)}
-    </div>
+      <CSScoreBlock type="presentation" overrides={carrierItem.rubricOverrides} icon={Trophy} title="Presentation Score" order={3} score={scoreByType.presentation} appealControl={renderAppealControl('presentation')} />
+
+      <div style={{ ...card, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: '#5A7290' }}>Module Final Grade</span>
+        <span style={{ fontSize: 16, fontWeight: 900, color: overallFinalGrade !== null ? (overallFinalGrade >= 70 ? '#059669' : SP_RED) : '#94A3B8' }}>{overallFinalGrade !== null ? `${overallFinalGrade}/100` : '—'}</span>
+      </div>
+    </>
   )
 }
 
@@ -652,15 +690,16 @@ function CSAppealControl({ appeal, isOpen, draftText, filing, readOnly, onOpen, 
   )
 }
 
-function CSScoreBlock({ type, icon: Icon, title, order, score, appealControl }: {
+function CSScoreBlock({ type, overrides, icon: Icon, title, order, score, appealControl }: {
   type: ScoreComponentType
+  overrides: RubricOverrides | undefined
   icon: LucideIcon
   title: string
   order: number
   score: CSScoreData | undefined
   appealControl: React.ReactNode
 }) {
-  const cat = CASE_STUDY_RUBRIC[type]
+  const cat = getEffectiveRubric(overrides, type)
   const isScored = score?.status === 'scored'
   return (
     <div style={{ background: '#fff', border: '1px solid #E4EAF2', borderRadius: 12, padding: '14px 16px' }}>
@@ -847,18 +886,19 @@ function LessonPreviewContent({
 }
 
 export function SPMyLearningPage() {
-  const { session } = useStudentPortal()
+  const { session, getToken } = useStudentPortal()
   const { readOnly } = usePortalReadOnly()
   const [courses, setCourses] = useState<LMSCourse[]>([])
   const [content, setContent] = useState<LMSContent[]>([])
   const [progress, setProgress] = useState<LMSProgress[]>([])
   const [enrolments, setEnrolments] = useState<LMSEnrolment[]>([])
+  const [mySubmissions, setMySubmissions] = useState<MySubmission[]>([])
   const [loading, setLoading] = useState(true)
   const [activeCourse, setActiveCourse] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [subjectFilter, setSubjectFilter] = useState('All')
   const [activeLessonId, setActiveLessonId] = useState<string | null>(null)
-  const [activePart, setActivePart] = useState<'tutorial' | 'mastery' | 'assignment' | null>(null)
+  const [activePart, setActivePart] = useState<'tutorial' | 'mastery' | 'lessonNotes' | 'caseStudyView' | 'caseStudyNotes' | 'socratic' | 'omr' | 'presentation' | null>(null)
   const [collapsedLessonIds, setCollapsedLessonIds] = useState<Set<string>>(new Set())
   const [openedAtMap, setOpenedAtMap] = useState<Record<string, number>>({})
   const [, setTimerNow] = useState(Date.now())
@@ -943,7 +983,7 @@ export function SPMyLearningPage() {
     // Curriculum belongs to the Course (group), shared by every section — load content by group_id.
     const groupIds = [...new Set((cData ?? []).map((r: Record<string, unknown>) => (r.group_id as string) ?? (r.id as string)).filter(Boolean))]
     const { data: coData } = await supabase.from('lms_content').select('*')
-      .in('course_id', groupIds).order('module_order').order('unit_order').order('order_idx')
+      .in('course_id', groupIds).order('unit_order').order('module_order').order('order_idx')
 
     const mappedCourses: LMSCourse[] = (cData ?? []).map((r: Record<string, unknown>) => ({
       id: r.id as string,
@@ -973,7 +1013,7 @@ export function SPMyLearningPage() {
         url: (extra.url as string) ?? '',
         body: (extra.body as string) ?? '',
         unitTitle: (r.unit_title as string) ?? '',
-        unitOrder: Number(r.unit_order ?? 0),
+        unitOrder: r.unit_order == null ? undefined : Number(r.unit_order),
         order: Number(r.order_idx ?? 0),
         estimatedMins: Number(extra.estimatedMins ?? 0) || undefined,
         moduleTitle: (r.module_title as string) ?? '',
@@ -990,6 +1030,13 @@ export function SPMyLearningPage() {
         assignMaxScore: Number(extra.assignMaxScore ?? 0) || undefined,
         assignWeight: Number(extra.assignWeight ?? 0) || undefined,
         assignRubric: (extra.assignRubric as string) ?? undefined,
+        caseStudyUrl: (extra.caseStudyUrl as string) ?? undefined,
+        caseStudyFileName: (extra.caseStudyFileName as string) ?? undefined,
+        moduleDescription: (extra.moduleDescription as string) ?? undefined,
+        omrFormUrl: (extra.omrFormUrl as string) ?? undefined,
+        socraticDate: (extra.socraticDate as string) ?? undefined,
+        socraticBrief: (extra.socraticBrief as string) ?? undefined,
+        presentationBrief: (extra.presentationBrief as string) ?? undefined,
       }
     })
 
@@ -1007,10 +1054,33 @@ export function SPMyLearningPage() {
       timeSpentMins: Number(r.time_spent_mins ?? 0),
     }))
 
+    // A content row (e.g. a case study) can be saved without unitOrder, which would
+    // otherwise coerce to 0 and tie it with the first module, scrambling module order.
+    // Backfill it from a sibling that shares the same course + unit title.
+    const unitOrderByKey = new Map<string, number>()
+    mappedContent.forEach((c) => {
+      if (c.unitOrder !== undefined) unitOrderByKey.set(`${c.courseId}::${c.unitTitle}`, c.unitOrder)
+    })
+    const backfilledContent = mappedContent.map((c) => (
+      c.unitOrder === undefined ? { ...c, unitOrder: unitOrderByKey.get(`${c.courseId}::${c.unitTitle}`) ?? 0 } : c
+    ))
+
     setCourses(publishedCourses.length ? publishedCourses : mappedCourses)
-    setContent(mappedContent)
+    setContent(backfilledContent)
     setProgress(mappedProgress)
+
+    try {
+      const subsData = await studentPortalFetch(getToken(), '/api/student-portal/lms-get-my-submissions')
+      setMySubmissions((subsData as { submissions: MySubmission[] }).submissions ?? [])
+    } catch {
+      setMySubmissions([])
+    }
+
     setLoading(false)
+  }
+
+  function onSubmissionAdded(sub: MySubmission) {
+    setMySubmissions((prev) => [sub, ...prev.filter((s) => !(s.contentId === sub.contentId && s.kind === sub.kind))])
   }
 
   async function markComplete(item: LMSContent) {
@@ -1035,7 +1105,7 @@ export function SPMyLearningPage() {
     if (error) console.error('markComplete error:', error)
   }
 
-  function openPart(item: LMSContent, part: 'tutorial' | 'mastery' | 'assignment') {
+  function openPart(item: LMSContent, part: 'tutorial' | 'mastery' | 'lessonNotes' | 'caseStudyView' | 'caseStudyNotes' | 'socratic' | 'omr' | 'presentation') {
     if (part === 'tutorial' && session) {
       const existing = openedAtMap[item.id]
       if (!existing) {
@@ -1123,7 +1193,7 @@ export function SPMyLearningPage() {
     if (!selectedCourse) return []
     return content
       .filter((item) => item.courseId === (selectedCourse.groupId ?? selectedCourse.id))
-      .sort((a, b) => (a.moduleOrder ?? 0) - (b.moduleOrder ?? 0) || (a.unitOrder ?? 0) - (b.unitOrder ?? 0) || (a.order ?? 0) - (b.order ?? 0))
+      .sort((a, b) => (a.unitOrder ?? 0) - (b.unitOrder ?? 0) || (a.moduleOrder ?? 0) - (b.moduleOrder ?? 0) || (a.order ?? 0) - (b.order ?? 0))
   }, [content, selectedCourse])
 
   const groupedModules = useMemo(() => {
@@ -1148,7 +1218,7 @@ export function SPMyLearningPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
         <div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: '#1A365E' }}>📚 My Learning</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: '#1A365E', display: 'flex', alignItems: 'center', gap: 8 }}><BookOpen size={18} /> My Learning</div>
           <div style={{ fontSize: 11, color: '#7A92B0', marginTop: 2 }}>{courses.length} course{courses.length !== 1 ? 's' : ''} assigned to you</div>
         </div>
         {!selectedCourse && (
@@ -1293,7 +1363,7 @@ export function SPMyLearningPage() {
           <div style={{ ...card, overflow: 'hidden' }}>
             <div style={{ height: 6, background: SUBJECT_COLORS[selectedCourse.subject] || SP_NAVY }} />
             <div style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12 }}>
-              <button onClick={() => setActiveCourse(null)} style={{ padding: '6px 12px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>← Back</button>
+              <button onClick={() => setActiveCourse(null)} style={{ padding: '6px 12px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back</button>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 15, fontWeight: 800, color: '#1A365E' }}>{selectedCourse.title}</div>
                 <div style={{ fontSize: 11, color: '#7A92B0' }}>{selectedCourse.subject || 'No subject'} · Pass: {selectedCourse.passMark || 80}%</div>
@@ -1342,73 +1412,120 @@ export function SPMyLearningPage() {
             groupedModules.map((module, moduleIdx) => (
               <div key={`${module.label || 'default'}-${moduleIdx}`} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {module.label ? <div style={{ fontSize: 10, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 4 }}><FolderKanban size={11} /> {module.label}</div> : null}
-                {[...module.units.entries()].map(([unit, items]) => (
-                  <div key={unit} style={{ ...card, overflow: 'hidden' }}>
-                    <div style={{ padding: '12px 18px', background: '#F7F9FC', borderBottom: '1px solid #E4EAF2', fontSize: 12, fontWeight: 800, color: '#1A365E', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <FolderOpen size={13} /> {unit}
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      {items.map((item, idx) => {
-                        const itemProgress = progress.find((entry) => entry.contentId === item.id && entry.studentId === session?.dbId)
-                        const done = itemProgress?.status === 'completed'
-                        const itemHasMastery = item.hasMastery === true || item.hasMastery === 'TRUE'
-                        const itemHasAssignment = item.hasAssignment === true || item.hasAssignment === 'TRUE'
-                        const masteryScore = itemProgress?.masteryScore != null && !Number.isNaN(Number(itemProgress.masteryScore)) ? Number(itemProgress.masteryScore) : null
-                        const assignScore = itemProgress?.assignScore != null && !Number.isNaN(Number(itemProgress.assignScore)) ? Number(itemProgress.assignScore) : null
-                        const expanded = !collapsedLessonIds.has(item.id)
-                        return (
-                          <div key={item.id} style={{ borderBottom: idx < items.length - 1 ? '1px solid #F0F4FA' : 'none' }}>
-                            <button
-                              onClick={() => toggleLessonExpanded(item.id)}
-                              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 18px', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}
-                            >
-                              <span style={{ width: 20, height: 20, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #E4EAF2', borderRadius: 4, background: '#fff', color: '#5A7290' }}>{expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</span>
-                              <span style={{ flexShrink: 0, display: 'inline-flex', color: '#5A7290' }}>{(() => { const TI = CONTENT_TYPE_ICONS[item.type] || FileText; return <TI size={16} /> })()}</span>
-                              <span style={{ fontSize: 13, fontWeight: 700, color: '#1A365E', flex: 1, minWidth: 0 }}>{item.title}</span>
-                            </button>
-                            {expanded && (
-                              <div style={{ display: 'flex', flexDirection: 'column', paddingBottom: 4 }}>
-                                <button onClick={() => openPart(item, 'tutorial')} style={partRowStyle}>
-                                  <span style={{ fontSize: 14 }}>📋</span>
-                                  <span>{item.title}: Tutorial{done ? ' · ✓ Done' : ''}</span>
+                {[...module.units.entries()].map(([unit, items]) => {
+                  const carrierItem = items.find((i) => i.hasAssignment === true || i.hasAssignment === 'TRUE') ?? null
+                  const lessonItems = items.filter((i) => i !== carrierItem)
+                  const moduleKey = `unit:${unit}`
+                  const moduleExpanded = !collapsedLessonIds.has(moduleKey)
+                  const hasSubmission = (contentId: string, kind: string) => mySubmissions.some((s) => s.contentId === contentId && s.kind === kind)
+                  return (
+                    <div key={unit} style={{ ...card, overflow: 'hidden' }}>
+                      <button
+                        onClick={() => toggleLessonExpanded(moduleKey)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '14px 18px', background: '#F7F9FC', border: 'none', borderBottom: moduleExpanded ? '1px solid #E4EAF2' : 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}
+                      >
+                        <span style={{ width: 20, height: 20, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #E4EAF2', borderRadius: 4, background: '#fff', color: '#5A7290' }}>{moduleExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</span>
+                        <FolderOpen size={13} style={{ flexShrink: 0, color: '#5A7290' }} />
+                        <span style={{ fontSize: 13, fontWeight: 800, color: '#1A365E', flex: 1, minWidth: 0 }}>{unit}</span>
+                      </button>
+                      {moduleExpanded && (
+                        <div style={{ display: 'flex', flexDirection: 'column', paddingBottom: 6 }}>
+                          {carrierItem?.moduleDescription && (
+                            <div style={{ padding: '10px 18px', fontSize: 12, color: '#5A7290', lineHeight: 1.6, borderBottom: '1px solid #F0F4FA' }}>{carrierItem.moduleDescription}</div>
+                          )}
+
+                          {carrierItem && (
+                            <>
+                              <div style={sectionLabelStyle}><Search size={11} /> Learn It</div>
+                              <button onClick={() => openPart(carrierItem, 'caseStudyView')} style={partRowStyle}>
+                                <FileText size={14} />
+                                <span>View case study</span>
+                              </button>
+                              <button onClick={() => openPart(carrierItem, 'caseStudyNotes')} style={partRowStyle}>
+                                <Upload size={14} />
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>Notes Upload{hasSubmission(carrierItem.id, 'case_study_notes') ? <> · <Check size={11} strokeWidth={3} /> Done</> : ''}</span>
+                              </button>
+                            </>
+                          )}
+
+                          <div style={sectionLabelStyle}><CheckCircle2 size={11} /> Do It</div>
+                          {lessonItems.map((item, idx) => {
+                            const itemProgress = progress.find((entry) => entry.contentId === item.id && entry.studentId === session?.dbId)
+                            const done = itemProgress?.status === 'completed'
+                            const itemHasMastery = item.hasMastery === true || item.hasMastery === 'TRUE'
+                            const masteryScore = itemProgress?.masteryScore != null && !Number.isNaN(Number(itemProgress.masteryScore)) ? Number(itemProgress.masteryScore) : null
+                            const lessonExpanded = !collapsedLessonIds.has(item.id)
+                            return (
+                              <div key={item.id}>
+                                <button onClick={() => toggleLessonExpanded(item.id)} style={lessonHeaderStyle}>
+                                  <span style={{ width: 18, height: 18, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94A3B8' }}>{lessonExpanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}</span>
+                                  <span style={{ flexShrink: 0, display: 'inline-flex', color: '#5A7290' }}>{(() => { const TI = CONTENT_TYPE_ICONS[item.type] || FileText; return <TI size={14} /> })()}</span>
+                                  <span style={{ fontSize: 12, fontWeight: 700, color: '#1A365E', flex: 1, minWidth: 0 }}>Lesson {idx + 1}: {item.title}</span>
                                 </button>
-                                {itemHasMastery && (
-                                  <button onClick={() => openPart(item, 'mastery')} style={partRowStyle}>
-                                    <span style={{ fontSize: 14 }}>📋</span>
-                                    <span>{item.title}: Mastery Test{masteryScore !== null ? ` · ${masteryScore}%` : ''}</span>
-                                  </button>
-                                )}
-                                {itemHasAssignment && (
-                                  <button onClick={() => openPart(item, 'assignment')} style={partRowStyle}>
-                                    <span style={{ fontSize: 14 }}>📋</span>
-                                    <span>{item.title}: Assignment{assignScore !== null ? ` · ${assignScore}%` : ''}</span>
-                                  </button>
+                                {lessonExpanded && (
+                                  <>
+                                    <button onClick={() => openPart(item, 'tutorial')} style={partRowStyleNested}>
+                                      <span>Tutorial{done ? <> · <Check size={11} strokeWidth={3} /> Done</> : ''}</span>
+                                    </button>
+                                    <button onClick={() => openPart(item, 'lessonNotes')} style={partRowStyleNested}>
+                                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>Notes: Upload{hasSubmission(item.id, 'lesson_notes') ? <> · <Check size={11} strokeWidth={3} /> Done</> : ''}</span>
+                                    </button>
+                                    {itemHasMastery && (
+                                      <button onClick={() => openPart(item, 'mastery')} style={partRowStyleNested}>
+                                        <span>Mastery Test{masteryScore !== null ? ` · ${masteryScore}%` : ''}</span>
+                                      </button>
+                                    )}
+                                  </>
                                 )}
                               </div>
-                            )}
-                          </div>
-                        )
-                      })}
+                            )
+                          })}
+
+                          {carrierItem && (
+                            <>
+                              <div style={sectionLabelStyle}><Scale size={11} /> Show It</div>
+                              <button onClick={() => openPart(carrierItem, 'socratic')} style={partRowStyle}>
+                                <Scale size={14} />
+                                <span>Socratic Seminar</span>
+                              </button>
+
+                              <div style={sectionLabelStyle}><Calculator size={11} /> Prove It</div>
+                              <button onClick={() => openPart(carrierItem, 'omr')} style={partRowStyle}>
+                                <Calculator size={14} />
+                                <span>OMR Test</span>
+                              </button>
+
+                              <div style={sectionLabelStyle}><Trophy size={11} /> Master It</div>
+                              <button onClick={() => openPart(carrierItem, 'presentation')} style={partRowStyle}>
+                                <Trophy size={14} />
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>Presentation{hasSubmission(carrierItem.id, 'presentation') ? <> · <Check size={11} strokeWidth={3} /> Submitted</> : ''}</span>
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             ))
           )}
 
+          {/* Course Discussion — parked pending future exploration; not deleted.
           <div style={{ ...card, padding: 16 }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: '#1A365E', marginBottom: 10 }}>💬 Course Discussion</div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: '#1A365E', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}><MessageSquare size={13} /> Course Discussion</div>
             <div style={emptyState}>Course discussion is not yet wired in this React page, so no discussion data is available here yet.</div>
           </div>
+          */}
         </div>
       )}
       {selectedCourse && activeLesson && activePart === 'tutorial' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ background: 'linear-gradient(135deg,#059669,#047857)', borderRadius: 11, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>← Back to Lessons</button>
+              <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back to Lessons</button>
               <div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>📖 {activeLesson.title} · Tutorial</div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><BookOpen size={15} /> {activeLesson.title} · Tutorial</div>
                 <div style={{ fontSize: 11, color: 'rgba(255,255,255,.78)' }}>{activeLesson.type}{activeLesson.estimatedMins ? ` · ${activeLesson.estimatedMins} min` : ''}</div>
               </div>
             </div>
@@ -1441,7 +1558,7 @@ export function SPMyLearningPage() {
                     </div>
                   </div>
                   {!readOnly && <button disabled={!done && !canMarkDone} onClick={() => void markComplete(activeLesson)} title={readOnly ? 'View-only access' : undefined} style={{ padding: '9px 16px', background: done ? '#DCFCE7' : canMarkDone ? '#1A365E' : '#E5E7EB', color: done ? '#059669' : canMarkDone ? '#fff' : '#94A3B8', border: `1px solid ${done ? '#86EFAC' : canMarkDone ? '#1A365E' : '#E5E7EB'}`, borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: done || canMarkDone ? 'pointer' : 'not-allowed', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                    {done ? '✓ Done' : 'Mark done'}
+                    {done ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Check size={12} strokeWidth={3} /> Done</span> : 'Mark done'}
                   </button>}
                 </div>
               )
@@ -1453,9 +1570,9 @@ export function SPMyLearningPage() {
       {selectedCourse && activeLesson && activePart === 'mastery' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ background: 'linear-gradient(135deg,#2563EB,#1D4ED8)', borderRadius: 11, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-            <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>← Back to Lessons</button>
+            <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back to Lessons</button>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>🎯 {activeLesson.title} · Mastery Test</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Target size={15} /> {activeLesson.title} · Mastery Test</div>
               <div style={{ fontSize: 11, color: 'rgba(255,255,255,.78)' }}>Pass mark: {activeLesson.masteryPassMark ?? 80}%</div>
             </div>
           </div>
@@ -1470,27 +1587,81 @@ export function SPMyLearningPage() {
         </div>
       )}
 
-      {selectedCourse && activeLesson && activePart === 'assignment' && (() => {
-        const lessonProg = progress.find((p) => p.contentId === activeLesson.id && p.studentId === session?.dbId)
-        const masteryPassed = lessonProg?.masteryPassed === true || lessonProg?.masteryPassed === 'TRUE'
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', borderRadius: 11, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-              <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>← Back to Lessons</button>
-              <div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>📚 {activeLesson.title} · Assignment</div>
-                <div style={{ fontSize: 11, color: 'rgba(255,255,255,.78)' }}>Case Study Assignment</div>
-              </div>
+      {selectedCourse && activeLesson && activePart === 'lessonNotes' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ background: 'linear-gradient(135deg,#0891B2,#0E7490)', borderRadius: 11, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back to Lessons</button>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Upload size={15} /> {activeLesson.title} · Show it: Notes</div>
             </div>
-
-            <CaseStudyPanel
-              item={activeLesson}
-              studentId={session?.dbId ?? ''}
-              masteryPassed={masteryPassed}
-            />
           </div>
-        )
-      })()}
+          <div style={{ ...card, padding: '14px 16px' }}>
+            <NotesUploadRow contentId={activeLesson.id} kind="lesson_notes" studentId={session?.dbId ?? ''} submission={mySubmissions.find((s) => s.contentId === activeLesson.id && s.kind === 'lesson_notes')} onSubmitted={onSubmissionAdded} />
+          </div>
+        </div>
+      )}
+
+      {selectedCourse && activeLesson && activePart === 'caseStudyView' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ background: 'linear-gradient(135deg,#7C3AED,#6D28D9)', borderRadius: 11, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back to Lessons</button>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Search size={15} /> Learn it · Case Study</div>
+            </div>
+          </div>
+          <CaseStudyDocPanel carrierItem={activeLesson} />
+        </div>
+      )}
+
+      {selectedCourse && activeLesson && activePart === 'caseStudyNotes' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ background: 'linear-gradient(135deg,#7C3AED,#6D28D9)', borderRadius: 11, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back to Lessons</button>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Upload size={15} /> Learn it · Show it: Notes</div>
+            </div>
+          </div>
+          <div style={{ ...card, padding: '14px 16px' }}>
+            <NotesUploadRow contentId={activeLesson.id} kind="case_study_notes" studentId={session?.dbId ?? ''} submission={mySubmissions.find((s) => s.contentId === activeLesson.id && s.kind === 'case_study_notes')} onSubmitted={onSubmissionAdded} />
+          </div>
+        </div>
+      )}
+
+      {selectedCourse && activeLesson && activePart === 'socratic' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', borderRadius: 11, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back to Lessons</button>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Scale size={15} /> Show it · Socratic Seminar</div>
+            </div>
+          </div>
+          <SocraticPanel carrierItem={activeLesson} />
+        </div>
+      )}
+
+      {selectedCourse && activeLesson && activePart === 'omr' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', borderRadius: 11, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back to Lessons</button>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Calculator size={15} /> Prove it · OMR Test</div>
+            </div>
+          </div>
+          <OmrPanel carrierItem={activeLesson} />
+        </div>
+      )}
+
+      {selectedCourse && activeLesson && activePart === 'presentation' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', borderRadius: 11, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back to Lessons</button>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Trophy size={15} /> Master it · Presentation</div>
+            </div>
+          </div>
+          <PresentationPanel carrierItem={activeLesson} studentId={session?.dbId ?? ''} />
+        </div>
+      )}
     </div>
   )
 }

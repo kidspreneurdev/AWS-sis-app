@@ -185,7 +185,7 @@ export interface TpmsBlock {
   assignmentType: TpmsAssignmentType
   cohort: string
   studentIds: string[]
-  coachId: string
+  coachIds: string[]
   managerId: string
   room: string
   notes: string
@@ -318,4 +318,4 @@ export const PACING_META: Record<string, { bg: string; tc: string }> = {
 }
 
 export const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-export const PERIODS = ['Block 1', 'Block 2', 'Block 3', 'Block 4', 'Block 5', 'Block 6', 'Block 7', 'Block 8']
+export const PERIODS = ['Block 1', 'Block 2', 'Block 3', 'Block 4', 'Block 5', 'Block 6', 'Block 7', 'Block 8', 'Block 9']

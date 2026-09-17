@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { CalendarRange, CalendarDays, CalendarClock, Radio, Book, MapPin, Circle, Link2, Clock } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
+import { DAYS, PERIODS } from '@/pages/tpms/tpmsConstants'
 
 const card: React.CSSProperties = {
   background: '#fff',
@@ -25,9 +26,6 @@ const emptyState: React.CSSProperties = {
   borderRadius: 10,
 }
 
-const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-const PERIODS = ['Block 1', 'Block 2', 'Block 3', 'Block 4', 'Block 5', 'Block 6', 'Block 7', 'Block 8']
-
 const BLOCK_BG = ['#EEF3FF', '#D1FAE5', '#EDE9FE', '#FFF6E0', '#E6F4FF', '#FFF0F1']
 
 interface TimetableBlock {
@@ -40,7 +38,7 @@ interface TimetableBlock {
   room: string
   sessionType: string
   meetLink: string
-  coachId: string
+  coachIds: string[]
   assignedToMe: boolean
 }
 
@@ -83,7 +81,7 @@ export function SPTimetablePage() {
     async function load() {
       const { data } = await supabase
         .from('timetable_blocks')
-        .select('id,name,day,period,time,subject,room,session_type,meet_link,coach_id,cohort,student_ids')
+        .select('id,name,day,period,time,subject,room,session_type,meet_link,coach_ids,cohort,student_ids')
         .or(`cohort.eq."${session!.cohort ?? ''}",student_ids.cs.{${session!.dbId}}`)
         .order('created_at', { ascending: true })
       if (cancelled) return
@@ -98,13 +96,13 @@ export function SPTimetablePage() {
         room: (row.room as string) ?? '',
         sessionType: (row.session_type as string) ?? 'Live Session',
         meetLink: (row.meet_link as string) ?? '',
-        coachId: (row.coach_id as string) ?? '',
+        coachIds: Array.isArray(row.coach_ids) ? (row.coach_ids as string[]).filter(Boolean) : [],
         assignedToMe: Array.isArray(row.student_ids) && (row.student_ids as string[]).length > 0,
       }))
       setBlocks(mapped)
       setLoaded(true)
 
-      const coachIds = [...new Set(mapped.map(b => b.coachId).filter(Boolean))]
+      const coachIds = [...new Set(mapped.flatMap(b => b.coachIds).filter(Boolean))]
       if (coachIds.length) {
         const { data: profs } = await supabase.from('profiles').select('id,full_name').in('id', coachIds)
         if (cancelled) return
@@ -180,7 +178,7 @@ export function SPTimetablePage() {
                       ? <><Radio size={10} /> Live Session</>
                       : <><Book size={10} /> Self-Paced Mastery</>}
                     {b.room ? <>· <MapPin size={10} /> {b.room}</> : ''}
-                    {coachNames[b.coachId] ? <>· <Circle size={8} fill="#16A34A" color="#16A34A" /> {coachNames[b.coachId]}</> : ''}
+                    {b.coachIds.length > 0 ? <>· <Circle size={8} fill="#16A34A" color="#16A34A" /> {b.coachIds.map(id => coachNames[id]).filter(Boolean).join(', ')}</> : ''}
                   </div>
                 </div>
                 {b.sessionType === 'Live Session' && b.meetLink && (

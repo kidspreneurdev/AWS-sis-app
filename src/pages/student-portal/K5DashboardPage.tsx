@@ -163,7 +163,7 @@ export function K5DashboardPage() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <div style={{ fontSize: 13, fontWeight: 800, color: NAVY, display: 'flex', alignItems: 'center', gap: 8 }}><Medal size={14} /> My Badges</div>
             <button onClick={() => navigate('/portal/badges')} style={{ fontSize: 11, color: RED, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>
-              See all →
+              See all <ArrowRight size={11} />
             </button>
           </div>
           {recentBadges.length === 0 ? (
@@ -194,7 +194,7 @@ export function K5DashboardPage() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <div style={{ fontSize: 13, fontWeight: 800, color: NAVY, display: 'flex', alignItems: 'center', gap: 8 }}><BarChart3 size={14} /> My Grades</div>
             <button onClick={() => navigate('/portal/grades')} style={{ fontSize: 11, color: RED, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>
-              See all →
+              See all <ArrowRight size={11} />
             </button>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 8 }}>

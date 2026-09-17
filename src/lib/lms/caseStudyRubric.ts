@@ -1,7 +1,8 @@
-// Fixed grading template for the LMS Case Study assignment (7-section revamp of the
-// old generic "+Lesson" assignment block). Not admin-editable — single source of truth
-// shared by the admin grading panel and the student-facing case study panel so the two
-// never disagree on criteria, max points, or the final grade math.
+// Grading template for the LMS Case Study assignment (7-section revamp of the old
+// generic "+Lesson" assignment block). CASE_STUDY_RUBRIC below is the DEFAULT template;
+// a module (case-study content item) can override any category's criteria/weight via
+// its `rubricOverrides` field (see getEffectiveRubric) — admins edit that per module in
+// each section's popup (Show It / Prove It / Master It), the default is the fallback.
 
 export interface RubricCriterion {
   key: string
@@ -63,23 +64,40 @@ export const CASE_STUDY_RUBRIC: Record<ScoreComponentType, RubricCategory> = {
 
 export const SCORE_COMPONENT_TYPES = Object.keys(CASE_STUDY_RUBRIC) as ScoreComponentType[]
 
-export function categoryMaxPoints(type: ScoreComponentType): number {
-  return CASE_STUDY_RUBRIC[type].criteria.reduce((sum, c) => sum + c.max, 0)
+// Discussion Post is parked pending future exploration — its rubric definition stays
+// above for when it's re-enabled, but it's excluded from the active flow and grade math.
+export const ACTIVE_SCORE_COMPONENT_TYPES = SCORE_COMPONENT_TYPES.filter((t) => t !== 'discussion')
+
+// Per-module custom rubric, keyed the same as CASE_STUDY_RUBRIC. Stored on a case-study
+// content item's `rubricOverrides` field. A type with no override (or an empty criteria
+// list) falls back to the default template.
+export type RubricOverrides = Partial<Record<ScoreComponentType, RubricCategory>>
+
+/** The rubric category actually in effect for one module + type — its custom override,
+ *  or the default template if it hasn't customized this one. */
+export function getEffectiveRubric(overrides: RubricOverrides | undefined, type: ScoreComponentType): RubricCategory {
+  const custom = overrides?.[type]
+  if (custom && custom.criteria.length > 0) return custom
+  return CASE_STUDY_RUBRIC[type]
+}
+
+export function categoryMaxPointsOf(category: RubricCategory): number {
+  return category.criteria.reduce((sum, c) => sum + c.max, 0)
 }
 
 /** round(earned / criteriaMax * categoryWeight) — the weighted subtotal for one category. */
-export function categorySubtotal(type: ScoreComponentType, criteriaScores: Record<string, number>): number {
-  const category = CASE_STUDY_RUBRIC[type]
-  const maxPts = categoryMaxPoints(type)
+export function categorySubtotalOf(category: RubricCategory, criteriaScores: Record<string, number>): number {
+  const maxPts = categoryMaxPointsOf(category)
   if (!maxPts) return 0
   const earned = category.criteria.reduce((sum, c) => sum + (Number(criteriaScores[c.key]) || 0), 0)
   return Math.round((earned / maxPts) * category.weight)
 }
 
-/** Sum of the 5 category subtotals — null unless every category has been scored. */
+/** Sum of the active category subtotals — null unless every active category has been scored.
+ *  Discussion is excluded while parked (see ACTIVE_SCORE_COMPONENT_TYPES). */
 export function finalGrade(subtotalsByType: Partial<Record<ScoreComponentType, number | null | undefined>>): number | null {
   let total = 0
-  for (const type of SCORE_COMPONENT_TYPES) {
+  for (const type of ACTIVE_SCORE_COMPONENT_TYPES) {
     const v = subtotalsByType[type]
     if (v === null || v === undefined || Number.isNaN(v)) return null
     total += v

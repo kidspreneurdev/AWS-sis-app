@@ -62,7 +62,7 @@ function gradeIcon(pct: number): LucideIcon {
   return Dumbbell
 }
 
-interface GradeRow { id: string; subject: string; grade: number; letter_grade: string; term: string }
+interface GradeRow { id: string; subject: string; grade: number | null; letter_grade: string; term: string }
 interface RemarkRow { id: string; term: string; content: string; author: string }
 
 export function K5GradesPage() {
@@ -77,13 +77,16 @@ export function K5GradesPage() {
       supabase.from('grades').select('id,subject,grade,letter_grade,term').eq('student_id', session.dbId).order('subject'),
       supabase.from('grade_remarks').select('id,term,content,author').eq('student_id', session.dbId).order('created_at', { ascending: false }),
     ]).then(([gr, re]) => {
-      const gradeData = (gr.data ?? []).map((r: Record<string, unknown>) => ({
-        id: r.id as string,
-        subject: (r.subject as string) ?? '',
-        grade: Number(r.grade ?? 0),
-        letter_grade: (r.letter_grade as string) ?? '',
-        term: (r.term as string) ?? '',
-      }))
+      const gradeData = (gr.data ?? []).map((r: Record<string, unknown>) => {
+        const rawGrade = Number(r.grade)
+        return {
+          id: r.id as string,
+          subject: (r.subject as string) ?? '',
+          grade: Number.isFinite(rawGrade) ? rawGrade : null,
+          letter_grade: (r.letter_grade as string) ?? '',
+          term: (r.term as string) ?? '',
+        }
+      })
       setGrades(gradeData)
       setRemarks((re.data ?? []).map((r: Record<string, unknown>) => ({
         id: r.id as string,
@@ -108,8 +111,9 @@ export function K5GradesPage() {
   ), [remarks, selectedTerm])
 
   const avgPct = useMemo(() => {
-    if (!filteredGrades.length) return null
-    return Math.round(filteredGrades.reduce((s, g) => s + g.grade, 0) / filteredGrades.length)
+    const graded = filteredGrades.filter((g): g is GradeRow & { grade: number } => g.grade !== null)
+    if (!graded.length) return null
+    return Math.round(graded.reduce((s, g) => s + g.grade, 0) / graded.length)
   }, [filteredGrades])
 
   return (
@@ -157,8 +161,10 @@ export function K5GradesPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10 }}>
           {filteredGrades.map((g, i) => {
             const col = TILE_COLORS[i % TILE_COLORS.length]
-            const letter = g.letter_grade || letterFromPct(g.grade)
             const pct = g.grade
+            const hasGrade = pct !== null
+            const letter = g.letter_grade || (hasGrade ? letterFromPct(pct) : '—')
+            const color = hasGrade ? gradeColor(pct) : '#94A3B8'
             return (
               <div key={g.id} style={{ background: col.bg, border: `2px solid ${col.accent}40`, borderRadius: 14, padding: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
@@ -170,16 +176,18 @@ export function K5GradesPage() {
                     {g.term && <div style={{ fontSize: 10, color: '#64748B' }}>{g.term}</div>}
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 24, fontWeight: 900, color: gradeColor(pct) }}>{letter}</div>
-                    <div style={{ fontSize: 10, color: '#64748B' }}>{pct}%</div>
+                    <div style={{ fontSize: 24, fontWeight: 900, color }}>{letter}</div>
+                    <div style={{ fontSize: 10, color: '#64748B' }}>{hasGrade ? `${pct}%` : '—'}</div>
                   </div>
                 </div>
                 <div style={{ background: 'rgba(255,255,255,.6)', borderRadius: 6, height: 8, overflow: 'hidden' }}>
-                  <div style={{ width: `${Math.min(100, pct)}%`, height: '100%', background: gradeColor(pct), borderRadius: 6, transition: 'width .4s' }} />
+                  <div style={{ width: `${hasGrade ? Math.min(100, pct) : 0}%`, height: '100%', background: color, borderRadius: 6, transition: 'width .4s' }} />
                 </div>
-                <div style={{ marginTop: 6, display: 'flex', justifyContent: 'flex-end', color: gradeColor(pct) }}>
-                  {(() => { const GI = gradeIcon(pct); return <GI size={14} /> })()}
-                </div>
+                {hasGrade && (
+                  <div style={{ marginTop: 6, display: 'flex', justifyContent: 'flex-end', color }}>
+                    {(() => { const GI = gradeIcon(pct); return <GI size={14} /> })()}
+                  </div>
+                )}
               </div>
             )
           })}

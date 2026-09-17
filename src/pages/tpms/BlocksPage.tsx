@@ -58,7 +58,7 @@ function mapBlock(r: Record<string, unknown>): TpmsBlock {
     assignmentType: ((r.assignment_type as string) as TpmsAssignmentType) || 'cohort',
     cohort: (r.cohort as string) ?? '',
     studentIds: Array.isArray(r.student_ids) ? (r.student_ids as string[]).filter(Boolean) : [],
-    coachId: (r.coach_id as string) ?? '',
+    coachIds: Array.isArray(r.coach_ids) ? (r.coach_ids as string[]).filter(Boolean) : [],
     managerId: (r.manager_id as string) ?? '',
     room: (r.room as string) ?? '',
     notes: (r.notes as string) ?? '',
@@ -89,7 +89,7 @@ function BlockModal({ block, cohorts, coaches, students, onClose, onSave, onDele
     assignmentType: (block?.assignmentType ?? 'cohort') as TpmsAssignmentType,
     cohort: block?.cohort ?? '',
     studentIds: block?.studentIds ?? [],
-    coachId: block?.coachId ?? '',
+    coachIds: block?.coachIds ?? [],
     managerId: block?.managerId ?? '',
     room: block?.room ?? '',
     notes: block?.notes ?? '',
@@ -98,6 +98,8 @@ function BlockModal({ block, cohorts, coaches, students, onClose, onSave, onDele
   const set = (k: string, v: string | number) => setForm(p => ({ ...p, [k]: v }))
   const addStudent = (id: string) => setForm(p => (p.studentIds.includes(id) ? p : { ...p, studentIds: [...p.studentIds, id] }))
   const removeStudent = (id: string) => setForm(p => ({ ...p, studentIds: p.studentIds.filter(s => s !== id) }))
+  const addCoach = (id: string) => setForm(p => (p.coachIds.includes(id) ? p : { ...p, coachIds: [...p.coachIds, id] }))
+  const removeCoach = (id: string) => setForm(p => ({ ...p, coachIds: p.coachIds.filter(c => c !== id) }))
 
   const start24 = to24(form.startHour, parseInt(form.startMin) || 0, form.startAmPm)
   const end24 = addMinutes(start24, form.duration)
@@ -121,7 +123,7 @@ function BlockModal({ block, cohorts, coaches, students, onClose, onSave, onDele
       assignmentType: form.assignmentType,
       cohort: form.assignmentType === 'cohort' ? form.cohort : '',
       studentIds: form.assignmentType === 'student' ? form.studentIds : [],
-      coachId: form.coachId,
+      coachIds: form.coachIds,
       managerId: form.managerId,
       room: form.room,
       notes: form.notes,
@@ -251,11 +253,28 @@ function BlockModal({ block, cohorts, coaches, students, onClose, onSave, onDele
           </div>
 
           <div style={{ gridColumn: 'span 2', background: '#F0FFF4', borderRadius: 8, padding: 10 }}>
-            <label style={{ ...lbl, color: '#059669' }}>🟢 Success Coach</label>
-            <select value={form.coachId} onChange={e => set('coachId', e.target.value)} style={{ ...inp, borderColor: '#D1FAE5' }}>
-              <option value="">— Not Assigned —</option>
-              {coaches.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <label style={{ ...lbl, color: '#059669' }}>🟢 Success Coach(es)</label>
+            <StudentCombobox
+              students={coaches.filter(c => !form.coachIds.includes(c.id))}
+              value=""
+              onChange={id => { if (id) addCoach(id) }}
+              getLabel={c => c.name}
+              placeholder={form.coachIds.length ? '+ Add another coach' : '— Select coach(es) —'}
+              style={{ ...inp, borderColor: '#D1FAE5' }}
+            />
+            {form.coachIds.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                {form.coachIds.map(id => {
+                  const c = coaches.find(x => x.id === id)
+                  return (
+                    <span key={id} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#D1FAE5', color: '#065F46', borderRadius: 999, padding: '3px 6px 3px 10px', fontSize: 11, fontWeight: 700 }}>
+                      {c ? c.name : 'Unknown coach'}
+                      <button type="button" onClick={() => removeCoach(id)} aria-label={`Remove ${c?.name ?? 'coach'}`} style={{ border: 'none', background: 'rgba(6,95,70,.15)', color: '#065F46', borderRadius: 999, width: 16, height: 16, lineHeight: '14px', fontSize: 11, cursor: 'pointer', padding: 0 }}>×</button>
+                    </span>
+                  )
+                })}
+              </div>
+            )}
           </div>
           <div style={{ gridColumn: 'span 2', background: '#FAF5FF', borderRadius: 8, padding: 10 }}>
             <label style={{ ...lbl, color: '#7C3AED' }}>🔵 Success Manager <span style={{ fontWeight: 400, color: '#AAB8CC' }}>(supervisor)</span></label>
@@ -285,8 +304,10 @@ export function BlocksPage() {
   const [coaches, setCoaches] = useState<{ id: string; name: string }[]>([])
   const [students, setStudents] = useState<RosterStudent[]>([])
   const [modal, setModal] = useState<{ open: boolean; block: TpmsBlock | null }>({ open: false, block: null })
+  const [filterCoachId, setFilterCoachId] = useState('')
 
   const studentName = useMemo(() => Object.fromEntries(students.map(s => [s.id, s.name])), [students])
+  const coachName = useMemo(() => Object.fromEntries(coaches.map(c => [c.id, c.name])), [coaches])
 
   async function load() {
     const [br, sr, cr, st] = await Promise.all([
@@ -316,7 +337,7 @@ export function BlocksPage() {
       name: data.name, day: data.day, period: data.period, time: data.time, duration: data.duration,
       subject: data.subject, session_type: data.sessionType, meet_link: data.meetLink || null,
       assignment_type: data.assignmentType, cohort: data.cohort || null, student_ids: data.studentIds,
-      coach_id: data.coachId || null, manager_id: data.managerId || null, room: data.room, notes: data.notes,
+      coach_ids: data.coachIds, manager_id: data.managerId || null, room: data.room, notes: data.notes,
     }
     if (id) {
       const { error } = await supabase.from('timetable_blocks').update(row).eq('id', id)
@@ -335,7 +356,13 @@ export function BlocksPage() {
 
   // Stats
   const cohortSet = useMemo(() => new Set(blocks.map(b => b.cohort).filter(Boolean)), [blocks])
-  const coachSet = useMemo(() => new Set(blocks.map(b => b.coachId).filter(Boolean)), [blocks])
+  const coachSet = useMemo(() => new Set(blocks.flatMap(b => b.coachIds).filter(Boolean)), [blocks])
+
+  // Filter by success coach — narrows the grid and cards below to one coach's blocks.
+  const filteredBlocks = useMemo(
+    () => (filterCoachId ? blocks.filter(b => b.coachIds.includes(filterCoachId)) : blocks),
+    [blocks, filterCoachId],
+  )
 
   // Group by assignment target for cards (cohort name, or individual students)
   const groupLabel = (b: TpmsBlock) => {
@@ -347,10 +374,10 @@ export function BlocksPage() {
   }
   const byCohort = useMemo(() => {
     const g: Record<string, TpmsBlock[]> = {}
-    blocks.forEach(b => { const k = groupLabel(b); if (!g[k]) g[k] = []; g[k].push(b) })
+    filteredBlocks.forEach(b => { const k = groupLabel(b); if (!g[k]) g[k] = []; g[k].push(b) })
     return g
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [blocks, studentName])
+  }, [filteredBlocks, studentName])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -360,7 +387,16 @@ export function BlocksPage() {
           <div style={{ fontSize: 15, fontWeight: 800, color: '#1A365E' }}>🟦 Blocks / Timetable</div>
           <div style={{ fontSize: 11, color: '#7A92B0', marginTop: 2 }}>Create and manage class blocks. Assign cohorts or individual students, success coaches and managers.</div>
         </div>
-        <button onClick={() => setModal({ open: true, block: null })} style={{ padding: '9px 18px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>+ New Block</button>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <div>
+            <label style={{ ...lbl, marginBottom: 2 }}>🟢 Filter by Coach</label>
+            <select value={filterCoachId} onChange={e => setFilterCoachId(e.target.value)} style={{ ...inp, minWidth: 190 }}>
+              <option value="">— All Coaches —</option>
+              {coaches.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <button onClick={() => setModal({ open: true, block: null })} style={{ padding: '9px 18px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer', alignSelf: 'flex-end' }}>+ New Block</button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -374,10 +410,10 @@ export function BlocksPage() {
       </div>
 
       {/* Weekly timetable grid */}
-      {blocks.length > 0 && (
+      {filteredBlocks.length > 0 && (
         <div style={card}>
           <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '12px 16px' }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: '#fff' }}>📅 Weekly Block Overview</div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: '#fff' }}>📅 Weekly Block Overview{filterCoachId ? ` · ${coachName[filterCoachId] ?? ''}` : ''}</div>
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, minWidth: 620 }}>
@@ -392,11 +428,11 @@ export function BlocksPage() {
                   <tr key={per} style={{ background: pi % 2 === 0 ? '#fff' : '#FAFBFF' }}>
                     <td style={{ padding: '7px 12px', border: '1px solid #E4EAF2', fontWeight: 700, color: '#3D5475', whiteSpace: 'nowrap', fontSize: 10 }}>{per}</td>
                     {DAYS.map(day => {
-                      const cell = blocks.filter(b => b.day === day && b.period === per)
+                      const cell = filteredBlocks.filter(b => b.day === day && b.period === per)
                       return (
                         <td key={day} style={{ padding: 4, border: '1px solid #E4EAF2', verticalAlign: 'top', minWidth: 110 }}>
                           {cell.map((b) => (
-                            <div key={b.id} onClick={() => setModal({ open: true, block: b })} style={{ background: BLOCK_BG_PALETTE[blocks.indexOf(b) % BLOCK_BG_PALETTE.length], borderRadius: 6, padding: '5px 7px', marginBottom: 2, cursor: 'pointer', border: '1px solid rgba(0,0,0,.06)' }}>
+                            <div key={b.id} onClick={() => setModal({ open: true, block: b })} style={{ background: BLOCK_BG_PALETTE[filteredBlocks.indexOf(b) % BLOCK_BG_PALETTE.length], borderRadius: 6, padding: '5px 7px', marginBottom: 2, cursor: 'pointer', border: '1px solid rgba(0,0,0,.06)' }}>
                               <div style={{ fontSize: 10, fontWeight: 800, color: '#1A365E' }}>{b.name || b.subject || '—'}</div>
                               <div style={{ fontSize: 9, color: '#059669', fontWeight: 700 }}>{groupLabel(b)}</div>
                               <div style={{ fontSize: 9, color: b.sessionType === 'Live Session' ? '#DC2626' : '#7C3AED', fontWeight: 700 }}>{b.sessionType === 'Live Session' ? '🔴 Live' : '📗 Self-Paced'}</div>
@@ -416,17 +452,17 @@ export function BlocksPage() {
       )}
 
       {/* Block cards by cohort */}
-      {blocks.length === 0 ? (
+      {filteredBlocks.length === 0 ? (
         <div style={{ ...card, padding: 48, textAlign: 'center', color: '#7A92B0' }}>
           <div style={{ fontSize: 52, marginBottom: 14 }}>🟦</div>
-          <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E', marginBottom: 8 }}>No blocks configured yet</div>
-          <div style={{ fontSize: 12, maxWidth: 360, margin: '0 auto' }}>Create blocks for each cohort and assign success coaches and subjects. The timetable grid will appear here.</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E', marginBottom: 8 }}>{filterCoachId ? 'No blocks for this coach' : 'No blocks configured yet'}</div>
+          <div style={{ fontSize: 12, maxWidth: 360, margin: '0 auto' }}>{filterCoachId ? 'This coach isn\'t assigned to any blocks yet.' : 'Create blocks for each cohort and assign success coaches and subjects. The timetable grid will appear here.'}</div>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {Object.keys(byCohort).sort().map(coh => {
             const cohBlocks = byCohort[coh]
-            const coaches = [...new Set(cohBlocks.map(b => b.coachId).filter(Boolean))]
+            const coachIdsInCohort = [...new Set(cohBlocks.flatMap(b => b.coachIds).filter(Boolean))]
             const managers = [...new Set(cohBlocks.map(b => b.managerId).filter(Boolean))]
             return (
               <div key={coh} style={card}>
@@ -434,8 +470,8 @@ export function BlocksPage() {
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 800, color: '#fff' }}>👥 {coh}</div>
                     <div style={{ fontSize: 10, color: 'rgba(255,255,255,.5)', marginTop: 2 }}>
-                      {coaches.length ? `🟢 ${coaches.join(', ')}` : 'No coach assigned'}
-                      {managers.length ? ` · 🔵 ${managers.join(', ')}` : ''}
+                      {coachIdsInCohort.length ? `🟢 ${coachIdsInCohort.map(id => coachName[id] || 'Unknown').join(', ')}` : 'No coach assigned'}
+                      {managers.length ? ` · 🔵 ${managers.map(id => coachName[id] || 'Unknown').join(', ')}` : ''}
                     </div>
                   </div>
                   <span style={{ fontSize: 10, background: 'rgba(255,255,255,.15)', color: '#fff', padding: '3px 10px', borderRadius: 8 }}>{cohBlocks.length} blocks</span>
@@ -452,8 +488,8 @@ export function BlocksPage() {
                         {b.sessionType === 'Live Session' ? '🔴 Live Session' : '📗 Self-Paced Mastery'}
                       </div>
                       {b.sessionType === 'Live Session' && b.meetLink && <a href={b.meetLink} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 9, color: '#0EA5E9', fontWeight: 600, wordBreak: 'break-all' }}>🔗 Meet link</a>}
-                      {b.coachId && <div style={{ fontSize: 10, color: '#059669', fontWeight: 600, marginTop: 4 }}>🟢 {b.coachId}</div>}
-                      {b.managerId && <div style={{ fontSize: 10, color: '#7C3AED', fontWeight: 600 }}>🔵 {b.managerId}</div>}
+                      {b.coachIds.length > 0 && <div style={{ fontSize: 10, color: '#059669', fontWeight: 600, marginTop: 4 }}>🟢 {b.coachIds.map(id => coachName[id] || 'Unknown').join(', ')}</div>}
+                      {b.managerId && <div style={{ fontSize: 10, color: '#7C3AED', fontWeight: 600 }}>🔵 {coachName[b.managerId] || b.managerId}</div>}
                       {b.room && <div style={{ fontSize: 9, color: '#AAB8CC', marginTop: 3 }}>📍 {b.room}</div>}
                       <div style={{ display: 'flex', gap: 4, marginTop: 9 }}>
                         <button onClick={() => setModal({ open: true, block: b })} style={{ flex: 1, background: '#EEF3FF', border: 'none', color: '#1A365E', borderRadius: 7, fontSize: 10, fontWeight: 700, padding: 5, cursor: 'pointer' }}>✏️ Edit</button>

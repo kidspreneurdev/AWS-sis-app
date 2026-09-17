@@ -15,7 +15,7 @@ import {
   SUBJECT_COLORS, SUBJECTS, GRADE_LEVELS, TYPE_ICONS,
   type LMSCourse, type LMSContent, type LMSEnrolment, type LMSProgress, type LMSStore, type LMSCourseGroup
 } from './lmsStore'
-import { CASE_STUDY_RUBRIC, SCORE_COMPONENT_TYPES, categorySubtotal, finalGrade, type ScoreComponentType } from '@/lib/lms/caseStudyRubric'
+import { CASE_STUDY_RUBRIC, SCORE_COMPONENT_TYPES, categorySubtotalOf, getEffectiveRubric, finalGrade, type ScoreComponentType, type RubricCategory, type RubricOverrides } from '@/lib/lms/caseStudyRubric'
 
 interface Student { id: string; lastName: string; firstName: string; fullName: string; cohort: string; grade: string; studentId: string; campus: string; status: string }
 type LMSSubmissionRow = Record<string, unknown>
@@ -852,11 +852,14 @@ export function LMSPage() {
   const [prefillUnit, setPrefillUnit] = useState<string | null>(null)
   const [showCaseStudyModal, setShowCaseStudyModal] = useState(false)
   const [editCaseStudyIdx, setEditCaseStudyIdx] = useState<number | null>(null)
+  // Show It / Prove It / Master It each get their own focused popup instead of being
+  // crammed into the case-study modal — all three still patch the same content record.
+  const [sectionModal, setSectionModal] = useState<{ type: 'socratic' | 'omr' | 'presentation'; contentId: string } | null>(null)
   const [showEnrolModal, setShowEnrolModal] = useState(false)
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null)
   const [promptDialog, setPromptDialog] = useState<PromptDialogState | null>(null)
   const [previewItem, setPreviewItem] = useState<LMSContent | null>(null)
-  const [scoreModal, setScoreModal] = useState<{ studentId: string; studentName: string; contentId: string; courseId: string; lessonTitle: string; caseStudyUrl?: string } | null>(null)
+  const [scoreModal, setScoreModal] = useState<{ studentId: string; studentName: string; contentId: string; courseId: string; lessonTitle: string; caseStudyUrl?: string; omrFormUrl?: string; socraticDate?: string; socraticBrief?: string; presentationBrief?: string; rubricOverrides?: RubricOverrides } | null>(null)
   const [studentSubmissions, setStudentSubmissions] = useState<LMSSubmissionRow[]>([])
   const [studentSubmissionsLoading, setStudentSubmissionsLoading] = useState(false)
   const [allSubmissions, setAllSubmissions] = useState<LMSSubmissionRow[]>([])
@@ -2142,6 +2145,11 @@ export function LMSPage() {
       setScoreModal({
         studentId, studentName, contentId, courseId: groupKey(course), lessonTitle,
         caseStudyUrl: lessonItem?.caseStudyUrl,
+        omrFormUrl: lessonItem?.omrFormUrl,
+        socraticDate: lessonItem?.socraticDate,
+        socraticBrief: lessonItem?.socraticBrief,
+        presentationBrief: lessonItem?.presentationBrief,
+        rubricOverrides: lessonItem?.rubricOverrides,
       })
     }
 
@@ -2656,22 +2664,25 @@ export function LMSPage() {
 
     function isExpanded(key: string) { return curriculumExpanded[key] !== false }
     function toggleExpanded(key: string) { setCurriculumExpanded(prev => ({ ...prev, [key]: !isExpanded(key) })) }
+    // Every item now has expandable sub-detail (a lesson always has at least Tutorial +
+    // Notes: Upload; a case study always has Learn It/Show It/Prove It/Master It) — so
+    // expand/collapse-all covers every item, not just ones with mastery/assignment.
     function expandAll() {
       const next: Record<string, boolean> = {}
       units.forEach(u => {
         next['unit:' + u.title] = true
-        u.items.forEach(it => { if (hasMasteryBool(it.hasMastery) || hasAssignBool(it.hasAssignment)) next['topic:' + it.id] = true })
+        u.items.forEach(it => { next['topic:' + it.id] = true })
       })
-      topLevel.forEach(it => { if (hasMasteryBool(it.hasMastery) || hasAssignBool(it.hasAssignment)) next['topic:' + it.id] = true })
+      topLevel.forEach(it => { next['topic:' + it.id] = true })
       setCurriculumExpanded(next)
     }
     function collapseAll() {
       const next: Record<string, boolean> = {}
       units.forEach(u => {
         next['unit:' + u.title] = false
-        u.items.forEach(it => { if (hasMasteryBool(it.hasMastery) || hasAssignBool(it.hasAssignment)) next['topic:' + it.id] = false })
+        u.items.forEach(it => { next['topic:' + it.id] = false })
       })
-      topLevel.forEach(it => { if (hasMasteryBool(it.hasMastery) || hasAssignBool(it.hasAssignment)) next['topic:' + it.id] = false })
+      topLevel.forEach(it => { next['topic:' + it.id] = false })
       setCurriculumExpanded(next)
     }
 
@@ -2818,12 +2829,16 @@ export function LMSPage() {
       }
       const itemHasMastery = hasMasteryBool(item.hasMastery)
       const itemHasAssignment = hasAssignBool(item.hasAssignment)
-      const hasSub = itemHasMastery || itemHasAssignment
-      const subLabels = ['Tutorial', ...(itemHasMastery ? ['Mastery Test'] : []), ...(itemHasAssignment ? ['Assignment'] : [])]
+      // Every item has expandable sub-detail now: a case study is Learn It (View case
+      // study / Notes Upload); a lesson is Do It (Tutorial / Notes: Upload / Mastery Test).
+      const hasSub = true
+      const subLabels = itemHasAssignment
+        ? ['View case study', 'Notes Upload']
+        : ['Tutorial', 'Notes: Upload', ...(itemHasMastery ? ['Mastery Test'] : [])]
       const key = 'topic:' + item.id
       const expanded = isExpanded(key)
       const isPretest = item.type === 'quiz' && item.title.toLowerCase().startsWith('pretest')
-      const icon = isPretest ? '⭐' : hasSub ? '📄' : '📋'
+      const icon = isPretest ? '⭐' : itemHasAssignment ? '📚' : '📋'
       return (
         <>
           <tr key={item.id} {...rowDropProps} style={{ borderBottom: isDropTarget ? '2px solid #2563EB' : '1px solid #F0F4FA', opacity: isDragging ? 0.4 : 1, background: isDragging ? '#F7F9FC' : undefined }}>
@@ -2866,6 +2881,68 @@ export function LMSPage() {
               <td />
             </tr>
           ))}
+        </>
+      )
+    }
+
+    // Category divider row (Learn It / Do It / Show It / Prove It / Master It) — mirrors
+    // the same "it" tree the student portal shows, purely a label, not draggable/editable.
+    function renderSectionLabelRow(icon: string, label: string, depth: number, key: string) {
+      return (
+        <tr key={key}>
+          <td colSpan={6} style={{ padding: '10px 10px 2px', paddingLeft: 12 + depth * 26 }}>
+            <span style={{ fontSize: 9, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '.08em', display: 'inline-flex', alignItems: 'center', gap: 4 }}>{icon} {label}</span>
+          </td>
+        </tr>
+      )
+    }
+
+    // Show It / Prove It / Master It point at the same case-study record as Learn It (one
+    // content row covers the whole fixed rubric), but each opens its own focused popup —
+    // not the case-study modal — so its fields don't get lost among every other section's.
+    function renderCarrierLinkRow(label: string, depth: number, carrierItem: LMSContent, key: string, sectionType: 'socratic' | 'omr' | 'presentation') {
+      return (
+        <tr key={key} style={{ borderBottom: '1px solid #F0F4FA' }}>
+          <td style={{ padding: '6px 10px', paddingLeft: 12 + (depth + 1) * 26 }} colSpan={6}>
+            <button onClick={() => { setSectionModal({ type: sectionType, contentId: carrierItem.id }); setCurriculumMenuOpenId(null) }} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>
+              <span style={{ fontSize: 14 }}>📋</span>
+              <span style={{ fontSize: 11, color: '#5A7290' }}>{carrierItem.title}: {label}</span>
+            </button>
+          </td>
+        </tr>
+      )
+    }
+
+    // Renders one module's body as the "it" tree: Learn It (the case study) → Do It (every
+    // lesson) → Show It / Prove It / Master It (the case study's remaining fixed sections).
+    // depth is the case-study/lesson row depth; section labels sit one level shallower.
+    function renderModuleBody(items: LMSContent[], depth: number, orderField: 'order' | 'moduleOrder', dragScope: string) {
+      const carrierItem = items.find(i => hasAssignBool(i.hasAssignment)) ?? null
+      const lessonItems = items.filter(i => i !== carrierItem)
+      return (
+        <>
+          {carrierItem && renderSectionLabelRow('🔎', 'Learn It', depth - 1, `${dragScope}-learn`)}
+          {carrierItem && renderContentRow(carrierItem, depth, orderField, dragScope)}
+
+          {renderSectionLabelRow('✅', 'Do It', depth - 1, `${dragScope}-do`)}
+          {lessonItems.length === 0 ? (
+            <tr key={`${dragScope}-do-empty`}><td colSpan={6} style={{ padding: '4px 10px 8px', paddingLeft: 12 + depth * 26, fontSize: 11, color: '#94A3B8' }}>No lessons yet.</td></tr>
+          ) : (
+            lessonItems.map(item => renderContentRow(item, depth, orderField, dragScope))
+          )}
+
+          {carrierItem && (
+            <>
+              {renderSectionLabelRow('⚖️', 'Show It', depth - 1, `${dragScope}-show`)}
+              {renderCarrierLinkRow('Socratic Seminar', depth - 1, carrierItem, `${dragScope}-socratic`, 'socratic')}
+
+              {renderSectionLabelRow('🔢', 'Prove It', depth - 1, `${dragScope}-prove`)}
+              {renderCarrierLinkRow('OMR Test', depth - 1, carrierItem, `${dragScope}-omr`, 'omr')}
+
+              {renderSectionLabelRow('🏆', 'Master It', depth - 1, `${dragScope}-master`)}
+              {renderCarrierLinkRow('Presentation', depth - 1, carrierItem, `${dragScope}-presentation`, 'presentation')}
+            </>
+          )}
         </>
       )
     }
@@ -3007,7 +3084,7 @@ export function LMSPage() {
                   {units.map(u => (
                     <Fragment key={u.title}>
                       {renderUnitRow(u)}
-                      {isExpanded('unit:' + u.title) && u.items.map(item => renderContentRow(item, 1, 'moduleOrder', u.title))}
+                      {isExpanded('unit:' + u.title) && renderModuleBody(u.items, 2, 'moduleOrder', u.title)}
                     </Fragment>
                   ))}
                 </>
@@ -4123,6 +4200,122 @@ export function LMSPage() {
   // ─── CASE STUDY MODAL ───────────────────────────────────────────────────────
   // A Case Study Assignment is its own item, separate from the Tutorial/Mastery Test
   // lesson editor above — one per module, conventionally that module's final lesson.
+  // Editable rubric for one score component on one module — criteria (label + max points)
+  // plus the category's overall weight (its contribution to the 100-point final grade).
+  // Starts from the shared default (CASE_STUDY_RUBRIC) until a module customizes it; the
+  // caller owns the value/persists it (see SectionModal), this is purely the editor UI.
+  function RubricEditor({ value, onChange }: { value: RubricCategory; onChange: (next: RubricCategory) => void }) {
+    function updateCriterion(idx: number, patch: Partial<RubricCategory['criteria'][number]>) {
+      onChange({ ...value, criteria: value.criteria.map((c, i) => i === idx ? { ...c, ...patch } : c) })
+    }
+    function removeCriterion(idx: number) {
+      onChange({ ...value, criteria: value.criteria.filter((_, i) => i !== idx) })
+    }
+    function addCriterion() {
+      onChange({ ...value, criteria: [...value.criteria, { key: lmsId(), label: '', max: 10 }] })
+    }
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div>
+          <label style={labelStyle}>Category Weight (points toward final grade)</label>
+          <input type="number" min={0} max={100} value={value.weight} onChange={e => onChange({ ...value, weight: parseInt(e.target.value) || 0 })} style={{ ...inputStyle, maxWidth: 120 }} />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {value.criteria.map((c, idx) => (
+            <div key={c.key} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <input value={c.label} onChange={e => updateCriterion(idx, { label: e.target.value })} placeholder="Criterion label" style={{ ...inputStyle, flex: 1 }} />
+              <input type="number" min={0} value={c.max} onChange={e => updateCriterion(idx, { max: parseInt(e.target.value) || 0 })} placeholder="Max" style={{ ...inputStyle, width: 70 }} />
+              <button onClick={() => removeCriterion(idx)} title="Remove criterion" style={{ width: 28, height: 28, flexShrink: 0, background: '#FEE2E2', color: '#D61F31', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>✕</button>
+            </div>
+          ))}
+        </div>
+        <button onClick={addCriterion} style={{ alignSelf: 'flex-start', padding: '6px 12px', background: '#EEF3FF', color: '#1A365E', border: '1px solid #DDE6F0', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>+ Add Criterion</button>
+      </div>
+    )
+  }
+
+  // Focused popup for Show It (Socratic Seminar) / Prove It (OMR Test) / Master It
+  // (Presentation) — each edits only its own fields on the case-study content record,
+  // instead of the case-study modal's everything-in-one-place editor.
+  function SectionModal({ type, contentId, onClose }: {
+    type: 'socratic' | 'omr' | 'presentation'
+    contentId: string
+    onClose: () => void
+  }) {
+    const item = store.content.find(c => c.id === contentId)
+
+    const meta = {
+      socratic: { icon: '⚖️', title: 'Show It — Socratic Seminar', rubricType: 'debate' as const },
+      omr: { icon: '🔢', title: 'Prove It — OMR Test', rubricType: 'omr' as const },
+      presentation: { icon: '🏆', title: 'Master It — Presentation', rubricType: 'presentation' as const },
+    }[type]
+
+    const [socraticBrief, setSocraticBrief] = useState(item?.socraticBrief ?? '')
+    const [socraticDate, setSocraticDate] = useState(item?.socraticDate ?? '')
+    const [omrFormUrl, setOmrFormUrl] = useState(item?.omrFormUrl ?? '')
+    const [presentationBrief, setPresentationBrief] = useState(item?.presentationBrief ?? '')
+    const [rubric, setRubric] = useState<RubricCategory>(getEffectiveRubric(item?.rubricOverrides, meta.rubricType))
+
+    if (!item) return null
+
+    function save() {
+      if (type === 'socratic' && !socraticBrief.trim()) { alert('Add a Socratic Seminar activity description'); return }
+      if (!rubric.criteria.length) { alert('Add at least one rubric criterion'); return }
+      const fieldPatch: Partial<LMSContent> =
+        type === 'socratic' ? { socraticBrief: socraticBrief.trim(), socraticDate: socraticDate || undefined } :
+        type === 'omr' ? { omrFormUrl: omrFormUrl.trim() || undefined } :
+        { presentationBrief: presentationBrief.trim() || undefined }
+      const patch: Partial<LMSContent> = { ...fieldPatch, rubricOverrides: { ...item?.rubricOverrides, [meta.rubricType]: rubric } }
+      persist({ ...store, content: store.content.map(c => c.id === contentId ? { ...c, ...patch } : c) })
+      onClose()
+    }
+
+    return (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 450, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto', backdropFilter: 'blur(4px)' }} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+        <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 480, maxHeight: '94vh', overflowY: 'auto', boxShadow: '0 24px 60px rgba(0,0,0,.3)', margin: 'auto' }}>
+          <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '18px 24px', borderRadius: '18px 18px 0 0' }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>{meta.icon} {meta.title}</div>
+            <div style={{ fontSize: 10, color: 'rgba(255,255,255,.65)', marginTop: 2 }}>{item.title}</div>
+          </div>
+          <div style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {type === 'socratic' && (
+              <>
+                <div>
+                  <label style={labelStyle}>Activity Description *</label>
+                  <textarea value={socraticBrief} onChange={e => setSocraticBrief(e.target.value)} rows={4} placeholder="What students should prepare and expect for the seminar — shown to students on the Show It page." style={taStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Socratic Seminar Date</label>
+                  <input type="date" value={socraticDate} onChange={e => setSocraticDate(e.target.value)} style={inputStyle} />
+                </div>
+              </>
+            )}
+            {type === 'omr' && (
+              <div>
+                <label style={labelStyle}>OMR Test — Google Form URL</label>
+                <input value={omrFormUrl} onChange={e => setOmrFormUrl(e.target.value)} placeholder="https://forms.google.com/..." style={inputStyle} />
+              </div>
+            )}
+            {type === 'presentation' && (
+              <div>
+                <label style={labelStyle}>Activity Description</label>
+                <textarea value={presentationBrief} onChange={e => setPresentationBrief(e.target.value)} rows={4} placeholder="What students should prepare and submit for the final presentation — shown to students on the Master It page." style={taStyle} />
+              </div>
+            )}
+            <div>
+              <label style={{ ...labelStyle, marginBottom: 4 }}>Rubric — {CASE_STUDY_RUBRIC[meta.rubricType].label}</label>
+              <RubricEditor value={rubric} onChange={setRubric} />
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6 }}>
+              <button onClick={onClose} style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+              <button onClick={save} style={{ padding: '9px 20px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>💾 Save</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   function CaseStudyModal() {
     const courseId = activeCourseId || (store.courses[0] ? groupKey(store.courses[0]) : '')
     const item = editCaseStudyIdx !== null ? store.content[editCaseStudyIdx] : undefined
@@ -4135,6 +4328,7 @@ export function LMSPage() {
     const [caseStudyUrl, setCaseStudyUrl] = useState(item?.caseStudyUrl ?? '')
     const [caseStudyFileName] = useState(item?.caseStudyFileName ?? '')
     const [caseStudyFile, setCaseStudyFile] = useState<File | null>(null)
+    const [moduleDescription, setModuleDescription] = useState(item?.moduleDescription ?? '')
 
     const save = async () => {
       if (!title.trim()) { alert('Title is required'); return }
@@ -4158,15 +4352,21 @@ export function LMSPage() {
       }
       // New case studies land after every other item in their module, so they sort as
       // that module's final lesson — matching how AWS actually orders "Case Study Launch".
-      const siblingOrders = store.content
-        .filter(c => c.courseId === courseId && (c.unitTitle || '') === finalUnit && c.id !== item?.id)
-        .map(c => c.order ?? 0)
+      const siblings = store.content.filter(c => c.courseId === courseId && (c.unitTitle || '') === finalUnit && c.id !== item?.id)
+      const siblingOrders = siblings.map(c => c.order ?? 0)
       const order = item?.order ?? (siblingOrders.length ? Math.max(...siblingOrders) + 1 : 1)
+      // unitOrder drives module sequence on the student portal — without it (left undefined
+      // here previously) a case study lands with a null unit_order and its module's position
+      // becomes ambiguous. Inherit it from a sibling in the same module, or fall back to the
+      // module's position among this course's existing modules.
+      const unitOrder = item?.unitOrder ?? siblings.find(c => c.unitOrder !== undefined)?.unitOrder
+        ?? Math.max(0, existingUnits.indexOf(finalUnit))
       const obj: LMSContent = {
         id: item?.id ?? lmsId(),
         courseId,
         title: title.trim(),
         unitTitle: finalUnit,
+        unitOrder,
         type: (caseStudyFile || finalCaseStudyFileName) ? 'file' : 'link',
         order,
         hasMastery: false,
@@ -4174,6 +4374,12 @@ export function LMSPage() {
         caseStudyUrl: finalCaseStudyUrl || undefined,
         caseStudyFileName: finalCaseStudyFileName || undefined,
         url: finalCaseStudyUrl || undefined,
+        moduleDescription: moduleDescription.trim() || undefined,
+        // Show It / Prove It / Master It are edited in their own popups (SectionModal) —
+        // carry through whatever this item already has rather than resetting it here.
+        omrFormUrl: item?.omrFormUrl,
+        socraticDate: item?.socraticDate,
+        socraticBrief: item?.socraticBrief,
       }
       const content = [...store.content]
       if (isNew) content.push(obj); else content[editCaseStudyIdx!] = obj
@@ -4200,10 +4406,14 @@ export function LMSPage() {
                 <input value={newUnitTitle} onChange={e => setNewUnitTitle(e.target.value)} placeholder="e.g. Module 1: Business Writing Fundamentals & Persuasive Memos" style={{ ...inputStyle, marginTop: 6 }} />
               )}
             </div>
+            <div>
+              <label style={labelStyle}>Module Description</label>
+              <textarea value={moduleDescription} onChange={e => setModuleDescription(e.target.value)} rows={3} placeholder="A paragraph describing what this module covers — shown to students above Learn it." style={taStyle} />
+            </div>
             <div style={{ padding: 12, background: '#FFF9F0', borderRadius: 10, border: '1px solid #FDE68A', display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{ fontSize: 10, fontWeight: 800, color: '#92400E', textTransform: 'uppercase', letterSpacing: '.5px' }}>📚 Case Study Document</div>
+              <div style={{ fontSize: 10, fontWeight: 800, color: '#92400E', textTransform: 'uppercase', letterSpacing: '.5px' }}>🔎 Learn it — Case Study Document</div>
               <div style={{ fontSize: 10, color: '#7A92B0' }}>
-                Students will view this case study, then work through a fixed 7-section flow (Case Study → Notes Score → Discussion Post → Socratic Debate Score → OMR Test Score → Presentation Upload → Presentation Score). Scoring happens per-student in the Gradebook — the rubric is fixed and not editable here.
+                Students view this case study and upload their notes here (Learn it), work through each lesson's Do it / Show it / Prove it, then finish with Master it (Socratic Seminar → OMR Test → Presentation — each edited from its own row in the curriculum tree once this case study is saved). Scoring happens per-student in the Gradebook — the rubric is fixed and not editable here.
               </div>
               <div>
                 <label style={labelStyle}>Case Study URL (Google Slides, Drive link)</label>
@@ -4217,6 +4427,11 @@ export function LMSPage() {
                 </div>
               </div>
             </div>
+            {!isNew && (
+              <div style={{ fontSize: 10, color: '#7A92B0', padding: '8px 10px', background: '#F7F9FC', borderRadius: 8, border: '1px dashed #D7E0EA' }}>
+                Show It (Socratic Seminar), Prove It (OMR Test), and Master It (Presentation) each have their own popup — click that row under this module in the curriculum tree to edit them.
+              </div>
+            )}
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6 }}>
               <button onClick={() => setShowCaseStudyModal(false)} style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
               <button onClick={save} style={{ padding: '9px 20px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>💾 Save Case Study</button>
@@ -4244,6 +4459,7 @@ export function LMSPage() {
       {showNewSectionFlow && <NewSectionFlow />}
       {showLessonModal && <LessonModal />}
       {showCaseStudyModal && <CaseStudyModal />}
+      {sectionModal && <SectionModal type={sectionModal.type} contentId={sectionModal.contentId} onClose={() => setSectionModal(null)} />}
       {showEnrolModal && <EnrolModal courses={store.courses} students={students} cohorts={cohorts} onSave={enrolment => persist({ ...store, enrolments: [...store.enrolments, enrolment] })} onClose={() => setShowEnrolModal(false)} />}
       {confirmDialog && <ConfirmDialog state={confirmDialog} onClose={() => setConfirmDialog(null)} />}
       {promptDialog && <PromptDialog state={promptDialog} onClose={() => setPromptDialog(null)} />}
@@ -4283,6 +4499,11 @@ interface CaseStudyGradingData {
   courseId: string
   lessonTitle: string
   caseStudyUrl?: string
+  omrFormUrl?: string
+  socraticDate?: string
+  socraticBrief?: string
+  presentationBrief?: string
+  rubricOverrides?: RubricOverrides
 }
 
 interface ScoreComponentRow {
@@ -4292,16 +4513,19 @@ interface ScoreComponentRow {
   status: 'not_scored' | 'scored'
 }
 
-interface DiscussionPostRow { id: string; studentId: string; studentName: string; body: string; createdAt: string; parentPostId: string | null }
 interface AppealRow { id: string; componentType: ScoreComponentType; message: string; status: 'open' | 'resolved'; adminReply: string | null }
 
 function emptyScoreComponents(): Record<ScoreComponentType, ScoreComponentRow> {
   return Object.fromEntries(SCORE_COMPONENT_TYPES.map(t => [t, { criteriaScores: {}, subtotal: null, feedback: '', status: 'not_scored' as const }])) as Record<ScoreComponentType, ScoreComponentRow>
 }
 
-/** A submission row counts as this content's Presentation Upload unless its note is
- *  tagged JSON metadata for something else (e.g. a mastery-quiz snapshot). */
+/** A submission row counts as this content's Presentation Upload if it's explicitly
+ *  tagged kind='presentation', or — for rows written before the `kind` column existed —
+ *  if its note isn't JSON metadata for something else (e.g. a mastery-quiz snapshot). */
 function isPresentationSubmission(row: Record<string, unknown>): boolean {
+  const kind = row.kind as string | undefined
+  if (kind && kind !== 'presentation') return false
+  if (kind === 'presentation') return true
   const noteVal = row.note
   if (typeof noteVal !== 'string') return true
   const t = noteVal.trim()
@@ -4323,16 +4547,16 @@ function CaseStudyGradingPanel({ data, onClose, onFinalGradeChange }: {
   const [scores, setScores] = useState<Record<ScoreComponentType, ScoreComponentRow>>(emptyScoreComponents)
   const [draftCriteria, setDraftCriteria] = useState<Record<ScoreComponentType, Record<string, string>>>(() => Object.fromEntries(SCORE_COMPONENT_TYPES.map(t => [t, {}])) as Record<ScoreComponentType, Record<string, string>>)
   const [draftFeedback, setDraftFeedback] = useState<Record<ScoreComponentType, string>>(() => Object.fromEntries(SCORE_COMPONENT_TYPES.map(t => [t, ''])) as Record<ScoreComponentType, string>)
-  const [posts, setPosts] = useState<DiscussionPostRow[]>([])
+  // Discussion Post is parked pending future exploration — see the commented block below.
+  const [notesSub, setNotesSub] = useState<{ note: string; linkUrl: string; submittedAt: string } | null>(null)
   const [presentationSub, setPresentationSub] = useState<{ note: string; linkUrl: string; submittedAt: string } | null>(null)
   const [appeals, setAppeals] = useState<AppealRow[]>([])
   const [saving, setSaving] = useState<ScoreComponentType | null>(null)
 
   async function load() {
     setLoading(true)
-    const [scRes, dpRes, subRes, apRes] = await Promise.all([
+    const [scRes, subRes, apRes] = await Promise.all([
       supabase.from('lms_score_components').select('*').eq('content_id', data.contentId).eq('student_id', data.studentId),
-      supabase.from('lms_discussion_posts').select('*').eq('content_id', data.contentId).order('created_at', { ascending: true }),
       supabase.from('lms_submissions').select('*').eq('content_id', data.contentId).eq('student_id', data.studentId).order('submitted_at', { ascending: false }),
       supabase.from('lms_grade_appeals').select('*').eq('content_id', data.contentId).eq('student_id', data.studentId),
     ])
@@ -4352,19 +4576,11 @@ function CaseStudyGradingPanel({ data, onClose, onFinalGradeChange }: {
     setDraftCriteria(nextDraftCriteria)
     setDraftFeedback(nextDraftFeedback)
 
-    const rawPosts = (dpRes.data ?? []) as Record<string, unknown>[]
-    const posterIds = [...new Set(rawPosts.map(p => p.student_id as string))]
-    let names: Record<string, string> = {}
-    if (posterIds.length) {
-      const { data: rows } = await supabase.from('students').select('id,first_name,last_name').in('id', posterIds)
-      names = Object.fromEntries((rows ?? []).map((r: Record<string, unknown>) => [r.id, `${(r.first_name as string) ?? ''} ${(r.last_name as string) ?? ''}`.trim()]))
-    }
-    setPosts(rawPosts.map(p => ({
-      id: p.id as string, studentId: p.student_id as string, studentName: names[p.student_id as string] ?? 'Student',
-      body: p.body as string, createdAt: p.created_at as string, parentPostId: (p.parent_post_id as string) ?? null,
-    })))
+    const subRows = (subRes.data ?? []) as Record<string, unknown>[]
+    const notesRow = subRows.find(r => r.kind === 'case_study_notes')
+    setNotesSub(notesRow ? { note: (notesRow.note as string) ?? '', linkUrl: (notesRow.link_url as string) ?? '', submittedAt: (notesRow.submitted_at as string) ?? '' } : null)
 
-    const presRow = (subRes.data ?? []).find(isPresentationSubmission) as Record<string, unknown> | undefined
+    const presRow = subRows.find(isPresentationSubmission)
     setPresentationSub(presRow ? { note: (presRow.note as string) ?? '', linkUrl: (presRow.link_url as string) ?? '', submittedAt: (presRow.submitted_at as string) ?? '' } : null)
 
     setAppeals((apRes.data ?? []).map((a: Record<string, unknown>) => ({
@@ -4377,14 +4593,14 @@ function CaseStudyGradingPanel({ data, onClose, onFinalGradeChange }: {
   useEffect(() => { void load() }, []) // eslint-disable-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
 
   async function saveCategory(type: ScoreComponentType) {
-    const criteria = CASE_STUDY_RUBRIC[type].criteria
+    const category = getEffectiveRubric(data.rubricOverrides, type)
     const criteriaScores: Record<string, number> = {}
-    for (const c of criteria) {
+    for (const c of category.criteria) {
       const raw = draftCriteria[type][c.key] ?? ''
       const v = Math.max(0, Math.min(c.max, Number(raw) || 0))
       criteriaScores[c.key] = v
     }
-    const subtotal = categorySubtotal(type, criteriaScores)
+    const subtotal = categorySubtotalOf(category, criteriaScores)
     setSaving(type)
     const { error } = await supabase.from('lms_score_components').upsert({
       content_id: data.contentId, student_id: data.studentId, component_type: type,
@@ -4412,7 +4628,7 @@ function CaseStudyGradingPanel({ data, onClose, onFinalGradeChange }: {
   function renderCategoryEditor(type: ScoreComponentType) {
     return (
       <CategoryEditor
-        type={type}
+        category={getEffectiveRubric(data.rubricOverrides, type)}
         row={scores[type]}
         draftValues={draftCriteria[type]}
         draftFeedback={draftFeedback[type]}
@@ -4440,53 +4656,61 @@ function CaseStudyGradingPanel({ data, onClose, onFinalGradeChange }: {
             <>
               <div style={{ padding: '10px 12px', background: currentFinalGrade !== null ? '#DCFCE7' : '#F7F9FC', border: `1px solid ${currentFinalGrade !== null ? '#BBF7D0' : '#E4EAF2'}`, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: 11, fontWeight: 700, color: '#5A7290' }}>Final Grade</span>
-                <span style={{ fontSize: 16, fontWeight: 900, color: currentFinalGrade !== null ? '#059669' : '#94A3B8' }}>{currentFinalGrade !== null ? `${currentFinalGrade}/100` : 'Pending — score all 5 categories'}</span>
+                <span style={{ fontSize: 16, fontWeight: 900, color: currentFinalGrade !== null ? '#059669' : '#94A3B8' }}>{currentFinalGrade !== null ? `${currentFinalGrade}/100` : 'Pending — score all categories'}</span>
               </div>
 
-              {/* 1. Case Study */}
+              {/* Learn it — Case Study + Notes */}
               <div style={{ background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 10, padding: 12 }}>
-                <div style={{ fontSize: 11, fontWeight: 800, color: '#1A365E', marginBottom: 6 }}>1. Case Study</div>
+                <div style={{ fontSize: 11, fontWeight: 800, color: '#1A365E', marginBottom: 6 }}>🔎 Learn it — Case Study</div>
                 {data.caseStudyUrl
                   ? <a href={data.caseStudyUrl} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#1A365E', fontWeight: 700 }}>↗ Open case study document</a>
                   : <div style={{ fontSize: 11, color: '#94A3B8' }}>No case study document uploaded.</div>}
+                <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #E4EAF2' }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: '#1A365E', marginBottom: 4 }}>📤 Show it — Notes</div>
+                  {notesSub ? (
+                    <>
+                      {notesSub.note && <div style={{ fontSize: 11, color: '#3D5475', marginBottom: 6, whiteSpace: 'pre-wrap' }}>{notesSub.note}</div>}
+                      {notesSub.linkUrl && <a href={notesSub.linkUrl} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#1A365E', fontWeight: 700, wordBreak: 'break-all' }}>🔗 View uploaded notes</a>}
+                    </>
+                  ) : (
+                    <div style={{ fontSize: 11, color: '#94A3B8' }}>Student has not uploaded notes yet.</div>
+                  )}
+                </div>
               </div>
 
-              {/* 2. Notes Score */}
+              {/* Notes Score */}
               {renderCategoryEditor('notes')}
 
-              {/* 3. Discussion Post */}
+              {/* Discussion Post — parked pending future exploration; not deleted.
               <div style={{ background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 10, padding: 12 }}>
-                <div style={{ fontSize: 11, fontWeight: 800, color: '#1A365E', marginBottom: 6 }}>3. Discussion Thread ({posts.length})</div>
-                {posts.length === 0 ? (
-                  <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 8 }}>No posts yet.</div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8, maxHeight: 220, overflowY: 'auto' }}>
-                    {posts.map(p => (
-                      <div key={p.id} style={{ background: p.studentId === data.studentId ? '#EEF3FF' : '#fff', border: '1px solid #E4EAF2', borderRadius: 8, padding: '8px 10px', marginLeft: p.parentPostId ? 16 : 0 }}>
-                        <div style={{ fontSize: 9, fontWeight: 800, color: '#1A365E', marginBottom: 3 }}>{p.studentName}{p.studentId === data.studentId ? ' (this student)' : ''}</div>
-                        <div style={{ fontSize: 11, color: '#3D5475', whiteSpace: 'pre-wrap' }}>{p.body}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <div style={{ fontSize: 11, fontWeight: 800, color: '#1A365E', marginBottom: 6 }}>Discussion Thread</div>
                 {renderCategoryEditor('discussion')}
               </div>
+              */}
 
-              {/* 4. Socratic Debate */}
-              <div>
-                <div style={{ fontSize: 11, fontWeight: 800, color: '#1A365E', marginBottom: 6 }}>4. Socratic Debate</div>
+              {/* Show it — Socratic Seminar */}
+              <div style={{ background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 10, padding: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: '#1A365E' }}>⚖️ Show it — Socratic Seminar</div>
+                  {data.socraticDate && <span style={{ fontSize: 10, fontWeight: 700, color: '#7A92B0' }}>📅 {data.socraticDate}</span>}
+                </div>
+                {data.socraticBrief && <div style={{ fontSize: 11, color: '#3D5475', marginBottom: 8, whiteSpace: 'pre-wrap' }}>{data.socraticBrief}</div>}
                 {renderCategoryEditor('debate')}
               </div>
 
-              {/* 5. OMR Test */}
+              {/* Prove it — OMR Test */}
               <div>
-                <div style={{ fontSize: 11, fontWeight: 800, color: '#1A365E', marginBottom: 6 }}>5. OMR Test</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: '#1A365E' }}>🔢 Prove it — OMR Test</div>
+                  {data.omrFormUrl && <a href={data.omrFormUrl} target="_blank" rel="noreferrer" style={{ fontSize: 10, fontWeight: 700, color: '#1A365E' }}>↗ Open Google Form</a>}
+                </div>
                 {renderCategoryEditor('omr')}
               </div>
 
-              {/* 6. Presentation Upload */}
+              {/* Master it — Presentation */}
               <div style={{ background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 10, padding: 12 }}>
-                <div style={{ fontSize: 11, fontWeight: 800, color: '#1A365E', marginBottom: 6 }}>6. Presentation Upload</div>
+                <div style={{ fontSize: 11, fontWeight: 800, color: '#1A365E', marginBottom: 6 }}>🏆 Master it — Presentation Upload</div>
+                {data.presentationBrief && <div style={{ fontSize: 11, color: '#3D5475', marginBottom: 8, whiteSpace: 'pre-wrap' }}>{data.presentationBrief}</div>}
                 {presentationSub ? (
                   <>
                     {presentationSub.note && <div style={{ fontSize: 11, color: '#3D5475', marginBottom: 6, whiteSpace: 'pre-wrap' }}>{presentationSub.note}</div>}
@@ -4497,9 +4721,9 @@ function CaseStudyGradingPanel({ data, onClose, onFinalGradeChange }: {
                 )}
               </div>
 
-              {/* 7. Presentation Score */}
+              {/* Presentation Score */}
               <div>
-                <div style={{ fontSize: 11, fontWeight: 800, color: '#1A365E', marginBottom: 6 }}>7. Presentation Score</div>
+                <div style={{ fontSize: 11, fontWeight: 800, color: '#1A365E', marginBottom: 6 }}>Presentation Score</div>
                 {renderCategoryEditor('presentation')}
               </div>
             </>
@@ -4548,8 +4772,8 @@ function CategoryEditorAppealNote({ appeal, onResolved }: {
   )
 }
 
-function CategoryEditor({ type, row, draftValues, draftFeedback, saving, appeal, onCriteriaChange, onFeedbackChange, onSave, onAppealResolved }: {
-  type: ScoreComponentType
+function CategoryEditor({ category: cat, row, draftValues, draftFeedback, saving, appeal, onCriteriaChange, onFeedbackChange, onSave, onAppealResolved }: {
+  category: RubricCategory
   row: ScoreComponentRow
   draftValues: Record<string, string>
   draftFeedback: string
@@ -4560,7 +4784,6 @@ function CategoryEditor({ type, row, draftValues, draftFeedback, saving, appeal,
   onSave: () => void
   onAppealResolved: (reply: string) => void
 }) {
-  const cat = CASE_STUDY_RUBRIC[type]
   return (
     <div style={{ background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 10, padding: 12 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -4795,7 +5018,7 @@ function LessonPreviewModal({ item, onClose }: { item: LMSContent; onClose: () =
   // Read-only preview of a fixed rubric category's criteria (Notes/Discussion/Debate/OMR/Presentation) —
   // structure only, no live scores, since preview has no specific student.
   function renderRubricPreview(type: ScoreComponentType) {
-    const cat = CASE_STUDY_RUBRIC[type]
+    const cat = getEffectiveRubric(item.rubricOverrides, type)
     return (
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
         {cat.criteria.map(c => (
@@ -4833,26 +5056,37 @@ function LessonPreviewModal({ item, onClose }: { item: LMSContent; onClose: () =
     }
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {caseStudySectionShell('📚', '1. Case Study', null, item.caseStudyUrl
+        {caseStudySectionShell('🔎', 'Learn it — Case Study', null, item.caseStudyUrl
           ? <div style={{ fontSize: 11, color: '#2D3F5E' }}><a href={item.caseStudyUrl} target="_blank" rel="noreferrer" style={{ color: '#1D4ED8', fontWeight: 700 }}>↗ Open case study document</a></div>
           : <div style={{ fontSize: 11, color: '#94A3B8' }}>No case study document uploaded yet.</div>
         )}
-        {caseStudySectionShell('📝', '2. Notes Score', CASE_STUDY_RUBRIC.notes.weight, <>
-          <div style={{ fontSize: 11, color: '#5A7290' }}>Admin scores the student's physical notes — no student view/upload here.</div>
+        {caseStudySectionShell('📤', 'Show it — Notes', CASE_STUDY_RUBRIC.notes.weight, <>
+          <div style={{ fontSize: 11, color: '#5A7290', marginBottom: 6 }}>Student uploads their notes about the case study here.</div>
+          <div style={{ padding: '9px 12px', borderRadius: 8, border: '2px dashed #BFDBFE', background: '#F7FBFF', fontSize: 11, color: '#94A3B8', textAlign: 'center' }}>+ Choose file (Preview Only)</div>
           {renderRubricPreview('notes')}
         </>)}
-        {caseStudySectionShell('💬', '3. Discussion Post', CASE_STUDY_RUBRIC.discussion.weight, <>
+        {/* Discussion Post — parked pending future exploration; not deleted.
+        {caseStudySectionShell('💬', 'Discussion Post', CASE_STUDY_RUBRIC.discussion.weight, <>
           <div style={{ fontSize: 11, color: '#5A7290', marginBottom: 6 }}>Student posts about the case study, then views/comments on classmates' posts.</div>
           <textarea disabled rows={2} placeholder="Student would post here… (Preview Only)" style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #BFDBFE', borderRadius: 8, fontSize: 11, resize: 'none', boxSizing: 'border-box', background: '#F7FBFF', color: '#94A3B8', fontFamily: 'inherit' }} />
           {renderRubricPreview('discussion')}
         </>)}
-        {caseStudySectionShell('⚖️', '4. Socratic Debate Score', CASE_STUDY_RUBRIC.debate.weight, renderRubricPreview('debate'))}
-        {caseStudySectionShell('🔢', '5. OMR Test Score', CASE_STUDY_RUBRIC.omr.weight, renderRubricPreview('omr'))}
-        {caseStudySectionShell('📤', '6. Presentation Upload', null, <>
+        */}
+        {caseStudySectionShell('⚖️', 'Show it — Socratic Seminar', CASE_STUDY_RUBRIC.debate.weight, <>
+          {item.socraticBrief && <div style={{ fontSize: 11, color: '#5A7290', marginBottom: 6 }}>{item.socraticBrief}</div>}
+          {item.socraticDate && <div style={{ fontSize: 10, fontWeight: 700, color: '#7A92B0', marginBottom: 6 }}>📅 {item.socraticDate}</div>}
+          {renderRubricPreview('debate')}
+        </>)}
+        {caseStudySectionShell('🔢', 'Prove it — OMR Test', CASE_STUDY_RUBRIC.omr.weight, <>
+          {item.omrFormUrl && <div style={{ fontSize: 11, marginBottom: 6 }}><a href={item.omrFormUrl} target="_blank" rel="noreferrer" style={{ color: '#1D4ED8', fontWeight: 700 }}>↗ Open Google Form</a></div>}
+          {renderRubricPreview('omr')}
+        </>)}
+        {caseStudySectionShell('📤', 'Master it — Submit Final Presentation', null, <>
+          {item.presentationBrief && <div style={{ fontSize: 11, color: '#5A7290', marginBottom: 6 }}>{item.presentationBrief}</div>}
           <div style={{ fontSize: 11, color: '#5A7290', marginBottom: 6 }}>Student uploads their presentation file here.</div>
           <div style={{ padding: '9px 12px', borderRadius: 8, border: '2px dashed #BFDBFE', background: '#F7FBFF', fontSize: 11, color: '#94A3B8', textAlign: 'center' }}>+ Choose file (Preview Only)</div>
         </>)}
-        {caseStudySectionShell('🏆', '7. Presentation Score', CASE_STUDY_RUBRIC.presentation.weight, renderRubricPreview('presentation'))}
+        {caseStudySectionShell('🏆', 'Master it — Presentation Score', CASE_STUDY_RUBRIC.presentation.weight, renderRubricPreview('presentation'))}
       </div>
     )
   }

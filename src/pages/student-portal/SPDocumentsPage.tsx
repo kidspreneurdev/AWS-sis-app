@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
+import { REQUIRED_DOCS } from './docHubShared'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 20 }
-const REQUIRED_DOCS = ['Passport', 'Visa', 'Birth Certificate', 'Medical Records', 'Immunization Records', 'Emergency Contact Form', 'Photo ID', 'Previous School Records']
 
 interface StudentDocument { id: string; document_name: string; status: string; uploaded_at: string; notes: string }
 

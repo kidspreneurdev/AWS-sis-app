@@ -90,6 +90,28 @@ export interface StudentRecordDef {
   semester?: 1 | 2 | 3
 }
 
+// View-model shape used by the student/parent portal record list (a trimmed
+// projection of StudentRecord, keyed by recordType rather than row id).
+export interface RecordView {
+  recordType: StudentRecordType
+  source: 'upload' | 'generated'
+  hasFile: boolean
+  fileName: string | null
+  fileSize: number | null
+  uploadedAt: string | null
+  generatedAt: string | null
+  data: Record<string, unknown> | null
+  signedFileUrl: string | null
+  signedFileName: string | null
+  signedStatus: SignedReturnStatus | null
+  signedReviewNote: string | null
+}
+
+export function isRecordAvailable(rec: RecordView | undefined, def: StudentRecordDef): boolean {
+  if (!rec) return false
+  return def.source === 'generated' ? !!rec.data : rec.hasFile
+}
+
 // ─── Diagnostic slots ─────────────────────────────────────────────────────────
 // Semester 1 reuses the original keys; 2 & 3 get a suffix.
 const DIAGNOSTIC_SEMESTERS: { semester: 1 | 2 | 3; math: StudentRecordType; reading: StudentRecordType; ela: StudentRecordType; summary: StudentRecordType }[] = [

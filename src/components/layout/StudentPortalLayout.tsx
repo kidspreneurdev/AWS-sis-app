@@ -1,38 +1,54 @@
-import { Outlet, NavLink, Navigate, useNavigate } from 'react-router-dom'
+import { useState } from 'react'
+import { Outlet, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { toLegacyStudentGradeValue } from '@/types/student'
 import {
   Home, GraduationCap, UserCheck, CalendarRange, ClipboardList, Puzzle,
-  MessageSquare, BookOpen, Rocket, FolderKanban, Target, Brain, HeartPulse,
-  Lightbulb, Globe, FileText, FolderArchive, ListChecks, FileCheck, CalendarDays,
-  Medal, UserCircle, Star, Trophy, Palette, type LucideIcon,
+  BookOpen, FolderArchive, FileCheck, CalendarDays,
+  UserCircle, Star, Trophy, Palette, ChevronRight, type LucideIcon,
 } from 'lucide-react'
 
 type SpNavItem = { id: string; icon: LucideIcon; label: string; to: string }
+type SpNavGroup = { id: string; label: string; items: SpNavItem[]; defaultOpen?: boolean }
 
-const SP_NAV: SpNavItem[] = [
-  { id: 'sp_dash',     icon: Home,          label: 'Dashboard',          to: '/portal/dashboard' },
-  { id: 'sp_grades',   icon: GraduationCap, label: 'My Grades',           to: '/portal/grades' },
-  { id: 'sp_attend',   icon: UserCheck,     label: 'Attendance',          to: '/portal/attendance' },
-  { id: 'sp_timetable',icon: CalendarRange, label: 'My Timetable',         to: '/portal/timetable' },
-  { id: 'sp_assign',   icon: ClipboardList, label: 'Assignments',         to: '/portal/assignments' },
-  { id: 'sp_mhs_quiz', icon: Puzzle,        label: 'My Quizzes',           to: '/portal/mhs-quiz' },
-  { id: 'sp_mhs_disc', icon: MessageSquare, label: 'Share it',             to: '/portal/mhs-discussion' },
-  { id: 'sp_learning', icon: BookOpen,      label: 'My Learning',         to: '/portal/learning' },
-  { id: 'sp_project',  icon: Rocket,        label: 'My Project',          to: '/portal/project' },
-  { id: 'sp_portfolio',icon: FolderKanban,  label: 'Portfolio',           to: '/portal/portfolio' },
-  { id: 'sp_goals',    icon: Target,        label: 'Goals & Reflections', to: '/portal/goals' },
-  { id: 'sp_skills',   icon: Brain,         label: 'Skill Graph',         to: '/portal/skills' },
-  { id: 'sp_wellness', icon: HeartPulse,    label: 'Wellness',            to: '/portal/wellness' },
-  { id: 'sp_lab',      icon: Lightbulb,     label: 'Innovation Lab',      to: '/portal/lab' },
-  { id: 'sp_rwlog',    icon: Globe,         label: 'Real-World Log',      to: '/portal/rwlog' },
-  { id: 'sp_docs',     icon: FileText,      label: 'My Documents',        to: '/portal/documents' },
-  { id: 'sp_records',  icon: FolderArchive, label: 'My Records',           to: '/portal/records' },
-  { id: 'sp_onboard',  icon: ListChecks,    label: 'Onboarding',            to: '/portal/onboarding' },
-  { id: 'sp_policy',   icon: FileCheck,     label: 'Policy Documents',      to: '/portal/policy-documents' },
-  { id: 'sp_calendar', icon: CalendarDays,  label: 'Academic Calendar',     to: '/portal/academic-calendar' },
-  { id: 'sp_badges',   icon: Medal,         label: 'My Badges',           to: '/portal/badges' },
-  { id: 'sp_profile',  icon: UserCircle,    label: 'My Profile',          to: '/portal/profile' },
+// 5 collapsible sections, grouped by how often a student needs them (Today opens by
+// default; School admin — one-time enrollment paperwork — stays collapsed by default).
+const SP_GROUPS: SpNavGroup[] = [
+  {
+    id: 'today', label: 'Today', defaultOpen: true,
+    items: [
+      { id: 'sp_dash',     icon: Home,          label: 'Dashboard',    to: '/portal/dashboard' },
+      { id: 'sp_timetable',icon: CalendarRange, label: 'My Timetable', to: '/portal/timetable' },
+    ],
+  },
+  {
+    id: 'learning', label: 'Learning',
+    items: [
+      { id: 'sp_learning', icon: BookOpen,      label: 'My Learning', to: '/portal/learning' },
+      { id: 'sp_assign',   icon: ClipboardList, label: 'Assignments', to: '/portal/assignments' },
+      { id: 'sp_mhs_quiz', icon: Puzzle,        label: 'My Quizzes',  to: '/portal/mhs-quiz' },
+      // Skill Graph, Share it — temporarily disabled, not yet ready for students.
+    ],
+  },
+  {
+    id: 'progress', label: 'Progress',
+    items: [
+      { id: 'sp_grades',   icon: GraduationCap, label: 'My Grades',  to: '/portal/grades' },
+      { id: 'sp_attend',   icon: UserCheck,     label: 'Attendance', to: '/portal/attendance' },
+      // My Project, Innovation Lab, Portfolio — temporarily disabled, not yet ready for students.
+    ],
+  },
+  // "Me" section (Goals & Reflections, Wellness, Real-World Log, My Badges) — temporarily
+  // disabled in full, not yet ready for students.
+  {
+    id: 'admin', label: 'School admin',
+    items: [
+      { id: 'sp_enrollment_docs', icon: FolderArchive, label: 'Enrollment & Documents', to: '/portal/documents-hub' },
+      { id: 'sp_policy',   icon: FileCheck,     label: 'Policy Documents',  to: '/portal/policy-documents' },
+      { id: 'sp_calendar', icon: CalendarDays,  label: 'Academic Calendar', to: '/portal/academic-calendar' },
+      { id: 'sp_profile',  icon: UserCircle,    label: 'My Profile',        to: '/portal/profile' },
+    ],
+  },
 ]
 
 const K5_NAV: SpNavItem[] = [
@@ -51,6 +67,22 @@ const K5_NAV: SpNavItem[] = [
 export function StudentPortalLayout() {
   const { session, loading, logout } = useStudentPortal()
   const navigate = useNavigate()
+  const location = useLocation()
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => {
+    const initial = new Set(SP_GROUPS.filter((g) => g.defaultOpen).map((g) => g.id))
+    const activeGroup = SP_GROUPS.find((g) => g.items.some((item) => location.pathname === item.to || location.pathname.startsWith(`${item.to}/`)))
+    if (activeGroup) initial.add(activeGroup.id)
+    return initial
+  })
+
+  function toggleGroup(id: string) {
+    setOpenGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   if (loading) {
     return (
@@ -70,9 +102,42 @@ export function StudentPortalLayout() {
     navigate('/portal/login')
   }
 
-  const nav = isK5 ? K5_NAV : SP_NAV
   const sidebarWidth = isK5 ? 185 : 220
   const initials = session.fullName.split(' ').filter(Boolean).map(p => p[0]).join('').slice(0, 2).toUpperCase()
+
+  function renderNavItem(item: SpNavItem) {
+    return (
+      <NavLink key={item.id} to={item.to} style={{ textDecoration: 'none' }}>
+        {({ isActive }) => (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: isK5 ? '11px 14px' : '10px 14px',
+            margin: '2px 8px',
+            borderRadius: isK5 ? 9 : 8,
+            background: isActive
+              ? (isK5 ? 'rgba(214,31,49,.22)' : 'rgba(255,255,255,.12)')
+              : 'transparent',
+            borderLeft: isK5 ? `3px solid ${isActive ? '#D61F31' : 'transparent'}` : 'none',
+            color: isActive ? '#fff' : (isK5 ? 'rgba(255,255,255,.58)' : 'rgba(255,255,255,.7)'),
+            fontSize: 12,
+            fontWeight: isK5 ? 700 : 600,
+            cursor: 'pointer',
+            width: 'calc(100% - 16px)',
+            boxSizing: 'border-box' as const,
+            fontFamily: 'Poppins, sans-serif',
+            transition: 'background 160ms, color 160ms',
+          }}>
+            <span style={{ width: 18, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <item.icon size={isK5 ? 16 : 15} strokeWidth={2} />
+            </span>
+            <span>{item.label}</span>
+          </div>
+        )}
+      </NavLink>
+    )
+  }
 
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -135,37 +200,28 @@ export function StudentPortalLayout() {
 
         {/* Nav */}
         <nav style={{ flex: 1, padding: isK5 ? '8px 0' : '0 0 58px', overflowY: 'auto' }}>
-          {nav.map(item => (
-            <NavLink key={item.id} to={item.to} style={{ textDecoration: 'none' }}>
-              {({ isActive }) => (
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  padding: isK5 ? '11px 14px' : '10px 14px',
-                  margin: '2px 8px',
-                  borderRadius: isK5 ? 9 : 8,
-                  background: isActive
-                    ? (isK5 ? 'rgba(214,31,49,.22)' : 'rgba(255,255,255,.12)')
-                    : 'transparent',
-                  borderLeft: isK5 ? `3px solid ${isActive ? '#D61F31' : 'transparent'}` : 'none',
-                  color: isActive ? '#fff' : (isK5 ? 'rgba(255,255,255,.58)' : 'rgba(255,255,255,.7)'),
-                  fontSize: 12,
-                  fontWeight: isK5 ? 700 : 600,
-                  cursor: 'pointer',
-                  width: 'calc(100% - 16px)',
-                  boxSizing: 'border-box' as const,
-                  fontFamily: 'Poppins, sans-serif',
-                  transition: 'background 160ms, color 160ms',
-                }}>
-                  <span style={{ width: 18, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <item.icon size={isK5 ? 16 : 15} strokeWidth={2} />
-                  </span>
-                  <span>{item.label}</span>
-                </div>
-              )}
-            </NavLink>
-          ))}
+          {isK5 ? (
+            K5_NAV.map((item) => renderNavItem(item))
+          ) : (
+            SP_GROUPS.map((group) => (
+              <div key={group.id}>
+                <button
+                  onClick={() => toggleGroup(group.id)}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    width: 'calc(100% - 16px)', margin: '10px 8px 2px', padding: '4px 6px',
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: 'rgba(255,255,255,.4)', fontSize: 10, fontWeight: 800,
+                    textTransform: 'uppercase', letterSpacing: 1, fontFamily: 'Poppins, sans-serif',
+                  }}
+                >
+                  <span>{group.label}</span>
+                  <ChevronRight size={12} style={{ transform: openGroups.has(group.id) ? 'rotate(90deg)' : 'none', transition: 'transform 150ms' }} />
+                </button>
+                {openGroups.has(group.id) && group.items.map((item) => renderNavItem(item))}
+              </div>
+            ))
+          )}
         </nav>
 
         {/* Sign out */}

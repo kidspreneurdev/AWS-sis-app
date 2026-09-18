@@ -23,6 +23,9 @@ import {
   SIGNED_STATUS_META,
   formatFileSize,
   recordSupportsSignedReturn,
+  isRecordAvailable,
+  type RecordCategory,
+  type RecordView,
   type SignedReturnStatus,
   type StudentRecordDef,
   type StudentRecordType,
@@ -30,21 +33,6 @@ import {
 
 const RECORD_BUCKET = 'student-records'
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 20 }
-
-interface RecordView {
-  recordType: StudentRecordType
-  source: 'upload' | 'generated'
-  hasFile: boolean
-  fileName: string | null
-  fileSize: number | null
-  uploadedAt: string | null
-  generatedAt: string | null
-  data: Record<string, unknown> | null
-  signedFileUrl: string | null
-  signedFileName: string | null
-  signedStatus: SignedReturnStatus | null
-  signedReviewNote: string | null
-}
 
 class AuthedFetchError extends Error {
   status: number
@@ -99,11 +87,6 @@ const GEN_DOC_LABELS: Record<GenDoc['kind'], string> = {
   assessment_instructions: STUDENT_RECORD_LABELS.assessment_instructions,
 }
 
-function isRecordAvailable(rec: RecordView | undefined, def: StudentRecordDef): boolean {
-  if (!rec) return false
-  return def.source === 'generated' ? !!rec.data : rec.hasFile
-}
-
 function GeneratedDocModal({ doc, onClose }: { doc: GenDoc; onClose: () => void }) {
   const docRef = useRef<HTMLDivElement>(null)
   const label = GEN_DOC_LABELS[doc.kind]
@@ -136,7 +119,7 @@ function GeneratedDocModal({ doc, onClose }: { doc: GenDoc; onClose: () => void 
   )
 }
 
-export function SPStudentRecordsPage() {
+export function SPStudentRecordsPage({ categoryFilter }: { categoryFilter?: RecordCategory[] } = {}) {
   const { session, getToken, logout } = useStudentPortal()
   const { readOnly } = usePortalReadOnly()
   const [records, setRecords] = useState<Record<string, RecordView>>({})
@@ -391,12 +374,16 @@ export function SPStudentRecordsPage() {
     )
   }
 
+  const visibleCategories = categoryFilter ? RECORD_CATEGORIES.filter((cat) => categoryFilter.includes(cat.key)) : RECORD_CATEGORIES
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1A365E', margin: 0 }}>My Records</h1>
-        <p style={{ fontSize: 13, color: '#7A92B0', margin: '4px 0 0' }}>Your school documents, grouped by category</p>
-      </div>
+      {!categoryFilter && (
+        <div>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1A365E', margin: 0 }}>My Records</h1>
+          <p style={{ fontSize: 13, color: '#7A92B0', margin: '4px 0 0' }}>Your school documents, grouped by category</p>
+        </div>
+      )}
 
       {error && (
         <div style={{ ...card, background: '#FFF8F8', border: '1px solid #F5C2C7', color: '#991B1B', fontSize: 13 }}>{error}</div>
@@ -407,7 +394,7 @@ export function SPStudentRecordsPage() {
           <div style={{ width: 28, height: 28, borderRadius: '50%', border: '3px solid #E4EAF2', borderTopColor: '#D61F31', animation: 'spin 0.7s linear infinite' }} />
         </div>
       ) : (
-        RECORD_CATEGORIES.map(cat => {
+        visibleCategories.map(cat => {
           const defs = recordDefsForCategory(cat.key)
           const availCount = defs.filter(d => isRecordAvailable(records[d.type], d)).length
 

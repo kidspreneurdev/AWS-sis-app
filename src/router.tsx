@@ -100,10 +100,7 @@ import { SPSkillsPage } from '@/pages/student-portal/SPSkillsPage'
 import { SPWellnessPage } from '@/pages/student-portal/SPWellnessPage'
 import { SPInnovationLabPage } from '@/pages/student-portal/SPInnovationLabPage'
 import { SPRealWorldLogPage } from '@/pages/student-portal/SPRealWorldLogPage'
-import { SPDocumentsPage } from '@/pages/student-portal/SPDocumentsPage'
-import { SPStudentRecordsPage } from '@/pages/student-portal/SPStudentRecordsPage'
-import { SPOnboardingPage } from '@/pages/student-portal/SPOnboardingPage'
-import { SPPolicyDocumentsPage } from '@/pages/student-portal/SPPolicyDocumentsPage'
+import { SPDocumentHubPage } from '@/pages/student-portal/SPDocumentHubPage'
 import { SPAcademicCalendarPage } from '@/pages/student-portal/SPAcademicCalendarPage'
 import { SPBadgesPage } from '@/pages/student-portal/SPBadgesPage'
 import { K5CertificatesPage } from '@/pages/student-portal/K5CertificatesPage'
@@ -146,10 +143,11 @@ export const router = createBrowserRouter([
       { path: '/parent/wellness',    element: <SPWellnessPage /> },
       { path: '/parent/lab',         element: <SPInnovationLabPage /> },
       { path: '/parent/rwlog',       element: <SPRealWorldLogPage /> },
-      { path: '/parent/documents',   element: <SPDocumentsPage /> },
-      { path: '/parent/records',     element: <SPStudentRecordsPage /> },
-      { path: '/parent/onboarding',  element: <SPOnboardingPage /> },
-      { path: '/parent/policy-documents', element: <SPPolicyDocumentsPage /> },
+      { path: '/parent/documents-hub', element: <SPDocumentHubPage /> },
+      { path: '/parent/documents',   element: <Navigate to="/parent/documents-hub?tab=enrollment" replace /> },
+      { path: '/parent/records',     element: <Navigate to="/parent/documents-hub?tab=assessments" replace /> },
+      { path: '/parent/onboarding',  element: <Navigate to="/parent/documents-hub?tab=enrollment" replace /> },
+      { path: '/parent/policy-documents', element: <Navigate to="/parent/documents-hub?tab=policies" replace /> },
       { path: '/parent/academic-calendar', element: <SPAcademicCalendarPage /> },
       { path: '/parent/badges',      element: <SPBadgesPage /> },
       { path: '/parent/messages',    element: <PPCommunicationsPage /> },
@@ -182,10 +180,11 @@ export const router = createBrowserRouter([
       { path: '/portal/wellness', element: <SPWellnessPage /> },
       { path: '/portal/lab', element: <SPInnovationLabPage /> },
       { path: '/portal/rwlog', element: <SPRealWorldLogPage /> },
-      { path: '/portal/documents', element: <SPDocumentsPage /> },
-      { path: '/portal/records', element: <SPStudentRecordsPage /> },
-      { path: '/portal/onboarding', element: <SPOnboardingPage /> },
-      { path: '/portal/policy-documents', element: <SPPolicyDocumentsPage /> },
+      { path: '/portal/documents-hub', element: <SPDocumentHubPage /> },
+      { path: '/portal/documents', element: <Navigate to="/portal/documents-hub?tab=enrollment" replace /> },
+      { path: '/portal/records', element: <Navigate to="/portal/documents-hub?tab=assessments" replace /> },
+      { path: '/portal/onboarding', element: <Navigate to="/portal/documents-hub?tab=enrollment" replace /> },
+      { path: '/portal/policy-documents', element: <Navigate to="/portal/documents-hub?tab=policies" replace /> },
       { path: '/portal/academic-calendar', element: <SPAcademicCalendarPage /> },
       { path: '/portal/badges', element: <SPBadgesPage /> },
       { path: '/portal/k5-certificates', element: <K5CertificatesPage /> },

@@ -9,7 +9,7 @@ import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import {
   card, emptyState, SP_NAVY, SP_RED, SP_GREEN, SP_GOLD, SP_PURPLE, portalPrefix,
-  calcGPA, calcWeightedGPA, gpaColor, estimateCollegeCreditsFromHsCredits,
+  calcGPA, calcWeightedGPA, gpaColor, estimateCollegeCreditsFromHsCredits, creditProgress,
   type CourseRow, type TransferRow, type ECDECreditRow, type SettingsRow,
   type GraduationRequirement, type DistinctionRow,
 } from './gradesShared'
@@ -149,10 +149,11 @@ export function SPGraduationAuditPage() {
 
   const uwGpa = useMemo(() => calcGPA(courses, transfers), [courses, transfers])
   const wGpa = useMemo(() => calcWeightedGPA(courses, transfers), [courses, transfers])
-  const graduationCreditsRequired = settings?.graduation_credits ?? 24
   const associateDegreeCreditsRequired = settings?.associate_degree_credits_required ?? 0
-  const totalEarned = Math.round((creditState.total || 0) * 10) / 10
-  const pctDone = graduationCreditsRequired > 0 ? Math.min(100, Math.round((totalEarned / graduationCreditsRequired) * 100)) : 0
+  const { totalEarned, required: graduationCreditsRequired, pct: pctDone } = useMemo(
+    () => creditProgress(courses, transfers, settings?.graduation_credits ?? null, ecdeCredits),
+    [courses, transfers, settings, ecdeCredits],
+  )
   const allMet = requirements.length > 0
     && requirements.every((req) => (creditState[req.key] || 0) >= req.required_credits)
     && graduationCreditsRequired > 0

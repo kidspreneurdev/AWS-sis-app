@@ -1,31 +1,23 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
 import { useParentPortal } from '@/contexts/ParentPortalContext'
 import { toLegacyStudentGradeValue } from '@/types/student'
-import { calcGPA, calcWeightedGPA, type CourseType, type GpaCourse, type GpaTransfer } from '@/lib/grading/gpa'
 import { K5DashboardPage } from '@/pages/student-portal/K5DashboardPage'
 import {
+  card, SP_NAVY, SP_RED, SP_GREEN, SP_GOLD, SP_PURPLE, portalPrefix,
+  calcGPA, calcWeightedGPA, gpaColor, attendanceRate, creditProgress, isOverdue,
+  type CourseType,
+} from '@/pages/student-portal/gradesShared'
+import {
   ClipboardList, Target, FolderKanban, HeartPulse, Lightbulb, Hand, Users,
-  UserCheck, GraduationCap, BookOpen, CalendarDays, Radio, Book, MapPin, Link2,
+  GraduationCap, CalendarDays, Radio, Book, MapPin, Link2,
   AlertTriangle, FileText, Pencil, Clock, CheckCircle2, Zap, Medal, ArrowRight,
   type LucideIcon,
 } from 'lucide-react'
 
-const card: React.CSSProperties = {
-  background: '#fff',
-  borderRadius: 13,
-  border: '1px solid #E4EAF2',
-  boxShadow: '0 1px 6px rgba(26,54,94,.06)',
-}
-
-const SP_NAVY = '#1A365E'
-const SP_RED = '#D61F31'
-const SP_GREEN = '#1DBD6A'
-const SP_GOLD = '#FAC600'
-const SP_PURPLE = '#A36CFF'
 const emptyState: React.CSSProperties = {
   textAlign: 'center',
   padding: 16,
@@ -44,6 +36,8 @@ const motivations = [
   'Your ideas have the power to change the world.',
 ]
 
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
 interface Assignment {
   id: string
   title: string
@@ -52,8 +46,19 @@ interface Assignment {
   status: string
 }
 
-type CourseRow = GpaCourse
-type TransferRow = GpaTransfer
+interface CourseRow {
+  grade_letter: string | null
+  type: CourseType
+  credits: number
+  credits_earned: number
+}
+
+interface TransferRow {
+  grade_letter: string | null
+  type?: string | null
+  credits: number
+  status: string | null
+}
 
 interface Badge {
   name: string
@@ -66,6 +71,7 @@ interface AttendanceRow {
 
 interface BlockRow {
   id: string
+  name: string
   day: string
   period: string
   time: string
@@ -95,23 +101,6 @@ function getGreeting() {
   return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'
 }
 
-function spCard(label: string, value: string, sub: string, color: string, Icon: LucideIcon) {
-  return (
-    <div key={label} style={{ ...card, padding: '16px 18px' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: 1 }}>{label}</div>
-          <div style={{ fontSize: 26, fontWeight: 900, color, marginTop: 8, lineHeight: 1 }}>{value}</div>
-          <div style={{ fontSize: 11, color: '#7A92B0', marginTop: 6 }}>{sub}</div>
-        </div>
-        <div style={{ width: 38, height: 38, borderRadius: 11, background: `${color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', color }}>
-          <Icon size={18} />
-        </div>
-      </div>
-    </div>
-  )
-}
-
 function parseGradeLevel(value: string) {
   const match = value.match(/\d+/)
   if (!match) return null
@@ -119,8 +108,25 @@ function parseGradeLevel(value: string) {
   return Number.isNaN(n) ? null : n
 }
 
-function todayLabel() {
-  return new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' })
+function ProgressRing({ pct, color, size = 84, strokeWidth = 8, children }: { pct: number | null; color: string; size?: number; strokeWidth?: number; children: React.ReactNode }) {
+  const r = (size - strokeWidth) / 2
+  const circumference = 2 * Math.PI * r
+  const dash = pct !== null ? (circumference * Math.min(100, Math.max(0, pct))) / 100 : 0
+  return (
+    <div style={{ position: 'relative', width: size, height: size }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#E4EAF2" strokeWidth={strokeWidth} />
+        {pct !== null && (
+          <circle
+            cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={strokeWidth}
+            strokeLinecap="round" strokeDasharray={`${dash} ${circumference}`}
+            transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          />
+        )}
+      </svg>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{children}</div>
+    </div>
+  )
 }
 
 export function SPDashboardPage() {
@@ -128,10 +134,13 @@ export function SPDashboardPage() {
   const { readOnly } = usePortalReadOnly()
   const parentPortal = useParentPortal()
   const navigate = useNavigate()
+  const location = useLocation()
+  const prefix = portalPrefix(location.pathname)
 
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [courses, setCourses] = useState<CourseRow[]>([])
   const [transfers, setTransfers] = useState<TransferRow[]>([])
+  const [graduationCredits, setGraduationCredits] = useState<number | null>(null)
   const [badges, setBadges] = useState<Badge[]>([])
   const [attendance, setAttendance] = useState<AttendanceRow[]>([])
   const [blocks, setBlocks] = useState<BlockRow[]>([])
@@ -139,12 +148,9 @@ export function SPDashboardPage() {
   const [coachReport, setCoachReport] = useState<CoachReportRow | null>(null)
   const [blocksError, setBlocksError] = useState<string | null>(null)
 
-  if (!session) return null
-  const gradeNum = toLegacyStudentGradeValue(session.grade)
-  if (!readOnly && gradeNum !== null && gradeNum <= 5) return <K5DashboardPage />
-  const studentSession = session
-
   useEffect(() => {
+    if (!session) return
+    const studentSession = session
     async function load() {
       const [
         subRes,
@@ -156,6 +162,7 @@ export function SPDashboardPage() {
         coachReportRes,
         coursesRes,
         transfersRes,
+        settingsRes,
       ] = await Promise.all([
         supabase.from('at_submissions').select('assignment_id,status').eq('student_id', studentSession.dbId),
         supabase.from('at_assignments').select('id,title,subject,due_date').order('due_date'),
@@ -166,14 +173,15 @@ export function SPDashboardPage() {
           if (studentSession.cohort) orClauses.unshift(`cohort.eq."${studentSession.cohort}"`)
           return supabase
             .from('timetable_blocks')
-            .select('id,day,period,time,subject,cohort,room,session_type,meet_link,student_ids')
+            .select('id,name,day,period,time,subject,cohort,room,session_type,meet_link,student_ids')
             .or(orClauses.join(','))
             .order('created_at', { ascending: true })
         })(),
         supabase.from('at_corrections').select('id,subject,instructions,status,deadline').eq('student_id', studentSession.dbId).order('deadline', { ascending: true }),
         supabase.from('at_reports').select('week,coach_note,generated_at').eq('student_id', studentSession.dbId).order('generated_at', { ascending: false }).limit(1),
-        supabase.from('courses').select('grade_letter,type,credits').eq('student_id', studentSession.dbId),
+        supabase.from('courses').select('grade_letter,type,credits,credits_earned').eq('student_id', studentSession.dbId),
         supabase.from('transfer_credits').select('*').eq('student_id', studentSession.dbId),
+        supabase.from('settings').select('graduation_credits').single(),
       ])
 
       const submissionMap = Object.fromEntries(
@@ -193,6 +201,7 @@ export function SPDashboardPage() {
         grade_letter: (row.grade_letter as string) ?? null,
         type: ((row.type as CourseType) ?? 'STD'),
         credits: Number(row.credits ?? 0),
+        credits_earned: Number(row.credits_earned ?? row.credits ?? 0),
       }))))
       setTransfers((((transfersRes.data as Record<string, unknown>[] | null) ?? []).map((row) => ({
         grade_letter: (row.grade_letter as string) ?? null,
@@ -200,6 +209,8 @@ export function SPDashboardPage() {
         credits: Number(row.credits ?? 0),
         status: (row.status as string) ?? null,
       }))))
+      setGraduationCredits((settingsRes.data as Record<string, unknown> | null)?.graduation_credits != null
+        ? Number((settingsRes.data as Record<string, unknown>).graduation_credits) : null)
       setBadges((((badgesRes.data as Record<string, unknown>[] | null) ?? []).map((row) => ({
         name: (row.name as string) ?? '',
         earned_at: (row.earned_at as string) ?? '',
@@ -210,6 +221,7 @@ export function SPDashboardPage() {
       setBlocksError(blocksRes.error?.message ?? null)
       setBlocks((((blocksRes.data as Record<string, unknown>[] | null) ?? []).map((row) => ({
         id: row.id as string,
+        name: (row.name as string) ?? '',
         day: (row.day as string) ?? '',
         period: (row.period as string) ?? '',
         time: (row.time as string) ?? '',
@@ -236,30 +248,17 @@ export function SPDashboardPage() {
     }
 
     void load()
-  }, [studentSession])
+  }, [session])
 
-  const greeting = getGreeting()
-  const firstName = readOnly
-    ? (parentPortal.session?.parentName.split(' ')[0] ?? 'Parent')
-    : (session?.fullName.split(' ')[0] ?? 'Student')
-  const gradeLevel = parseGradeLevel(session?.grade ?? '')
-  const isHS = gradeLevel !== null && gradeLevel >= 9
-  const hasGpaData = courses.length > 0 || transfers.some((t) => t.status === 'Approved')
-  const gpa = hasGpaData ? calcGPA(courses, transfers) : null
-  const weightedGpa = hasGpaData ? calcWeightedGPA(courses, transfers) : null
-  const attPresent = attendance.filter((row) => row.status === 'Present').length
-  const attRate = attendance.length ? Math.round((attPresent / attendance.length) * 100) : 0
   const todayIso = new Date().toISOString().slice(0, 10)
   const now = new Date()
   const nowMs = now.getTime()
 
   const overdue = useMemo(() => (
     assignments
-      .filter((row) => row.dueDate && row.dueDate < todayIso && row.status !== 'Turned In')
+      .filter((row) => isOverdue(row.dueDate, row.status, todayIso))
       .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
   ), [assignments, todayIso])
-
-  const pending = useMemo(() => assignments.filter((row) => row.status !== 'Turned In'), [assignments])
 
   const upcomingDeadlines = useMemo(() => {
     const weekAhead = new Date()
@@ -267,7 +266,7 @@ export function SPDashboardPage() {
 
     return assignments
       .filter((row) => {
-        if (!row.dueDate || row.status === 'Turned In') return false
+        if (!row.dueDate || row.status === 'Turned In' || isOverdue(row.dueDate, row.status, todayIso)) return false
         const due = new Date(`${row.dueDate}T00:00:00`)
         return due >= new Date(`${todayIso}T00:00:00`) && due <= weekAhead
       })
@@ -279,20 +278,132 @@ export function SPDashboardPage() {
     corrections.filter((row) => row.status === 'Assigned' || row.status === 'In Progress')
   ), [corrections])
 
-  const todayBlocks = useMemo(() => {
-    const day = new Date().toLocaleDateString('en-US', { weekday: 'long' })
-    return blocks
-      .filter((row) => row.day === day)
-      .sort((a, b) => (a.time || '').localeCompare(b.time || ''))
-  }, [blocks])
+  const nextClass = useMemo(() => {
+    for (let offset = 0; offset < 7; offset++) {
+      const d = new Date(now)
+      d.setDate(d.getDate() + offset)
+      const dayName = DAY_NAMES[d.getDay()]
+      const dateIso = d.toISOString().slice(0, 10)
+      const dayBlocks = blocks
+        .filter((b) => b.day === dayName)
+        .map((b) => {
+          const parts = (b.time || '').split('–').map((p) => p.trim())
+          const start = parts[0] ?? ''
+          const end = parts[1] ?? ''
+          const startMs = start ? new Date(`${dateIso}T${start}`).getTime() : null
+          const endMs = end ? new Date(`${dateIso}T${end}`).getTime() : null
+          return { ...b, startMs, endMs }
+        })
+        .filter((b) => b.endMs === null || b.endMs > nowMs)
+        .sort((a, b) => (a.startMs ?? 0) - (b.startMs ?? 0))
+      if (dayBlocks.length) {
+        const first = dayBlocks[0]
+        const isLive = first.startMs !== null && first.endMs !== null && nowMs >= first.startMs && nowMs < first.endMs
+        return { ...first, isToday: offset === 0, isLive }
+      }
+    }
+    return null
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blocks, nowMs])
+
+  const weekStrip = useMemo(() => (
+    Array.from({ length: 7 }).map((_, offset) => {
+      const d = new Date(now)
+      d.setDate(d.getDate() + offset)
+      const dayName = DAY_NAMES[d.getDay()]
+      const count = blocks.filter((b) => b.day === dayName).length
+      return {
+        dateIso: d.toISOString().slice(0, 10),
+        label: d.toLocaleDateString('en-US', { weekday: 'short' }),
+        dayNum: d.getDate(),
+        count,
+        isToday: offset === 0,
+      }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [blocks, nowMs])
 
   const quickActions: { icon: LucideIcon; label: string; to: string; color: string }[] = [
-    { icon: ClipboardList, label: 'Submit Assignment', to: '/portal/assignments', color: SP_RED },
-    { icon: Target, label: 'Update My Goals', to: '/portal/goals', color: SP_NAVY },
-    { icon: FolderKanban, label: 'Add to Portfolio', to: '/portal/portfolio', color: SP_PURPLE },
-    { icon: HeartPulse, label: 'Wellness Check-in', to: '/portal/wellness', color: SP_GREEN },
-    { icon: Lightbulb, label: 'Innovation Lab', to: '/portal/lab', color: SP_GOLD },
+    { icon: ClipboardList, label: 'Submit Assignment', to: `${prefix}/assignments`, color: SP_RED },
+    { icon: Target, label: 'Update My Goals', to: `${prefix}/goals`, color: SP_NAVY },
+    { icon: FolderKanban, label: 'Add to Portfolio', to: `${prefix}/portfolio`, color: SP_PURPLE },
+    { icon: HeartPulse, label: 'Wellness Check-in', to: `${prefix}/wellness`, color: SP_GREEN },
+    { icon: Lightbulb, label: 'Innovation Lab', to: `${prefix}/lab`, color: SP_GOLD },
   ]
+
+  type QueueItem = { id: string; icon: LucideIcon; color: string; bg: string; title: string; detail: string; sortKey: string; cta?: { label: string; to: string } }
+
+  const queueItems = useMemo(() => {
+    const items: QueueItem[] = []
+    overdue.slice(0, 5).forEach((row) => {
+      items.push({
+        id: `ov-${row.id}`, icon: AlertTriangle, color: SP_RED, bg: '#FEE2E2',
+        title: row.title, detail: `${row.subject ? `${row.subject} · ` : ''}Overdue since ${row.dueDate}`,
+        sortKey: row.dueDate || '', cta: { label: 'Submit now', to: `${prefix}/assignments` },
+      })
+    })
+    pendingCorrections.slice(0, 5).forEach((row) => {
+      items.push({
+        id: `co-${row.id}`, icon: Pencil, color: '#D97706', bg: '#FFF7ED',
+        title: row.subject || 'Correction task',
+        detail: row.instructions.slice(0, 80) + (row.instructions.length > 80 ? '…' : ''),
+        sortKey: row.deadline || '9999-12-31', cta: { label: 'View', to: `${prefix}/assignments` },
+      })
+    })
+    if (coachReport?.coach_note) {
+      items.push({
+        id: 'coach', icon: ClipboardList, color: '#059669', bg: '#F0FDF4',
+        title: `Coach report${coachReport.week ? ` · Week of ${coachReport.week}` : ''}`,
+        detail: coachReport.coach_note.slice(0, 120) + (coachReport.coach_note.length > 120 ? '…' : ''),
+        sortKey: '9999-12-32',
+      })
+    }
+    return items.sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+  }, [overdue, pendingCorrections, coachReport, prefix])
+
+  if (!session) return null
+  const gradeNum = toLegacyStudentGradeValue(session.grade)
+  if (!readOnly && gradeNum !== null && gradeNum <= 5) return <K5DashboardPage />
+
+  const greeting = getGreeting()
+  const firstName = readOnly
+    ? (parentPortal.session?.parentName.split(' ')[0] ?? 'Parent')
+    : (session.fullName.split(' ')[0] ?? 'Student')
+  const gradeLevel = parseGradeLevel(session.grade)
+  const isHS = gradeLevel !== null && gradeLevel >= 9
+
+  const hasGradedCourses = courses.some((c) => c.grade_letter && c.grade_letter !== 'IP')
+    || transfers.some((t) => t.status === 'Approved' && t.grade_letter)
+  const uwGpa = hasGradedCourses ? calcGPA(courses, transfers) : null
+  const wGpa = hasGradedCourses ? calcWeightedGPA(courses, transfers) : null
+  const attRate = attendanceRate(attendance)
+  const credit = isHS ? creditProgress(courses, transfers, graduationCredits) : null
+
+  const ringMetrics: { key: string; label: string; pct: number | null; display: string; sub?: string; color: string }[] = [
+    {
+      key: 'attendance', label: 'Attendance', pct: attRate,
+      display: attRate !== null ? `${attRate}%` : '—',
+      color: attRate !== null ? (attRate >= 85 ? SP_GREEN : attRate >= 70 ? SP_GOLD : SP_RED) : '#94A3B8',
+    },
+  ]
+  if (isHS) {
+    ringMetrics.push({
+      key: 'gpa', label: 'GPA', pct: uwGpa !== null ? Math.min(100, Math.round((uwGpa / 4) * 100)) : null,
+      display: uwGpa !== null ? uwGpa.toFixed(2) : '—',
+      sub: wGpa !== null ? `Weighted ${wGpa.toFixed(2)}` : undefined,
+      color: uwGpa !== null ? gpaColor(uwGpa) : '#94A3B8',
+    })
+    if (credit) {
+      ringMetrics.push({
+        key: 'graduation', label: 'Graduation', pct: credit.pct, display: `${credit.pct}%`,
+        color: credit.pct >= 100 ? SP_GREEN : SP_GOLD,
+      })
+      ringMetrics.push({
+        key: 'credits', label: 'Credits', pct: credit.pct, display: `${credit.totalEarned}/${credit.required}`,
+        color: credit.pct >= 100 ? SP_GREEN : SP_GOLD,
+      })
+    }
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -325,185 +436,186 @@ export function SPDashboardPage() {
         </div>
       </div>
 
-      {(() => {
-        const statCards = [
-          spCard('Attendance', `${attRate}%`, 'This term', attRate >= 85 ? SP_GREEN : attRate >= 70 ? SP_GOLD : SP_RED, UserCheck),
-          pending.length > 0
-            ? spCard('Pending', String(pending.length), 'assignments', SP_GOLD, ClipboardList)
-            : null,
-          isHS
-            ? spCard('GPA', gpa !== null ? gpa.toFixed(2) : '—', weightedGpa !== null ? `Weighted: ${weightedGpa.toFixed(2)}` : 'Weighted: —', gpa !== null && gpa >= 3.5 ? SP_GREEN : gpa !== null && gpa >= 2.5 ? SP_GOLD : SP_RED, GraduationCap)
-            : spCard('Term', '2025-26', 'Active', SP_NAVY, BookOpen),
-        ].filter(Boolean)
-        return (
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${statCards.length},1fr)`, gap: 12 }}>
-            {statCards}
-          </div>
-        )
-      })()}
-
-      <div style={{ ...card, padding: '14px 18px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 6 }}><CalendarDays size={13} /> Today's Schedule</div>
-            <div style={{ fontSize: 10, color: '#7A92B0' }}>{todayLabel()}</div>
-          </div>
-          {todayBlocks.length === 0 ? (
-            <div style={emptyState}>
-              {blocksError
-                ? `Couldn't load your timetable: ${blocksError}`
-                : blocks.length === 0
-                  ? (studentSession.cohort
-                      ? `No timetable blocks are assigned to your cohort (${studentSession.cohort}) or to you yet. Ask your coach to add them in Teaching & Planning → Blocks.`
-                      : "You're not assigned to a cohort yet, so no cohort timetable can be shown. Ask your coach to set your cohort.")
-                  : `No classes are scheduled for ${new Date().toLocaleDateString('en-US', { weekday: 'long' })}.`}
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {todayBlocks.map((row) => {
-                const parts = row.time.split('–').map((part) => part.trim())
-                const start = parts[0] ?? ''
-                const end = parts[1] ?? ''
-                const startMs = start ? new Date(`${todayIso}T${start}`).getTime() : 0
-                const endMs = end ? new Date(`${todayIso}T${end}`).getTime() : 0
-                const isNow = startMs && endMs ? nowMs >= startMs && nowMs < endMs : false
-                const isPast = endMs ? nowMs >= endMs : false
-
-                return (
-                  <div key={row.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: isNow ? '#F0FDF4' : isPast ? '#F9FAFB' : '#fff', border: `1px solid ${isNow ? '#059669' : '#E4EAF2'}`, borderRadius: 8, borderLeft: `4px solid ${isNow ? '#059669' : SP_NAVY}` }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#7A92B0', minWidth: 86, flexShrink: 0 }}>{row.time || row.period}</div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: SP_NAVY }}>{row.subject || 'Class'}</div>
-                      <div style={{ fontSize: 10, color: row.sessionType === 'Live Session' ? '#DC2626' : '#7C3AED', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>{row.sessionType === 'Live Session' ? <><Radio size={10} /> Live Session</> : <><Book size={10} /> Self-Paced Mastery</>}</div>
-                      {row.room && <div style={{ fontSize: 10, color: '#7A92B0', display: 'flex', alignItems: 'center', gap: 4 }}><MapPin size={10} /> {row.room}</div>}
-                    </div>
-                    {row.sessionType === 'Live Session' && row.meetLink && !isPast && (
-                      <a href={row.meetLink} target="_blank" rel="noreferrer" style={{ fontSize: 9, fontWeight: 800, background: isNow ? '#059669' : '#E0F2FE', color: isNow ? '#fff' : '#0369A1', padding: '4px 10px', borderRadius: 6, textDecoration: 'none', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Link2 size={10} /> Join</a>
-                    )}
-                    {isNow && <span style={{ fontSize: 9, fontWeight: 800, background: '#DCFCE7', color: '#059669', padding: '2px 8px', borderRadius: 5 }}>NOW</span>}
-                    {isPast && <span style={{ fontSize: 9, color: '#94A3B8' }}>Done</span>}
-                  </div>
-                )
-              })}
-            </div>
-          )}
+      {blocksError && (
+        <div style={{ ...card, padding: '10px 16px', borderLeft: `4px solid ${SP_GOLD}`, fontSize: 11, color: '#7A92B0', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <AlertTriangle size={12} color={SP_GOLD} />
+          We couldn't load your class schedule right now. Try refreshing, or check{' '}
+          <button
+            onClick={() => navigate(`${prefix}/timetable`)}
+            style={{ background: 'none', border: 'none', padding: 0, color: SP_NAVY, fontWeight: 700, cursor: 'pointer', textDecoration: 'underline', fontFamily: 'Poppins,sans-serif' }}
+          >
+            My Timetable
+          </button>{' '}directly.
         </div>
+      )}
 
-      <div style={{ background: overdue.length > 0 ? '#FFF0F1' : '#FFF7F7', borderLeft: `4px solid ${SP_RED}`, borderRadius: 8, padding: '12px 16px' }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: SP_RED, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <AlertTriangle size={12} /> {overdue.length} Overdue Assignment{overdue.length > 1 ? 's' : ''}
-          </div>
-          {overdue.length === 0 ? (
-            <div style={{ ...emptyState, textAlign: 'left', padding: 0, background: 'transparent', border: 'none' }}>
-              No overdue assignments.
+      {/* Zone 1 — Next Class Banner */}
+      {nextClass && (
+        <div style={{ ...card, padding: '16px 20px', borderLeft: `4px solid ${nextClass.isLive ? SP_GREEN : SP_NAVY}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: nextClass.isLive ? '#DCFCE7' : '#EEF2FF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: nextClass.isLive ? SP_GREEN : SP_NAVY, flexShrink: 0 }}>
+              {nextClass.sessionType === 'Live Session' ? <Radio size={20} /> : <Book size={20} />}
             </div>
-          ) : (
-            overdue.slice(0, 3).map((row) => (
-              <div key={row.id} style={{ fontSize: 11, color: '#3D5475', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 4 }}>
-                <FileText size={11} /> {row.title} — Due {row.dueDate || '?'} · {row.subject || ''}
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 800, color: nextClass.isLive ? SP_GREEN : '#7A92B0', textTransform: 'uppercase', letterSpacing: 1 }}>
+                {nextClass.isLive ? 'Live now' : nextClass.isToday ? 'Next class today' : `Next class · ${nextClass.day}`}
               </div>
-            ))
-          )}
-        </div>
-
-      <div style={{ background: '#F0FDF4', borderLeft: '4px solid #059669', borderRadius: 8, padding: '12px 16px' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-            <ClipboardList size={11} /> Latest Coach Report {coachReport?.week ? `· Week of ${coachReport.week}` : ''}
+              <div style={{ fontSize: 15, fontWeight: 800, color: SP_NAVY }}>{nextClass.name || nextClass.subject || 'Class'}</div>
+              <div style={{ fontSize: 11, color: '#7A92B0', display: 'flex', gap: 10, marginTop: 2, flexWrap: 'wrap' }}>
+                <span>{nextClass.time || nextClass.period}</span>
+                {nextClass.room && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><MapPin size={10} /> {nextClass.room}</span>}
+              </div>
+            </div>
           </div>
-          {coachReport?.coach_note ? (
-            <div style={{ fontSize: 12, color: SP_NAVY, lineHeight: 1.6 }}>
-              {coachReport.coach_note.slice(0, 200)}{coachReport.coach_note.length > 200 ? '…' : ''}
-            </div>
-          ) : (
-            <div style={{ ...emptyState, textAlign: 'left', padding: 0, background: 'transparent', border: 'none' }}>
-              No coach report has been shared yet.
-            </div>
-          )}
-        </div>
-
-      <div style={{ background: '#FFF7ED', borderLeft: '4px solid #D97706', borderRadius: 8, padding: '12px 16px' }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#92400E', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Pencil size={12} /> {pendingCorrections.length} Correction Task{pendingCorrections.length > 1 ? 's' : ''} Assigned
-          </div>
-          {pendingCorrections.length === 0 ? (
-            <div style={{ ...emptyState, textAlign: 'left', padding: 0, background: 'transparent', border: 'none' }}>
-              No correction tasks assigned.
-            </div>
-          ) : (
-            <>
-              {pendingCorrections.slice(0, 3).map((row) => (
-                <div key={row.id} style={{ fontSize: 11, color: '#3D5475', marginBottom: 3 }}>
-                  · {row.subject || ''} — {row.instructions.slice(0, 60)}{row.instructions.length > 60 ? '…' : ''}{row.deadline ? ` (due ${row.deadline})` : ''}
-                </div>
-              ))}
-              <button onClick={() => navigate('/portal/assignments')} style={{ marginTop: 6, fontSize: 10, color: '#D97706', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontFamily: 'Poppins,sans-serif', padding: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                View all <ArrowRight size={10} />
-              </button>
-            </>
-          )}
-        </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-        <div style={{ ...card, padding: 18 }}>
-          <div style={{ fontSize: 12, fontWeight: 800, color: SP_NAVY, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}><Clock size={12} /> Upcoming Deadlines</div>
-          {upcomingDeadlines.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 16, color: '#7A92B0', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><CheckCircle2 size={12} /> No assignments due in the next 7 days</div>
-          ) : (
-            upcomingDeadlines.map((row) => {
-              const due = new Date(`${row.dueDate}T00:00:00`)
-              const daysLeft = Math.ceil((due.getTime() - new Date(`${todayIso}T00:00:00`).getTime()) / 86400000)
-              const color = daysLeft <= 1 ? SP_RED : daysLeft <= 3 ? SP_GOLD : SP_NAVY
-              return (
-                <div key={row.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid #F0F4FA' }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 8, background: `${color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', color }}><FileText size={14} /></div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: SP_NAVY }}>{row.title}</div>
-                    <div style={{ fontSize: 10, color: '#7A92B0' }}>{row.subject || ''}</div>
-                  </div>
-                  <div style={{ fontSize: 10, fontWeight: 800, color }}>
-                    {daysLeft === 0 ? 'Today' : daysLeft === 1 ? 'Tomorrow' : `${daysLeft}d`}
-                  </div>
-                </div>
-              )
-            })
-          )}
-        </div>
-
-        <div style={{ ...card, padding: 18 }}>
-          <div style={{ fontSize: 12, fontWeight: 800, color: SP_NAVY, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}><Zap size={12} /> Quick Actions</div>
-          {quickActions.map((action) => (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {nextClass.sessionType === 'Live Session' && nextClass.meetLink && (
+              <a
+                href={nextClass.meetLink} target="_blank" rel="noreferrer"
+                style={{ fontSize: 11, fontWeight: 800, background: nextClass.isLive ? SP_GREEN : '#E0F2FE', color: nextClass.isLive ? '#fff' : '#0369A1', padding: '8px 16px', borderRadius: 8, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                <Link2 size={12} /> Join
+              </a>
+            )}
             <button
-              key={action.label}
-              onClick={() => navigate(action.to)}
-              style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 10px', marginBottom: 6, background: `${action.color}10`, border: `1.5px solid ${action.color}25`, borderRadius: 9, cursor: 'pointer', fontFamily: 'Poppins,sans-serif' }}
+              onClick={() => navigate(`${prefix}/timetable`)}
+              style={{ fontSize: 11, color: '#7A92B0', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Poppins,sans-serif', display: 'inline-flex', alignItems: 'center', gap: 4 }}
             >
-              <span style={{ display: 'inline-flex', color: action.color }}><action.icon size={16} /></span>
-              <span style={{ fontSize: 12, fontWeight: 600, color: SP_NAVY }}>{action.label}</span>
-              <span style={{ marginLeft: 'auto', color: '#7A92B0', display: 'inline-flex' }}><ArrowRight size={12} /></span>
+              Full timetable <ArrowRight size={11} />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Zone 2 — Progress Rings */}
+      <div style={{ ...card, padding: 18 }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 6 }}><GraduationCap size={13} /> Progress</div>
+        <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap' }}>
+          {ringMetrics.map((m) => (
+            <div key={m.key} style={{ textAlign: 'center', minWidth: 84 }}>
+              <ProgressRing pct={m.pct} color={m.color}>
+                <span title={m.pct === null ? 'Not yet calculated' : undefined} style={{ fontSize: 13, fontWeight: 900, color: m.pct === null ? '#94A3B8' : m.color }}>{m.display}</span>
+              </ProgressRing>
+              <div style={{ fontSize: 11, fontWeight: 700, color: SP_NAVY, marginTop: 8 }}>{m.label}</div>
+              {m.sub && <div style={{ fontSize: 9, color: '#7A92B0', marginTop: 1 }}>{m.sub}</div>}
+            </div>
           ))}
         </div>
       </div>
 
-      <div style={{ ...card, padding: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 6 }}><Medal size={12} /> My Badges</div>
-            <button onClick={() => navigate('/portal/badges')} style={{ fontSize: 11, color: SP_RED, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Poppins,sans-serif', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-              View all <ArrowRight size={11} />
+      {/* Zone 3 — Action Queue */}
+      {queueItems.length > 0 && (
+        <div style={{ ...card, padding: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}><Zap size={13} /> Needs Your Attention</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {queueItems.map((item) => (
+              <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: item.bg, borderRadius: 9 }}>
+                <div style={{ color: item.color, flexShrink: 0 }}><item.icon size={16} /></div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: SP_NAVY }}>{item.title}</div>
+                  <div style={{ fontSize: 11, color: '#7A92B0' }}>{item.detail}</div>
+                </div>
+                {item.cta && (
+                  <button
+                    onClick={() => navigate(item.cta!.to)}
+                    style={{ fontSize: 11, fontWeight: 800, color: item.color, background: '#fff', border: `1.5px solid ${item.color}40`, borderRadius: 7, padding: '6px 12px', cursor: 'pointer', fontFamily: 'Poppins,sans-serif', flexShrink: 0, whiteSpace: 'nowrap' }}
+                  >
+                    {item.cta.label}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Zone 4 — This Week */}
+      <div style={{ ...card, padding: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 6 }}><CalendarDays size={13} /> This Week</div>
+          <button
+            onClick={() => navigate(`${prefix}/timetable`)}
+            style={{ fontSize: 11, color: '#7A92B0', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Poppins,sans-serif', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+          >
+            Full timetable <ArrowRight size={10} />
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+          {weekStrip.map((d) => (
+            <div key={d.dateIso} style={{ flex: 1, textAlign: 'center', padding: '8px 4px', borderRadius: 8, background: d.isToday ? SP_NAVY : '#F7F9FC', border: `1px solid ${d.isToday ? SP_NAVY : '#E4EAF2'}` }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: d.isToday ? 'rgba(255,255,255,.7)' : '#94A3B8', textTransform: 'uppercase' }}>{d.label}</div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: d.isToday ? '#fff' : SP_NAVY, marginTop: 2 }}>{d.dayNum}</div>
+              {d.count > 0 && <div style={{ fontSize: 8, fontWeight: 700, color: d.isToday ? SP_GOLD : SP_NAVY, marginTop: 2 }}>{d.count} class{d.count !== 1 ? 'es' : ''}</div>}
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 800, color: SP_NAVY, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 5 }}><Clock size={11} /> Upcoming Deadlines</div>
+            {upcomingDeadlines.length === 0 ? (
+              <div style={{ ...emptyState, padding: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}><CheckCircle2 size={11} /> Nothing due in the next 7 days</div>
+            ) : (
+              upcomingDeadlines.map((row) => {
+                const due = new Date(`${row.dueDate}T00:00:00`)
+                const daysLeft = Math.ceil((due.getTime() - new Date(`${todayIso}T00:00:00`).getTime()) / 86400000)
+                const color = daysLeft <= 1 ? SP_RED : daysLeft <= 3 ? SP_GOLD : SP_NAVY
+                return (
+                  <div key={row.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid #F0F4FA' }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 8, background: `${color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', color, flexShrink: 0 }}><FileText size={13} /></div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: SP_NAVY }}>{row.title}</div>
+                      <div style={{ fontSize: 10, color: '#7A92B0' }}>{row.subject || ''}</div>
+                    </div>
+                    <div style={{ fontSize: 10, fontWeight: 800, color, flexShrink: 0 }}>
+                      {daysLeft === 0 ? 'Today' : daysLeft === 1 ? 'Tomorrow' : `${daysLeft}d`}
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 800, color: SP_NAVY, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 5 }}><Zap size={11} /> Quick Actions</div>
+            {quickActions.map((action) => (
+              <button
+                key={action.label}
+                onClick={() => navigate(action.to)}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '7px 10px', marginBottom: 6, background: `${action.color}10`, border: `1.5px solid ${action.color}25`, borderRadius: 9, cursor: 'pointer', fontFamily: 'Poppins,sans-serif' }}
+              >
+                <span style={{ display: 'inline-flex', color: action.color }}><action.icon size={14} /></span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: SP_NAVY }}>{action.label}</span>
+                <span style={{ marginLeft: 'auto', color: '#7A92B0', display: 'inline-flex' }}><ArrowRight size={11} /></span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid #F0F4F8' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 5 }}><Medal size={11} /> My Badges</div>
+            <button
+              onClick={() => navigate(`${prefix}/badges`)}
+              style={{ fontSize: 10, color: SP_RED, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Poppins,sans-serif', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+            >
+              View all <ArrowRight size={9} />
             </button>
           </div>
           {badges.length === 0 ? (
-            <div style={emptyState}>No badges earned yet.</div>
+            <div style={{ fontSize: 11, color: '#94A3B8' }}>No badges earned yet.</div>
           ) : (
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              {badges.slice(0, 4).map((badge) => (
-                <div key={`${badge.name}-${badge.earned_at}`} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: '#F7F9FC', borderRadius: 20, border: '1px solid #E4EAF2' }}>
-                  <Medal size={18} color={SP_GOLD} />
-                  <span style={{ fontSize: 11, fontWeight: 700, color: SP_NAVY }}>{badge.name}</span>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {badges.slice(0, 6).map((badge) => (
+                <div key={`${badge.name}-${badge.earned_at}`} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', background: '#F7F9FC', borderRadius: 16, border: '1px solid #E4EAF2' }}>
+                  <Medal size={14} color={SP_GOLD} />
+                  <span style={{ fontSize: 10, fontWeight: 700, color: SP_NAVY }}>{badge.name}</span>
                 </div>
               ))}
             </div>
           )}
         </div>
+      </div>
     </div>
   )
 }

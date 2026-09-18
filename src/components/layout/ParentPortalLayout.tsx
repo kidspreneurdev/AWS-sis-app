@@ -1,36 +1,78 @@
-import { Outlet, NavLink, Navigate, useNavigate } from 'react-router-dom'
+import { useState } from 'react'
+import { Outlet, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useParentPortal } from '@/contexts/ParentPortalContext'
 import { StudentPortalContext } from '@/contexts/StudentPortalContext'
 import { PortalReadOnlyContext } from '@/contexts/PortalReadOnlyContext'
+import {
+  Home, GraduationCap, UserCheck, CalendarRange, ClipboardList,
+  BookOpen, FolderArchive, FileCheck, CalendarDays,
+  UserCircle, MessageCircle, Inbox, ChevronRight, type LucideIcon,
+} from 'lucide-react'
 
-const PP_NAV = [
-  { id: 'pp_dash',     icon: '🏠', label: 'Dashboard',         to: '/parent/dashboard' },
-  { id: 'pp_grades',   icon: '📊', label: 'Grades',             to: '/parent/grades' },
-  { id: 'pp_attend',   icon: '📅', label: 'Attendance',         to: '/parent/attendance' },
-  { id: 'pp_timetable',icon: '🗓️', label: 'Timetable',           to: '/parent/timetable' },
-  { id: 'pp_assign',   icon: '📝', label: 'Assignments',        to: '/parent/assignments' },
-  { id: 'pp_learning', icon: '📚', label: 'Learning',           to: '/parent/learning' },
-  { id: 'pp_project',  icon: '🚀', label: 'Project',            to: '/parent/project' },
-  { id: 'pp_portfolio',icon: '🗂️', label: 'Portfolio',         to: '/parent/portfolio' },
-  { id: 'pp_goals',    icon: '🎯', label: 'Goals',              to: '/parent/goals' },
-  { id: 'pp_skills',   icon: '🧠', label: 'Skills',             to: '/parent/skills' },
-  { id: 'pp_wellness', icon: '💚', label: 'Wellness',           to: '/parent/wellness' },
-  { id: 'pp_lab',      icon: '💡', label: 'Innovation Lab',     to: '/parent/lab' },
-  { id: 'pp_rwlog',    icon: '🌍', label: 'Real-World Log',     to: '/parent/rwlog' },
-  { id: 'pp_docs',     icon: '📄', label: 'Documents',          to: '/parent/documents' },
-  { id: 'pp_records',  icon: '📁', label: 'Records',            to: '/parent/records' },
-  { id: 'pp_onboard',  icon: '✅', label: 'Onboarding',         to: '/parent/onboarding' },
-  { id: 'pp_policy',   icon: '📜', label: 'Policy Documents',   to: '/parent/policy-documents' },
-  { id: 'pp_calendar', icon: '📆', label: 'Academic Calendar',  to: '/parent/academic-calendar' },
-  { id: 'pp_badges',   icon: '🏅', label: 'Badges',             to: '/parent/badges' },
-  { id: 'pp_msgs',     icon: '💬', label: 'Messages',           to: '/parent/messages' },
-  { id: 'pp_requests', icon: '📬', label: 'Requests',           to: '/parent/requests' },
-  { id: 'pp_profile',  icon: '👤', label: 'Profile',            to: '/parent/profile' },
+type PpNavItem = { id: string; icon: LucideIcon; label: string; to: string }
+type PpNavGroup = { id: string; label: string; items: PpNavItem[]; defaultOpen?: boolean }
+
+// Mirrors StudentPortalLayout's 5 sections and icon choices for the routes both
+// portals share; Messages/Requests have no student-portal equivalent and fold
+// into School admin to keep exactly 5 groups.
+const PP_GROUPS: PpNavGroup[] = [
+  {
+    id: 'today', label: 'Today', defaultOpen: true,
+    items: [
+      { id: 'pp_dash',      icon: Home,          label: 'Dashboard', to: '/parent/dashboard' },
+      { id: 'pp_timetable', icon: CalendarRange, label: 'Timetable', to: '/parent/timetable' },
+    ],
+  },
+  {
+    id: 'learning', label: 'Learning',
+    items: [
+      { id: 'pp_learning', icon: BookOpen,      label: 'Learning',    to: '/parent/learning' },
+      { id: 'pp_assign',   icon: ClipboardList, label: 'Assignments', to: '/parent/assignments' },
+      // Skills — temporarily disabled, not yet ready for students.
+    ],
+  },
+  {
+    id: 'progress', label: 'Progress',
+    items: [
+      { id: 'pp_grades',   icon: GraduationCap, label: 'Grades',     to: '/parent/grades' },
+      { id: 'pp_attend',   icon: UserCheck,     label: 'Attendance', to: '/parent/attendance' },
+      // Project, Innovation Lab, Portfolio — temporarily disabled, not yet ready for students.
+    ],
+  },
+  // "Me" section (Goals, Wellness, Real-World Log, Badges) — temporarily disabled
+  // in full, not yet ready for students.
+  {
+    id: 'admin', label: 'School admin',
+    items: [
+      { id: 'pp_enrollment_docs', icon: FolderArchive, label: 'Enrollment & Documents', to: '/parent/documents-hub' },
+      { id: 'pp_policy',   icon: FileCheck,     label: 'Policy Documents',  to: '/parent/policy-documents' },
+      { id: 'pp_calendar', icon: CalendarDays,  label: 'Academic Calendar', to: '/parent/academic-calendar' },
+      { id: 'pp_profile',  icon: UserCircle,    label: 'Profile',           to: '/parent/profile' },
+      { id: 'pp_msgs',     icon: MessageCircle, label: 'Messages',          to: '/parent/messages' },
+      { id: 'pp_requests', icon: Inbox,         label: 'Requests',          to: '/parent/requests' },
+    ],
+  },
 ]
 
 export function ParentPortalLayout() {
   const { session, loading, activeChild, setActiveChildIndex, logout } = useParentPortal()
   const navigate = useNavigate()
+  const location = useLocation()
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => {
+    const initial = new Set(PP_GROUPS.filter((g) => g.defaultOpen).map((g) => g.id))
+    const activeGroup = PP_GROUPS.find((g) => g.items.some((item) => location.pathname === item.to || location.pathname.startsWith(`${item.to}/`)))
+    if (activeGroup) initial.add(activeGroup.id)
+    return initial
+  })
+
+  function toggleGroup(id: string) {
+    setOpenGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   if (loading) {
     return (
@@ -134,24 +176,43 @@ export function ParentPortalLayout() {
 
             {/* Nav */}
             <nav style={{ flex: 1, padding: '4px 0 58px', overflowY: 'auto' }}>
-              {PP_NAV.map(item => (
-                <NavLink key={item.id} to={item.to}>
-                  {({ isActive }) => (
-                    <div style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '9px 14px', margin: '1px 8px', borderRadius: 8,
-                      background: isActive ? 'rgba(255,255,255,.15)' : 'transparent',
-                      color: isActive ? '#fff' : 'rgba(255,255,255,.65)',
-                      fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                      width: 'calc(100% - 16px)', boxSizing: 'border-box',
-                      fontFamily: 'Poppins, sans-serif',
-                      transition: 'background 160ms, color 160ms',
-                    }}>
-                      <span style={{ fontSize: 14, lineHeight: 1, width: 18, textAlign: 'center', flexShrink: 0 }}>{item.icon}</span>
-                      <span>{item.label}</span>
-                    </div>
-                  )}
-                </NavLink>
+              {PP_GROUPS.map((group) => (
+                <div key={group.id}>
+                  <button
+                    onClick={() => toggleGroup(group.id)}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      width: 'calc(100% - 16px)', margin: '10px 8px 2px', padding: '4px 6px',
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      color: 'rgba(255,255,255,.45)', fontSize: 10, fontWeight: 800,
+                      textTransform: 'uppercase', letterSpacing: 1, fontFamily: 'Poppins, sans-serif',
+                    }}
+                  >
+                    <span>{group.label}</span>
+                    <ChevronRight size={12} style={{ transform: openGroups.has(group.id) ? 'rotate(90deg)' : 'none', transition: 'transform 150ms' }} />
+                  </button>
+                  {openGroups.has(group.id) && group.items.map((item) => (
+                    <NavLink key={item.id} to={item.to}>
+                      {({ isActive }) => (
+                        <div style={{
+                          display: 'flex', alignItems: 'center', gap: 10,
+                          padding: '9px 14px', margin: '1px 8px', borderRadius: 8,
+                          background: isActive ? 'rgba(255,255,255,.15)' : 'transparent',
+                          color: isActive ? '#fff' : 'rgba(255,255,255,.65)',
+                          fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                          width: 'calc(100% - 16px)', boxSizing: 'border-box',
+                          fontFamily: 'Poppins, sans-serif',
+                          transition: 'background 160ms, color 160ms',
+                        }}>
+                          <span style={{ width: 18, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <item.icon size={15} strokeWidth={2} />
+                          </span>
+                          <span>{item.label}</span>
+                        </div>
+                      )}
+                    </NavLink>
+                  ))}
+                </div>
               ))}
             </nav>
 

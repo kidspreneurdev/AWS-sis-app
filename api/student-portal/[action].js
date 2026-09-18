@@ -838,7 +838,13 @@ async function lmsGetCaseStudy(req, res, adminClient) {
       socraticBrief: extra.socraticBrief ?? null,
       presentationBrief: extra.presentationBrief ?? null,
     },
-    scores: scRes.data ?? [],
+    scores: (scRes.data ?? []).map((s) => ({
+      componentType: s.component_type,
+      criteriaScores: s.criteria_scores ?? {},
+      subtotal: s.subtotal,
+      feedback: s.feedback,
+      status: s.status,
+    })),
     notes: notesRow ? { note: notesRow.note, linkUrl: notesRow.link_url, submittedAt: notesRow.submitted_at } : null,
     discussion: {
       myStudentId: studentDbId,

@@ -161,7 +161,20 @@ export function weightedPoints(letter: string | null, type: CourseType) {
   return Math.round((base + TYPE_WEIGHT[type]) * 100) / 100
 }
 
-export function calcGPA(courses: CourseRow[], transfers: TransferRow[] = []) {
+export interface GpaCourseInput {
+  grade_letter: string | null
+  type: CourseType
+  credits: number
+}
+
+export interface GpaTransferInput {
+  grade_letter: string | null
+  type?: string | null
+  credits: number
+  status: string | null
+}
+
+export function calcGPA(courses: GpaCourseInput[], transfers: GpaTransferInput[] = []) {
   let credits = 0
   let points = 0
   courses.forEach((course) => {
@@ -180,7 +193,7 @@ export function calcGPA(courses: CourseRow[], transfers: TransferRow[] = []) {
   return credits ? Math.round((points / credits) * 100) / 100 : 0
 }
 
-export function calcWeightedGPA(courses: CourseRow[], transfers: TransferRow[] = []) {
+export function calcWeightedGPA(courses: GpaCourseInput[], transfers: GpaTransferInput[] = []) {
   let credits = 0
   let points = 0
   courses.forEach((course) => {
@@ -240,4 +253,45 @@ export function estimateCollegeCreditsFromHsCredits(hsCredits: number) {
 
 export function portalPrefix(pathname: string) {
   return pathname.startsWith('/parent') ? '/parent' : '/portal'
+}
+
+export function isOverdue(dueDate: string, rawStatus: string, todayIso: string): boolean {
+  return Boolean(dueDate && dueDate < todayIso && !['Turned In', 'Late', 'Resubmitted'].includes(rawStatus))
+}
+
+export interface CreditEarningCourse {
+  grade_letter: string | null
+  credits_earned: number
+}
+
+export interface CreditEarningTransfer {
+  credits: number
+  status: string | null
+}
+
+export interface CreditEarningECDE {
+  hs_credits: number
+}
+
+export function creditProgress(
+  courses: CreditEarningCourse[],
+  transfers: CreditEarningTransfer[],
+  graduationCredits: number | null,
+  ecdeCredits: CreditEarningECDE[] = [],
+): { totalEarned: number; required: number; pct: number } {
+  let total = 0
+  courses.forEach((course) => {
+    if (course.grade_letter === 'F' || !course.grade_letter || course.grade_letter === 'IP') return
+    total += course.credits_earned || 0
+  })
+  transfers.forEach((transfer) => {
+    if (transfer.status !== 'Approved') return
+    total += transfer.credits || 0
+  })
+  ecdeCredits.forEach((credit) => { total += credit.hs_credits || 0 })
+
+  const required = graduationCredits ?? 24
+  const totalEarned = Math.round(total * 10) / 10
+  const pct = required > 0 ? Math.min(100, Math.round((totalEarned / required) * 100)) : 0
+  return { totalEarned, required, pct }
 }

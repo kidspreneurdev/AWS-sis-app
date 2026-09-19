@@ -1056,6 +1056,100 @@ async function lmsGetMySubmissions(req, res, adminClient) {
   })
 }
 
+// Default OMR category weight, mirrored from CASE_STUDY_RUBRIC.omr.weight in
+// src/lib/lms/caseStudyRubric.ts (this file can't import from src/).
+const DEFAULT_OMR_WEIGHT = 25
+
+/** Prove It — OMR Test: an in-app MCQ quiz, auto-graded on submit like a lesson's
+ *  Mastery Test — but the result is written to lms_score_components (component_type
+ *  'omr') instead of lms_progress, since it's one of the case study's rubric categories
+ *  and needs to feed finalGrade the same way Notes/Debate/Presentation do. */
+async function lmsSubmitOmrQuiz(req, res, adminClient) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST')
+    return json(res, 405, { error: 'Method not allowed' })
+  }
+
+  const studentDbId = requireStudentToken(req, res, json)
+  if (!studentDbId) return
+
+  const { contentId, answers } = req.body || {}
+  if (typeof contentId !== 'string' || !contentId) return json(res, 400, { error: 'contentId is required.' })
+  if (!answers || typeof answers !== 'object') return json(res, 400, { error: 'answers is required.' })
+
+  const { data: content, error: contentError } = await adminClient
+    .from('lms_content')
+    .select('id,course_id,extra')
+    .eq('id', contentId)
+    .single()
+  if (contentError || !content) return json(res, 404, { error: 'OMR test not found.' })
+
+  const extra = content.extra || {}
+  let questions = []
+  try { questions = JSON.parse(extra.omrQuizJson || '[]') } catch { questions = [] }
+  if (!questions.length) return json(res, 400, { error: 'No OMR questions have been configured yet.' })
+
+  const passMark = Number(extra.omrPassMark ?? 80)
+  const maxAttempts = Number(extra.omrRetakes ?? 3)
+  const weight = Number(extra.omrWeight ?? DEFAULT_OMR_WEIGHT)
+
+  const { data: existing, error: existingError } = await adminClient
+    .from('lms_score_components')
+    .select('id,criteria_scores,subtotal')
+    .eq('content_id', contentId)
+    .eq('student_id', studentDbId)
+    .eq('component_type', 'omr')
+    .maybeSingle()
+  if (existingError) return json(res, 500, { error: existingError.message })
+
+  const prevAttempts = Number(existing?.criteria_scores?.attempts ?? 0)
+  if (prevAttempts >= maxAttempts) {
+    return json(res, 409, { error: 'No attempts remaining.' })
+  }
+
+  let correct = 0
+  questions.forEach((q, qi) => {
+    if (answers[qi] === q.ans) correct++
+  })
+  const total = questions.length
+  const pct = total > 0 ? Math.round((correct / total) * 100) : 0
+  const passed = pct >= passMark
+  const subtotal = Math.round((pct / 100) * weight)
+  const bestSubtotal = Math.max(Number(existing?.subtotal ?? 0), subtotal)
+  const attempts = prevAttempts + 1
+
+  const payload = {
+    content_id: contentId,
+    student_id: studentDbId,
+    component_type: 'omr',
+    criteria_scores: { correct, total, attempts, passed: passed ? 1 : 0 },
+    subtotal: bestSubtotal,
+    status: 'scored',
+    scored_at: new Date().toISOString(),
+  }
+  if (existing?.id) payload.id = existing.id
+  const { error: upsertError } = await adminClient
+    .from('lms_score_components')
+    .upsert(payload, { onConflict: 'content_id,student_id,component_type' })
+  if (upsertError) return json(res, 500, { error: upsertError.message })
+
+  try {
+    await adminClient.from('lms_submissions').insert({
+      student_id: studentDbId,
+      course_id: content.course_id,
+      content_id: contentId,
+      kind: 'omr_quiz',
+      note: JSON.stringify({ score: pct, correct, total, passed, attempt: attempts, answers }),
+      link_url: null,
+      submitted_at: new Date().toISOString(),
+    })
+  } catch {
+    // Best-effort audit snapshot — don't fail the request if lms_submissions insert fails.
+  }
+
+  return json(res, 200, { score: pct, correct, total, passed, attempts, maxAttempts, subtotal: bestSubtotal, weight })
+}
+
 async function listMyRecords(req, res, adminClient) {
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET')
@@ -1306,6 +1400,7 @@ const ACTIONS = {
   'lms-file-appeal': lmsFileAppeal,
   'lms-submit-notes': lmsSubmitNotes,
   'lms-get-my-submissions': lmsGetMySubmissions,
+  'lms-submit-omr-quiz': lmsSubmitOmrQuiz,
 }
 
 export default async function handler(req, res) {

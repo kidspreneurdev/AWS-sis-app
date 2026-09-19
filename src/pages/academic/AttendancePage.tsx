@@ -54,6 +54,16 @@ function fullName(s: Stu) {
   return `${s.first_name} ${s.last_name}`
 }
 
+function tokenize(q: string): string[] {
+  return q.toLowerCase().split(/\s+/).filter(Boolean)
+}
+
+function matchesSearch(s: Stu, toks: string[]): boolean {
+  if (toks.length === 0) return true
+  const hay = `${fullName(s)} ${s.grade ?? ''} ${s.cohort ?? ''}`.toLowerCase()
+  return toks.every(t => hay.includes(t))
+}
+
 function rate30(records: AttendanceRecord[], studentId: string, upToDate: string): number | null {
   const cutoff = toISODate(new Date(new Date(upToDate).getTime() - 30 * 24 * 60 * 60 * 1000))
   const recs = records.filter(r => r.student_id === studentId && r.date >= cutoff && r.date <= upToDate)
@@ -142,6 +152,7 @@ export function AttendancePage() {
   const [cohortDate, setCohortDate] = useState(todayStr())
   const [selectedCohort, setSelectedCohort] = useState<string>('')
   const [selectedGrade, setSelectedGrade] = useState<string>('')
+  const [searchQuery, setSearchQuery] = useState('')
   const [notes, setNotes] = useState<Record<string, string>>({})
 
   useEffect(() => {
@@ -189,10 +200,10 @@ export function AttendancePage() {
     })
   }, [students])
 
-  const filteredStudents = useMemo(
-    () => selectedGrade ? students.filter(s => s.grade === selectedGrade) : students,
-    [students, selectedGrade]
-  )
+  const filteredStudents = useMemo(() => {
+    const toks = tokenize(searchQuery)
+    return students.filter(s => (!selectedGrade || s.grade === selectedGrade) && matchesSearch(s, toks))
+  }, [students, selectedGrade, searchQuery])
 
   useEffect(() => {
     if (!selectedCohort && cohorts.length > 0) setSelectedCohort(cohorts[0])
@@ -297,6 +308,16 @@ export function AttendancePage() {
           <p style={{ fontSize: 13, color: '#7A92B0', margin: '4px 0 0' }}>Track daily student attendance</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search students…"
+            style={{
+              padding: '6px 10px', borderRadius: 8, border: '1px solid #E4EAF2',
+              fontSize: 13, color: '#1A365E', background: '#fff', width: 200,
+            }}
+          />
           <span style={{ fontSize: 12, fontWeight: 600, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Grade</span>
           <select
             value={selectedGrade}

@@ -5,6 +5,7 @@ import { downloadUrl } from '@/lib/uploadFile'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
 import { useCohorts } from '@/hooks/useCohorts'
 import { RubricBuilder, rubricParse, rubricMaxPoints, rubricComputeScore, rubricScale, type Rubric } from '@/components/shared/RubricBuilder'
+import { StudentMultiCombobox } from '@/components/shared/StudentMultiCombobox'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 20 }
 
@@ -36,7 +37,7 @@ const EMPTY_FORM = {
   title: '', type: 'Homework', subject: 'Mathematics', division: 'All', cohort: '',
   gradingScale: 'Points', maxScore: '',
   dateAssigned: new Date().toISOString().slice(0, 10), dueDate: '', dueTime: '',
-  instructions: '', rubric: '',
+  instructions: '', rubric: '', studentIds: [] as string[],
 }
 
 // ── RubricScoringModal ────────────────────────────────────────────────────────
@@ -113,15 +114,16 @@ function RubricScoringModal({ rubric, assignMax, studentName, existingScores, on
 interface Assignment {
   id: string; title: string; type: string; subject: string; division: string; cohort: string
   gradingScale: string; maxScore: number | null; dateAssigned: string; dueDate: string; dueTime: string
-  instructions: string; rubric: string
+  instructions: string; rubric: string; studentIds: string[]
 }
 interface Submission { id: string; assignment_id: string; student_id: string; status: string; score: number | null; teacher_note: string; file_url: string; link_url: string; student_note: string; submitted_date: string }
 interface Student { id: string; fullName: string; grade: string }
 
 // ── AssignModal ───────────────────────────────────────────────────────────────
-function AssignModal({ item, cohorts, onClose, onSave }: {
+function AssignModal({ item, cohorts, students, onClose, onSave }: {
   item: Assignment | null
   cohorts: string[]
+  students: Student[]
   onClose: () => void
   onSave: (f: typeof EMPTY_FORM, id?: string) => Promise<void>
 }) {
@@ -130,10 +132,11 @@ function AssignModal({ item, cohorts, onClose, onSave }: {
     cohort: item.cohort ?? '', gradingScale: item.gradingScale ?? 'Points',
     maxScore: item.maxScore ? String(item.maxScore) : '',
     dateAssigned: item.dateAssigned, dueDate: item.dueDate, dueTime: item.dueTime ?? '',
-    instructions: item.instructions, rubric: item.rubric ?? '',
+    instructions: item.instructions, rubric: item.rubric ?? '', studentIds: item.studentIds ?? [],
   } : { ...EMPTY_FORM })
   const [saving, setSaving] = useState(false)
   const set = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }))
+  const setStudentIds = (ids: string[]) => setForm(p => ({ ...p, studentIds: ids }))
   const inp: React.CSSProperties = { width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #E4EAF2', fontSize: 13, color: '#1A365E', background: '#fff', boxSizing: 'border-box', fontFamily: 'inherit' }
   const lbl: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: '#7A92B0', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }
 
@@ -169,6 +172,24 @@ function AssignModal({ item, cohorts, onClose, onSave }: {
                 {cohorts.map(c => <option key={c}>{c}</option>)}
               </select>
             </div>
+          </div>
+
+          {/* Row 3b: Specific Students (overrides Division/Cohort targeting above) */}
+          <div>
+            <label style={lbl}>Assign to Specific Students (optional)</label>
+            <StudentMultiCombobox
+              students={students}
+              values={form.studentIds}
+              onChange={setStudentIds}
+              getLabel={s => s.fullName}
+              getMeta={s => s.grade ? `Grade ${s.grade}` : undefined}
+              placeholder="Leave empty to assign by Division/Cohort above…"
+            />
+            {form.studentIds.length > 0 && (
+              <div style={{ fontSize: 10, color: '#7A92B0', marginTop: 4 }}>
+                Only the {form.studentIds.length} selected student{form.studentIds.length !== 1 ? 's' : ''} will receive this assignment, regardless of Division/Cohort.
+              </div>
+            )}
           </div>
 
           {/* Row 4: Grading Scale + Max Score */}
@@ -241,6 +262,7 @@ export function ATAssignmentsPage() {
       dueTime: (r.due_time as string) ?? '',
       instructions: (r.instructions as string) ?? (r.description as string) ?? '',
       rubric: (r.rubric as string) ?? '',
+      studentIds: (r.student_ids as string[] | null) ?? [],
     })))
     if (sub) setSubmissions(sub.map((r: Record<string, unknown>) => ({
       id: r.id as string,
@@ -269,6 +291,10 @@ export function ATAssignmentsPage() {
     return m
   }, [submissions])
 
+  const targetStudents = useCallback((a: Assignment) => (
+    a.studentIds.length ? students.filter(s => a.studentIds.includes(s.id)) : students
+  ), [students])
+
   const filtered = useMemo(() => assignments.filter(a => {
     if (filterType !== 'All' && a.type !== filterType) return false
     if (filterSubject !== 'All' && a.subject !== filterSubject) return false
@@ -287,6 +313,7 @@ export function ATAssignmentsPage() {
       due_time: form.dueTime || null,
       instructions: form.instructions,
       rubric: form.rubric || null,
+      student_ids: form.studentIds.length ? form.studentIds : null,
     }
     if (id) await supabase.from('at_assignments').update(payload).eq('id', id)
     else {
@@ -306,8 +333,9 @@ export function ATAssignmentsPage() {
   function openGrades(assignId: string) {
     if (expandedId === assignId) { setExpandedId(null); return }
     setExpandedId(assignId)
+    const assign = assignments.find(a => a.id === assignId)
     const init: Record<string, { status: string; score: string; note: string }> = {}
-    students.forEach(s => {
+    ;(assign ? targetStudents(assign) : students).forEach(s => {
       const sub = subMap[`${assignId}_${s.id}`]
       init[s.id] = { status: sub?.status ?? 'Assigned', score: sub?.score !== null && sub?.score !== undefined ? String(sub.score) : '', note: sub?.teacher_note ?? '' }
     })
@@ -318,7 +346,7 @@ export function ATAssignmentsPage() {
     const today = new Date().toISOString().slice(0, 10)
     const isOverdue = assign.dueDate && today > assign.dueDate
 
-    for (const s of students) {
+    for (const s of targetStudents(assign)) {
       const ls = localSubs[s.id]
       if (!ls) continue
       const key = `${assign.id}_${s.id}`
@@ -403,10 +431,11 @@ export function ATAssignmentsPage() {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {filtered.map(a => {
+          const assignStudents = targetStudents(a)
           const submCount = submissions.filter(s => s.assignment_id === a.id && s.status === 'Turned In').length
           const missCount = submissions.filter(s => s.assignment_id === a.id && s.status === 'Missing').length
           const totalSubsForAssign = submissions.filter(s => s.assignment_id === a.id).length
-          const pct = students.length ? Math.round(submCount / students.length * 100) : 0
+          const pct = assignStudents.length ? Math.round(submCount / assignStudents.length * 100) : 0
           const typeCol = TYPE_COLORS[a.type] ?? '#6B7280'
           const isOpen = expandedId === a.id
           const isOverdue = a.dueDate && new Date().toISOString().slice(0, 10) > a.dueDate
@@ -424,8 +453,14 @@ export function ATAssignmentsPage() {
                   </div>
                   <div style={{ display: 'flex', gap: 14, fontSize: 11, color: '#7A92B0', flexWrap: 'wrap' }}>
                     <span>📚 {a.subject}</span>
-                    <span>🏫 {a.division}</span>
-                    {a.cohort && <span>👥 {a.cohort}</span>}
+                    {a.studentIds.length > 0 ? (
+                      <span>🎯 {a.studentIds.length} student{a.studentIds.length !== 1 ? 's' : ''}</span>
+                    ) : (
+                      <>
+                        <span>🏫 {a.division}</span>
+                        {a.cohort && <span>👥 {a.cohort}</span>}
+                      </>
+                    )}
                     {a.dateAssigned && <span>📅 Assigned: {a.dateAssigned}</span>}
                     <span>⏰ Due: {a.dueDate}{a.dueTime ? ` at ${a.dueTime}` : ''}</span>
                     {a.maxScore && <span>🎯 Max: {a.maxScore}pts ({a.gradingScale})</span>}
@@ -462,7 +497,7 @@ export function ATAssignmentsPage() {
                     <button onClick={() => saveGrades(a)} style={{ padding: '7px 14px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>💾 Save All Grades</button>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 8 }}>
-                    {students.map(s => {
+                    {assignStudents.map(s => {
                       const ls = localSubs[s.id] ?? { status: 'Assigned', score: '', note: '' }
                       const rowKey = `${a.id}_${s.id}`
                       const rowSaving = !!savingRows[rowKey]
@@ -553,7 +588,7 @@ export function ATAssignmentsPage() {
         })}
       </div>
 
-      {modal.open && <AssignModal item={modal.item} cohorts={cohorts} onClose={() => setModal({ open: false, item: null })} onSave={saveAssignment} />}
+      {modal.open && <AssignModal item={modal.item} cohorts={cohorts} students={students} onClose={() => setModal({ open: false, item: null })} onSave={saveAssignment} />}
       {rubricModal && (
         <RubricScoringModal
           rubric={rubricModal.rubric}

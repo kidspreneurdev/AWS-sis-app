@@ -155,9 +155,9 @@ export const STUDENT_RECORD_DEFS: StudentRecordDef[] = [
   {
     type: 'stock_market_game',
     label: 'Stock Market Game Details',
-    source: 'upload',
+    source: 'generated',
     category: 'learning_resources',
-    description: 'Access details for the Stock Market Game.',
+    description: 'Stock Market Game login credentials and video guides.',
   },
 
   {

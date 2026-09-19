@@ -42,6 +42,7 @@ interface AssignmentRow {
   description: string
   cohort: string
   maxScore: number | null
+  studentIds: string[]
 }
 
 interface SubmissionRow {
@@ -96,7 +97,7 @@ export function SPAssignmentsPage() {
     async function loadAssignments() {
       const { data, error } = await supabase
         .from('at_assignments')
-        .select('id,title,type,subject,due_date,description,cohort,max_score')
+        .select('id,title,type,subject,due_date,description,cohort,max_score,student_ids')
         .order('due_date')
       if (error) { console.error('AT assignments load error:', error); return }
       if (!data) return
@@ -109,9 +110,13 @@ export function SPAssignmentsPage() {
         description: (row.description as string) ?? '',
         cohort: (row.cohort as string) ?? '',
         maxScore: row.max_score == null ? null : Number(row.max_score),
+        studentIds: (row.student_ids as string[] | null) ?? [],
       }))
-      // Show assignments matching student's cohort, or with no cohort (global)
-      setAssignments(mapped.filter(r => !r.cohort || r.cohort === studentCohort))
+      // Specific-student assignments only show for the targeted students.
+      // Otherwise, show assignments matching student's cohort, or with no cohort (global).
+      setAssignments(mapped.filter(r => (
+        r.studentIds.length > 0 ? r.studentIds.includes(studentDbId) : (!r.cohort || r.cohort === studentCohort)
+      )))
     }
 
     async function loadSubmissions() {

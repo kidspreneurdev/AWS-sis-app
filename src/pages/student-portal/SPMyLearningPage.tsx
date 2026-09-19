@@ -569,19 +569,167 @@ function SocraticPanel({ carrierItem }: { carrierItem: LMSContent }) {
   )
 }
 
-/** Prove It — OMR Test score, with the Google Form link if one's configured. */
+/** Prove It — OMR Test: an in-app auto-graded MCQ quiz, same shape/UX as a lesson's
+ *  Mastery Test — but the score is read from/written to the case study's 'omr' rubric
+ *  component (lms_score_components) instead of lms_progress, since it's one of the
+ *  categories that feeds the module's overall grade. */
+function OmrQuiz({ carrierItem, score, onSubmitted }: {
+  carrierItem: LMSContent
+  score: CSScoreData | undefined
+  onSubmitted: () => void
+}) {
+  const { readOnly } = usePortalReadOnly()
+  const { getToken } = useStudentPortal()
+  const passMark = carrierItem.omrPassMark ?? 80
+  const maxAttempts = carrierItem.omrRetakes ?? 3
+  const timeLimitSecs = (carrierItem.omrTimeLimit ?? 0) * 60
+
+  let questions: Array<{ q: string; opts: string[]; ans: number }> = []
+  try { questions = JSON.parse(carrierItem.omrQuizJson ?? '[]') } catch { /* empty */ }
+
+  const priorCorrect = score?.criteriaScores?.correct
+  const priorTotal = score?.criteriaScores?.total
+  const priorAttempts = score?.criteriaScores?.attempts ?? 0
+  const priorPassed = score?.criteriaScores?.passed === 1
+  const alreadyScored = score?.status === 'scored' && priorCorrect != null && priorTotal != null
+
+  const [phase, setPhase] = useState<'quiz' | 'result'>(alreadyScored ? 'result' : 'quiz')
+  const [qIdx, setQIdx] = useState(0)
+  const [answers, setAnswers] = useState<Record<number, number>>({})
+  const [attemptsUsed, setAttemptsUsed] = useState(priorAttempts)
+  const [result, setResult] = useState<{ score: number; passed: boolean; correct: number; total: number } | null>(
+    alreadyScored ? { score: Math.round((priorCorrect! / priorTotal!) * 100), passed: priorPassed, correct: priorCorrect!, total: priorTotal! } : null,
+  )
+  const [timeLeft, setTimeLeft] = useState(timeLimitSecs)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (!timeLimitSecs || phase !== 'quiz') return
+    if (timeLeft <= 0) return
+    const id = window.setInterval(() => setTimeLeft((p) => Math.max(0, p - 1)), 1000)
+    return () => window.clearInterval(id)
+  }, [timeLimitSecs, phase, timeLeft])
+
+  if (!questions.length) {
+    return (
+      <div style={{ padding: '14px 16px', background: '#F7F9FC', borderRadius: 10, border: '1px solid #E4EAF2', fontSize: 11, color: '#94A3B8', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <Calculator size={12} /> No OMR questions have been configured for this module yet.
+      </div>
+    )
+  }
+
+  async function submitQuiz(ans: Record<number, number>) {
+    setSaving(true)
+    try {
+      const data = await studentPortalFetch(getToken(), '/api/student-portal/lms-submit-omr-quiz', {
+        method: 'POST', body: JSON.stringify({ contentId: carrierItem.id, answers: ans }),
+      }) as { score: number; correct: number; total: number; passed: boolean; attempts: number }
+      setResult({ score: data.score, passed: data.passed, correct: data.correct, total: data.total })
+      setAttemptsUsed(data.attempts)
+      setPhase('result')
+      onSubmitted()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to submit. Please try again.')
+    }
+    setSaving(false)
+  }
+
+  function retry() {
+    setPhase('quiz')
+    setQIdx(0)
+    setAnswers({})
+    setResult(null)
+    setTimeLeft(timeLimitSecs)
+  }
+
+  const remainingAttempts = maxAttempts - attemptsUsed
+
+  if (phase === 'result' && result) {
+    return (
+      <div style={{ background: result.passed ? 'linear-gradient(135deg,#059669,#047857)' : 'linear-gradient(135deg,#DC2626,#B91C1C)', borderRadius: 14, padding: '20px 22px', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', top: -20, right: -20, width: 100, height: 100, borderRadius: '50%', background: 'rgba(255,255,255,.07)' }} />
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8, color: '#fff' }}>{result.passed ? <PartyPopper size={36} /> : <Frown size={36} />}</div>
+        <div style={{ fontSize: 16, fontWeight: 900, color: '#fff', marginBottom: 4 }}>{result.passed ? 'Congratulations!' : 'Not quite there yet'}</div>
+        <div style={{ fontSize: 12, color: 'rgba(255,255,255,.85)', marginBottom: 14 }}>
+          {result.passed ? `You passed with ${result.score}% (${result.correct}/${result.total} correct)` : `You scored ${result.score}% (${result.correct}/${result.total} correct) — you need ${passMark}% to pass`}
+        </div>
+        {!result.passed && remainingAttempts > 0 && (
+          <button onClick={retry} style={{ padding: '9px 20px', background: '#fff', color: '#DC2626', border: 'none', borderRadius: 9, fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><RefreshCw size={13} /> Try Again ({remainingAttempts} attempt{remainingAttempts !== 1 ? 's' : ''} left)</span>
+          </button>
+        )}
+        {!result.passed && remainingAttempts <= 0 && (
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,.75)' }}>No more attempts remaining. Contact your teacher.</div>
+        )}
+      </div>
+    )
+  }
+
+  const currentQ = questions[qIdx]
+  const isLast = qIdx === questions.length - 1
+  const timedOut = timeLimitSecs > 0 && timeLeft === 0
+
+  return (
+    <div style={{ background: '#F7F9FC', borderRadius: 13, padding: 20, border: '1px solid #E4EAF2' }}>
+      {timeLimitSecs > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', background: '#FFF7ED', border: '1px solid #FDE68A', borderRadius: 8, marginBottom: 10 }}>
+          <Timer size={18} color="#92400E" />
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#92400E', textTransform: 'uppercase' }}>Time Remaining</div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: timeLeft < 60 ? SP_RED : '#D97706', fontVariantNumeric: 'tabular-nums' }}>
+              {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}
+            </div>
+          </div>
+        </div>
+      )}
+      {timedOut && (
+        <div style={{ padding: '8px 12px', background: '#FEE2E2', borderRadius: 8, fontSize: 11, fontWeight: 700, color: SP_RED, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Timer size={12} /> Time's up! Please submit your answers.
+        </div>
+      )}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: '#7A92B0' }}>Question {qIdx + 1} of {questions.length}</div>
+        <div style={{ display: 'flex', gap: 5 }}>
+          {questions.map((_, i) => (
+            <div key={i} style={{ width: i === qIdx ? 20 : 8, height: 8, borderRadius: 4, background: i < qIdx ? '#059669' : i === qIdx ? '#1A365E' : '#E4EAF2', transition: 'all .3s' }} />
+          ))}
+        </div>
+      </div>
+      <div style={{ background: '#fff', border: '1.5px solid #E4EAF2', borderRadius: 12, padding: '16px 18px', marginBottom: 14 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#1A365E', lineHeight: 1.6, marginBottom: 14 }}>{currentQ.q}</div>
+        {currentQ.opts.map((opt, oi) => {
+          const selected = answers[qIdx] === oi
+          return (
+            <label
+              key={oi}
+              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 9, cursor: 'pointer', fontSize: 12, color: selected ? '#1A365E' : '#3D5475', marginBottom: 6, background: selected ? '#EEF3FF' : '#fff', border: `1.5px solid ${selected ? '#1A365E' : '#E4EAF2'}`, transition: 'all .15s' }}
+              onClick={() => setAnswers((p) => ({ ...p, [qIdx]: oi }))}
+            >
+              <input type="radio" name={`omr_q_${qIdx}`} value={oi} checked={selected} onChange={() => setAnswers((p) => ({ ...p, [qIdx]: oi }))} style={{ flexShrink: 0, accentColor: '#1A365E' }} readOnly />
+              <span style={{ fontSize: 10, fontWeight: 800, color: '#7A92B0', background: '#F0F4FA', padding: '2px 7px', borderRadius: 4, flexShrink: 0 }}>{String.fromCharCode(65 + oi)}</span>
+              <span>{opt}</span>
+            </label>
+          )
+        })}
+      </div>
+      <button
+        onClick={isLast || timedOut ? () => void submitQuiz(answers) : () => setQIdx((p) => p + 1)}
+        disabled={readOnly || saving || (!timedOut && answers[qIdx] === undefined)}
+        title={readOnly ? 'View-only access' : undefined}
+        style={{ width: '100%', padding: 11, background: saving ? '#94A3B8' : (answers[qIdx] !== undefined || timedOut) ? '#1A365E' : '#E4EAF2', color: (answers[qIdx] !== undefined || timedOut) ? '#fff' : '#94A3B8', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: readOnly || (answers[qIdx] === undefined && !timedOut) ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: readOnly ? 0.5 : 1 }}
+      >
+        {saving ? 'Saving…' : readOnly ? 'View-only access' : (isLast || timedOut) ? `Submit OMR Test (${questions.length} question${questions.length !== 1 ? 's' : ''})` : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>Next Question <ArrowRight size={13} /></span>}
+      </button>
+    </div>
+  )
+}
+
+/** Prove It — OMR Test. */
 function OmrPanel({ carrierItem }: { carrierItem: LMSContent }) {
-  const { loading, bundle, scoreByType, renderAppealControl } = useModuleScoring(carrierItem)
+  const { loading, bundle, refresh, scoreByType } = useModuleScoring(carrierItem)
   if (loading) return <div style={{ ...card, ...emptyState }}>Loading…</div>
   if (!bundle) return <div style={{ ...card, ...emptyState }}>Couldn't load this. Try refreshing.</div>
-  return (
-    <>
-      {carrierItem.omrFormUrl && (
-        <a href={carrierItem.omrFormUrl} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#1A365E', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Link2 size={11} /> Take the OMR Test (Google Form)</a>
-      )}
-      <CSScoreBlock type="omr" overrides={carrierItem.rubricOverrides} icon={Calculator} title="OMR Test" order={2} score={scoreByType.omr} appealControl={renderAppealControl('omr')} />
-    </>
-  )
+  return <OmrQuiz carrierItem={carrierItem} score={scoreByType.omr} onSubmitted={() => void refresh()} />
 }
 
 /** Master It — final presentation upload + score, plus the module's overall grade

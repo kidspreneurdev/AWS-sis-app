@@ -8,12 +8,14 @@ import { PdfScrollViewer } from '@/components/pdf/PdfViewer'
 import { CourseConfirmationDocument } from '@/components/records/CourseConfirmationDocument'
 import { WeeklyScheduleDocument } from '@/components/records/WeeklyScheduleDocument'
 import { EdmentumCredentialsDocument } from '@/components/records/EdmentumCredentialsDocument'
+import { StockMarketGameDocument } from '@/components/records/StockMarketGameDocument'
 import { AssessmentInstructionsDocument } from '@/components/records/AssessmentInstructionsDocument'
 import { printDocument } from '@/lib/records/printDocument'
 import { CollapsibleSection } from '@/components/shared/CollapsibleSection'
 import { isCourseConfirmationData, type CourseConfirmationData } from '@/types/courseConfirmation'
 import { isWeeklyScheduleData, type WeeklyScheduleData } from '@/types/weeklySchedule'
 import { isEdmentumCredentialsData, type EdmentumCredentialsData } from '@/types/edmentumCredentials'
+import { isStockMarketGameData, type StockMarketGameData } from '@/types/stockMarketGame'
 import { isAssessmentInstructionsData, type AssessmentInstructionsData } from '@/types/assessmentInstructions'
 import {
   RECORD_CATEGORIES,
@@ -78,12 +80,14 @@ type GenDoc =
   | { kind: 'course_confirmation'; data: CourseConfirmationData }
   | { kind: 'weekly_schedule'; data: WeeklyScheduleData }
   | { kind: 'edmentum_credentials'; data: EdmentumCredentialsData }
+  | { kind: 'stock_market_game'; data: StockMarketGameData }
   | { kind: 'assessment_instructions'; data: AssessmentInstructionsData }
 
 const GEN_DOC_LABELS: Record<GenDoc['kind'], string> = {
   course_confirmation: STUDENT_RECORD_LABELS.course_confirmation,
   weekly_schedule: STUDENT_RECORD_LABELS.weekly_schedule,
   edmentum_credentials: STUDENT_RECORD_LABELS.edmentum_credentials,
+  stock_market_game: STUDENT_RECORD_LABELS.stock_market_game,
   assessment_instructions: STUDENT_RECORD_LABELS.assessment_instructions,
 }
 
@@ -112,6 +116,7 @@ function GeneratedDocModal({ doc, onClose }: { doc: GenDoc; onClose: () => void 
           {doc.kind === 'course_confirmation' && <CourseConfirmationDocument ref={docRef} data={doc.data} />}
           {doc.kind === 'weekly_schedule' && <WeeklyScheduleDocument ref={docRef} data={doc.data} />}
           {doc.kind === 'edmentum_credentials' && <EdmentumCredentialsDocument ref={docRef} data={doc.data} />}
+          {doc.kind === 'stock_market_game' && <StockMarketGameDocument ref={docRef} data={doc.data} />}
           {doc.kind === 'assessment_instructions' && <AssessmentInstructionsDocument ref={docRef} data={doc.data} />}
         </div>
       </div>
@@ -271,6 +276,8 @@ export function SPStudentRecordsPage({ categoryFilter }: { categoryFilter?: Reco
       genDoc = { kind: 'weekly_schedule', data: rec!.data as unknown as WeeklyScheduleData }
     } else if (def.type === 'edmentum_credentials' && isEdmentumCredentialsData(rec?.data)) {
       genDoc = { kind: 'edmentum_credentials', data: rec!.data as unknown as EdmentumCredentialsData }
+    } else if (def.type === 'stock_market_game' && isStockMarketGameData(rec?.data)) {
+      genDoc = { kind: 'stock_market_game', data: rec!.data as unknown as StockMarketGameData }
     } else if (def.type === 'assessment_instructions' && isAssessmentInstructionsData(rec?.data)) {
       genDoc = { kind: 'assessment_instructions', data: rec!.data as unknown as AssessmentInstructionsData }
     }

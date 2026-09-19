@@ -91,6 +91,13 @@ export interface LMSContent {
   // that item stands in for the Module record (see Learn it / Master it restructure).
   moduleDescription?: string
   omrFormUrl?: string
+  // Prove It — OMR Test is an in-app auto-graded MCQ quiz (same shape as a lesson's
+  // Mastery Test), not a Google Form link. omrFormUrl above is legacy/unused going forward.
+  omrQuizJson?: string
+  omrPassMark?: number
+  omrRetakes?: number
+  omrTimeLimit?: number
+  omrWeight?: number
   socraticDate?: string
   socraticBrief?: string
   presentationBrief?: string
@@ -219,6 +226,11 @@ function rowToLMSContent(r: Record<string, unknown>): LMSContent {
     caseStudyFileName: extra.caseStudyFileName as string | undefined,
     moduleDescription: extra.moduleDescription as string | undefined,
     omrFormUrl: extra.omrFormUrl as string | undefined,
+    omrQuizJson: extra.omrQuizJson as string | undefined,
+    omrPassMark: extra.omrPassMark as number | undefined,
+    omrRetakes: extra.omrRetakes as number | undefined,
+    omrTimeLimit: extra.omrTimeLimit as number | undefined,
+    omrWeight: extra.omrWeight as number | undefined,
     socraticDate: extra.socraticDate as string | undefined,
     socraticBrief: extra.socraticBrief as string | undefined,
     presentationBrief: extra.presentationBrief as string | undefined,
@@ -389,6 +401,8 @@ export async function saveLMS(store: LMSStore): Promise<string | null> {
           assignments: c.assignments,
           caseStudyUrl: c.caseStudyUrl, caseStudyFileName: c.caseStudyFileName,
           moduleDescription: c.moduleDescription, omrFormUrl: c.omrFormUrl, socraticDate: c.socraticDate,
+          omrQuizJson: c.omrQuizJson, omrPassMark: c.omrPassMark, omrRetakes: c.omrRetakes,
+          omrTimeLimit: c.omrTimeLimit, omrWeight: c.omrWeight,
           socraticBrief: c.socraticBrief, presentationBrief: c.presentationBrief,
           rubricOverrides: c.rubricOverrides,
           targetDate: c.targetDate, locked: c.locked, hidden: c.hidden, excludedFromGrade: c.excludedFromGrade,

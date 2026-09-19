@@ -14,6 +14,8 @@ import { WeeklyScheduleDocument } from '@/components/records/WeeklyScheduleDocum
 import { WeeklyScheduleForm } from '@/components/records/WeeklyScheduleForm'
 import { EdmentumCredentialsDocument } from '@/components/records/EdmentumCredentialsDocument'
 import { EdmentumCredentialsForm } from '@/components/records/EdmentumCredentialsForm'
+import { StockMarketGameDocument } from '@/components/records/StockMarketGameDocument'
+import { StockMarketGameForm } from '@/components/records/StockMarketGameForm'
 import { AssessmentInstructionsDocument } from '@/components/records/AssessmentInstructionsDocument'
 import { AssessmentInstructionsForm } from '@/components/records/AssessmentInstructionsForm'
 import { printDocument } from '@/lib/records/printDocument'
@@ -32,6 +34,11 @@ import {
   isEdmentumCredentialsData,
   type EdmentumCredentialsData,
 } from '@/types/edmentumCredentials'
+import {
+  buildDefaultStockMarketGameData,
+  isStockMarketGameData,
+  type StockMarketGameData,
+} from '@/types/stockMarketGame'
 import {
   buildDefaultAssessmentInstructionsData,
   isAssessmentInstructionsData,
@@ -363,6 +370,8 @@ export function StudentRecordsPage() {
   const [wsPreview, setWsPreview] = useState<WeeklyScheduleData | null>(null)
   const [edForm, setEdForm] = useState<EdmentumCredentialsData | null>(null)
   const [edPreview, setEdPreview] = useState<EdmentumCredentialsData | null>(null)
+  const [smgForm, setSmgForm] = useState<StockMarketGameData | null>(null)
+  const [smgPreview, setSmgPreview] = useState<StockMarketGameData | null>(null)
   const [aiForm, setAiForm] = useState<AssessmentInstructionsData | null>(null)
   const [aiPreview, setAiPreview] = useState<AssessmentInstructionsData | null>(null)
 
@@ -591,6 +600,18 @@ export function StudentRecordsPage() {
     }))
   }
 
+  function openStockMarketGameForm() {
+    if (!selectedStudent) return
+    const existing = records.stock_market_game?.data
+    if (isStockMarketGameData(existing)) { setSmgForm(existing); return }
+    setSmgForm(buildDefaultStockMarketGameData({
+      firstName: selectedStudent.firstName,
+      lastName: selectedStudent.lastName,
+      studentIdCode: selectedStudent.studentId,
+      grade: selectedStudent.grade,
+    }))
+  }
+
   function openAssessmentForm() {
     if (!selectedStudent) return
     const existing = records.assessment_instructions?.data
@@ -603,7 +624,7 @@ export function StudentRecordsPage() {
   }
 
   async function saveGeneratedDoc(
-    recordType: 'course_confirmation' | 'weekly_schedule' | 'edmentum_credentials' | 'assessment_instructions',
+    recordType: 'course_confirmation' | 'weekly_schedule' | 'edmentum_credentials' | 'stock_market_game' | 'assessment_instructions',
     data: Record<string, unknown>,
     onDone: () => void,
   ) {
@@ -766,6 +787,23 @@ export function StudentRecordsPage() {
             onDelete={() => void handleDelete(def)}
           />
         )
+      case 'stock_market_game':
+        return (
+          <GeneratedDocCard
+            key={def.type}
+            def={def}
+            record={records[def.type]}
+            has={isStockMarketGameData(records.stock_market_game?.data)}
+            busy={busyType === 'stock_market_game'}
+            onCreate={openStockMarketGameForm}
+            onEdit={openStockMarketGameForm}
+            onPreview={() => {
+              const data = records.stock_market_game?.data
+              if (isStockMarketGameData(data)) setSmgPreview(data)
+            }}
+            onDelete={() => void handleDelete(def)}
+          />
+        )
       case 'assessment_instructions':
         return (
           <GeneratedDocCard
@@ -876,6 +914,22 @@ export function StudentRecordsPage() {
           printTitle={`Edmentum Login Credentials — ${edPreview.studentName}`}
           onClose={() => setEdPreview(null)}
           renderDoc={ref => <EdmentumCredentialsDocument ref={ref} data={edPreview} />}
+        />
+      )}
+      {smgForm && (
+        <StockMarketGameForm
+          initial={smgForm}
+          saving={busyType === 'stock_market_game'}
+          onClose={() => setSmgForm(null)}
+          onSave={data => void saveGeneratedDoc('stock_market_game', data as unknown as Record<string, unknown>, () => setSmgForm(null))}
+        />
+      )}
+      {smgPreview && (
+        <DocPreviewModal
+          title="Stock Market Game — Preview"
+          printTitle={`Stock Market Game — ${smgPreview.studentName}`}
+          onClose={() => setSmgPreview(null)}
+          renderDoc={ref => <StockMarketGameDocument ref={ref} data={smgPreview} />}
         />
       )}
       {aiForm && (

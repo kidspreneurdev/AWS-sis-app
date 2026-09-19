@@ -109,6 +109,81 @@ function PromptDialog({ state, onClose }: { state: PromptDialogState; onClose: (
   )
 }
 
+const SECTION_PICKER_LABELS: Record<'socratic' | 'omr' | 'presentation', string> = {
+  socratic: '⚖️ Show It — Socratic Seminar',
+  omr: '🔢 Prove It — OMR Test',
+  presentation: '🏆 Master It — Presentation',
+}
+
+/** "Which module?" — shown when a "+ Show It / + Prove It / + Master It" toolbar button
+ *  is clicked and more than one module already has a case study to attach it to. */
+function SectionPickerModal({ state, onPick, onClose }: {
+  state: { type: 'socratic' | 'omr' | 'presentation'; options: { unitTitle: string; contentId: string }[] }
+  onPick: (contentId: string) => void
+  onClose: () => void
+}) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, backdropFilter: 'blur(4px)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 420, boxShadow: '0 24px 60px rgba(0,0,0,.3)', padding: '22px 24px' }}>
+        <div style={{ fontSize: 15, fontWeight: 800, color: '#1A365E', marginBottom: 4 }}>{SECTION_PICKER_LABELS[state.type]}</div>
+        <div style={{ fontSize: 11, color: '#7A92B0', marginBottom: 14 }}>Which module?</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 320, overflowY: 'auto' }}>
+          {state.options.map(o => (
+            <button key={o.contentId} onClick={() => { onPick(o.contentId); onClose() }}
+              style={{ textAlign: 'left', padding: '10px 12px', background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 8, fontSize: 12, fontWeight: 700, color: '#1A365E', cursor: 'pointer', fontFamily: 'inherit' }}>
+              {o.unitTitle}
+            </button>
+          ))}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+          <button onClick={onClose} style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const MODULE_PICKER_LABELS: Record<'lesson' | 'caseStudy', string> = {
+  lesson: '✅ Do It — Add Lesson',
+  caseStudy: '🔎 Learn It — Add Case Study',
+}
+
+/** "Which module?" for "+ Do It" and "+ Learn It" — same pattern as SectionPickerModal,
+ *  plus a "+ New Module" option since (unlike Show It/Prove It/Master It) these can start
+ *  a module that doesn't exist yet. */
+function ModulePickerModal({ state, onPick, onNewModule, onClose }: {
+  state: { purpose: 'lesson' | 'caseStudy'; units: string[] }
+  onPick: (unitTitle: string) => void
+  onNewModule: () => void
+  onClose: () => void
+}) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, backdropFilter: 'blur(4px)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 420, boxShadow: '0 24px 60px rgba(0,0,0,.3)', padding: '22px 24px' }}>
+        <div style={{ fontSize: 15, fontWeight: 800, color: '#1A365E', marginBottom: 4 }}>{MODULE_PICKER_LABELS[state.purpose]}</div>
+        <div style={{ fontSize: 11, color: '#7A92B0', marginBottom: 14 }}>Which module?</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 320, overflowY: 'auto' }}>
+          {state.units.map(u => (
+            <button key={u} onClick={() => { onPick(u); onClose() }}
+              style={{ textAlign: 'left', padding: '10px 12px', background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 8, fontSize: 12, fontWeight: 700, color: '#1A365E', cursor: 'pointer', fontFamily: 'inherit' }}>
+              {u}
+            </button>
+          ))}
+          <button onClick={() => { onNewModule(); onClose() }}
+            style={{ textAlign: 'left', padding: '10px 12px', background: '#EEF3FF', border: '1.5px dashed #B7C6E8', borderRadius: 8, fontSize: 12, fontWeight: 700, color: '#1A365E', cursor: 'pointer', fontFamily: 'inherit' }}>
+            + New Module...
+          </button>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+          <button onClick={onClose} style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const TAB_PATHS: Record<string, string> = {
   '/lms/overview': 'overview',
   '/lms/manage': 'manage',
@@ -855,11 +930,18 @@ export function LMSPage() {
   // Show It / Prove It / Master It each get their own focused popup instead of being
   // crammed into the case-study modal — all three still patch the same content record.
   const [sectionModal, setSectionModal] = useState<{ type: 'socratic' | 'omr' | 'presentation'; contentId: string } | null>(null)
+  // "+ Show It / + Prove It / + Master It" toolbar buttons need to know WHICH module's
+  // case study to open SectionModal for — if there's more than one candidate, ask first.
+  const [sectionPicker, setSectionPicker] = useState<{ type: 'socratic' | 'omr' | 'presentation'; options: { unitTitle: string; contentId: string }[] } | null>(null)
+  // "+ Do It" and "+ Learn It" ask which module first too, same as the Show It / Prove It
+  // / Master It buttons — units is captured at click time (see openSectionPicker) since
+  // this state is top-level and doesn't have the per-course `units` list in scope.
+  const [modulePicker, setModulePicker] = useState<{ purpose: 'lesson' | 'caseStudy'; units: string[] } | null>(null)
   const [showEnrolModal, setShowEnrolModal] = useState(false)
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null)
   const [promptDialog, setPromptDialog] = useState<PromptDialogState | null>(null)
   const [previewItem, setPreviewItem] = useState<LMSContent | null>(null)
-  const [scoreModal, setScoreModal] = useState<{ studentId: string; studentName: string; contentId: string; courseId: string; lessonTitle: string; caseStudyUrl?: string; omrFormUrl?: string; socraticDate?: string; socraticBrief?: string; presentationBrief?: string; rubricOverrides?: RubricOverrides } | null>(null)
+  const [scoreModal, setScoreModal] = useState<{ studentId: string; studentName: string; contentId: string; courseId: string; lessonTitle: string; caseStudyUrl?: string; omrFormUrl?: string; omrWeight?: number; socraticDate?: string; socraticBrief?: string; presentationBrief?: string; rubricOverrides?: RubricOverrides } | null>(null)
   const [studentSubmissions, setStudentSubmissions] = useState<LMSSubmissionRow[]>([])
   const [studentSubmissionsLoading, setStudentSubmissionsLoading] = useState(false)
   const [allSubmissions, setAllSubmissions] = useState<LMSSubmissionRow[]>([])
@@ -1012,6 +1094,20 @@ export function LMSPage() {
       setEditLessonIdx(idx)
       setShowLessonModal(true)
     }
+  }
+
+  // Used by ModulePickerModal's onPick/onNewModule (via "+ Do It" / "+ Learn It") — by the
+  // time these run, activeCourseId is already set from the toolbar button click, so all
+  // they need is which module to prefill.
+  function openLessonWithUnit(unitTitle: string) {
+    setPrefillUnit(unitTitle)
+    setEditLessonIdx(null)
+    setShowLessonModal(true)
+  }
+  function openCaseStudyWithUnit(unitTitle: string) {
+    setPrefillUnit(unitTitle)
+    setEditCaseStudyIdx(null)
+    setShowCaseStudyModal(true)
   }
 
   // ─── Shared per-student × per-course stat calc (Manage Students + student-section detail) ──
@@ -2146,6 +2242,7 @@ export function LMSPage() {
         studentId, studentName, contentId, courseId: groupKey(course), lessonTitle,
         caseStudyUrl: lessonItem?.caseStudyUrl,
         omrFormUrl: lessonItem?.omrFormUrl,
+        omrWeight: lessonItem?.omrWeight,
         socraticDate: lessonItem?.socraticDate,
         socraticBrief: lessonItem?.socraticBrief,
         presentationBrief: lessonItem?.presentationBrief,
@@ -2792,6 +2889,23 @@ export function LMSPage() {
         onConfirm: (ut) => openAddItem(ut),
       })
     }
+    // Show It / Prove It / Master It all live on a module's case-study record — jump
+    // straight to that module's SectionModal (asking which module first if there's more
+    // than one with a case study already, or pointing at Case Study first if there's none).
+    function openSectionPicker(type: 'socratic' | 'omr' | 'presentation') {
+      const candidates = units
+        .map(u => ({ unitTitle: u.title, carrier: u.items.find(i => hasAssignBool(i.hasAssignment)) }))
+        .filter((c): c is { unitTitle: string; carrier: LMSContent } => !!c.carrier)
+      if (candidates.length === 0) {
+        alert('Add a Case Study to a module first — Show It, Prove It, and Master It are all part of a module\'s case study.')
+        return
+      }
+      if (candidates.length === 1) {
+        setSectionModal({ type, contentId: candidates[0].carrier.id })
+        return
+      }
+      setSectionPicker({ type, options: candidates.map(c => ({ unitTitle: c.unitTitle, contentId: c.carrier.id })) })
+    }
     function openEdit(item: LMSContent) {
       openEditItem(item, store.content.indexOf(item), groupKey(course))
       setCurriculumMenuOpenId(null)
@@ -3072,8 +3186,11 @@ export function LMSPage() {
                 <td colSpan={4} />
                 <td style={{ padding: '8px 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                   <button onClick={openAddUnit} title="Add Module" style={{ padding: '5px 9px', background: '#EEF3FF', color: '#1A365E', border: '1px solid #DDE6F0', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginRight: 6 }}>+ Module</button>
-                  <button onClick={() => openAddItem(null)} title="Add Lesson" style={{ padding: '5px 9px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginRight: 6 }}>+ Lesson</button>
-                  <button onClick={() => { setActiveCourseId(groupKey(course)); setPrefillUnit(null); setEditCaseStudyIdx(null); setShowCaseStudyModal(true) }} title="Add Case Study" style={{ padding: '5px 9px', background: '#FFF3D6', color: '#92400E', border: '1px solid #FDE68A', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>📚 + Case Study</button>
+                  <button onClick={() => { setActiveCourseId(groupKey(course)); setModulePicker({ purpose: 'lesson', units: units.map(u => u.title) }) }} title="Do It — Add Lesson" style={{ padding: '5px 9px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginRight: 6 }}>✅ + Do It</button>
+                  <button onClick={() => { setActiveCourseId(groupKey(course)); setModulePicker({ purpose: 'caseStudy', units: units.map(u => u.title) }) }} title="Learn It — Add Case Study" style={{ padding: '5px 9px', background: '#FFF3D6', color: '#92400E', border: '1px solid #FDE68A', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginRight: 6 }}>🔎 + Learn It</button>
+                  <button onClick={() => openSectionPicker('socratic')} title="Show It — Socratic Seminar" style={{ padding: '5px 9px', background: '#F0F4FA', color: '#1A365E', border: '1px solid #DDE6F0', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginRight: 6 }}>⚖️ + Show It</button>
+                  <button onClick={() => openSectionPicker('omr')} title="Prove It — OMR Test" style={{ padding: '5px 9px', background: '#F0F4FA', color: '#1A365E', border: '1px solid #DDE6F0', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginRight: 6 }}>🔢 + Prove It</button>
+                  <button onClick={() => openSectionPicker('presentation')} title="Master It — Presentation" style={{ padding: '5px 9px', background: '#F0F4FA', color: '#1A365E', border: '1px solid #DDE6F0', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>🏆 + Master It</button>
                 </td>
               </tr>
               {!content.length ? (
@@ -4237,6 +4354,74 @@ export function LMSPage() {
   // Focused popup for Show It (Socratic Seminar) / Prove It (OMR Test) / Master It
   // (Presentation) — each edits only its own fields on the case-study content record,
   // instead of the case-study modal's everything-in-one-place editor.
+  interface McqQuestion { q: string; opts: string[]; ans: number }
+
+  // MCQ question builder — same shape/UX as a lesson's Mastery Test questions (minus the
+  // short-answer option type, since OMR is fully auto-graded). Used for Prove It — OMR.
+  function McqQuestionEditor({ questions, onChange }: { questions: McqQuestion[]; onChange: (next: McqQuestion[]) => void }) {
+    function update(qi: number, patch: Partial<McqQuestion>) {
+      onChange(questions.map((q, i) => i === qi ? { ...q, ...patch } : q))
+    }
+    function updateOption(qi: number, oi: number, val: string) {
+      onChange(questions.map((q, i) => i === qi ? { ...q, opts: q.opts.map((o, j) => j === oi ? val : o) } : q))
+    }
+    function remove(qi: number) {
+      onChange(questions.filter((_, i) => i !== qi))
+    }
+    function add() {
+      onChange([...questions, { q: '', opts: ['', '', '', ''], ans: 0 }])
+    }
+    return (
+      <div style={{ border: '1px solid #E4EAF2', borderRadius: 10, overflow: 'hidden' }}>
+        <div style={{ background: '#F7F9FC', padding: '8px 12px', borderBottom: '1px solid #E4EAF2' }}>
+          <span style={{ fontSize: 11, fontWeight: 800, color: '#1A365E' }}>🔢 OMR Test Questions <span style={{ fontWeight: 400, color: '#7A92B0' }}>({questions.length})</span></span>
+        </div>
+        <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {questions.length === 0 && (
+            <div style={{ fontSize: 11, color: '#94A3B8', padding: '6px 0' }}>No questions yet. Click the button below to add one.</div>
+          )}
+          {questions.map((q, qi) => (
+            <div key={qi} style={{ background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 8, padding: '10px 12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 800, color: '#1A365E', flexShrink: 0 }}>{qi + 1}.</span>
+                <input
+                  value={q.q}
+                  onChange={e => update(qi, { q: e.target.value })}
+                  placeholder="Question text..."
+                  style={{ flex: 1, padding: '5px 8px', border: '1.5px solid #E4EAF2', borderRadius: 6, fontSize: 11, fontFamily: 'inherit' }}
+                />
+                <button type="button" onClick={() => remove(qi)} style={{ padding: '3px 7px', background: '#FFF0F1', color: '#D61F31', border: '1px solid #F5C2C7', borderRadius: 5, fontSize: 11, cursor: 'pointer' }}>×</button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {q.opts.map((opt, oi) => (
+                  <div key={oi} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <input
+                      type="radio"
+                      name={`omr_ans_${qi}`}
+                      checked={q.ans === oi}
+                      onChange={() => update(qi, { ans: oi })}
+                      title="Mark as correct answer"
+                      style={{ flexShrink: 0, cursor: 'pointer' }}
+                    />
+                    <span style={{ fontSize: 10, fontWeight: 700, color: '#7A92B0', width: 14 }}>{['A', 'B', 'C', 'D'][oi]}</span>
+                    <input
+                      value={opt}
+                      onChange={e => updateOption(qi, oi, e.target.value)}
+                      placeholder={`Option ${['A', 'B', 'C', 'D'][oi]}...`}
+                      style={{ flex: 1, padding: '4px 8px', border: '1px solid #E4EAF2', borderRadius: 5, fontSize: 11, fontFamily: 'inherit' }}
+                    />
+                  </div>
+                ))}
+                <div style={{ fontSize: 9, color: '#94A3B8', marginTop: 2 }}>Click the radio button to mark the correct answer</div>
+              </div>
+            </div>
+          ))}
+          <button type="button" onClick={add} style={{ padding: '8px 14px', background: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', width: '100%' }}>+ Add Question</button>
+        </div>
+      </div>
+    )
+  }
+
   function SectionModal({ type, contentId, onClose }: {
     type: 'socratic' | 'omr' | 'presentation'
     contentId: string
@@ -4252,20 +4437,35 @@ export function LMSPage() {
 
     const [socraticBrief, setSocraticBrief] = useState(item?.socraticBrief ?? '')
     const [socraticDate, setSocraticDate] = useState(item?.socraticDate ?? '')
-    const [omrFormUrl, setOmrFormUrl] = useState(item?.omrFormUrl ?? '')
     const [presentationBrief, setPresentationBrief] = useState(item?.presentationBrief ?? '')
     const [rubric, setRubric] = useState<RubricCategory>(getEffectiveRubric(item?.rubricOverrides, meta.rubricType))
+    const [omrQuestions, setOmrQuestions] = useState<McqQuestion[]>(() => {
+      try { return JSON.parse(item?.omrQuizJson || '[]') } catch { return [] }
+    })
+    const [omrPassMark, setOmrPassMark] = useState(String(item?.omrPassMark ?? 80))
+    const [omrRetakes, setOmrRetakes] = useState(String(item?.omrRetakes ?? 3))
+    const [omrTimeLimit, setOmrTimeLimit] = useState(String(item?.omrTimeLimit ?? ''))
+    const [omrWeight, setOmrWeight] = useState(String(item?.omrWeight ?? CASE_STUDY_RUBRIC.omr.weight))
 
     if (!item) return null
 
     function save() {
       if (type === 'socratic' && !socraticBrief.trim()) { alert('Add a Socratic Seminar activity description'); return }
-      if (!rubric.criteria.length) { alert('Add at least one rubric criterion'); return }
+      if (type === 'omr' && omrQuestions.length === 0) { alert('Add at least one OMR question'); return }
+      if (type !== 'omr' && !rubric.criteria.length) { alert('Add at least one rubric criterion'); return }
       const fieldPatch: Partial<LMSContent> =
         type === 'socratic' ? { socraticBrief: socraticBrief.trim(), socraticDate: socraticDate || undefined } :
-        type === 'omr' ? { omrFormUrl: omrFormUrl.trim() || undefined } :
+        type === 'omr' ? {
+          omrQuizJson: JSON.stringify(omrQuestions),
+          omrPassMark: parseInt(omrPassMark) || 80,
+          omrRetakes: parseInt(omrRetakes) || 0,
+          omrTimeLimit: parseInt(omrTimeLimit) || undefined,
+          omrWeight: parseInt(omrWeight) || CASE_STUDY_RUBRIC.omr.weight,
+        } :
         { presentationBrief: presentationBrief.trim() || undefined }
-      const patch: Partial<LMSContent> = { ...fieldPatch, rubricOverrides: { ...item?.rubricOverrides, [meta.rubricType]: rubric } }
+      // OMR is auto-graded from its questions now, not a rubric admins score by hand —
+      // don't write a rubricOverrides entry for it (leave any old one untouched).
+      const patch: Partial<LMSContent> = type === 'omr' ? fieldPatch : { ...fieldPatch, rubricOverrides: { ...item?.rubricOverrides, [meta.rubricType]: rubric } }
       persist({ ...store, content: store.content.map(c => c.id === contentId ? { ...c, ...patch } : c) })
       onClose()
     }
@@ -4288,24 +4488,41 @@ export function LMSPage() {
                   <label style={labelStyle}>Socratic Seminar Date</label>
                   <input type="date" value={socraticDate} onChange={e => setSocraticDate(e.target.value)} style={inputStyle} />
                 </div>
+                <div>
+                  <label style={{ ...labelStyle, marginBottom: 4 }}>Rubric — {CASE_STUDY_RUBRIC[meta.rubricType].label}</label>
+                  <RubricEditor value={rubric} onChange={setRubric} />
+                </div>
               </>
             )}
             {type === 'omr' && (
-              <div>
-                <label style={labelStyle}>OMR Test — Google Form URL</label>
-                <input value={omrFormUrl} onChange={e => setOmrFormUrl(e.target.value)} placeholder="https://forms.google.com/..." style={inputStyle} />
-              </div>
+              <>
+                <div style={{ fontSize: 10, color: '#7A92B0' }}>
+                  Students take this as an in-app multiple-choice test — auto-graded on submit, same as a lesson's Mastery Test.
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                  <div><label style={labelStyle}>Pass Mark (%)</label><input type="number" min={0} max={100} value={omrPassMark} onChange={e => setOmrPassMark(e.target.value)} style={inputStyle} /></div>
+                  <div><label style={labelStyle}>Retakes</label><input type="number" min={0} value={omrRetakes} onChange={e => setOmrRetakes(e.target.value)} style={inputStyle} /></div>
+                  <div><label style={labelStyle}>Time Limit (min)</label><input type="number" min={1} placeholder="None" value={omrTimeLimit} onChange={e => setOmrTimeLimit(e.target.value)} style={inputStyle} /></div>
+                </div>
+                <div>
+                  <label style={labelStyle}>Category Weight (points toward final grade)</label>
+                  <input type="number" min={0} max={100} value={omrWeight} onChange={e => setOmrWeight(e.target.value)} style={{ ...inputStyle, maxWidth: 120 }} />
+                </div>
+                <McqQuestionEditor questions={omrQuestions} onChange={setOmrQuestions} />
+              </>
             )}
             {type === 'presentation' && (
-              <div>
-                <label style={labelStyle}>Activity Description</label>
-                <textarea value={presentationBrief} onChange={e => setPresentationBrief(e.target.value)} rows={4} placeholder="What students should prepare and submit for the final presentation — shown to students on the Master It page." style={taStyle} />
-              </div>
+              <>
+                <div>
+                  <label style={labelStyle}>Activity Description</label>
+                  <textarea value={presentationBrief} onChange={e => setPresentationBrief(e.target.value)} rows={4} placeholder="What students should prepare and submit for the final presentation — shown to students on the Master It page." style={taStyle} />
+                </div>
+                <div>
+                  <label style={{ ...labelStyle, marginBottom: 4 }}>Rubric — {CASE_STUDY_RUBRIC[meta.rubricType].label}</label>
+                  <RubricEditor value={rubric} onChange={setRubric} />
+                </div>
+              </>
             )}
-            <div>
-              <label style={{ ...labelStyle, marginBottom: 4 }}>Rubric — {CASE_STUDY_RUBRIC[meta.rubricType].label}</label>
-              <RubricEditor value={rubric} onChange={setRubric} />
-            </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6 }}>
               <button onClick={onClose} style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
               <button onClick={save} style={{ padding: '9px 20px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>💾 Save</button>
@@ -4460,6 +4677,24 @@ export function LMSPage() {
       {showLessonModal && <LessonModal />}
       {showCaseStudyModal && <CaseStudyModal />}
       {sectionModal && <SectionModal type={sectionModal.type} contentId={sectionModal.contentId} onClose={() => setSectionModal(null)} />}
+      {sectionPicker && <SectionPickerModal state={sectionPicker} onPick={contentId => setSectionModal({ type: sectionPicker.type, contentId })} onClose={() => setSectionPicker(null)} />}
+      {modulePicker && (
+        <ModulePickerModal
+          state={modulePicker}
+          onPick={unitTitle => (modulePicker.purpose === 'lesson' ? openLessonWithUnit(unitTitle) : openCaseStudyWithUnit(unitTitle))}
+          onNewModule={() => {
+            const purpose = modulePicker.purpose
+            setPromptDialog({
+              title: 'New Module',
+              label: 'Module title',
+              placeholder: 'e.g. Module 1: Business Writing Fundamentals & Persuasive Memos',
+              confirmLabel: 'Continue',
+              onConfirm: ut => (purpose === 'lesson' ? openLessonWithUnit(ut) : openCaseStudyWithUnit(ut)),
+            })
+          }}
+          onClose={() => setModulePicker(null)}
+        />
+      )}
       {showEnrolModal && <EnrolModal courses={store.courses} students={students} cohorts={cohorts} onSave={enrolment => persist({ ...store, enrolments: [...store.enrolments, enrolment] })} onClose={() => setShowEnrolModal(false)} />}
       {confirmDialog && <ConfirmDialog state={confirmDialog} onClose={() => setConfirmDialog(null)} />}
       {promptDialog && <PromptDialog state={promptDialog} onClose={() => setPromptDialog(null)} />}
@@ -4500,6 +4735,7 @@ interface CaseStudyGradingData {
   lessonTitle: string
   caseStudyUrl?: string
   omrFormUrl?: string
+  omrWeight?: number
   socraticDate?: string
   socraticBrief?: string
   presentationBrief?: string
@@ -4698,13 +4934,22 @@ function CaseStudyGradingPanel({ data, onClose, onFinalGradeChange }: {
                 {renderCategoryEditor('debate')}
               </div>
 
-              {/* Prove it — OMR Test */}
-              <div>
+              {/* Prove it — OMR Test (auto-graded, in-app MCQ — see the OMR row's popup to author questions) */}
+              <div style={{ background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 10, padding: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                   <div style={{ fontSize: 11, fontWeight: 800, color: '#1A365E' }}>🔢 Prove it — OMR Test</div>
-                  {data.omrFormUrl && <a href={data.omrFormUrl} target="_blank" rel="noreferrer" style={{ fontSize: 10, fontWeight: 700, color: '#1A365E' }}>↗ Open Google Form</a>}
+                  {scores.omr.status === 'scored' && <span style={{ fontSize: 10, fontWeight: 900, color: '#059669', background: '#DCFCE7', padding: '2px 8px', borderRadius: 10 }}>{scores.omr.subtotal}/{data.omrWeight ?? CASE_STUDY_RUBRIC.omr.weight}</span>}
                 </div>
-                {renderCategoryEditor('omr')}
+                {scores.omr.status === 'scored' ? (
+                  <div style={{ fontSize: 11, color: '#3D5475' }}>
+                    Auto-graded — {scores.omr.criteriaScores.correct ?? 0}/{scores.omr.criteriaScores.total ?? 0} correct
+                    {scores.omr.criteriaScores.attempts != null && <> · attempt {scores.omr.criteriaScores.attempts}</>}
+                    {scores.omr.criteriaScores.passed != null && <> · {scores.omr.criteriaScores.passed ? 'passed' : 'below pass mark'}</>}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 11, color: '#94A3B8' }}>Student hasn't taken the OMR test yet.</div>
+                )}
+                <CategoryEditorAppealNote appeal={appealFor('omr')} onResolved={reply => setAppeals(prev => prev.map(a => a.componentType === 'omr' ? { ...a, status: 'resolved', adminReply: reply } : a))} />
               </div>
 
               {/* Master it — Presentation */}
@@ -5077,10 +5322,17 @@ function LessonPreviewModal({ item, onClose }: { item: LMSContent; onClose: () =
           {item.socraticDate && <div style={{ fontSize: 10, fontWeight: 700, color: '#7A92B0', marginBottom: 6 }}>📅 {item.socraticDate}</div>}
           {renderRubricPreview('debate')}
         </>)}
-        {caseStudySectionShell('🔢', 'Prove it — OMR Test', CASE_STUDY_RUBRIC.omr.weight, <>
-          {item.omrFormUrl && <div style={{ fontSize: 11, marginBottom: 6 }}><a href={item.omrFormUrl} target="_blank" rel="noreferrer" style={{ color: '#1D4ED8', fontWeight: 700 }}>↗ Open Google Form</a></div>}
-          {renderRubricPreview('omr')}
-        </>)}
+        {caseStudySectionShell('🔢', 'Prove it — OMR Test', item.omrWeight ?? CASE_STUDY_RUBRIC.omr.weight, (() => {
+          let omrQuestions: Array<{ q: string; opts: string[]; ans: number }> = []
+          try { omrQuestions = JSON.parse(item.omrQuizJson || '[]') } catch { /* empty */ }
+          return (
+            <div style={{ fontSize: 11, color: '#5A7290' }}>
+              {omrQuestions.length > 0
+                ? <>In-app auto-graded MCQ test — {omrQuestions.length} question{omrQuestions.length !== 1 ? 's' : ''}, pass mark {item.omrPassMark ?? 80}%{item.omrRetakes != null ? `, ${item.omrRetakes} retake${item.omrRetakes !== 1 ? 's' : ''}` : ''}{item.omrTimeLimit ? `, ${item.omrTimeLimit} min limit` : ''}.</>
+                : 'No OMR questions have been added yet.'}
+            </div>
+          )
+        })())}
         {caseStudySectionShell('📤', 'Master it — Submit Final Presentation', null, <>
           {item.presentationBrief && <div style={{ fontSize: 11, color: '#5A7290', marginBottom: 6 }}>{item.presentationBrief}</div>}
           <div style={{ fontSize: 11, color: '#5A7290', marginBottom: 6 }}>Student uploads their presentation file here.</div>

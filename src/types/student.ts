@@ -10,6 +10,7 @@ export interface Student {
   studentId: string
   firstName: string
   lastName: string
+  photoUrl: string | null
   dob: string | null
   gender: 'Male' | 'Female' | 'Other' | null
   nationality: string | null
@@ -174,6 +175,7 @@ export const EMPTY_STUDENT: StudentInsert = {
   studentId: '',
   firstName: '',
   lastName: '',
+  photoUrl: null,
   dob: null,
   gender: null,
   nationality: null,

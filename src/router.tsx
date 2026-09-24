@@ -16,6 +16,7 @@ import { DocumentsPage } from '@/pages/students/DocumentsPage'
 import { StudentRecordsPage } from '@/pages/students/StudentRecordsPage'
 import { StudentOnboardingPage } from '@/pages/students/StudentOnboardingPage'
 import { StudentPolicyDocumentsPage } from '@/pages/students/StudentPolicyDocumentsPage'
+import { StudentNotificationsPage } from '@/pages/students/StudentNotificationsPage'
 import { StudentGoalsPage } from '@/pages/students/StudentGoalsPage'
 import { Student360Page } from '@/pages/students/Student360Page'
 import { AttendancePage } from '@/pages/academic/AttendancePage'
@@ -101,10 +102,12 @@ import { SPWellnessPage } from '@/pages/student-portal/SPWellnessPage'
 import { SPInnovationLabPage } from '@/pages/student-portal/SPInnovationLabPage'
 import { SPRealWorldLogPage } from '@/pages/student-portal/SPRealWorldLogPage'
 import { SPDocumentHubPage } from '@/pages/student-portal/SPDocumentHubPage'
+import { SPPolicyDocumentsPage } from '@/pages/student-portal/SPPolicyDocumentsPage'
 import { SPAcademicCalendarPage } from '@/pages/student-portal/SPAcademicCalendarPage'
 import { SPBadgesPage } from '@/pages/student-portal/SPBadgesPage'
 import { K5CertificatesPage } from '@/pages/student-portal/K5CertificatesPage'
 import { SPProfilePage } from '@/pages/student-portal/SPProfilePage'
+import { SPNotificationsPage } from '@/pages/student-portal/SPNotificationsPage'
 import { MHSQuizPlayer } from '@/pages/student-portal/MHSQuizPlayer'
 import { MHSDiscussionThread } from '@/pages/student-portal/MHSDiscussionThread'
 
@@ -147,7 +150,7 @@ export const router = createBrowserRouter([
       { path: '/parent/documents',   element: <Navigate to="/parent/documents-hub?tab=enrollment" replace /> },
       { path: '/parent/records',     element: <Navigate to="/parent/documents-hub?tab=assessments" replace /> },
       { path: '/parent/onboarding',  element: <Navigate to="/parent/documents-hub?tab=enrollment" replace /> },
-      { path: '/parent/policy-documents', element: <Navigate to="/parent/documents-hub?tab=policies" replace /> },
+      { path: '/parent/policy-documents', element: <SPPolicyDocumentsPage /> },
       { path: '/parent/academic-calendar', element: <SPAcademicCalendarPage /> },
       { path: '/parent/badges',      element: <SPBadgesPage /> },
       { path: '/parent/messages',    element: <PPCommunicationsPage /> },
@@ -184,13 +187,14 @@ export const router = createBrowserRouter([
       { path: '/portal/documents', element: <Navigate to="/portal/documents-hub?tab=enrollment" replace /> },
       { path: '/portal/records', element: <Navigate to="/portal/documents-hub?tab=assessments" replace /> },
       { path: '/portal/onboarding', element: <Navigate to="/portal/documents-hub?tab=enrollment" replace /> },
-      { path: '/portal/policy-documents', element: <Navigate to="/portal/documents-hub?tab=policies" replace /> },
+      { path: '/portal/policy-documents', element: <SPPolicyDocumentsPage /> },
       { path: '/portal/academic-calendar', element: <SPAcademicCalendarPage /> },
       { path: '/portal/badges', element: <SPBadgesPage /> },
       { path: '/portal/k5-certificates', element: <K5CertificatesPage /> },
       { path: '/portal/profile', element: <SPProfilePage /> },
       { path: '/portal/mhs-quiz', element: <MHSQuizPlayer /> },
       { path: '/portal/mhs-discussion', element: <MHSDiscussionThread /> },
+      { path: '/portal/notifications', element: <SPNotificationsPage /> },
     ],
   },
 
@@ -213,6 +217,7 @@ export const router = createBrowserRouter([
         { path: '/students/records', element: <Lazy><StudentRecordsPage /></Lazy> },
         { path: '/students/onboarding', element: <Lazy><StudentOnboardingPage /></Lazy> },
         { path: '/students/policy-documents', element: <Lazy><StudentPolicyDocumentsPage /></Lazy> },
+        { path: '/students/notifications', element: <Lazy><StudentNotificationsPage /></Lazy> },
         { path: '/students/goals', element: <Lazy><StudentGoalsPage /></Lazy> },
         { path: '/students/360', element: <Lazy><Student360Page /></Lazy> },
 

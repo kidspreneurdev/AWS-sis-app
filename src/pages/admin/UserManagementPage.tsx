@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 
 const ROLES = ['admin', 'staff', 'teacher', 'principal', 'partner', 'coach', 'counselor', 'viewer', 'readonly', 'parent']
@@ -216,6 +216,66 @@ function SetPasswordModal({ student, onClose, onSave }: {
   )
 }
 
+const umStyles = `
+  .um-eye-btn {
+    transition: transform 120ms cubic-bezier(0.23,1,0.32,1), background 150ms ease-out, color 150ms ease-out;
+  }
+  .um-eye-btn:active {
+    transform: scale(0.88);
+  }
+  .um-pwd-popover {
+    transform-origin: top right;
+    animation: um-pwd-in 160ms cubic-bezier(0.23,1,0.32,1) both;
+  }
+  @keyframes um-pwd-in {
+    from { opacity: 0; transform: scale(0.95) translateY(-4px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+`
+
+// ─── Current Password Popover ──────────────────────────────────────────────────
+function PasswordPopover({ student, top, right, onClose }: {
+  student: Student
+  top: number
+  right: number
+  onClose: () => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function onDocMouseDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+    }
+    function onKeyDown(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
+    document.addEventListener('mousedown', onDocMouseDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onDocMouseDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [onClose])
+
+  return (
+    <div
+      ref={ref}
+      className="um-pwd-popover"
+      style={{
+        position: 'fixed', top, right, zIndex: 1200, minWidth: 200,
+        background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2',
+        boxShadow: '0 12px 32px rgba(10,18,36,.18)', padding: '12px 14px',
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 10 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '.06em' }}>Current Password</span>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#7A92B0', cursor: 'pointer', fontSize: 12, padding: 0, lineHeight: 1 }}>✕</button>
+      </div>
+      <div style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 15, color: '#1A365E', background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 8, padding: '8px 10px', wordBreak: 'break-all' }}>
+        {student.portalPassword || '—'}
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 export function UserManagementPage() {
   const [tab, setTab] = useState<'staff' | 'students'>('staff')
@@ -226,6 +286,7 @@ export function UserManagementPage() {
   const [currentUserId, setCurrentUserId] = useState('')
   const [staffModal, setStaffModal] = useState<{ open: boolean; user: UserProfile | null }>({ open: false, user: null })
   const [pwdModal, setPwdModal] = useState<Student | null>(null)
+  const [pwdPopover, setPwdPopover] = useState<{ studentId: string; top: number; right: number } | null>(null)
 
   async function load() {
     const [{ data: profiles }, { data: settings }, { data: { user } }] = await Promise.all([
@@ -323,9 +384,16 @@ export function UserManagementPage() {
     void load()
   }
 
+  function togglePasswordPopover(e: React.MouseEvent<HTMLButtonElement>, s: Student) {
+    if (pwdPopover?.studentId === s.id) { setPwdPopover(null); return }
+    const rect = e.currentTarget.getBoundingClientRect()
+    setPwdPopover({ studentId: s.id, top: rect.bottom + 8, right: window.innerWidth - rect.right })
+  }
+
   async function removeStudentPortal(s: Student) {
     if (!confirm(`Remove portal access for ${s.fullName}?`)) return
     await supabase.from('students').update({ portal_password: null }).eq('id', s.id)
+    if (pwdPopover?.studentId === s.id) setPwdPopover(null)
     void loadStudents()
   }
 
@@ -338,8 +406,11 @@ export function UserManagementPage() {
     return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
   }
 
+  const popoverStudent = pwdPopover ? students.find(s => s.id === pwdPopover.studentId) : null
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <style>{umStyles}</style>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
         <div>
@@ -360,7 +431,7 @@ export function UserManagementPage() {
           { label: 'Total Accounts', value: users.length + students.filter(s => s.portalPassword).length, color: '#1A365E' },
           { label: 'Admins', value: admins, color: '#D61F31' },
           { label: 'Staff / Teachers', value: staffCount, color: '#0EA5E9' },
-          { label: 'Student Portal', value: portalActive, color: '#1DBD6A' },
+          { label: 'Students', value: portalActive, color: '#1DBD6A' },
         ].map(c => (
           <div key={c.label} style={{ ...card, padding: '16px 20px' }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '1.2px' }}>{c.label}</div>
@@ -371,7 +442,7 @@ export function UserManagementPage() {
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 0, borderRadius: 10, overflow: 'hidden', border: '1.5px solid #E4EAF2', width: 'fit-content' }}>
-        {([['staff', `👤 Staff & Admins (${users.length})`], ['students', `🎓 Student Portal (${portalActive})`]] as const).map(([key, label]) => (
+        {([['staff', `👤 Staff & Admins (${users.length})`], ['students', `🎓 Students (${portalActive})`]] as const).map(([key, label]) => (
           <button key={key} onClick={() => { setTab(key); setSearch('') }} style={{ flex: 1, padding: '10px 20px', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', background: tab === key ? '#1A365E' : '#F7F9FC', color: tab === key ? '#fff' : '#7A92B0', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>{label}</button>
         ))}
       </div>
@@ -433,7 +504,7 @@ export function UserManagementPage() {
       {tab === 'students' && (
         <>
           <div style={{ background: '#EEF3FF', borderLeft: '4px solid #1A365E', borderRadius: 8, padding: '12px 16px', fontSize: 11, color: '#1A365E' }}>
-            <strong>🎓 Student Portal Accounts</strong> — Students log in using their <strong>Student ID</strong> and portal password. Click <strong>🔑 Set Password</strong> to activate a student's portal access.
+            <strong>🎓 Students Accounts</strong> — Students log in using their <strong>Student ID</strong> and portal password. Click <strong>🔑 Set Password</strong> to activate a student's portal access.
           </div>
           <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -466,6 +537,19 @@ export function UserManagementPage() {
                       <td style={{ ...td, fontSize: 11, color: '#7A92B0' }}>{fmtDate(s.lastPortalLogin)}</td>
                       <td style={{ ...td, textAlign: 'right' }}>
                         <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                          {hasPortal && (
+                            <button
+                              className="um-eye-btn"
+                              onClick={e => togglePasswordPopover(e, s)}
+                              title="View current password"
+                              style={{
+                                padding: '5px 8px',
+                                background: pwdPopover?.studentId === s.id ? '#1A365E' : '#fff',
+                                color: pwdPopover?.studentId === s.id ? '#fff' : '#3D5475',
+                                border: '1.5px solid #E4EAF2', borderRadius: 7, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                              }}
+                            >👁</button>
+                          )}
                           <button onClick={() => setPwdModal(s)} style={{ padding: '5px 10px', background: '#EEF3FF', color: '#1A365E', border: '1.5px solid #C4D4E8', borderRadius: 7, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>🔑 {hasPortal ? 'Change' : 'Set Password'}</button>
                           {hasPortal && <button onClick={() => void removeStudentPortal(s)} style={{ padding: '5px 8px', background: '#FFF0F1', color: '#D61F31', border: '1.5px solid #F5C2C7', borderRadius: 7, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>🗑</button>}
                         </div>
@@ -495,6 +579,14 @@ export function UserManagementPage() {
           student={pwdModal}
           onClose={() => setPwdModal(null)}
           onSave={() => void loadStudents()}
+        />
+      )}
+      {pwdPopover && popoverStudent && (
+        <PasswordPopover
+          student={popoverStudent}
+          top={pwdPopover.top}
+          right={pwdPopover.right}
+          onClose={() => setPwdPopover(null)}
         />
       )}
     </div>

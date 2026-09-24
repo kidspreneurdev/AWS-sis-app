@@ -1,28 +1,25 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { FileText, ClipboardCheck, BookOpen, FileCheck, type LucideIcon } from 'lucide-react'
+import { FileText, ClipboardCheck, BookOpen, type LucideIcon } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { card, SP_NAVY } from './gradesShared'
 import { SPDocumentsPage } from './SPDocumentsPage'
 import { SPOnboardingPage } from './SPOnboardingPage'
 import { SPStudentRecordsPage } from './SPStudentRecordsPage'
-import { SPPolicyDocumentsPage } from './SPPolicyDocumentsPage'
 import {
-  HUB_STATUS_META, REQUIRED_DOCS, mapDocumentStatus, mapRecordStatus, mapPolicyStatus, mapOnboardingStatus,
+  HUB_STATUS_META, REQUIRED_DOCS, mapDocumentStatus, mapRecordStatus, mapOnboardingStatus,
   type HubStatus,
 } from './docHubShared'
 import {
   RECORD_CATEGORIES, recordDefsForCategory, recordSupportsSignedReturn, isRecordAvailable,
   type RecordView, type SignedReturnStatus,
 } from '@/types/studentRecord'
-import type { PolicyDocStatus } from '@/types/policyDocument'
 
 const TABS: { key: string; label: string; icon: LucideIcon }[] = [
   { key: 'enrollment', label: 'Enrollment docs', icon: FileText },
-  { key: 'assessments', label: 'Assessments', icon: ClipboardCheck },
+  { key: 'assessments', label: 'Onboarding Assessments', icon: ClipboardCheck },
   { key: 'course', label: 'Course docs', icon: BookOpen },
-  { key: 'policies', label: 'Policies to sign', icon: FileCheck },
 ]
 const TAB_KEYS = TABS.map((t) => t.key)
 
@@ -132,21 +129,6 @@ export function SPDocumentHubPage() {
             })
           } catch { /* soft-fail */ }
         })(),
-
-        // Policy documents
-        (async () => {
-          try {
-            let list: { status: PolicyDocStatus }[] = []
-            if (token) {
-              const body = await authedFetch(token, '/api/student-portal/list-my-policy-documents')
-              list = body.policies ?? []
-            } else {
-              const { data } = await supabase.from('student_policy_documents').select('status').eq('student_id', studentDbId)
-              list = ((data as Record<string, unknown>[] | null) ?? []).map((r) => ({ status: (r.status as PolicyDocStatus) ?? 'requested' }))
-            }
-            list.forEach((r) => bump(mapPolicyStatus(r.status)))
-          } catch { /* soft-fail */ }
-        })(),
       ])
 
       setSummary({ actionNeeded, awaitingSchool, complete })
@@ -208,7 +190,6 @@ export function SPDocumentHubPage() {
       )}
       {tab === 'assessments' && <SPStudentRecordsPage categoryFilter={['diagnostics', 'psychometric']} />}
       {tab === 'course' && <SPStudentRecordsPage categoryFilter={['learning_resources', 'course']} />}
-      {tab === 'policies' && <SPPolicyDocumentsPage />}
     </div>
   )
 }

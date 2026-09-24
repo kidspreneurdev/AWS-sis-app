@@ -61,6 +61,11 @@ export interface LMSContent {
   lessonSubType?: string
   url?: string
   body?: string
+  // A separate uploaded video on the lesson — distinct from Tutorial (which can itself be
+  // any content type, video included). Shows as its own "Video" row under Do It, between
+  // Tutorial and Notes: Upload, only once one's been uploaded.
+  videoUrl?: string
+  videoFileName?: string
   unitTitle?: string
   unitOrder?: number
   order?: number
@@ -203,6 +208,8 @@ function rowToLMSContent(r: Record<string, unknown>): LMSContent {
     lessonSubType: extra.lessonSubType as string | undefined,
     url: extra.url as string | undefined,
     body: extra.body as string | undefined,
+    videoUrl: extra.videoUrl as string | undefined,
+    videoFileName: extra.videoFileName as string | undefined,
     estimatedMins: extra.estimatedMins as number | undefined,
     slideCount: extra.slideCount as number | undefined,
     hasMastery: extra.hasMastery as boolean | 'TRUE' | undefined,
@@ -389,6 +396,7 @@ export async function saveLMS(store: LMSStore): Promise<string | null> {
         order_idx: c.order ?? null,
         extra: {
           lessonSubType: c.lessonSubType, url: c.url, body: c.body,
+          videoUrl: c.videoUrl, videoFileName: c.videoFileName,
           estimatedMins: c.estimatedMins, slideCount: c.slideCount,
           hasMastery: c.hasMastery, masteryPassMark: c.masteryPassMark,
           masteryRetakes: c.masteryRetakes, masteryBrief: c.masteryBrief,

@@ -17,6 +17,7 @@ import { useCampusFilter } from '@/hooks/useCampusFilter'
 // ─── DB helpers ──────────────────────────────────────────────────────────────
 function toRow(s: StudentInsert) {
   const notes = JSON.stringify({
+    photoUrl: s.photoUrl,
     dob: s.dob,
     gender: s.gender,
     lang: s.lang,
@@ -89,6 +90,7 @@ function fromRow(row: Record<string, unknown>): Student {
     studentId: row.student_id as string ?? '',
     firstName: row.first_name as string ?? '',
     lastName: row.last_name as string ?? '',
+    photoUrl: (ext.photoUrl as string) ?? null,
     dob: (row.date_of_birth as string) ?? (ext.dob as string) ?? null,
     gender: ext.gender as Student['gender'] ?? null,
     nationality: row.nationality as string ?? null,

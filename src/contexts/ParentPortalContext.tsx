@@ -23,6 +23,8 @@ interface ParentPortalContextType {
 const ParentPortalContext = createContext<ParentPortalContextType | null>(null)
 
 function mapChild(row: Record<string, unknown>): StudentSession {
+  let ext: Record<string, unknown> = {}
+  try { ext = JSON.parse((row.notes as string) || '{}') } catch { /* */ }
   return {
     studentId: (row.student_id as string) ?? '',
     fullName: `${(row.first_name as string) ?? ''} ${(row.last_name as string) ?? ''}`.trim(),
@@ -31,6 +33,13 @@ function mapChild(row: Record<string, unknown>): StudentSession {
     cohort: (row.cohort as string) ?? '',
     dbId: row.id as string,
     email: (row.email as string) ?? '',
+    address: (ext.address as string) ?? '',
+    parent: (row.parent as string) ?? '',
+    relation: (ext.relation as string) ?? '',
+    ecName: (ext.ecName as string) ?? '',
+    ecPhone: (ext.ecPhone as string) ?? '',
+    bloodGroup: (ext.bloodGroup as string) ?? '',
+    photoUrl: (ext.photoUrl as string) ?? null,
   }
 }
 
@@ -55,7 +64,7 @@ export function ParentPortalProvider({ children }: { children: ReactNode }) {
 
     const { data: links } = await supabase
       .from('parent_students')
-      .select('student_id, students(id, first_name, last_name, student_id, grade, campus, cohort, email)')
+      .select('student_id, students(id, first_name, last_name, student_id, grade, campus, cohort, email, parent, notes)')
       .eq('parent_id', user.id)
 
     const childRows = (links ?? [])

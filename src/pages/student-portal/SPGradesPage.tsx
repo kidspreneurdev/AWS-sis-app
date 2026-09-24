@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom'
-import { BarChart3, GraduationCap, BookOpen, FileText, ArrowRight, type LucideIcon } from 'lucide-react'
+import { BarChart3, GraduationCap, BookOpen, ArrowRight, type LucideIcon } from 'lucide-react'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { toLegacyStudentGradeValue } from '@/types/student'
 import { K5GradesPage } from '@/pages/student-portal/K5GradesPage'
@@ -21,14 +21,14 @@ export function SPGradesPage() {
   const navButtons: { key: string; label: string; icon: LucideIcon; color: string; path: string }[] = [
     { key: 'audit', label: 'Graduation Audit', icon: GraduationCap, color: '#1A365E', path: `${prefix}/grades/audit` },
     { key: 'courses', label: 'Course Records', icon: BookOpen, color: '#0A6B64', path: `${prefix}/grades/courses` },
-    { key: 'report', label: 'Report Card', icon: FileText, color: '#A36CFF', path: `${prefix}/grades/report-card` },
+    // Report Card — temporarily disabled, not currently offered to students.
   ]
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ fontSize: 18, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 8 }}><BarChart3 size={18} /> My Grades</div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
         {navButtons.map((btn) => (
           <button
             key={btn.key}

@@ -70,14 +70,14 @@ export function SPProfilePage() {
     }
   }
 
-  const inp: React.CSSProperties = { width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #E4EAF2', fontSize: 13, color: '#1A365E', background: '#fff', boxSizing: 'border-box' }
-  const lbl: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: '#7A92B0', display: 'block', marginBottom: 4 }
+  const inp: React.CSSProperties = { width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #E4EAF2', fontSize: 16, color: '#1A365E', background: '#fff', boxSizing: 'border-box' }
+  const lbl: React.CSSProperties = { fontSize: 16, fontWeight: 600, color: '#7A92B0', display: 'block', marginBottom: 4 }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1A365E', margin: 0 }}>My Profile</h1>
-        <p style={{ fontSize: 13, color: '#7A92B0', margin: '4px 0 0' }}>Your student account information</p>
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: '#1A365E', margin: 0 }}>My Profile</h1>
+        <p style={{ fontSize: 16, color: '#7A92B0', margin: '4px 0 0' }}>Your student account information</p>
       </div>
 
       {/* Profile card */}
@@ -90,7 +90,7 @@ export function SPProfilePage() {
         >
           <div style={{
             width: 72, height: 72, borderRadius: 18, background: '#1A365E', color: '#fff',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, fontWeight: 800,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 800,
             overflow: 'hidden',
           }}>
             {session?.photoUrl
@@ -123,8 +123,8 @@ export function SPProfilePage() {
           )}
         </div>
         <div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: '#1A365E' }}>{session?.fullName}</div>
-          {photoError && <div style={{ fontSize: 12, fontWeight: 600, color: '#D61F31', marginTop: 4 }}>{photoError}</div>}
+          <div style={{ fontSize: 24, fontWeight: 800, color: '#1A365E' }}>{session?.fullName}</div>
+          {photoError && <div style={{ fontSize: 16, fontWeight: 600, color: '#D61F31', marginTop: 4 }}>{photoError}</div>}
         </div>
       </div>
       <style>{`
@@ -134,7 +134,7 @@ export function SPProfilePage() {
 
       {/* Info */}
       <div style={card}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: '#1A365E', marginBottom: 14 }}>Student Information</div>
+        <div style={{ fontSize: 17, fontWeight: 700, color: '#1A365E', marginBottom: 14 }}>Student Information</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           {[
             { label: 'Full Name', value: session?.fullName },
@@ -150,8 +150,8 @@ export function SPProfilePage() {
             { label: 'Aadhar/Passport - Identification', value: 'Not provided' },
           ].map(row => (
             <div key={row.label}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase', marginBottom: 2 }}>{row.label}</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#1A365E' }}>{row.value}</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase', marginBottom: 2 }}>{row.label}</div>
+              <div style={{ fontSize: 17, fontWeight: 600, color: '#1A365E' }}>{row.value}</div>
             </div>
           ))}
         </div>
@@ -159,16 +159,16 @@ export function SPProfilePage() {
 
       {/* Change password — hidden for parent view-only mode */}
       {!readOnly && <div style={card}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: '#1A365E', marginBottom: 14 }}>Change Portal Password</div>
+        <div style={{ fontSize: 17, fontWeight: 700, color: '#1A365E', marginBottom: 14 }}>Change Portal Password</div>
         <form onSubmit={changePassword} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div><label style={lbl}>Current Password</label><input type="password" value={oldPw} onChange={e => setOldPw(e.target.value)} style={inp} /></div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div><label style={lbl}>New Password</label><input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} style={inp} /></div>
             <div><label style={lbl}>Confirm New Password</label><input type="password" value={confirmPw} onChange={e => setConfirmPw(e.target.value)} style={inp} /></div>
           </div>
-          {pwMsg && <div style={{ padding: '10px 14px', borderRadius: 8, background: pwMsg.ok ? '#E8FBF0' : '#FEE2E2', color: pwMsg.ok ? '#0E6B3B' : '#D61F31', fontSize: 13, fontWeight: 600 }}>{pwMsg.text}</div>}
+          {pwMsg && <div style={{ padding: '10px 14px', borderRadius: 8, background: pwMsg.ok ? '#E8FBF0' : '#FEE2E2', color: pwMsg.ok ? '#0E6B3B' : '#D61F31', fontSize: 16, fontWeight: 600 }}>{pwMsg.text}</div>}
           <div>
-            <button type="submit" disabled={saving} style={{ padding: '9px 24px', borderRadius: 8, border: 'none', background: '#1A365E', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+            <button type="submit" disabled={saving} style={{ padding: '9px 24px', borderRadius: 8, border: 'none', background: '#1A365E', color: '#fff', fontWeight: 600, fontSize: 16, cursor: 'pointer' }}>
               {saving ? 'Saving…' : 'Update Password'}
             </button>
           </div>

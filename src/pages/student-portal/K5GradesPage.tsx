@@ -121,14 +121,14 @@ export function K5GradesPage() {
 
       {/* Header */}
       <div style={{ background: `linear-gradient(135deg,${NAVY},#2A4A7E)`, borderRadius: 16, padding: '20px 22px' }}>
-        <div style={{ fontSize: 20, fontWeight: 800, color: '#fff', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}><BarChart3 size={20} /> My Grades</div>
-        <div style={{ fontSize: 12, color: 'rgba(255,255,255,.55)' }}>How you are doing in each subject</div>
+        <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}><BarChart3 size={20} /> My Grades</div>
+        <div style={{ fontSize: 16, color: 'rgba(255,255,255,.55)' }}>How you are doing in each subject</div>
         {avgPct !== null && (
           <div style={{ marginTop: 12, display: 'inline-flex', alignItems: 'center', gap: 10, background: 'rgba(255,255,255,.1)', borderRadius: 12, padding: '8px 16px' }}>
             {(() => { const GI = gradeIcon(avgPct); return <GI size={22} color={GOLD} /> })()}
             <div>
-              <div style={{ fontSize: 18, fontWeight: 900, color: GOLD }}>{avgPct}%</div>
-              <div style={{ fontSize: 10, color: 'rgba(255,255,255,.5)' }}>Overall average</div>
+              <div style={{ fontSize: 20, fontWeight: 900, color: GOLD }}>{avgPct}%</div>
+              <div style={{ fontSize: 14, color: 'rgba(255,255,255,.5)' }}>Overall average</div>
             </div>
           </div>
         )}
@@ -143,7 +143,7 @@ export function K5GradesPage() {
               borderColor: selectedTerm === t ? NAVY : '#E2E8F0',
               background: selectedTerm === t ? NAVY : '#fff',
               color: selectedTerm === t ? '#fff' : '#64748B',
-              fontSize: 12, fontWeight: 700, cursor: 'pointer',
+              fontSize: 16, fontWeight: 700, cursor: 'pointer',
             }}>
               {t}
             </button>
@@ -155,7 +155,7 @@ export function K5GradesPage() {
       {filteredGrades.length === 0 ? (
         <div style={{ background: '#fff', border: '1.5px solid #E2E8F0', borderRadius: 14, padding: 32, textAlign: 'center' }}>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10, color: '#94A3B8' }}><Library size={36} /></div>
-          <div style={{ fontSize: 13, color: '#64748B' }}>No grade data available yet.</div>
+          <div style={{ fontSize: 16, color: '#64748B' }}>No grade data available yet.</div>
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10 }}>
@@ -172,12 +172,12 @@ export function K5GradesPage() {
                     {(() => { const SI = subjectIcon(g.subject); return <SI size={22} /> })()}
                   </div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: NAVY }}>{g.subject}</div>
-                    {g.term && <div style={{ fontSize: 10, color: '#64748B' }}>{g.term}</div>}
+                    <div style={{ fontSize: 16, fontWeight: 800, color: NAVY }}>{g.subject}</div>
+                    {g.term && <div style={{ fontSize: 14, color: '#64748B' }}>{g.term}</div>}
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 24, fontWeight: 900, color }}>{letter}</div>
-                    <div style={{ fontSize: 10, color: '#64748B' }}>{hasGrade ? `${pct}%` : '—'}</div>
+                    <div style={{ fontSize: 26, fontWeight: 900, color }}>{letter}</div>
+                    <div style={{ fontSize: 14, color: '#64748B' }}>{hasGrade ? `${pct}%` : '—'}</div>
                   </div>
                 </div>
                 <div style={{ background: 'rgba(255,255,255,.6)', borderRadius: 6, height: 8, overflow: 'hidden' }}>
@@ -197,14 +197,14 @@ export function K5GradesPage() {
       {/* Teacher notes */}
       {termRemarks.length > 0 && (
         <div style={{ background: '#fff', border: '1.5px solid #E2E8F0', borderRadius: 14, padding: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: NAVY, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}><MessageSquare size={14} /> Teacher Notes</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: NAVY, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}><MessageSquare size={14} /> Teacher Notes</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {termRemarks.map(r => (
               <div key={r.id} style={{ background: '#F0F7FF', border: '1.5px solid #BFDBFE', borderRadius: 10, padding: '12px 14px' }}>
                 {r.author && (
-                  <div style={{ fontSize: 10, fontWeight: 700, color: '#1E40AF', marginBottom: 4 }}>{r.author}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#1E40AF', marginBottom: 4 }}>{r.author}</div>
                 )}
-                <div style={{ fontSize: 12, color: '#1E3A5F', lineHeight: 1.7 }}>{r.content}</div>
+                <div style={{ fontSize: 16, color: '#1E3A5F', lineHeight: 1.7 }}>{r.content}</div>
               </div>
             ))}
           </div>
@@ -213,7 +213,7 @@ export function K5GradesPage() {
 
       {/* Grade key */}
       <div style={{ background: '#F8FAFC', border: '1.5px solid #E2E8F0', borderRadius: 14, padding: 14 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Grade Guide</div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Grade Guide</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {[
             { range: '90–100%', letter: 'A', color: GREEN, Icon: Sparkles },
@@ -223,8 +223,8 @@ export function K5GradesPage() {
           ].map(g => (
             <div key={g.letter} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', background: '#fff', borderRadius: 20, border: '1px solid #E2E8F0' }}>
               <g.Icon size={14} color={g.color} />
-              <span style={{ fontSize: 12, fontWeight: 800, color: g.color }}>{g.letter}</span>
-              <span style={{ fontSize: 10, color: '#94A3B8' }}>{g.range}</span>
+              <span style={{ fontSize: 16, fontWeight: 800, color: g.color }}>{g.letter}</span>
+              <span style={{ fontSize: 14, color: '#94A3B8' }}>{g.range}</span>
             </div>
           ))}
         </div>

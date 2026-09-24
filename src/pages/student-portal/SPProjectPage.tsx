@@ -65,13 +65,13 @@ export function SPProjectPage() {
       : null,
   }
 
-  const iStyle: React.CSSProperties = { padding: '7px 12px', borderRadius: 8, border: '1px solid #E4EAF2', fontSize: 13, color: '#1A365E', background: '#fff' }
+  const iStyle: React.CSSProperties = { padding: '7px 12px', borderRadius: 8, border: '1px solid #E4EAF2', fontSize: 16, color: '#1A365E', background: '#fff' }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1A365E', margin: 0 }}>My AWSC-27 Projects</h1>
-        <p style={{ fontSize: 13, color: '#7A92B0', margin: '4px 0 0' }}>Track your 27-methodology project journey</p>
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: '#1A365E', margin: 0 }}>My AWSC-27 Projects</h1>
+        <p style={{ fontSize: 16, color: '#7A92B0', margin: '4px 0 0' }}>Track your 27-methodology project journey</p>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
@@ -82,8 +82,8 @@ export function SPProjectPage() {
           { label: 'Avg Score', value: overallStats.avgScore !== null ? `${overallStats.avgScore}/4` : '—', color: '#D61F31' },
         ].map(c => (
           <div key={c.label} style={card}>
-            <div style={{ fontSize: 11, color: '#7A92B0', fontWeight: 700, textTransform: 'uppercase' }}>{c.label}</div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: c.color, marginTop: 4 }}>{c.value}</div>
+            <div style={{ fontSize: 15, color: '#7A92B0', fontWeight: 700, textTransform: 'uppercase' }}>{c.label}</div>
+            <div style={{ fontSize: 26, fontWeight: 800, color: c.color, marginTop: 4 }}>{c.value}</div>
           </div>
         ))}
       </div>
@@ -103,15 +103,15 @@ export function SPProjectPage() {
             <div key={a.id} style={card}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: ev ? 12 : 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ width: 40, height: 40, borderRadius: 10, background: '#1A365E', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800 }}>#{a.methodology_n}</div>
+                  <div style={{ width: 40, height: 40, borderRadius: 10, background: '#1A365E', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 800 }}>#{a.methodology_n}</div>
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#1A365E' }}>{PT_METHODOLOGIES[a.methodology_n]}</div>
-                    <div style={{ fontSize: 12, color: '#7A92B0' }}>{a.quarter}{a.due_date ? ` · Due ${new Date(a.due_date).toLocaleDateString()}` : ''}</div>
+                    <div style={{ fontSize: 17, fontWeight: 700, color: '#1A365E' }}>{PT_METHODOLOGIES[a.methodology_n]}</div>
+                    <div style={{ fontSize: 16, color: '#7A92B0' }}>{a.quarter}{a.due_date ? ` · Due ${new Date(a.due_date).toLocaleDateString()}` : ''}</div>
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  {ev && <span style={{ fontSize: 14, fontWeight: 800, color: ev.mastery ? '#0E6B3B' : '#7A92B0' }}>{ev.overall}/4</span>}
-                  <span style={{ padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: sm.bg, color: sm.tc }}>{a.status}</span>
+                  {ev && <span style={{ fontSize: 17, fontWeight: 800, color: ev.mastery ? '#0E6B3B' : '#7A92B0' }}>{ev.overall}/4</span>}
+                  <span style={{ padding: '3px 10px', borderRadius: 6, fontSize: 15, fontWeight: 700, background: sm.bg, color: sm.tc }}>{a.status}</span>
                 </div>
               </div>
 
@@ -120,18 +120,18 @@ export function SPProjectPage() {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
                     {CORE_COMPETENCIES.map(comp => (
                       <div key={comp} style={{ background: '#F7F9FC', borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
-                        <div style={{ fontSize: 10, color: '#7A92B0', marginBottom: 2 }}>{comp.split(' ')[0]}</div>
-                        <div style={{ fontSize: 18, fontWeight: 800, color: '#1A365E' }}>{ev.competencies?.[comp] ?? '—'}</div>
+                        <div style={{ fontSize: 14, color: '#7A92B0', marginBottom: 2 }}>{comp.split(' ')[0]}</div>
+                        <div style={{ fontSize: 20, fontWeight: 800, color: '#1A365E' }}>{ev.competencies?.[comp] ?? '—'}</div>
                       </div>
                     ))}
                   </div>
-                  {ev.comment && <div style={{ fontSize: 12, color: '#7A92B0', marginTop: 8, fontStyle: 'italic' }}>"{ev.comment}"</div>}
+                  {ev.comment && <div style={{ fontSize: 16, color: '#7A92B0', marginTop: 8, fontStyle: 'italic' }}>"{ev.comment}"</div>}
                 </div>
               )}
             </div>
           )
         })}
-        {filtered.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#7A92B0', fontSize: 13, background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2' }}>No projects assigned yet.</div>}
+        {filtered.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#7A92B0', fontSize: 16, background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2' }}>No projects assigned yet.</div>}
       </div>
     </div>
   )

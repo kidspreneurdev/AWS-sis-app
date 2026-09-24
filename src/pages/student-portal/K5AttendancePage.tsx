@@ -112,8 +112,8 @@ export function K5AttendancePage() {
 
       {/* Header */}
       <div style={{ background: `linear-gradient(135deg,${NAVY},#2A4A7E)`, borderRadius: 16, padding: '20px 22px' }}>
-        <div style={{ fontSize: 20, fontWeight: 800, color: '#fff', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}><CalendarDays size={20} /> Attendance</div>
-        <div style={{ fontSize: 12, color: 'rgba(255,255,255,.55)', marginBottom: 14 }}>How often you come to school</div>
+        <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}><CalendarDays size={20} /> Attendance</div>
+        <div style={{ fontSize: 16, color: 'rgba(255,255,255,.55)', marginBottom: 14 }}>How often you come to school</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
           {[
             { label: 'Rate', value: `${stats.rate}%`, color: rateColor(stats.rate) },
@@ -121,8 +121,8 @@ export function K5AttendancePage() {
             { label: 'Days Absent', value: String(stats.absent), color: stats.absent > 0 ? RED : GREEN },
           ].map(s => (
             <div key={s.label} style={{ background: 'rgba(255,255,255,.1)', borderRadius: 12, padding: '12px 10px', textAlign: 'center' }}>
-              <div style={{ fontSize: 22, fontWeight: 900, color: s.color }}>{s.value}</div>
-              <div style={{ fontSize: 10, color: 'rgba(255,255,255,.5)', marginTop: 2 }}>{s.label}</div>
+              <div style={{ fontSize: 24, fontWeight: 900, color: s.color }}>{s.value}</div>
+              <div style={{ fontSize: 14, color: 'rgba(255,255,255,.5)', marginTop: 2 }}>{s.label}</div>
             </div>
           ))}
         </div>
@@ -130,7 +130,7 @@ export function K5AttendancePage() {
 
       {/* Encouragement message */}
       <div style={{ background: msg.bg, borderRadius: 12, padding: '12px 16px', border: `1.5px solid ${rateColor(stats.rate)}40` }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: msg.color, display: 'flex', alignItems: 'center', gap: 8 }}><msg.icon size={16} /> {msg.text}</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: msg.color, display: 'flex', alignItems: 'center', gap: 8 }}><msg.icon size={16} /> {msg.text}</div>
       </div>
 
       {/* Calendar */}
@@ -138,14 +138,14 @@ export function K5AttendancePage() {
         {/* Month nav */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
           <button onClick={prevMonth} style={{ width: 32, height: 32, borderRadius: 8, border: '1.5px solid #E2E8F0', background: '#fff', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><ChevronLeft size={16} /></button>
-          <div style={{ fontSize: 14, fontWeight: 800, color: NAVY }}>{monthName}</div>
+          <div style={{ fontSize: 17, fontWeight: 800, color: NAVY }}>{monthName}</div>
           <button onClick={nextMonth} style={{ width: 32, height: 32, borderRadius: 8, border: '1.5px solid #E2E8F0', background: '#fff', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><ChevronRight size={16} /></button>
         </div>
 
         {/* Day headers */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 3, marginBottom: 6 }}>
           {['M', 'T', 'W', 'T', 'F', 'Sa', 'Su'].map((d, i) => (
-            <div key={i} style={{ textAlign: 'center', fontSize: 9, fontWeight: 700, color: '#94A3B8', padding: '4px 0' }}>{d}</div>
+            <div key={i} style={{ textAlign: 'center', fontSize: 14, fontWeight: 700, color: '#94A3B8', padding: '4px 0' }}>{d}</div>
           ))}
         </div>
 
@@ -162,7 +162,7 @@ export function K5AttendancePage() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: 11,
+                fontSize: 15,
                 fontWeight: 700,
                 background: cell.isToday ? NAVY : col ? col.bg : isWeekend ? '#F1F5F9' : '#FAFAFA',
                 color: cell.isToday ? '#fff' : col ? col.text : '#CBD5E1',
@@ -184,7 +184,7 @@ export function K5AttendancePage() {
           ].map(l => (
             <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <div style={{ width: 12, height: 12, borderRadius: 3, background: l.bg, border: `1px solid ${l.border}` }} />
-              <span style={{ fontSize: 10, color: '#64748B' }}>{l.label}</span>
+              <span style={{ fontSize: 14, color: '#64748B' }}>{l.label}</span>
             </div>
           ))}
         </div>
@@ -192,9 +192,9 @@ export function K5AttendancePage() {
 
       {/* Recent records */}
       <div style={{ background: '#fff', border: '1.5px solid #E2E8F0', borderRadius: 14, padding: 16 }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: NAVY, marginBottom: 12 }}>Recent Attendance</div>
+        <div style={{ fontSize: 16, fontWeight: 800, color: NAVY, marginBottom: 12 }}>Recent Attendance</div>
         {recentRecords.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 20, color: '#94A3B8', fontSize: 12 }}>No attendance records yet.</div>
+          <div style={{ textAlign: 'center', padding: 20, color: '#94A3B8', fontSize: 16 }}>No attendance records yet.</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {recentRecords.map(r => {
@@ -202,10 +202,10 @@ export function K5AttendancePage() {
               return (
                 <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: col.bg, borderRadius: 9 }}>
                   <col.icon size={16} color={col.text} />
-                  <div style={{ flex: 1, fontSize: 12, fontWeight: 700, color: NAVY }}>
+                  <div style={{ flex: 1, fontSize: 16, fontWeight: 700, color: NAVY }}>
                     {new Date(r.date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
                   </div>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: col.text }}>{r.status}</span>
+                  <span style={{ fontSize: 15, fontWeight: 700, color: col.text }}>{r.status}</span>
                 </div>
               )
             })}

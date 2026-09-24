@@ -20,7 +20,7 @@ const emptyState: React.CSSProperties = {
   textAlign: 'center',
   padding: 28,
   color: SP_SLATE,
-  fontSize: 12,
+  fontSize: 16,
   background: '#F8FAFC',
   border: '1px dashed #D7E0EA',
   borderRadius: 10,
@@ -147,8 +147,8 @@ export function SPTimetablePage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div>
-        <div style={{ fontSize: 18, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 8 }}><CalendarRange size={18} /> My Timetable</div>
-        <div style={{ fontSize: 12, color: SP_SLATE, marginTop: 2 }}>
+        <div style={{ fontSize: 20, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 8 }}><CalendarRange size={18} /> My Timetable</div>
+        <div style={{ fontSize: 16, color: SP_SLATE, marginTop: 2 }}>
           Your weekly class blocks{session?.cohort ? ` · ${session.cohort}` : ''}
         </div>
       </div>
@@ -156,8 +156,8 @@ export function SPTimetablePage() {
       {/* Today */}
       <div style={{ ...card, padding: '14px 18px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 6 }}><CalendarDays size={13} /> Today · {today}</div>
-          <div style={{ fontSize: 10, color: SP_SLATE }}>{todayBlocks.length} {todayBlocks.length === 1 ? 'class' : 'classes'}</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 6 }}><CalendarDays size={13} /> Today · {today}</div>
+          <div style={{ fontSize: 14, color: SP_SLATE }}>{todayBlocks.length} {todayBlocks.length === 1 ? 'class' : 'classes'}</div>
         </div>
         {!loaded ? (
           <div style={emptyState}>Loading your timetable…</div>
@@ -167,13 +167,13 @@ export function SPTimetablePage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {todayBlocks.map(b => (
               <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', background: '#fff', border: '1px solid #E4EAF2', borderRadius: 8, borderLeft: `4px solid ${b.sessionType === 'Live Session' ? SP_RED : '#7C3AED'}` }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: SP_SLATE, minWidth: 120, flexShrink: 0 }}>{timeRange(b.time) || b.period}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: SP_SLATE, minWidth: 120, flexShrink: 0 }}>{timeRange(b.time) || b.period}</div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: SP_NAVY }}>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: SP_NAVY }}>
                     {b.name || b.subject || 'Class'}
-                    {b.assignedToMe && <span style={{ fontSize: 9, fontWeight: 700, color: '#059669', marginLeft: 6 }}>• for you</span>}
+                    {b.assignedToMe && <span style={{ fontSize: 14, fontWeight: 700, color: '#059669', marginLeft: 6 }}>• for you</span>}
                   </div>
-                  <div style={{ fontSize: 10, color: SP_SLATE, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: 14, color: SP_SLATE, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
                     {b.sessionType === 'Live Session'
                       ? <><Radio size={10} /> Live Session</>
                       : <><Book size={10} /> Self-Paced Mastery</>}
@@ -182,7 +182,7 @@ export function SPTimetablePage() {
                   </div>
                 </div>
                 {b.sessionType === 'Live Session' && b.meetLink && (
-                  <a href={b.meetLink} target="_blank" rel="noreferrer" style={{ fontSize: 9, fontWeight: 800, background: '#059669', color: '#fff', padding: '5px 12px', borderRadius: 6, textDecoration: 'none', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Link2 size={10} /> Join</a>
+                  <a href={b.meetLink} target="_blank" rel="noreferrer" style={{ fontSize: 14, fontWeight: 800, background: '#059669', color: '#fff', padding: '5px 12px', borderRadius: 6, textDecoration: 'none', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Link2 size={10} /> Join</a>
                 )}
               </div>
             ))}
@@ -193,7 +193,7 @@ export function SPTimetablePage() {
       {/* Weekly grid */}
       <div style={card}>
         <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '12px 16px' }}>
-          <div style={{ fontSize: 12, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 6 }}><CalendarClock size={12} /> Weekly Overview</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 6 }}><CalendarClock size={12} /> Weekly Overview</div>
         </div>
         {!loaded ? (
           <div style={{ padding: 18 }}><div style={emptyState}>Loading…</div></div>
@@ -201,12 +201,12 @@ export function SPTimetablePage() {
           <div style={{ padding: 18 }}><div style={emptyState}>You don't have any timetable blocks yet. Check back once your coach sets up your schedule.</div></div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, minWidth: 560 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 15, minWidth: 560 }}>
               <thead>
                 <tr>
-                  <th style={{ padding: '8px 12px', background: '#F7F9FC', border: '1px solid #E4EAF2', fontSize: 10, color: SP_SLATE, textAlign: 'left', whiteSpace: 'nowrap' }}>Block</th>
+                  <th style={{ padding: '8px 12px', background: '#F7F9FC', border: '1px solid #E4EAF2', fontSize: 14, color: SP_SLATE, textAlign: 'left', whiteSpace: 'nowrap' }}>Block</th>
                   {activeDays.map(d => (
-                    <th key={d} style={{ padding: '8px 10px', background: d === today ? '#EEF3FF' : '#F7F9FC', border: '1px solid #E4EAF2', fontSize: 10, fontWeight: 800, color: d === today ? SP_NAVY : '#3D5475', textAlign: 'center' }}>
+                    <th key={d} style={{ padding: '8px 10px', background: d === today ? '#EEF3FF' : '#F7F9FC', border: '1px solid #E4EAF2', fontSize: 14, fontWeight: 800, color: d === today ? SP_NAVY : '#3D5475', textAlign: 'center' }}>
                       {d}{d === today ? ' •' : ''}
                     </th>
                   ))}
@@ -215,21 +215,21 @@ export function SPTimetablePage() {
               <tbody>
                 {activePeriods.map((per, pi) => (
                   <tr key={per} style={{ background: pi % 2 === 0 ? '#fff' : '#FAFBFF' }}>
-                    <td style={{ padding: '7px 12px', border: '1px solid #E4EAF2', fontWeight: 700, color: '#3D5475', whiteSpace: 'nowrap', fontSize: 10 }}>{per}</td>
+                    <td style={{ padding: '7px 12px', border: '1px solid #E4EAF2', fontWeight: 700, color: '#3D5475', whiteSpace: 'nowrap', fontSize: 14 }}>{per}</td>
                     {activeDays.map(day => {
                       const cell = cellBlocks(day, per)
                       return (
                         <td key={day} style={{ padding: 4, border: '1px solid #E4EAF2', verticalAlign: 'top', minWidth: 120, background: day === today ? 'rgba(238,243,255,.4)' : undefined }}>
                           {cell.map(b => (
                             <div key={b.id} style={{ background: colorFor[b.subject || b.name || b.id], borderRadius: 6, padding: '6px 8px', marginBottom: 3, border: '1px solid rgba(0,0,0,.06)' }}>
-                              <div style={{ fontSize: 10, fontWeight: 800, color: SP_NAVY }}>{b.name || b.subject || '—'}</div>
-                              {b.time && <div style={{ fontSize: 9, color: '#5A6B85', display: 'flex', alignItems: 'center', gap: 3 }}><Clock size={9} /> {timeRange(b.time)}</div>}
-                              <div style={{ fontSize: 9, color: b.sessionType === 'Live Session' ? SP_RED : '#7C3AED', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 3 }}>
+                              <div style={{ fontSize: 14, fontWeight: 800, color: SP_NAVY }}>{b.name || b.subject || '—'}</div>
+                              {b.time && <div style={{ fontSize: 14, color: '#5A6B85', display: 'flex', alignItems: 'center', gap: 3 }}><Clock size={9} /> {timeRange(b.time)}</div>}
+                              <div style={{ fontSize: 14, color: b.sessionType === 'Live Session' ? SP_RED : '#7C3AED', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 3 }}>
                                 {b.sessionType === 'Live Session' ? <><Radio size={9} /> Live</> : <><Book size={9} /> Self-Paced</>}
                               </div>
-                              {b.room && <div style={{ fontSize: 9, color: SP_SLATE, display: 'flex', alignItems: 'center', gap: 3 }}><MapPin size={9} /> {b.room}</div>}
+                              {b.room && <div style={{ fontSize: 14, color: SP_SLATE, display: 'flex', alignItems: 'center', gap: 3 }}><MapPin size={9} /> {b.room}</div>}
                               {b.sessionType === 'Live Session' && b.meetLink && (
-                                <a href={b.meetLink} target="_blank" rel="noreferrer" style={{ fontSize: 9, fontWeight: 700, color: '#0369A1', display: 'inline-flex', alignItems: 'center', gap: 3 }}><Link2 size={9} /> Join</a>
+                                <a href={b.meetLink} target="_blank" rel="noreferrer" style={{ fontSize: 14, fontWeight: 700, color: '#0369A1', display: 'inline-flex', alignItems: 'center', gap: 3 }}><Link2 size={9} /> Join</a>
                               )}
                             </div>
                           ))}

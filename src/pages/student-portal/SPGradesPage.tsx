@@ -26,7 +26,7 @@ export function SPGradesPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ fontSize: 18, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 8 }}><BarChart3 size={18} /> My Grades</div>
+      <div style={{ fontSize: 20, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 8 }}><BarChart3 size={18} /> My Grades</div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
         {navButtons.map((btn) => (
@@ -51,7 +51,7 @@ export function SPGradesPage() {
               <span style={{ width: 34, height: 34, borderRadius: 9, background: `${btn.color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: btn.color, flexShrink: 0 }}>
                 <btn.icon size={17} />
               </span>
-              <span style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY }}>{btn.label}</span>
+              <span style={{ fontSize: 16, fontWeight: 800, color: SP_NAVY }}>{btn.label}</span>
             </span>
             <ArrowRight size={14} color="#94A3B8" />
           </button>

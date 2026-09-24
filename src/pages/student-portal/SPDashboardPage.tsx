@@ -21,7 +21,7 @@ const emptyState: React.CSSProperties = {
   textAlign: 'center',
   padding: 16,
   color: '#7A92B0',
-  fontSize: 12,
+  fontSize: 16,
   background: '#F8FAFC',
   border: '1px dashed #D7E0EA',
   borderRadius: 10,
@@ -389,7 +389,7 @@ export function SPDashboardPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {blocksError && (
-        <div style={{ ...card, padding: '10px 16px', borderLeft: `4px solid ${SP_GOLD}`, fontSize: 11, color: '#7A92B0', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ ...card, padding: '10px 16px', borderLeft: `4px solid ${SP_GOLD}`, fontSize: 15, color: '#7A92B0', display: 'flex', alignItems: 'center', gap: 8 }}>
           <AlertTriangle size={12} color={SP_GOLD} />
           We couldn't load your class schedule right now. Try refreshing, or check{' '}
           <button
@@ -405,15 +405,15 @@ export function SPDashboardPage() {
       <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
         {/* Column 1 — Progress */}
         <div style={{ ...card, padding: 18, flex: 1, minWidth: 260 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 6 }}><GraduationCap size={13} /> Progress</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: SP_NAVY, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 6 }}><GraduationCap size={13} /> Progress</div>
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
             {ringMetrics.map((m) => (
               <div key={m.key} style={{ textAlign: 'center', minWidth: 68 }}>
                 <ProgressRing pct={m.pct} color={m.color} size={66} strokeWidth={7}>
-                  <span title={m.pct === null ? 'Not yet calculated' : undefined} style={{ fontSize: 11, fontWeight: 900, color: m.pct === null ? '#94A3B8' : m.color }}>{m.display}</span>
+                  <span title={m.pct === null ? 'Not yet calculated' : undefined} style={{ fontSize: 15, fontWeight: 900, color: m.pct === null ? '#94A3B8' : m.color }}>{m.display}</span>
                 </ProgressRing>
-                <div style={{ fontSize: 10, fontWeight: 700, color: SP_NAVY, marginTop: 7 }}>{m.label}</div>
-                {m.sub && <div style={{ fontSize: 8, color: '#7A92B0', marginTop: 1 }}>{m.sub}</div>}
+                <div style={{ fontSize: 14, fontWeight: 700, color: SP_NAVY, marginTop: 7 }}>{m.label}</div>
+                {m.sub && <div style={{ fontSize: 14, color: '#7A92B0', marginTop: 1 }}>{m.sub}</div>}
               </div>
             ))}
           </div>
@@ -421,7 +421,7 @@ export function SPDashboardPage() {
 
         {/* Column 2 — Next Class */}
         <div style={{ ...card, padding: 18, flex: 1, minWidth: 260, borderLeft: nextClass ? `4px solid ${nextClass.isLive ? SP_GREEN : SP_NAVY}` : undefined }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: SP_NAVY, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
             {nextClass?.sessionType === 'Live Session' ? <Radio size={13} /> : <Book size={13} />} Next Class
           </div>
           {nextClass ? (
@@ -431,13 +431,13 @@ export function SPDashboardPage() {
                   {nextClass.sessionType === 'Live Session' ? <Radio size={18} /> : <Book size={18} />}
                 </div>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 9, fontWeight: 800, color: nextClass.isLive ? SP_GREEN : '#7A92B0', textTransform: 'uppercase', letterSpacing: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: nextClass.isLive ? SP_GREEN : '#7A92B0', textTransform: 'uppercase', letterSpacing: 1 }}>
                     {nextClass.isLive ? 'Live now' : nextClass.isToday ? 'Today' : nextClass.day}
                   </div>
-                  <div style={{ fontSize: 14, fontWeight: 800, color: SP_NAVY }}>{nextClass.name || nextClass.subject || 'Class'}</div>
+                  <div style={{ fontSize: 17, fontWeight: 800, color: SP_NAVY }}>{nextClass.name || nextClass.subject || 'Class'}</div>
                 </div>
               </div>
-              <div style={{ fontSize: 11, color: '#7A92B0', display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+              <div style={{ fontSize: 15, color: '#7A92B0', display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
                 <span>{nextClass.time || nextClass.period}</span>
                 {nextClass.room && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><MapPin size={10} /> {nextClass.room}</span>}
               </div>
@@ -445,14 +445,14 @@ export function SPDashboardPage() {
                 {nextClass.sessionType === 'Live Session' && nextClass.meetLink && (
                   <a
                     href={nextClass.meetLink} target="_blank" rel="noreferrer"
-                    style={{ fontSize: 11, fontWeight: 800, background: nextClass.isLive ? SP_GREEN : '#E0F2FE', color: nextClass.isLive ? '#fff' : '#0369A1', padding: '8px 16px', borderRadius: 8, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    style={{ fontSize: 15, fontWeight: 800, background: nextClass.isLive ? SP_GREEN : '#E0F2FE', color: nextClass.isLive ? '#fff' : '#0369A1', padding: '8px 16px', borderRadius: 8, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}
                   >
                     <Link2 size={12} /> Join Now
                   </a>
                 )}
                 <button
                   onClick={() => navigate(`${prefix}/timetable`)}
-                  style={{ fontSize: 11, color: '#7A92B0', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Poppins,sans-serif', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                  style={{ fontSize: 15, color: '#7A92B0', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Poppins,sans-serif', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                 >
                   Full timetable <ArrowRight size={11} />
                 </button>
@@ -467,19 +467,19 @@ export function SPDashboardPage() {
       {/* Zone 3 — Action Queue */}
       {queueItems.length > 0 && (
         <div style={{ ...card, padding: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}><Zap size={13} /> Needs Your Attention</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: SP_NAVY, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}><Zap size={13} /> Needs Your Attention</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {queueItems.map((item) => (
               <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: item.bg, borderRadius: 9 }}>
                 <div style={{ color: item.color, flexShrink: 0 }}><item.icon size={16} /></div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: SP_NAVY }}>{item.title}</div>
-                  <div style={{ fontSize: 11, color: '#7A92B0' }}>{item.detail}</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: SP_NAVY }}>{item.title}</div>
+                  <div style={{ fontSize: 15, color: '#7A92B0' }}>{item.detail}</div>
                 </div>
                 {item.cta && (
                   <button
                     onClick={() => navigate(item.cta!.to)}
-                    style={{ fontSize: 11, fontWeight: 800, color: item.color, background: '#fff', border: `1.5px solid ${item.color}40`, borderRadius: 7, padding: '6px 12px', cursor: 'pointer', fontFamily: 'Poppins,sans-serif', flexShrink: 0, whiteSpace: 'nowrap' }}
+                    style={{ fontSize: 15, fontWeight: 800, color: item.color, background: '#fff', border: `1.5px solid ${item.color}40`, borderRadius: 7, padding: '6px 12px', cursor: 'pointer', fontFamily: 'Poppins,sans-serif', flexShrink: 0, whiteSpace: 'nowrap' }}
                   >
                     {item.cta.label}
                   </button>
@@ -495,7 +495,7 @@ export function SPDashboardPage() {
         <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
           {/* Column 1 — Quick Actions */}
           <div style={{ flex: 1, minWidth: 220 }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}><Zap size={13} /> Quick Actions</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: SP_NAVY, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}><Zap size={13} /> Quick Actions</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {quickActions.map((action) => (
                 <button
@@ -504,7 +504,7 @@ export function SPDashboardPage() {
                   style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '7px 10px', background: `${action.color}10`, border: `1.5px solid ${action.color}25`, borderRadius: 9, cursor: 'pointer', fontFamily: 'Poppins,sans-serif' }}
                 >
                   <span style={{ display: 'inline-flex', color: action.color }}><action.icon size={14} /></span>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: SP_NAVY }}>{action.label}</span>
+                  <span style={{ fontSize: 15, fontWeight: 600, color: SP_NAVY }}>{action.label}</span>
                   <span style={{ marginLeft: 'auto', color: '#7A92B0', display: 'inline-flex' }}><ArrowRight size={11} /></span>
                 </button>
               ))}
@@ -514,10 +514,10 @@ export function SPDashboardPage() {
           {/* Column 2 — This Week + Upcoming Deadlines */}
           <div style={{ flex: 1.4, minWidth: 280 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 6 }}><CalendarDays size={13} /> This Week</div>
+              <div style={{ fontSize: 16, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 6 }}><CalendarDays size={13} /> This Week</div>
               <button
                 onClick={() => navigate(`${prefix}/timetable`)}
-                style={{ fontSize: 11, color: '#7A92B0', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Poppins,sans-serif', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                style={{ fontSize: 15, color: '#7A92B0', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Poppins,sans-serif', display: 'inline-flex', alignItems: 'center', gap: 4 }}
               >
                 Full timetable <ArrowRight size={10} />
               </button>
@@ -526,19 +526,19 @@ export function SPDashboardPage() {
             <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
               {weekStrip.map((d) => (
                 <div key={d.dateIso} style={{ flex: 1, textAlign: 'center', padding: '8px 4px', borderRadius: 8, background: d.isToday ? SP_NAVY : '#F7F9FC', border: `1px solid ${d.isToday ? SP_NAVY : '#E4EAF2'}` }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: d.isToday ? 'rgba(255,255,255,.7)' : '#94A3B8', textTransform: 'uppercase' }}>{d.label}</div>
-                  <div style={{ fontSize: 14, fontWeight: 800, color: d.isToday ? '#fff' : SP_NAVY, marginTop: 2 }}>{d.dayNum}</div>
-                  {d.count > 0 && <div style={{ fontSize: 8, fontWeight: 700, color: d.isToday ? SP_GOLD : SP_NAVY, marginTop: 2 }}>{d.count} class{d.count !== 1 ? 'es' : ''}</div>}
+                  <div style={{ fontSize: 14, fontWeight: 700, color: d.isToday ? 'rgba(255,255,255,.7)' : '#94A3B8', textTransform: 'uppercase' }}>{d.label}</div>
+                  <div style={{ fontSize: 17, fontWeight: 800, color: d.isToday ? '#fff' : SP_NAVY, marginTop: 2 }}>{d.dayNum}</div>
+                  {d.count > 0 && <div style={{ fontSize: 14, fontWeight: 700, color: d.isToday ? SP_GOLD : SP_NAVY, marginTop: 2 }}>{d.count} class{d.count !== 1 ? 'es' : ''}</div>}
                 </div>
               ))}
             </div>
 
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <div style={{ fontSize: 11, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 5 }}><Clock size={11} /> Upcoming Deadlines</div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 5 }}><Clock size={11} /> Upcoming Deadlines</div>
                 <button
                   onClick={() => navigate(`${prefix}/assignments`)}
-                  style={{ fontSize: 10, color: '#7A92B0', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Poppins,sans-serif', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+                  style={{ fontSize: 14, color: '#7A92B0', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Poppins,sans-serif', display: 'inline-flex', alignItems: 'center', gap: 3 }}
                 >
                   View all <ArrowRight size={9} />
                 </button>
@@ -554,10 +554,10 @@ export function SPDashboardPage() {
                     <div key={row.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid #F0F4FA' }}>
                       <div style={{ width: 32, height: 32, borderRadius: 8, background: `${color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', color, flexShrink: 0 }}><FileText size={13} /></div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: SP_NAVY }}>{row.title}</div>
-                        <div style={{ fontSize: 10, color: '#7A92B0' }}>{row.subject || ''}</div>
+                        <div style={{ fontSize: 16, fontWeight: 700, color: SP_NAVY }}>{row.title}</div>
+                        <div style={{ fontSize: 14, color: '#7A92B0' }}>{row.subject || ''}</div>
                       </div>
-                      <div style={{ fontSize: 10, fontWeight: 800, color, flexShrink: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 800, color, flexShrink: 0 }}>
                         {daysLeft === 0 ? 'Today' : daysLeft === 1 ? 'Tomorrow' : `${daysLeft}d`}
                       </div>
                     </div>
@@ -570,22 +570,22 @@ export function SPDashboardPage() {
 
         <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid #F0F4F8' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-            <div style={{ fontSize: 11, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 5 }}><Medal size={11} /> My Badges</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 5 }}><Medal size={11} /> My Badges</div>
             <button
               onClick={() => navigate(`${prefix}/badges`)}
-              style={{ fontSize: 10, color: SP_RED, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Poppins,sans-serif', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+              style={{ fontSize: 14, color: SP_RED, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Poppins,sans-serif', display: 'inline-flex', alignItems: 'center', gap: 3 }}
             >
               View all <ArrowRight size={9} />
             </button>
           </div>
           {badges.length === 0 ? (
-            <div style={{ fontSize: 11, color: '#94A3B8' }}>No badges earned yet.</div>
+            <div style={{ fontSize: 15, color: '#94A3B8' }}>No badges earned yet.</div>
           ) : (
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {badges.slice(0, 6).map((badge) => (
                 <div key={`${badge.name}-${badge.earned_at}`} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', background: '#F7F9FC', borderRadius: 16, border: '1px solid #E4EAF2' }}>
                   <Medal size={14} color={SP_GOLD} />
-                  <span style={{ fontSize: 10, fontWeight: 700, color: SP_NAVY }}>{badge.name}</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: SP_NAVY }}>{badge.name}</span>
                 </div>
               ))}
             </div>

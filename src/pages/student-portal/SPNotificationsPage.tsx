@@ -147,16 +147,16 @@ export function SPNotificationsPage() {
       <style>{styles}</style>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
         <Bell size={20} color="#1A365E" />
-        <h1 style={{ fontSize: 19, fontWeight: 800, color: '#1A365E', margin: 0 }}>Notifications</h1>
+        <h1 style={{ fontSize: 21, fontWeight: 800, color: '#1A365E', margin: 0 }}>Notifications</h1>
       </div>
-      <div style={{ fontSize: 12.5, color: '#7A92B0', marginBottom: 20 }}>Messages sent to you from school staff.</div>
+      <div style={{ fontSize: 17, color: '#7A92B0', marginBottom: 20 }}>Messages sent to you from school staff.</div>
 
       {loading ? (
-        <div style={{ fontSize: 13, color: '#7A92B0' }}>Loading…</div>
+        <div style={{ fontSize: 16, color: '#7A92B0' }}>Loading…</div>
       ) : error ? (
-        <div style={{ fontSize: 13, color: '#D61F31' }}>{error}</div>
+        <div style={{ fontSize: 16, color: '#D61F31' }}>{error}</div>
       ) : items.length === 0 ? (
-        <div style={{ padding: '40px 0', textAlign: 'center', color: '#9AACC4', fontSize: 13 }}>You don't have any notifications yet.</div>
+        <div style={{ padding: '40px 0', textAlign: 'center', color: '#9AACC4', fontSize: 16 }}>You don't have any notifications yet.</div>
       ) : (
         <>
           {items.map(n => {
@@ -169,14 +169,14 @@ export function SPNotificationsPage() {
               >
                 <button className="spn-card-head" onClick={() => toggle(n)}>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: n.read ? 600 : 800, color: '#1A365E' }}>{n.subject}</div>
+                    <div style={{ fontSize: 17, fontWeight: n.read ? 600 : 800, color: '#1A365E' }}>{n.subject}</div>
                     {!isOpen && (
-                      <div style={{ fontSize: 12.5, color: '#7A92B0', marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <div style={{ fontSize: 17, color: '#7A92B0', marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {n.content}
                       </div>
                     )}
                   </div>
-                  <span style={{ fontSize: 11, color: '#9AACC4', flexShrink: 0, whiteSpace: 'nowrap' }}>{timeAgo(n.sentAt)}</span>
+                  <span style={{ fontSize: 15, color: '#9AACC4', flexShrink: 0, whiteSpace: 'nowrap' }}>{timeAgo(n.sentAt)}</span>
                 </button>
                 <div className={`spn-card-body${isOpen ? ' spn-card-body--open' : ''}`}>
                   <div className="spn-card-body-inner">

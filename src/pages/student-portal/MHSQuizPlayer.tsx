@@ -119,20 +119,20 @@ export function MHSQuizPlayer() {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div style={card}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: '#1A365E', marginBottom: 10 }}>My Quizzes</div>
-          {error && <div style={{ color: '#DC2626', fontSize: 12, marginBottom: 8 }}>{error}</div>}
-          {list.length === 0 && <div style={{ fontSize: 12, color: '#7A92B0' }}>No quizzes assigned yet.</div>}
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E', marginBottom: 10 }}>My Quizzes</div>
+          {error && <div style={{ color: '#DC2626', fontSize: 16, marginBottom: 8 }}>{error}</div>}
+          {list.length === 0 && <div style={{ fontSize: 16, color: '#7A92B0' }}>No quizzes assigned yet.</div>}
           {list.map((q) => (
             <button key={q.lessonId} onClick={() => void openQuiz(q.lessonId)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', marginBottom: 6, borderRadius: 8, border: '1.5px solid #E4EAF2', background: '#F7F9FC', cursor: 'pointer' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#1A365E' }}>{q.title}</div>
-              <div style={{ fontSize: 10, color: '#7A92B0' }}>{q.courseTitle} · attempt {q.attemptCount}/{q.maxAttempts ?? '—'} · {q.status.replace('_', ' ')}</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: '#1A365E' }}>{q.title}</div>
+              <div style={{ fontSize: 14, color: '#7A92B0' }}>{q.courseTitle} · attempt {q.attemptCount}/{q.maxAttempts ?? '—'} · {q.status.replace('_', ' ')}</div>
             </button>
           ))}
         </div>
 
         {components.length > 0 && (
           <div style={card}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: '#1A365E', marginBottom: 10 }}>My Notes &amp; Other Work</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E', marginBottom: 10 }}>My Notes &amp; Other Work</div>
             {components.map((c) => (
               <MyComponentRow key={c.componentId} component={c} onChanged={() => { void loadComponents() }} />
             ))}
@@ -141,7 +141,7 @@ export function MHSQuizPlayer() {
 
         {howScores.length > 0 && (
           <div style={card}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: '#1A365E', marginBottom: 10 }}>My Habits of Work Scores</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E', marginBottom: 10 }}>My Habits of Work Scores</div>
             {howScores.map((h) => (
               <MyHowScoreRow key={h.howScoreId} howScore={h} onChanged={() => { void loadHowScores() }} />
             ))}
@@ -153,10 +153,10 @@ export function MHSQuizPlayer() {
 
   return (
     <div style={card}>
-      <button onClick={() => { setSelectedLessonId(null); setQuiz(null) }} style={{ background: 'none', border: 'none', color: '#0369A1', fontSize: 11, cursor: 'pointer', marginBottom: 10, display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={12} /> Back to quiz list</button>
-      {error && <div style={{ color: '#DC2626', fontSize: 12, marginBottom: 8 }}>{error}</div>}
+      <button onClick={() => { setSelectedLessonId(null); setQuiz(null) }} style={{ background: 'none', border: 'none', color: '#0369A1', fontSize: 15, cursor: 'pointer', marginBottom: 10, display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={12} /> Back to quiz list</button>
+      {error && <div style={{ color: '#DC2626', fontSize: 16, marginBottom: 8 }}>{error}</div>}
       {!quiz ? (
-        <div style={{ fontSize: 12, color: '#7A92B0' }}>Loading…</div>
+        <div style={{ fontSize: 16, color: '#7A92B0' }}>Loading…</div>
       ) : result ? (
         <div style={{ padding: 16, textAlign: 'center' }}>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
@@ -166,8 +166,8 @@ export function MHSQuizPlayer() {
               ? <Flag size={32} color="#DC2626" />
               : <RotateCcw size={32} color="#7A92B0" />}
           </div>
-          <div style={{ fontSize: 14, fontWeight: 800, color: '#1A365E' }}>Score: {result.scorePct}%</div>
-          <div style={{ fontSize: 12, color: '#7A92B0', marginTop: 4 }}>
+          <div style={{ fontSize: 17, fontWeight: 800, color: '#1A365E' }}>Score: {result.scorePct}%</div>
+          <div style={{ fontSize: 16, color: '#7A92B0', marginTop: 4 }}>
             {result.passed
               ? 'You passed! This lesson is unlocked.'
               : result.flaggedForTeacher
@@ -177,13 +177,13 @@ export function MHSQuizPlayer() {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: '#1A365E' }}>{quiz.lesson.title}</div>
-          <div style={{ fontSize: 11, color: '#7A92B0' }}>Need {quiz.lesson.gateThresholdPct}% to pass · Attempt {quiz.component.attemptCount + 1} of {quiz.lesson.maxAttempts}</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E' }}>{quiz.lesson.title}</div>
+          <div style={{ fontSize: 15, color: '#7A92B0' }}>Need {quiz.lesson.gateThresholdPct}% to pass · Attempt {quiz.component.attemptCount + 1} of {quiz.lesson.maxAttempts}</div>
           {quiz.questions.map((q, qi) => (
             <div key={qi} style={{ padding: 10, background: '#F7F9FC', borderRadius: 8 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#1A365E', marginBottom: 6 }}>{qi + 1}. {q.question}</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: '#1A365E', marginBottom: 6 }}>{qi + 1}. {q.question}</div>
               {q.choices.map((c, ci) => (
-                <label key={ci} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0', fontSize: 12 }}>
+                <label key={ci} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0', fontSize: 16 }}>
                   <input type="radio" name={`q_${qi}`} checked={answers[qi] === ci} onChange={() => setAnswers((prev) => prev.map((a, i) => (i === qi ? ci : a)))} />
                   {c}
                 </label>
@@ -193,7 +193,7 @@ export function MHSQuizPlayer() {
           <button
             onClick={() => void submit()}
             disabled={loading || answers.some((a) => a === -1)}
-            style={{ alignSelf: 'flex-start', padding: '9px 20px', background: answers.some((a) => a === -1) ? '#CBD5E1' : '#059669', color: '#fff', border: 'none', borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: answers.some((a) => a === -1) ? 'not-allowed' : 'pointer' }}
+            style={{ alignSelf: 'flex-start', padding: '9px 20px', background: answers.some((a) => a === -1) ? '#CBD5E1' : '#059669', color: '#fff', border: 'none', borderRadius: 9, fontSize: 16, fontWeight: 700, cursor: answers.some((a) => a === -1) ? 'not-allowed' : 'pointer' }}
           >
             {loading ? 'Submitting…' : 'Submit Quiz'}
           </button>
@@ -259,8 +259,8 @@ function MyComponentRow({ component, onChanged }: { component: MyComponent; onCh
 
   return (
     <div style={{ padding: '10px 12px', marginBottom: 6, borderRadius: 8, border: '1.5px solid #E4EAF2', background: '#F7F9FC' }}>
-      <div style={{ fontSize: 12, fontWeight: 700, color: '#1A365E' }}>{component.lessonTitle} <span style={{ fontWeight: 400, color: '#7A92B0' }}>· {COMPONENT_TYPE_LABELS[component.componentType] ?? component.componentType}</span></div>
-      <div style={{ fontSize: 10, color: '#7A92B0', marginTop: 2 }}>
+      <div style={{ fontSize: 16, fontWeight: 700, color: '#1A365E' }}>{component.lessonTitle} <span style={{ fontWeight: 400, color: '#7A92B0' }}>· {COMPONENT_TYPE_LABELS[component.componentType] ?? component.componentType}</span></div>
+      <div style={{ fontSize: 14, color: '#7A92B0', marginTop: 2 }}>
         {component.needsReview
           ? '4+ days late — your teacher will review this.'
           : component.latePenaltyPct !== null && component.latePenaltyPct < 100
@@ -270,25 +270,25 @@ function MyComponentRow({ component, onChanged }: { component: MyComponent; onCh
       </div>
 
       {component.reflection && (
-        <div style={{ fontSize: 10, marginTop: 6, color: component.reflection.status === 'Approved' ? '#15803D' : component.reflection.status === 'Denied' ? '#B91C1C' : '#92400E' }}>
+        <div style={{ fontSize: 14, marginTop: 6, color: component.reflection.status === 'Approved' ? '#15803D' : component.reflection.status === 'Denied' ? '#B91C1C' : '#92400E' }}>
           Reflection {component.reflection.status.toLowerCase()}
           {component.reflection.status === 'Approved' ? ` — ${component.reflection.pointsAwarded} pts restored` : ''}
         </div>
       )}
       {component.dispute && (
-        <div style={{ fontSize: 10, marginTop: 6, color: component.dispute.status === 'Resolved' ? '#15803D' : '#92400E' }}>
+        <div style={{ fontSize: 14, marginTop: 6, color: component.dispute.status === 'Resolved' ? '#15803D' : '#92400E' }}>
           Dispute {component.dispute.status.toLowerCase()}
         </div>
       )}
 
       <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
         {component.canReflect && !showForm && (
-          <button onClick={() => { setShowForm('reflection'); setText('') }} style={{ padding: '5px 12px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+          <button onClick={() => { setShowForm('reflection'); setText('') }} style={{ padding: '5px 12px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 6, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
             Submit a reflection to recover points
           </button>
         )}
         {component.canDispute && !showForm && (
-          <button onClick={() => { setShowForm('dispute'); setText('') }} style={{ padding: '5px 12px', background: '#FEE2E2', color: '#B91C1C', border: '1.5px solid #FCA5A5', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+          <button onClick={() => { setShowForm('dispute'); setText('') }} style={{ padding: '5px 12px', background: '#FEE2E2', color: '#B91C1C', border: '1.5px solid #FCA5A5', borderRadius: 6, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
             File a Dispute
           </button>
         )}
@@ -296,23 +296,23 @@ function MyComponentRow({ component, onChanged }: { component: MyComponent; onCh
 
       {showForm && (
         <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {error && <div style={{ color: '#DC2626', fontSize: 11 }}>{error}</div>}
+          {error && <div style={{ color: '#DC2626', fontSize: 15 }}>{error}</div>}
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
             rows={3}
             placeholder={showForm === 'reflection' ? 'What happened, and what will you do differently next time?' : 'Why do you believe this score should be reviewed?'}
-            style={{ width: '100%', padding: '7px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 12, resize: 'vertical', boxSizing: 'border-box' }}
+            style={{ width: '100%', padding: '7px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 16, resize: 'vertical', boxSizing: 'border-box' }}
           />
           <div style={{ display: 'flex', gap: 8 }}>
             <button
               onClick={() => void (showForm === 'reflection' ? submitReflection() : submitDispute())}
               disabled={submitting || !text.trim()}
-              style={{ padding: '6px 14px', background: text.trim() ? '#059669' : '#CBD5E1', color: '#fff', border: 'none', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: text.trim() ? 'pointer' : 'not-allowed' }}
+              style={{ padding: '6px 14px', background: text.trim() ? '#059669' : '#CBD5E1', color: '#fff', border: 'none', borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: text.trim() ? 'pointer' : 'not-allowed' }}
             >
               {submitting ? 'Submitting…' : showForm === 'reflection' ? 'Submit Reflection' : 'File Dispute'}
             </button>
-            <button onClick={() => setShowForm(null)} style={{ padding: '6px 14px', background: 'none', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 11, color: '#7A92B0', cursor: 'pointer' }}>Cancel</button>
+            <button onClick={() => setShowForm(null)} style={{ padding: '6px 14px', background: 'none', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 15, color: '#7A92B0', cursor: 'pointer' }}>Cancel</button>
           </div>
         </div>
       )}
@@ -350,24 +350,24 @@ function MyHowScoreRow({ howScore, onChanged }: { howScore: MyHowScore; onChange
   return (
     <div style={{ padding: '10px 12px', marginBottom: 6, borderRadius: 8, border: '1.5px solid #E4EAF2', background: '#F7F9FC' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#1A365E' }}>{howScore.lessonTitle}</div>
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#1A365E' }}>{howScore.pct}%</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#1A365E' }}>{howScore.lessonTitle}</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#1A365E' }}>{howScore.pct}%</div>
       </div>
-      {howScore.dispute && <div style={{ fontSize: 10, marginTop: 4, color: howScore.dispute.status === 'Resolved' ? '#15803D' : '#92400E' }}>Dispute {howScore.dispute.status.toLowerCase()}</div>}
+      {howScore.dispute && <div style={{ fontSize: 14, marginTop: 4, color: howScore.dispute.status === 'Resolved' ? '#15803D' : '#92400E' }}>Dispute {howScore.dispute.status.toLowerCase()}</div>}
       {howScore.canDispute && !showForm && (
-        <button onClick={() => setShowForm(true)} style={{ marginTop: 8, padding: '5px 12px', background: '#FEE2E2', color: '#B91C1C', border: '1.5px solid #FCA5A5', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+        <button onClick={() => setShowForm(true)} style={{ marginTop: 8, padding: '5px 12px', background: '#FEE2E2', color: '#B91C1C', border: '1.5px solid #FCA5A5', borderRadius: 6, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
           File a Dispute
         </button>
       )}
       {showForm && (
         <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {error && <div style={{ color: '#DC2626', fontSize: 11 }}>{error}</div>}
-          <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} placeholder="Why do you believe this score should be reviewed?" style={{ width: '100%', padding: '7px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 12, resize: 'vertical', boxSizing: 'border-box' }} />
+          {error && <div style={{ color: '#DC2626', fontSize: 15 }}>{error}</div>}
+          <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} placeholder="Why do you believe this score should be reviewed?" style={{ width: '100%', padding: '7px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 16, resize: 'vertical', boxSizing: 'border-box' }} />
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => void submitDispute()} disabled={submitting || !text.trim()} style={{ padding: '6px 14px', background: text.trim() ? '#059669' : '#CBD5E1', color: '#fff', border: 'none', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: text.trim() ? 'pointer' : 'not-allowed' }}>
+            <button onClick={() => void submitDispute()} disabled={submitting || !text.trim()} style={{ padding: '6px 14px', background: text.trim() ? '#059669' : '#CBD5E1', color: '#fff', border: 'none', borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: text.trim() ? 'pointer' : 'not-allowed' }}>
               {submitting ? 'Submitting…' : 'File Dispute'}
             </button>
-            <button onClick={() => setShowForm(false)} style={{ padding: '6px 14px', background: 'none', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 11, color: '#7A92B0', cursor: 'pointer' }}>Cancel</button>
+            <button onClick={() => setShowForm(false)} style={{ padding: '6px 14px', background: 'none', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 15, color: '#7A92B0', cursor: 'pointer' }}>Cancel</button>
           </div>
         </div>
       )}

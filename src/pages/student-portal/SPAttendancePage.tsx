@@ -24,7 +24,7 @@ const emptyState: React.CSSProperties = {
   textAlign: 'center',
   padding: 20,
   color: SP_SLATE,
-  fontSize: 12,
+  fontSize: 16,
   background: '#F8FAFC',
   border: '1px dashed #D7E0EA',
   borderRadius: 10,
@@ -123,11 +123,11 @@ export function SPAttendancePage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ fontSize: 18, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 8 }}><CalendarDays size={18} /> My Attendance</div>
+      <div style={{ fontSize: 20, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 8 }}><CalendarDays size={18} /> My Attendance</div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: 14 }}>
         <div style={{ ...card, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: SP_SLATE, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: SP_SLATE, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
             Attendance Rate
           </div>
           <svg width="160" height="160" viewBox="0 0 160 160">
@@ -151,7 +151,7 @@ export function SPAttendancePage() {
             </text>
           </svg>
           {stats.rate < 90 && (
-            <div style={{ fontSize: 10, color: SP_RED, fontWeight: 700, textAlign: 'center', marginTop: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+            <div style={{ fontSize: 14, color: SP_RED, fontWeight: 700, textAlign: 'center', marginTop: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
               <AlertTriangle size={11} /> Below 90% threshold
             </div>
           )}
@@ -166,8 +166,8 @@ export function SPAttendancePage() {
           ] as { label: string; value: number; color: string; icon: LucideIcon }[]).map((item) => (
             <div key={item.label} style={{ ...card, padding: 14, textAlign: 'center' }}>
               <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 4, color: item.color }}><item.icon size={24} /></div>
-              <div style={{ fontSize: 24, fontWeight: 800, color: item.color }}>{item.value}</div>
-              <div style={{ fontSize: 10, color: SP_SLATE, fontWeight: 600 }}>{item.label}</div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: item.color }}>{item.value}</div>
+              <div style={{ fontSize: 14, color: SP_SLATE, fontWeight: 600 }}>{item.label}</div>
             </div>
           ))}
         </div>
@@ -175,7 +175,7 @@ export function SPAttendancePage() {
 
       {months.length === 0 ? (
         <div style={card}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}><CalendarDays size={13} /> Attendance Calendar</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: SP_NAVY, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}><CalendarDays size={13} /> Attendance Calendar</div>
           <div style={emptyState}>No attendance records yet.</div>
         </div>
       ) : (
@@ -187,10 +187,10 @@ export function SPAttendancePage() {
 
           return (
             <div key={monthKey} style={{ ...card, padding: 18 }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}><CalendarDays size={13} /> {label}</div>
+              <div style={{ fontSize: 16, fontWeight: 800, color: SP_NAVY, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}><CalendarDays size={13} /> {label}</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 4 }}>
                 {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-                  <div key={day} style={{ textAlign: 'center', fontSize: 9, fontWeight: 700, color: SP_SLATE, padding: '4px 0' }}>
+                  <div key={day} style={{ textAlign: 'center', fontSize: 14, fontWeight: 700, color: SP_SLATE, padding: '4px 0' }}>
                     {day}
                   </div>
                 ))}
@@ -207,7 +207,7 @@ export function SPAttendancePage() {
                   if (isWeekend) {
                     return (
                       <div key={dateStr} style={{ textAlign: 'center', padding: '6px 0' }}>
-                        <div style={{ width: 28, height: 28, borderRadius: 6, background: '#F7F9FC', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#C0C0C0' }}>
+                        <div style={{ width: 28, height: 28, borderRadius: 6, background: '#F7F9FC', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: '#C0C0C0' }}>
                           {dayNumber}
                         </div>
                       </div>
@@ -216,7 +216,7 @@ export function SPAttendancePage() {
 
                   return (
                     <div key={dateStr} title={`${dateStr}${status ? ` — ${statLabels[status]}` : ''}`} style={{ textAlign: 'center', padding: '6px 0' }}>
-                      <div style={{ width: 28, height: 28, borderRadius: 6, background: color, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: status ? '#fff' : '#9EB3C8' }}>
+                      <div style={{ width: 28, height: 28, borderRadius: 6, background: color, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: status ? '#fff' : '#9EB3C8' }}>
                         {dayNumber}
                       </div>
                     </div>
@@ -228,7 +228,7 @@ export function SPAttendancePage() {
                 {Object.keys(statLabels).filter((key) => key).map((key) => (
                   <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                     <div style={{ width: 12, height: 12, borderRadius: 3, background: statCols[key] }} />
-                    <span style={{ fontSize: 9, color: SP_SLATE }}>{statLabels[key]}</span>
+                    <span style={{ fontSize: 14, color: SP_SLATE }}>{statLabels[key]}</span>
                   </div>
                 ))}
               </div>

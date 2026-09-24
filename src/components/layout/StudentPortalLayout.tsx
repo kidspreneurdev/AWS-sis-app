@@ -508,10 +508,10 @@ function NotificationBell({ getToken }: { getToken: () => string | null }) {
                   onClick={() => openNotification(n)}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                    <span style={{ fontSize: 12.5, fontWeight: n.read ? 600 : 800, color: '#1A365E' }}>{n.subject}</span>
-                    <span style={{ fontSize: 10, color: '#9AACC4', flexShrink: 0, whiteSpace: 'nowrap' }}>{timeAgo(n.sentAt)}</span>
+                    <span style={{ fontSize: 17, fontWeight: n.read ? 600 : 800, color: '#1A365E' }}>{n.subject}</span>
+                    <span style={{ fontSize: 14, color: '#9AACC4', flexShrink: 0, whiteSpace: 'nowrap' }}>{timeAgo(n.sentAt)}</span>
                   </div>
-                  <div style={{ fontSize: 11.5, color: '#7A92B0', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <div style={{ fontSize: 16, color: '#7A92B0', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {n.content}
                   </div>
                 </button>
@@ -627,14 +627,14 @@ export function StudentPortalLayout() {
               width: 52, height: 52, borderRadius: '50%',
               background: '#FAC600',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 22, fontWeight: 900, color: '#1A365E',
+              fontSize: 24, fontWeight: 900, color: '#1A365E',
               margin: '0 auto 8px',
               border: '3px solid rgba(255,255,255,.2)',
             }}>
               {initials}
             </div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#fff', lineHeight: 1.3 }}>{session.fullName}</div>
-            <div style={{ fontSize: 10, color: 'rgba(255,255,255,.45)', marginTop: 3 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#fff', lineHeight: 1.3 }}>{session.fullName}</div>
+            <div style={{ fontSize: 14, color: 'rgba(255,255,255,.45)', marginTop: 3 }}>
               Grade {session.grade}{session.campus ? ` · ${session.campus}` : ''}
             </div>
           </div>
@@ -645,7 +645,7 @@ export function StudentPortalLayout() {
               background: 'rgba(255,255,255,.12)',
               border: '1px solid rgba(255,255,255,.2)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 12, fontWeight: 800, color: '#fff',
+              fontSize: 16, fontWeight: 800, color: '#fff',
               margin: '0 auto',
             }}>
               {initials}
@@ -658,23 +658,23 @@ export function StudentPortalLayout() {
               background: 'rgba(255,255,255,.1)',
               border: '1px solid rgba(255,255,255,.18)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 16, fontWeight: 700, color: '#fff',
+              fontSize: 18, fontWeight: 700, color: '#fff',
               margin: '0 auto 10px',
               fontFamily: 'Poppins, sans-serif',
             }}>
               {initials}
             </div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: '#fff', fontFamily: 'Poppins, sans-serif', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <div style={{ fontSize: 18, fontWeight: 600, color: '#fff', fontFamily: 'Poppins, sans-serif', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {session.fullName || 'Student'}
             </div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,.5)', marginTop: 3, fontFamily: 'Poppins, sans-serif' }}>
+            <div style={{ fontSize: 16, color: 'rgba(255,255,255,.5)', marginTop: 3, fontFamily: 'Poppins, sans-serif' }}>
               {session.grade || 'Student'}{session.campus ? ` · ${session.campus}` : ''}
             </div>
             <div style={{
               display: 'inline-block', marginTop: 10,
               padding: '3px 10px', borderRadius: 20,
               background: 'rgba(255,255,255,.08)',
-              fontSize: 10.5, letterSpacing: 0.5, color: 'rgba(255,255,255,.55)',
+              fontSize: 15, letterSpacing: 0.5, color: 'rgba(255,255,255,.55)',
               fontFamily: "'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace",
             }}>
               {session.studentId}
@@ -698,7 +698,7 @@ export function StudentPortalLayout() {
                       ? { height: 0, padding: 0, margin: 0, overflow: 'hidden' }
                       : {
                         width: 'calc(100% - 16px)', margin: '10px 8px 2px', padding: '4px 6px',
-                        color: 'rgba(255,255,255,.55)', fontSize: 10, fontWeight: 800,
+                        color: 'rgba(255,255,255,.55)', fontSize: 14, fontWeight: 800,
                         textTransform: 'uppercase', letterSpacing: 1, fontFamily: 'Poppins, sans-serif',
                       }}
                   >
@@ -751,11 +751,11 @@ export function StudentPortalLayout() {
           {isK5 ? (
             <>
               <Star size={16} color="#FAC600" fill="#FAC600" />
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#FAC600' }}>K–5 Learning Portal</span>
-              <span style={{ fontSize: 10, color: 'rgba(255,255,255,.3)', marginLeft: 4 }}>2025–26</span>
+              <span style={{ fontSize: 16, fontWeight: 700, color: '#FAC600' }}>K–5 Learning Portal</span>
+              <span style={{ fontSize: 14, color: 'rgba(255,255,255,.3)', marginLeft: 4 }}>2025–26</span>
             </>
           ) : (
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Greetings, {session.fullName}</span>
+            <span style={{ fontSize: 16, fontWeight: 700, color: '#fff', minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Greetings, {session.fullName}</span>
           )}
           <NotificationBell getToken={getToken} />
         </header>
@@ -772,8 +772,8 @@ export function StudentPortalLayout() {
           onKeyDown={e => { if (e.key === 'Escape' && !signingOut) setConfirmSignOutOpen(false) }}
         >
           <div className="sp-modal-card" style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 380, boxShadow: '0 24px 60px rgba(0,0,0,.3)', padding: '22px 24px' }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: '#1A365E' }}>Sign out?</div>
-            <div style={{ fontSize: 12.5, color: '#5A7290', lineHeight: 1.55, marginTop: 8 }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: '#1A365E' }}>Sign out?</div>
+            <div style={{ fontSize: 17, color: '#5A7290', lineHeight: 1.55, marginTop: 8 }}>
               You'll need to sign back in with your Student ID and password to access the portal again.
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 20 }}>

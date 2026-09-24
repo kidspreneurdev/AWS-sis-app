@@ -291,35 +291,35 @@ export function SPAssignmentsPage() {
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
             <div style={{ flex: 1 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 15, fontWeight: 800, color: SP_NAVY }}>{assignment.title}</span>
-                <span style={{ background: meta.bg, color: meta.color, padding: '2px 10px', borderRadius: 10, fontSize: 10, fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ fontSize: 18, fontWeight: 800, color: SP_NAVY }}>{assignment.title}</span>
+                <span style={{ background: meta.bg, color: meta.color, padding: '2px 10px', borderRadius: 10, fontSize: 14, fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                   <meta.icon size={11} /> {assignment.displayStatus}
                 </span>
                 {assignment.type && (
-                  <span style={{ background: '#F7F9FC', color: '#7A92B0', padding: '2px 8px', borderRadius: 6, fontSize: 9, fontWeight: 700 }}>
+                  <span style={{ background: '#F7F9FC', color: '#7A92B0', padding: '2px 8px', borderRadius: 6, fontSize: 14, fontWeight: 700 }}>
                     {assignment.type}
                   </span>
                 )}
               </div>
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                {assignment.maxScore != null && <span style={{ fontSize: 11, color: '#7A92B0', display: 'inline-flex', alignItems: 'center', gap: 4 }}><BarChart3 size={11} /> {assignment.maxScore} pts max</span>}
+                {assignment.maxScore != null && <span style={{ fontSize: 15, color: '#7A92B0', display: 'inline-flex', alignItems: 'center', gap: 4 }}><BarChart3 size={11} /> {assignment.maxScore} pts max</span>}
                 {assignment.dueDate && (
-                  <span style={{ fontSize: 11, fontWeight: 700, color: relative.color, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ fontSize: 15, fontWeight: 700, color: relative.color, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                     <CalendarDays size={11} /> {assignment.dueDate}{relative.text ? ` (${relative.text})` : ''}
                   </span>
                 )}
               </div>
               {assignment.description && (
-                <div style={{ marginTop: 8, fontSize: 12, color: '#3D5475', lineHeight: 1.6, background: '#F7F9FC', padding: '8px 12px', borderRadius: 7 }}>
+                <div style={{ marginTop: 8, fontSize: 16, color: '#3D5475', lineHeight: 1.6, background: '#F7F9FC', padding: '8px 12px', borderRadius: 7 }}>
                   {assignment.description}
                 </div>
               )}
             </div>
             {score && (
               <div style={{ textAlign: 'center', padding: '12px 18px', background: `${score.color}15`, borderRadius: 10, minWidth: 90, flexShrink: 0 }}>
-                <div style={{ fontSize: 26, fontWeight: 900, color: score.color }}>{submission?.score}</div>
-                <div style={{ fontSize: 10, color: '#7A92B0', marginTop: 2 }}>{assignment.maxScore ? `of ${assignment.maxScore}` : 'pts'}</div>
-                {score.pct !== null && <div style={{ fontSize: 12, fontWeight: 800, color: score.color }}>{score.pct}%</div>}
+                <div style={{ fontSize: 28, fontWeight: 900, color: score.color }}>{submission?.score}</div>
+                <div style={{ fontSize: 14, color: '#7A92B0', marginTop: 2 }}>{assignment.maxScore ? `of ${assignment.maxScore}` : 'pts'}</div>
+                {score.pct !== null && <div style={{ fontSize: 16, fontWeight: 800, color: score.color }}>{score.pct}%</div>}
               </div>
             )}
           </div>
@@ -327,21 +327,21 @@ export function SPAssignmentsPage() {
 
         {submission?.teacher_note && (
           <div style={{ padding: '10px 18px', background: '#F0F9FF', borderTop: '1px solid #BAE6FD' }}>
-            <span style={{ fontSize: 10, fontWeight: 700, color: '#0369A1', textTransform: 'uppercase', letterSpacing: '.5px', display: 'inline-flex', alignItems: 'center', gap: 4 }}><MessageSquare size={11} /> Teacher Feedback: </span>
-            <span style={{ fontSize: 12, color: '#0C4A6E' }}>{submission.teacher_note}</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#0369A1', textTransform: 'uppercase', letterSpacing: '.5px', display: 'inline-flex', alignItems: 'center', gap: 4 }}><MessageSquare size={11} /> Teacher Feedback: </span>
+            <span style={{ fontSize: 16, color: '#0C4A6E' }}>{submission.teacher_note}</span>
           </div>
         )}
 
         {(submission?.file_url || submission?.link_url) && (
           <div style={{ padding: '8px 18px', background: '#F0FDF4', borderTop: '1px solid #BBF7D0', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-            <span style={{ fontSize: 10, fontWeight: 700, color: '#0E6B3B' }}>Your submission:</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#0E6B3B' }}>Your submission:</span>
             {submission.file_url && <>
-              <a href={submission.file_url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#0369A1', fontWeight: 700, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Paperclip size={11} /> View</a>
-              <button onClick={() => void downloadUrl(submission.file_url!)} style={{ fontSize: 11, color: '#059669', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Download size={11} /> Download</button>
+              <a href={submission.file_url} target="_blank" rel="noreferrer" style={{ fontSize: 15, color: '#0369A1', fontWeight: 700, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Paperclip size={11} /> View</a>
+              <button onClick={() => void downloadUrl(submission.file_url!)} style={{ fontSize: 15, color: '#059669', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Download size={11} /> Download</button>
             </>}
             {submission.link_url && <>
-              <a href={submission.link_url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#0369A1', fontWeight: 700, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Link2 size={11} /> View</a>
-              <button onClick={() => void downloadUrl(submission.link_url!)} style={{ fontSize: 11, color: '#059669', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Download size={11} /> Download</button>
+              <a href={submission.link_url} target="_blank" rel="noreferrer" style={{ fontSize: 15, color: '#0369A1', fontWeight: 700, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Link2 size={11} /> View</a>
+              <button onClick={() => void downloadUrl(submission.link_url!)} style={{ fontSize: 15, color: '#059669', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Download size={11} /> Download</button>
             </>}
           </div>
         )}
@@ -350,40 +350,40 @@ export function SPAssignmentsPage() {
           <div style={{ padding: '14px 18px', borderTop: '2px dashed #E4EAF2', background: '#F7F9FC' }}>
             {assignment.rawStatus === 'Resubmit' && (
               <div style={{ background: '#FDF4FF', border: '1.5px solid #A855F7', borderRadius: 8, padding: '8px 12px', marginBottom: 10 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#7C3AED', display: 'flex', alignItems: 'center', gap: 4 }}><RefreshCw size={11} /> Resubmission Requested</div>
-                <div style={{ fontSize: 11, color: '#6B21A8', marginTop: 3 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: '#7C3AED', display: 'flex', alignItems: 'center', gap: 4 }}><RefreshCw size={11} /> Resubmission Requested</div>
+                <div style={{ fontSize: 15, color: '#6B21A8', marginTop: 3 }}>
                   Your teacher has reviewed your work and is asking for a revision. Check the feedback above, then resubmit below.
                 </div>
               </div>
             )}
-            <div style={{ fontSize: 12, fontWeight: 800, color: SP_NAVY, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: SP_NAVY, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
               {assignment.rawStatus === 'Resubmit' ? <><RefreshCw size={12} /> Resubmit Your Work</> : <><Upload size={12} /> Turn In Your Work</>}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div>
-                <label style={{ fontSize: 10, fontWeight: 700, color: '#7A92B0', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+                <label style={{ fontSize: 14, fontWeight: 700, color: '#7A92B0', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
                   <Paperclip size={11} /> Upload Your Work
                 </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, border: `2px dashed ${pendingFile ? SP_GREEN : '#CBD5E0'}`, background: pendingFile ? '#F0FDF4' : '#F8FAFC', cursor: 'pointer', fontSize: 12, color: pendingFile ? SP_GREEN : '#7A92B0', fontWeight: pendingFile ? 700 : 400 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, border: `2px dashed ${pendingFile ? SP_GREEN : '#CBD5E0'}`, background: pendingFile ? '#F0FDF4' : '#F8FAFC', cursor: 'pointer', fontSize: 16, color: pendingFile ? SP_GREEN : '#7A92B0', fontWeight: pendingFile ? 700 : 400 }}>
                   <input type="file" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) setPendingFile(assignment.id, f) }} />
                   {pendingFile ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><CheckCircle2 size={13} /> {pendingFile.name}</span> : '+ Choose file (PDF, image, doc…)'}
                 </label>
               </div>
               <div>
-                <label style={{ fontSize: 10, fontWeight: 700, color: '#7A92B0', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+                <label style={{ fontSize: 14, fontWeight: 700, color: '#7A92B0', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
                   <StickyNote size={11} /> Note to Teacher (optional)
                 </label>
                 <input
                   value={note}
                   onChange={(e) => setFormNote(assignment.id, e.target.value)}
                   placeholder="Any context or comments for your teacher..."
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #E4EAF2', fontSize: 12, color: SP_NAVY, background: '#fff', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #E4EAF2', fontSize: 16, color: SP_NAVY, background: '#fff', boxSizing: 'border-box' }}
                 />
               </div>
               <button
                 onClick={() => submitAssignment(assignment.id, assignment.rawStatus)}
                 disabled={submittingId === assignment.id || !pendingFile}
-                style={{ padding: '11px 24px', background: SP_GREEN, color: '#fff', border: 'none', borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: 'pointer', width: '100%', fontFamily: 'Poppins,sans-serif', marginTop: 4, opacity: submittingId === assignment.id || !pendingFile ? 0.6 : 1 }}
+                style={{ padding: '11px 24px', background: SP_GREEN, color: '#fff', border: 'none', borderRadius: 9, fontSize: 16, fontWeight: 700, cursor: 'pointer', width: '100%', fontFamily: 'Poppins,sans-serif', marginTop: 4, opacity: submittingId === assignment.id || !pendingFile ? 0.6 : 1 }}
               >
                 <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                   {submittingId === assignment.id ? <><Hourglass size={13} /> Uploading &amp; Submitting…</> : <><CheckCircle2 size={13} /> Turn In Assignment</>}
@@ -416,13 +416,13 @@ export function SPAssignmentsPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button
             onClick={() => { setSelectedSubject(null); setSubjectFilter('all') }}
-            style={{ background: '#F0F4F8', border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 700, color: SP_NAVY, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+            style={{ background: '#F0F4F8', border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: 16, fontWeight: 700, color: SP_NAVY, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
           >
             <ArrowLeft size={13} /> Back
           </button>
           <div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 8 }}><BookOpen size={18} /> {selectedSubject}</div>
-            <div style={{ fontSize: 12, color: '#7A92B0' }}>{all.length} assignment{all.length !== 1 ? 's' : ''}</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 8 }}><BookOpen size={18} /> {selectedSubject}</div>
+            <div style={{ fontSize: 16, color: '#7A92B0' }}>{all.length} assignment{all.length !== 1 ? 's' : ''}</div>
           </div>
         </div>
 
@@ -434,10 +434,10 @@ export function SPAssignmentsPage() {
               <button
                 key={btn.key}
                 onClick={() => setSubjectFilter(btn.key)}
-                style={{ padding: '7px 16px', border: `1.5px solid ${active ? btn.color : '#E4EAF2'}`, background: active ? btn.color : '#fff', color: active ? '#fff' : '#3D5475', borderRadius: 9, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                style={{ padding: '7px 16px', border: `1.5px solid ${active ? btn.color : '#E4EAF2'}`, background: active ? btn.color : '#fff', color: active ? '#fff' : '#3D5475', borderRadius: 9, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}
               >
                 {btn.label}
-                <span style={{ background: active ? 'rgba(255,255,255,.25)' : '#F1F5F9', padding: '1px 7px', borderRadius: 10, fontSize: 10, marginLeft: 4 }}>{btn.count}</span>
+                <span style={{ background: active ? 'rgba(255,255,255,.25)' : '#F1F5F9', padding: '1px 7px', borderRadius: 10, fontSize: 14, marginLeft: 4 }}>{btn.count}</span>
               </button>
             )
           })}
@@ -447,7 +447,7 @@ export function SPAssignmentsPage() {
         {subjectAssignments.length === 0 ? (
           <div style={{ ...card, padding: 40, textAlign: 'center' }}>
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8, color: SP_GREEN }}><CheckCircle2 size={32} /></div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: SP_NAVY }}>No assignments in this view.</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: SP_NAVY }}>No assignments in this view.</div>
           </div>
         ) : (
           subjectAssignments.map(renderAssignmentCard)
@@ -461,15 +461,15 @@ export function SPAssignmentsPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 8 }}><ClipboardList size={18} /> My Assignments</div>
-          <div style={{ fontSize: 12, color: '#7A92B0', marginTop: 2 }}>{counts.all} total · {counts.overdue} overdue · {counts.pending} pending</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 8 }}><ClipboardList size={18} /> My Assignments</div>
+          <div style={{ fontSize: 16, color: '#7A92B0', marginTop: 2 }}>{counts.all} total · {counts.overdue} overdue · {counts.pending} pending</div>
         </div>
       </div>
 
       {subjects.length === 0 ? (
         <div style={{ ...card, padding: 40, textAlign: 'center' }}>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8, color: '#7A92B0' }}><ClipboardList size={32} /></div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: SP_NAVY }}>No assignments yet. Check back soon!</div>
+          <div style={{ fontSize: 17, fontWeight: 700, color: SP_NAVY }}>No assignments yet. Check back soon!</div>
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
@@ -489,29 +489,29 @@ export function SPAssignmentsPage() {
                 onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = '0 1px 4px rgba(26,54,94,0.06)'; (e.currentTarget as HTMLDivElement).style.transform = 'none' }}
               >
                 <div style={{ padding: '16px 18px 12px' }}>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: SP_NAVY, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}><BookOpen size={15} /> {subject}</div>
-                  <div style={{ fontSize: 12, color: '#7A92B0', marginBottom: 14 }}>{list.length} assignment{list.length !== 1 ? 's' : ''}</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: SP_NAVY, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}><BookOpen size={15} /> {subject}</div>
+                  <div style={{ fontSize: 16, color: '#7A92B0', marginBottom: 14 }}>{list.length} assignment{list.length !== 1 ? 's' : ''}</div>
 
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     {overdueCount > 0 && (
-                      <span style={{ background: '#FEE2E2', color: SP_RED, padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <span style={{ background: '#FEE2E2', color: SP_RED, padding: '4px 12px', borderRadius: 20, fontSize: 15, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                         <Siren size={11} /> {overdueCount} Overdue
                       </span>
                     )}
                     {pendingCount > 0 && (
-                      <span style={{ background: '#DBEAFE', color: '#1E40AF', padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <span style={{ background: '#DBEAFE', color: '#1E40AF', padding: '4px 12px', borderRadius: 20, fontSize: 15, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                         <ClipboardList size={11} /> {pendingCount} Pending
                       </span>
                     )}
                     {submittedCount > 0 && (
-                      <span style={{ background: '#DCFCE7', color: SP_GREEN, padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <span style={{ background: '#DCFCE7', color: SP_GREEN, padding: '4px 12px', borderRadius: 20, fontSize: 15, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                         <CheckCircle2 size={11} /> {submittedCount} Submitted
                       </span>
                     )}
                   </div>
                 </div>
                 <div style={{ padding: '10px 18px', background: '#F7F9FC', borderTop: '1px solid #F0F4F8', display: 'flex', justifyContent: 'flex-end' }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: accentColor, display: 'inline-flex', alignItems: 'center', gap: 4 }}>View assignments <ArrowRight size={11} /></span>
+                  <span style={{ fontSize: 15, fontWeight: 700, color: accentColor, display: 'inline-flex', alignItems: 'center', gap: 4 }}>View assignments <ArrowRight size={11} /></span>
                 </div>
               </div>
             )

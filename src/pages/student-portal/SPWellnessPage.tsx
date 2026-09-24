@@ -44,62 +44,62 @@ export function SPWellnessPage() {
   const avgMood = logs.length > 0 ? Math.round(logs.reduce((s, l) => s + l.mood, 0) / logs.length * 10) / 10 : null
   const moodAvg = MOODS.find(m => m.level === Math.round(avgMood ?? 3))
 
-  const inp: React.CSSProperties = { width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #E4EAF2', fontSize: 13, color: '#1A365E', background: '#fff', boxSizing: 'border-box' }
+  const inp: React.CSSProperties = { width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #E4EAF2', fontSize: 16, color: '#1A365E', background: '#fff', boxSizing: 'border-box' }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1A365E', margin: 0 }}>Wellness</h1>
-        <p style={{ fontSize: 13, color: '#7A92B0', margin: '4px 0 0' }}>Daily check-ins and wellbeing tracker</p>
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: '#1A365E', margin: 0 }}>Wellness</h1>
+        <p style={{ fontSize: 16, color: '#7A92B0', margin: '4px 0 0' }}>Daily check-ins and wellbeing tracker</p>
       </div>
 
       {avgMood !== null && (
         <div style={{ ...card, display: 'flex', alignItems: 'center', gap: 16 }}>
           {moodAvg ? <moodAvg.icon size={40} color="#D61F31" /> : null}
           <div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: '#1A365E' }}>{avgMood}/5</div>
-            <div style={{ fontSize: 13, color: '#7A92B0' }}>Average mood over {logs.length} check-in{logs.length !== 1 ? 's' : ''}</div>
+            <div style={{ fontSize: 26, fontWeight: 800, color: '#1A365E' }}>{avgMood}/5</div>
+            <div style={{ fontSize: 16, color: '#7A92B0' }}>Average mood over {logs.length} check-in{logs.length !== 1 ? 's' : ''}</div>
           </div>
         </div>
       )}
 
       {/* Check-in */}
       {readOnly && (
-        <div style={{ background: '#FAF5FF', border: '1px solid #DDD6FE', borderRadius: 10, padding: '10px 16px', fontSize: 12, color: '#6D28D9', fontWeight: 600 }}>
+        <div style={{ background: '#FAF5FF', border: '1px solid #DDD6FE', borderRadius: 10, padding: '10px 16px', fontSize: 16, color: '#6D28D9', fontWeight: 600 }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Eye size={14} /> View-only access — check-in not available</span>
         </div>
       )}
       <div style={{ ...card, opacity: readOnly ? 0.6 : 1, pointerEvents: readOnly ? 'none' : 'auto' }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: '#1A365E', marginBottom: 14 }}>Today's Check-In</div>
+        <div style={{ fontSize: 17, fontWeight: 700, color: '#1A365E', marginBottom: 14 }}>Today's Check-In</div>
         <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#7A92B0', marginBottom: 8 }}>How are you feeling?</div>
+          <div style={{ fontSize: 16, fontWeight: 600, color: '#7A92B0', marginBottom: 8 }}>How are you feeling?</div>
           <div style={{ display: 'flex', gap: 8 }}>
             {MOODS.map(m => (
               <button key={m.level} onClick={() => setMood(m.level)} style={{ flex: 1, padding: '10px 4px', borderRadius: 10, border: mood === m.level ? '2px solid #D61F31' : '2px solid #E4EAF2', background: mood === m.level ? '#FEE2E2' : '#F7F9FC', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, color: mood === m.level ? '#D61F31' : '#7A92B0' }}>
                 <m.icon size={22} />
-                <span style={{ fontSize: 10, color: mood === m.level ? '#D61F31' : '#7A92B0', fontWeight: 600 }}>{m.label}</span>
+                <span style={{ fontSize: 14, color: mood === m.level ? '#D61F31' : '#7A92B0', fontWeight: 600 }}>{m.label}</span>
               </button>
             ))}
           </div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
           <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: '#7A92B0', display: 'block', marginBottom: 4 }}>Category</label>
+            <label style={{ fontSize: 16, fontWeight: 600, color: '#7A92B0', display: 'block', marginBottom: 4 }}>Category</label>
             <select value={category} onChange={e => setCategory(e.target.value)} style={inp}>{CATEGORIES.map(c => <option key={c}>{c}</option>)}</select>
           </div>
           <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: '#7A92B0', display: 'block', marginBottom: 4 }}>Notes (optional)</label>
+            <label style={{ fontSize: 16, fontWeight: 600, color: '#7A92B0', display: 'block', marginBottom: 4 }}>Notes (optional)</label>
             <input value={notes} onChange={e => setNotes(e.target.value)} style={inp} placeholder="How's your day going?" />
           </div>
         </div>
-        <button onClick={checkin} disabled={saving} style={{ padding: '9px 24px', borderRadius: 8, border: 'none', background: saved ? '#10B981' : '#D61F31', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+        <button onClick={checkin} disabled={saving} style={{ padding: '9px 24px', borderRadius: 8, border: 'none', background: saved ? '#10B981' : '#D61F31', color: '#fff', fontWeight: 600, fontSize: 16, cursor: 'pointer' }}>
           {saved ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Check size={14} strokeWidth={3} /> Logged!</span> : saving ? 'Saving…' : 'Log Check-In'}
         </button>
       </div>
 
       {/* Log */}
       <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
-        <div style={{ padding: '14px 18px', borderBottom: '1px solid #E4EAF2', fontSize: 14, fontWeight: 700, color: '#1A365E' }}>Recent Check-Ins</div>
+        <div style={{ padding: '14px 18px', borderBottom: '1px solid #E4EAF2', fontSize: 17, fontWeight: 700, color: '#1A365E' }}>Recent Check-Ins</div>
         <div style={{ maxHeight: 300, overflowY: 'auto' }}>
           {logs.map(l => {
             const m = MOODS.find(m => m.level === l.mood)
@@ -107,14 +107,14 @@ export function SPWellnessPage() {
               <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 18px', borderBottom: '1px solid #F0F4F8' }}>
                 {m ? <m.icon size={24} color="#7A92B0" /> : null}
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#1A365E' }}>{m?.label} · {l.category}</div>
-                  <div style={{ fontSize: 11, color: '#7A92B0' }}>{new Date(l.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</div>
-                  {l.notes && <div style={{ fontSize: 12, color: '#7A92B0', marginTop: 2 }}>{l.notes}</div>}
+                  <div style={{ fontSize: 16, fontWeight: 600, color: '#1A365E' }}>{m?.label} · {l.category}</div>
+                  <div style={{ fontSize: 15, color: '#7A92B0' }}>{new Date(l.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</div>
+                  {l.notes && <div style={{ fontSize: 16, color: '#7A92B0', marginTop: 2 }}>{l.notes}</div>}
                 </div>
               </div>
             )
           })}
-          {logs.length === 0 && <div style={{ padding: 24, textAlign: 'center', color: '#7A92B0', fontSize: 13 }}>No check-ins yet.</div>}
+          {logs.length === 0 && <div style={{ padding: 24, textAlign: 'center', color: '#7A92B0', fontSize: 16 }}>No check-ins yet.</div>}
         </div>
       </div>
     </div>

@@ -132,8 +132,8 @@ export function K5MyLearningPage() {
       <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
 
         <div style={{ background:`linear-gradient(135deg,${NAVY},#2A4A7E)`, borderRadius:16, padding:'24px 26px' }}>
-          <div style={{ fontSize:26, fontWeight:800, color:'#fff', marginBottom:6, display:'flex', alignItems:'center', gap:10 }}><BookOpen size={24} /> My Lessons</div>
-          <div style={{ fontSize:15, color:'rgba(255,255,255,.55)' }}>Pick a subject to see your lessons!</div>
+          <div style={{ fontSize:28, fontWeight:800, color:'#fff', marginBottom:6, display:'flex', alignItems:'center', gap:10 }}><BookOpen size={24} /> My Lessons</div>
+          <div style={{ fontSize:18, color:'rgba(255,255,255,.55)' }}>Pick a subject to see your lessons!</div>
         </div>
 
         {loading ? (
@@ -162,8 +162,8 @@ export function K5MyLearningPage() {
                   <div style={{ width:100, height:100, borderRadius:22, background:s.bg, border:`3px solid ${s.border}40`, display:'flex', alignItems:'center', justifyContent:'center', color:s.border, flexShrink:0 }}>
                     <s.icon size={56} />
                   </div>
-                  <div style={{ fontSize:28, fontWeight:800, color:NAVY }}>{s.name}</div>
-                  <div style={{ fontSize:16, color:'#64748B' }}>
+                  <div style={{ fontSize:30, fontWeight:800, color:NAVY }}>{s.name}</div>
+                  <div style={{ fontSize:18, color:'#64748B' }}>
                     {empty ? 'No lessons yet' : `${subjectLessons.length} lesson${subjectLessons.length === 1 ? '' : 's'} · ${doneCount} done`}
                   </div>
                   {!empty && <div style={{ color:s.border, marginTop:'auto' }}><ArrowRight size={22} /></div>}
@@ -187,12 +187,12 @@ export function K5MyLearningPage() {
       <div style={{ background:`linear-gradient(135deg,${NAVY},#2A4A7E)`, borderRadius:16, padding:'20px 22px' }}>
         <button
           onClick={() => setActiveSubject(null)}
-          style={{ background:'rgba(255,255,255,.12)', border:'1px solid rgba(255,255,255,.2)', borderRadius:8, color:'rgba(255,255,255,.85)', fontSize:11, fontWeight:700, padding:'5px 12px', cursor:'pointer', fontFamily:'inherit', marginBottom:10 }}
+          style={{ background:'rgba(255,255,255,.12)', border:'1px solid rgba(255,255,255,.2)', borderRadius:8, color:'rgba(255,255,255,.85)', fontSize:15, fontWeight:700, padding:'5px 12px', cursor:'pointer', fontFamily:'inherit', marginBottom:10 }}
         >
           <ArrowLeft size={12} style={{ verticalAlign: 'middle' }} /> Subjects
         </button>
-        <div style={{ fontSize:20, fontWeight:800, color:'#fff', marginBottom:4, display:'flex', alignItems:'center', gap:8 }}>{subjectMeta ? <subjectMeta.icon size={20} /> : null} {activeSubject}</div>
-        <div style={{ fontSize:12, color:'rgba(255,255,255,.55)' }}>Pick a lesson and start learning!</div>
+        <div style={{ fontSize:22, fontWeight:800, color:'#fff', marginBottom:4, display:'flex', alignItems:'center', gap:8 }}>{subjectMeta ? <subjectMeta.icon size={20} /> : null} {activeSubject}</div>
+        <div style={{ fontSize:16, color:'rgba(255,255,255,.55)' }}>Pick a lesson and start learning!</div>
       </div>
 
       {loading ? (
@@ -202,8 +202,8 @@ export function K5MyLearningPage() {
       ) : subjectLessons.length === 0 ? (
         <div style={{ background:'#fff', border:'1.5px solid #E2E8F0', borderRadius:14, padding:'32px 20px', textAlign:'center' }}>
           <div style={{ display:'flex', justifyContent:'center', marginBottom:12, color:'#94A3B8' }}><BookOpen size={52} /></div>
-          <div style={{ fontSize:15, fontWeight:800, color:NAVY, marginBottom:6 }}>No lessons assigned yet</div>
-          <div style={{ fontSize:12, color:'#64748B', lineHeight:1.7 }}>
+          <div style={{ fontSize:18, fontWeight:800, color:NAVY, marginBottom:6 }}>No lessons assigned yet</div>
+          <div style={{ fontSize:16, color:'#64748B', lineHeight:1.7 }}>
             Your teacher will add lessons soon. Check back here to start learning!
           </div>
         </div>
@@ -233,18 +233,18 @@ export function K5MyLearningPage() {
                   </div>
                   <div style={{ flex:1 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:3 }}>
-                      <div style={{ fontSize:14, fontWeight:800, color:NAVY }}>{lesson.title}</div>
+                      <div style={{ fontSize:17, fontWeight:800, color:NAVY }}>{lesson.title}</div>
                       {done && (
-                        <span style={{ fontSize:10, fontWeight:800, background:'#DCFCE7', color:GREEN, padding:'2px 8px', borderRadius:10, display:'inline-flex', alignItems:'center', gap:3 }}>
+                        <span style={{ fontSize:14, fontWeight:800, background:'#DCFCE7', color:GREEN, padding:'2px 8px', borderRadius:10, display:'inline-flex', alignItems:'center', gap:3 }}>
                           Done <Check size={10} strokeWidth={3} />
                         </span>
                       )}
                     </div>
-                    <div style={{ fontSize:11, color:'#64748B' }}>
+                    <div style={{ fontSize:15, color:'#64748B' }}>
                       {lesson.slides.length} slides · {lesson.quiz.length} questions · {lesson.estimatedMins} min
                     </div>
                     {done && prog?.starsEarned !== null && prog?.starsEarned !== undefined && (
-                      <div style={{ fontSize:11, color:GOLD, marginTop:3, fontWeight:700, display:'flex', alignItems:'center', gap:2 }}>
+                      <div style={{ fontSize:15, color:GOLD, marginTop:3, fontWeight:700, display:'flex', alignItems:'center', gap:2 }}>
                         {Array.from({ length: prog.starsEarned }).map((_, si) => <Star key={si} size={11} color={GOLD} fill={GOLD} />)}
                         <span style={{ marginLeft:4 }}>{prog.starsEarned}/{lesson.quiz.length} stars</span>
                       </div>
@@ -261,7 +261,7 @@ export function K5MyLearningPage() {
                     border: done ? `2px solid ${GREEN}40` : 'none',
                     background: done ? '#F0FDF4' : `linear-gradient(135deg,${NAVY},#2A4A7E)`,
                     color: done ? GREEN : '#fff',
-                    fontSize:13,
+                    fontSize:16,
                     fontWeight:800,
                     cursor:'pointer',
                     fontFamily:'inherit',

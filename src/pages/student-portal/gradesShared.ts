@@ -13,7 +13,7 @@ export const emptyState: React.CSSProperties = {
   borderRadius: 10,
   background: '#F8FAFC',
   border: '1px dashed #D7E0EA',
-  fontSize: 12,
+  fontSize: 16,
   color: '#7A92B0',
 }
 

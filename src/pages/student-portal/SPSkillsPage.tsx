@@ -165,8 +165,8 @@ export function SPSkillsPage() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1A365E', margin: 0 }}>Skill Graph</h1>
-          <p style={{ fontSize: 13, color: '#7A92B0', margin: '4px 0 0' }}>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: '#1A365E', margin: 0 }}>Skill Graph</h1>
+          <p style={{ fontSize: 16, color: '#7A92B0', margin: '4px 0 0' }}>
             Rate yourself on each competency — your self-assessment will be compared against your teacher's evaluation.
           </p>
         </div>
@@ -177,7 +177,7 @@ export function SPSkillsPage() {
                 onClick={() => { setSelfScores({}); setSavedSelfScores(null); setSaved(false) }}
                 style={{
                   padding: '9px 16px', borderRadius: 8, border: '1.5px solid #E4EAF2',
-                  background: '#fff', color: '#1A365E', fontWeight: 600, fontSize: 13, cursor: 'pointer',
+                  background: '#fff', color: '#1A365E', fontWeight: 600, fontSize: 16, cursor: 'pointer',
                   display: 'inline-flex', alignItems: 'center', gap: 6,
                 }}
               >
@@ -190,7 +190,7 @@ export function SPSkillsPage() {
               style={{
                 padding: '9px 20px', borderRadius: 8, border: 'none',
                 background: saved ? '#10B981' : '#D61F31',
-                color: '#fff', fontWeight: 700, fontSize: 13, cursor: saving ? 'default' : 'pointer',
+                color: '#fff', fontWeight: 700, fontSize: 16, cursor: saving ? 'default' : 'pointer',
                 transition: 'background 0.2s',
               }}
             >
@@ -202,9 +202,9 @@ export function SPSkillsPage() {
 
       {/* Scale legend */}
       <div style={{ ...card, padding: '12px 20px', display: 'flex', flexWrap: 'wrap', gap: '8px 20px', alignItems: 'center' }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Scale:</span>
+        <span style={{ fontSize: 15, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Scale:</span>
         {SKILL_LABELS.slice(1).map((lbl, i) => (
-          <span key={lbl} style={{ fontSize: 12, color: '#1A365E' }}>
+          <span key={lbl} style={{ fontSize: 16, color: '#1A365E' }}>
             <strong>{i + 1}</strong> — {lbl}
           </span>
         ))}
@@ -215,7 +215,7 @@ export function SPSkillsPage() {
         <div key={cat} style={card}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
             <div style={{ width: 10, height: 10, borderRadius: '50%', background: COMP_COLORS[cat], flexShrink: 0 }} />
-            <span style={{ fontSize: 14, fontWeight: 700, color: '#1A365E' }}>{CAT_LABELS[cat]}</span>
+            <span style={{ fontSize: 17, fontWeight: 700, color: '#1A365E' }}>{CAT_LABELS[cat]}</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {comps.map(c => {
@@ -225,15 +225,15 @@ export function SPSkillsPage() {
                 <div key={c.key}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: '#1A365E' }}>{c.label}</span>
+                      <span style={{ fontSize: 16, fontWeight: 600, color: '#1A365E' }}>{c.label}</span>
                       {val > 0 && (
-                        <span style={{ fontSize: 11, color: COMP_COLORS[cat], fontWeight: 600 }}>
+                        <span style={{ fontSize: 15, color: COMP_COLORS[cat], fontWeight: 600 }}>
                           {SKILL_LABELS[val]}
                         </span>
                       )}
                     </div>
                     {tVal > 0 && (
-                      <span style={{ fontSize: 11, color: '#7A92B0' }}>
+                      <span style={{ fontSize: 15, color: '#7A92B0' }}>
                         Teacher: <strong style={{ color: '#1A365E' }}>{SKILL_LABELS[tVal]}</strong>
                       </span>
                     )}
@@ -249,7 +249,7 @@ export function SPSkillsPage() {
                           flex: 1, height: 32, borderRadius: 7, border: 'none',
                           background: lvl <= val ? COMP_COLORS[cat] : '#F0F4F8',
                           color: lvl <= val ? '#fff' : '#94A3B8',
-                          fontSize: 12, fontWeight: 700,
+                          fontSize: 16, fontWeight: 700,
                           cursor: readOnly ? 'not-allowed' : 'pointer',
                           transition: 'all 0.12s',
                           opacity: readOnly ? 0.7 : 1,
@@ -268,7 +268,7 @@ export function SPSkillsPage() {
 
       {/* Prompt to save before comparison appears */}
       {!hasComparison && Object.keys(selfScores).length > 0 && (
-        <div style={{ ...card, textAlign: 'center', padding: '18px 20px', color: '#7A92B0', fontSize: 13 }}>
+        <div style={{ ...card, textAlign: 'center', padding: '18px 20px', color: '#7A92B0', fontSize: 16 }}>
           Press <strong style={{ color: '#D61F31' }}>Save Self-Assessment</strong> to see your comparison graph.
         </div>
       )}
@@ -279,20 +279,20 @@ export function SPSkillsPage() {
 
           {/* Radar chart */}
           <div style={card}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#1A365E', marginBottom: 2 }}>Comparison Graph</div>
-            <p style={{ fontSize: 12, color: '#7A92B0', margin: '0 0 16px' }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#1A365E', marginBottom: 2 }}>Comparison Graph</div>
+            <p style={{ fontSize: 16, color: '#7A92B0', margin: '0 0 16px' }}>
               Your self-assessment vs. your teacher's evaluation
             </p>
             <div style={{ display: 'flex', gap: 24, marginBottom: 16, flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <svg width="28" height="4"><rect width="28" height="4" rx="2" fill="#1A365E" /></svg>
-                <span style={{ fontSize: 12, color: '#7A92B0' }}>Teacher Assessment</span>
+                <span style={{ fontSize: 16, color: '#7A92B0' }}>Teacher Assessment</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <svg width="28" height="4">
                   <line x1="0" y1="2" x2="28" y2="2" stroke="#D61F31" strokeWidth="3" strokeDasharray="6,3" />
                 </svg>
-                <span style={{ fontSize: 12, color: '#7A92B0' }}>Your Self-Assessment</span>
+                <span style={{ fontSize: 16, color: '#7A92B0' }}>Your Self-Assessment</span>
               </div>
             </div>
             <ComparisonRadar teacher={teacherScores} self={savedSelfScores} />
@@ -303,7 +303,7 @@ export function SPSkillsPage() {
             <div key={cat} style={card}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
                 <div style={{ width: 10, height: 10, borderRadius: '50%', background: COMP_COLORS[cat] }} />
-                <span style={{ fontSize: 14, fontWeight: 700, color: '#1A365E' }}>{CAT_LABELS[cat]}</span>
+                <span style={{ fontSize: 17, fontWeight: 700, color: '#1A365E' }}>{CAT_LABELS[cat]}</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 {comps.map(c => {
@@ -313,10 +313,10 @@ export function SPSkillsPage() {
                   return (
                     <div key={c.key}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: '#1A365E' }}>{c.label}</span>
+                        <span style={{ fontSize: 16, fontWeight: 600, color: '#1A365E' }}>{c.label}</span>
                         {tVal > 0 && sVal > 0 && (
                           <span style={{
-                            fontSize: 11, fontWeight: 700,
+                            fontSize: 15, fontWeight: 700,
                             color: diff > 0 ? '#F59E0B' : diff < 0 ? '#D61F31' : '#10B981',
                           }}>
                             {diff > 0 ? `+${diff} self-rated higher` : diff < 0 ? `${Math.abs(diff)} below teacher` : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Check size={12} strokeWidth={3} /> Aligned</span>}
@@ -325,20 +325,20 @@ export function SPSkillsPage() {
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <span style={{ fontSize: 10, color: '#7A92B0', width: 52, flexShrink: 0 }}>Teacher</span>
+                          <span style={{ fontSize: 14, color: '#7A92B0', width: 52, flexShrink: 0 }}>Teacher</span>
                           <div style={{ flex: 1, height: 8, background: '#F0F4F8', borderRadius: 4, overflow: 'hidden' }}>
                             <div style={{ height: '100%', width: `${(tVal / 5) * 100}%`, background: '#1A365E', borderRadius: 4, transition: 'width 0.4s' }} />
                           </div>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: '#1A365E', width: 24, textAlign: 'right' }}>
+                          <span style={{ fontSize: 15, fontWeight: 700, color: '#1A365E', width: 24, textAlign: 'right' }}>
                             {tVal > 0 ? tVal : '–'}
                           </span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <span style={{ fontSize: 10, color: '#7A92B0', width: 52, flexShrink: 0 }}>You</span>
+                          <span style={{ fontSize: 14, color: '#7A92B0', width: 52, flexShrink: 0 }}>You</span>
                           <div style={{ flex: 1, height: 8, background: '#F0F4F8', borderRadius: 4, overflow: 'hidden' }}>
                             <div style={{ height: '100%', width: `${(sVal / 5) * 100}%`, background: '#D61F31', borderRadius: 4, transition: 'width 0.4s' }} />
                           </div>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: '#D61F31', width: 24, textAlign: 'right' }}>
+                          <span style={{ fontSize: 15, fontWeight: 700, color: '#D61F31', width: 24, textAlign: 'right' }}>
                             {sVal > 0 ? sVal : '–'}
                           </span>
                         </div>
@@ -356,8 +356,8 @@ export function SPSkillsPage() {
       {!hasTeacher && (
         <div style={{ ...card, textAlign: 'center', padding: '30px 20px' }}>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10, color: '#7A92B0' }}><BarChart3 size={28} /></div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#1A365E', marginBottom: 4 }}>Awaiting Teacher Assessment</div>
-          <div style={{ fontSize: 12, color: '#7A92B0' }}>
+          <div style={{ fontSize: 17, fontWeight: 700, color: '#1A365E', marginBottom: 4 }}>Awaiting Teacher Assessment</div>
+          <div style={{ fontSize: 16, color: '#7A92B0' }}>
             Once your teacher submits your competency scores, the comparison graph will appear here.
           </div>
         </div>

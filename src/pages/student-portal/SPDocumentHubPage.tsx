@@ -144,8 +144,8 @@ export function SPDocumentHubPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: SP_NAVY, margin: 0 }}>Enrollment & Documents</h1>
-        <p style={{ fontSize: 13, color: '#7A92B0', margin: '4px 0 0' }}>Everything you need to submit, sign, or track — in one place</p>
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: SP_NAVY, margin: 0 }}>Enrollment & Documents</h1>
+        <p style={{ fontSize: 16, color: '#7A92B0', margin: '4px 0 0' }}>Everything you need to submit, sign, or track — in one place</p>
       </div>
 
       {summary && total > 0 && (
@@ -156,8 +156,8 @@ export function SPDocumentHubPage() {
             { label: 'Complete' as const, count: summary.complete },
           ]).map((s) => (
             <div key={s.label} style={{ ...card, flex: '1 1 140px', padding: '14px 16px', borderLeft: `4px solid ${HUB_STATUS_META[s.label].fg}` }}>
-              <div style={{ fontSize: 24, fontWeight: 900, color: HUB_STATUS_META[s.label].fg }}>{s.count}</div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: SP_NAVY, marginTop: 2 }}>{s.label}</div>
+              <div style={{ fontSize: 26, fontWeight: 900, color: HUB_STATUS_META[s.label].fg }}>{s.count}</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: SP_NAVY, marginTop: 2 }}>{s.label}</div>
             </div>
           ))}
         </div>
@@ -169,7 +169,7 @@ export function SPDocumentHubPage() {
             key={t.key}
             onClick={() => selectTab(t.key)}
             style={{
-              flex: 1, padding: 10, border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+              flex: 1, padding: 10, border: 'none', fontSize: 15, fontWeight: 700, cursor: 'pointer',
               fontFamily: 'Poppins,sans-serif',
               background: tab === t.key ? SP_NAVY : '#F7F9FC',
               color: tab === t.key ? '#fff' : '#7A92B0',

@@ -335,17 +335,17 @@ export function SPCourseGradesSection() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ fontSize: 15, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 8 }}><BookOpen size={16} /> Course Grades</div>
+      <div style={{ fontSize: 18, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 8 }}><BookOpen size={16} /> Course Grades</div>
 
       <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
         <div style={{ padding: '14px 18px', borderBottom: '1px solid #E4EAF2', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <BookOpen size={15} color={SP_NAVY} />
-          <span style={{ fontSize: 13, fontWeight: 700, color: SP_NAVY, flexShrink: 0 }}>Course</span>
+          <span style={{ fontSize: 16, fontWeight: 700, color: SP_NAVY, flexShrink: 0 }}>Course</span>
           <select
             value={activeCourseId ?? ''}
             onChange={(e) => setSelectedCourseId(e.target.value)}
             style={{
-              padding: '7px 12px', borderRadius: 8, border: '1.5px solid #E4EAF2', fontSize: 12.5, fontWeight: 700,
+              padding: '7px 12px', borderRadius: 8, border: '1.5px solid #E4EAF2', fontSize: 17, fontWeight: 700,
               color: SP_NAVY, background: '#fff', fontFamily: 'Poppins,sans-serif', cursor: 'pointer', minWidth: 220,
             }}
           >
@@ -353,7 +353,7 @@ export function SPCourseGradesSection() {
               <option key={course.id} value={course.id}>{course.title}</option>
             ))}
           </select>
-          <span style={{ fontSize: 11, color: '#7A92B0' }}>{rows.length} item{rows.length !== 1 ? 's' : ''}</span>
+          <span style={{ fontSize: 15, color: '#7A92B0' }}>{rows.length} item{rows.length !== 1 ? 's' : ''}</span>
         </div>
 
         <div style={{ overflowX: 'auto' }}>
@@ -371,7 +371,7 @@ export function SPCourseGradesSection() {
                   <th
                     key={h}
                     style={{
-                      padding: '9px 14px', textAlign: i === 4 ? 'right' : 'left', fontSize: 10.5, fontWeight: 700,
+                      padding: '9px 14px', textAlign: i === 4 ? 'right' : 'left', fontSize: 15, fontWeight: 700,
                       color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap',
                     }}
                   >
@@ -383,7 +383,7 @@ export function SPCourseGradesSection() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={5} style={{ padding: '24px 14px', textAlign: 'center', fontSize: 12, color: '#7A92B0' }}>No graded coursework for this course yet.</td>
+                  <td colSpan={5} style={{ padding: '24px 14px', textAlign: 'center', fontSize: 16, color: '#7A92B0' }}>No graded coursework for this course yet.</td>
                 </tr>
               ) : (
                 activeEntry?.modules.flatMap((module) => {
@@ -391,7 +391,7 @@ export function SPCourseGradesSection() {
                   if (!moduleRows.length) return []
                   return [
                     <tr key={`${module.unit}-header`}>
-                      <td colSpan={5} style={{ padding: '10px 14px', background: '#F0F4FA', fontSize: 11.5, fontWeight: 800, color: SP_NAVY, borderBottom: '1px solid #E4EAF2' }}>
+                      <td colSpan={5} style={{ padding: '10px 14px', background: '#F0F4FA', fontSize: 16, fontWeight: 800, color: SP_NAVY, borderBottom: '1px solid #E4EAF2' }}>
                         {module.unit}
                       </td>
                     </tr>,
@@ -400,17 +400,17 @@ export function SPCourseGradesSection() {
                       return (
                         <tr key={row.id}>
                           <td style={{ padding: '11px 14px', borderBottom: '1px solid #F0F4F8', verticalAlign: 'top' }}>
-                            <div style={{ fontSize: 12.5, fontWeight: 700, color: SP_NAVY }}>{row.name}</div>
-                            <div style={{ fontSize: 10.5, color: '#94A3B8', marginTop: 2 }}>{row.sectionLabel}</div>
+                            <div style={{ fontSize: 17, fontWeight: 700, color: SP_NAVY }}>{row.name}</div>
+                            <div style={{ fontSize: 15, color: '#94A3B8', marginTop: 2 }}>{row.sectionLabel}</div>
                           </td>
-                          <td style={{ padding: '11px 14px', borderBottom: '1px solid #F0F4F8', fontSize: 12, color: '#3D5475', whiteSpace: 'nowrap' }}>{row.due}</td>
-                          <td style={{ padding: '11px 14px', borderBottom: '1px solid #F0F4F8', fontSize: 12, color: '#3D5475', whiteSpace: 'nowrap' }}>{row.submitted}</td>
+                          <td style={{ padding: '11px 14px', borderBottom: '1px solid #F0F4F8', fontSize: 16, color: '#3D5475', whiteSpace: 'nowrap' }}>{row.due}</td>
+                          <td style={{ padding: '11px 14px', borderBottom: '1px solid #F0F4F8', fontSize: 16, color: '#3D5475', whiteSpace: 'nowrap' }}>{row.submitted}</td>
                           <td style={{ padding: '11px 14px', borderBottom: '1px solid #F0F4F8' }}>
-                            <span style={{ background: meta.bg, color: meta.color, padding: '3px 10px', borderRadius: 20, fontSize: 10.5, fontWeight: 700, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{ background: meta.bg, color: meta.color, padding: '3px 10px', borderRadius: 20, fontSize: 15, fontWeight: 700, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                               <meta.icon size={10} /> {row.status}
                             </span>
                           </td>
-                          <td style={{ padding: '11px 14px', borderBottom: '1px solid #F0F4F8', fontSize: 12.5, fontWeight: 800, textAlign: 'right', whiteSpace: 'nowrap', color: row.scoreGood === null ? SP_NAVY : row.scoreGood ? SP_GREEN : SP_RED }}>
+                          <td style={{ padding: '11px 14px', borderBottom: '1px solid #F0F4F8', fontSize: 17, fontWeight: 800, textAlign: 'right', whiteSpace: 'nowrap', color: row.scoreGood === null ? SP_NAVY : row.scoreGood ? SP_GREEN : SP_RED }}>
                             {row.score}
                           </td>
                         </tr>
@@ -423,19 +423,19 @@ export function SPCourseGradesSection() {
             {rows.length > 0 && (
               <tfoot>
                 <tr>
-                  <td style={{ padding: '12px 14px', fontSize: 12.5, fontWeight: 900, color: SP_NAVY, borderTop: `2px solid ${SP_NAVY}` }}>TOTAL</td>
+                  <td style={{ padding: '12px 14px', fontSize: 17, fontWeight: 900, color: SP_NAVY, borderTop: `2px solid ${SP_NAVY}` }}>TOTAL</td>
                   <td style={{ borderTop: `2px solid ${SP_NAVY}` }} />
                   <td style={{ borderTop: `2px solid ${SP_NAVY}` }} />
                   <td style={{ padding: '12px 14px', borderTop: `2px solid ${SP_NAVY}`, textAlign: 'right' }}>
                     {totals.pct !== null ? (
-                      <span style={{ background: totals.pct >= 70 ? '#DCFCE7' : '#FEE2E2', color: totals.pct >= 70 ? SP_GREEN : SP_RED, padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 800, whiteSpace: 'nowrap' }}>
+                      <span style={{ background: totals.pct >= 70 ? '#DCFCE7' : '#FEE2E2', color: totals.pct >= 70 ? SP_GREEN : SP_RED, padding: '3px 10px', borderRadius: 20, fontSize: 15, fontWeight: 800, whiteSpace: 'nowrap' }}>
                         {totals.pct}%
                       </span>
                     ) : (
-                      <span style={{ fontSize: 11, color: '#94A3B8' }}>—</span>
+                      <span style={{ fontSize: 15, color: '#94A3B8' }}>—</span>
                     )}
                   </td>
-                  <td style={{ padding: '12px 14px', borderTop: `2px solid ${SP_NAVY}`, textAlign: 'right', fontSize: 13.5, fontWeight: 900, color: SP_NAVY, whiteSpace: 'nowrap' }}>
+                  <td style={{ padding: '12px 14px', borderTop: `2px solid ${SP_NAVY}`, textAlign: 'right', fontSize: 17, fontWeight: 900, color: SP_NAVY, whiteSpace: 'nowrap' }}>
                     {totals.max > 0 ? `${totals.achieved}/${totals.max}` : '—'}
                   </td>
                 </tr>

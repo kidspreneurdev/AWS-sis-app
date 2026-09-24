@@ -29,16 +29,16 @@ export function SPBadgesPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1A365E', margin: 0 }}>My Badges</h1>
-        <p style={{ fontSize: 13, color: '#7A92B0', margin: '4px 0 0' }}>Achievements and recognition earned throughout your journey</p>
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: '#1A365E', margin: 0 }}>My Badges</h1>
+        <p style={{ fontSize: 16, color: '#7A92B0', margin: '4px 0 0' }}>Achievements and recognition earned throughout your journey</p>
       </div>
 
       {badges.length > 0 && (
         <div style={{ ...card, display: 'flex', alignItems: 'center', gap: 16 }}>
           <div style={{ display: 'flex', color: '#D61F31' }}><Medal size={40} /></div>
           <div>
-            <div style={{ fontSize: 28, fontWeight: 800, color: '#1A365E' }}>{badges.length}</div>
-            <div style={{ fontSize: 13, color: '#7A92B0' }}>badge{badges.length !== 1 ? 's' : ''} earned</div>
+            <div style={{ fontSize: 30, fontWeight: 800, color: '#1A365E' }}>{badges.length}</div>
+            <div style={{ fontSize: 16, color: '#7A92B0' }}>badge{badges.length !== 1 ? 's' : ''} earned</div>
           </div>
         </div>
       )}
@@ -51,15 +51,15 @@ export function SPBadgesPage() {
             <div key={b.id} style={{ ...card, background: bg, border: `1px solid ${tc}30` }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                 <div style={{ width: 36, height: 36, borderRadius: 9, background: tc, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Medal size={18} /></div>
-                <span style={{ fontSize: 11, color: tc, fontWeight: 600 }}>{new Date(b.earned_at).toLocaleDateString()}</span>
+                <span style={{ fontSize: 15, color: tc, fontWeight: 600 }}>{new Date(b.earned_at).toLocaleDateString()}</span>
               </div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: '#1A365E', marginBottom: 4 }}>{b.name}</div>
-              {b.description && <p style={{ fontSize: 12, color: '#7A92B0', margin: 0 }}>{b.description}</p>}
-              {b.criteria && <div style={{ marginTop: 8, fontSize: 11, color: tc, fontStyle: 'italic' }}>Criteria: {b.criteria}</div>}
+              <div style={{ fontSize: 18, fontWeight: 700, color: '#1A365E', marginBottom: 4 }}>{b.name}</div>
+              {b.description && <p style={{ fontSize: 16, color: '#7A92B0', margin: 0 }}>{b.description}</p>}
+              {b.criteria && <div style={{ marginTop: 8, fontSize: 15, color: tc, fontStyle: 'italic' }}>Criteria: {b.criteria}</div>}
             </div>
           )
         })}
-        {badges.length === 0 && <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: 40, color: '#7A92B0', fontSize: 13, background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2' }}>No badges earned yet. Keep up the great work!</div>}
+        {badges.length === 0 && <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: 40, color: '#7A92B0', fontSize: 16, background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2' }}>No badges earned yet. Keep up the great work!</div>}
       </div>
     </div>
   )

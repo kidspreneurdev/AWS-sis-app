@@ -15,7 +15,7 @@ const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border
 function btn(bg: string, color = '#fff'): React.CSSProperties {
   return {
     padding: '8px 16px', borderRadius: 8, border: bg === '#fff' ? '1px solid #E4EAF2' : 'none',
-    background: bg, color, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+    background: bg, color, fontSize: 16, fontWeight: 700, cursor: 'pointer',
   }
 }
 
@@ -115,12 +115,12 @@ export function SPPolicyDocumentsPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1A365E', margin: 0 }}>Policy Documents</h1>
-        <p style={{ fontSize: 13, color: '#7A92B0', margin: '4px 0 0' }}>Read, sign and return your school policy documents</p>
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: '#1A365E', margin: 0 }}>Policy Documents</h1>
+        <p style={{ fontSize: 16, color: '#7A92B0', margin: '4px 0 0' }}>Read, sign and return your school policy documents</p>
       </div>
 
       {error && (
-        <div style={{ ...card, background: '#FFF8F8', border: '1px solid #F5C2C7', color: '#991B1B', fontSize: 13 }}>{error}</div>
+        <div style={{ ...card, background: '#FFF8F8', border: '1px solid #F5C2C7', color: '#991B1B', fontSize: 16 }}>{error}</div>
       )}
 
       {loading ? (
@@ -128,7 +128,7 @@ export function SPPolicyDocumentsPage() {
           <div style={{ width: 28, height: 28, borderRadius: '50%', border: '3px solid #E4EAF2', borderTopColor: '#D61F31', animation: 'spin 0.7s linear infinite' }} />
         </div>
       ) : rows.length === 0 ? (
-        <div style={{ ...card, textAlign: 'center', color: '#7A92B0', fontSize: 13 }}>
+        <div style={{ ...card, textAlign: 'center', color: '#7A92B0', fontSize: 16 }}>
           No policy documents have been requested yet.
         </div>
       ) : (
@@ -141,18 +141,18 @@ export function SPPolicyDocumentsPage() {
             <div key={row.policyKey} style={card}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
                 <div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#1A365E' }}>{doc.label}</div>
+                  <div style={{ fontSize: 17, fontWeight: 700, color: '#1A365E' }}>{doc.label}</div>
                   {row.status === 'rejected' && row.reviewNote && (
-                    <div style={{ fontSize: 12, color: '#991B1B', marginTop: 2 }}>Rejected: {row.reviewNote}. Please re-upload a signed copy.</div>
+                    <div style={{ fontSize: 16, color: '#991B1B', marginTop: 2 }}>Rejected: {row.reviewNote}. Please re-upload a signed copy.</div>
                   )}
                   {row.status === 'submitted' && (
-                    <div style={{ fontSize: 12, color: '#7A92B0', marginTop: 2 }}>Uploaded — waiting for the school to review.</div>
+                    <div style={{ fontSize: 16, color: '#7A92B0', marginTop: 2 }}>Uploaded — waiting for the school to review.</div>
                   )}
                   {row.status === 'approved' && (
-                    <div style={{ fontSize: 12, color: '#0E6B3B', marginTop: 2 }}>Approved — nothing more to do.</div>
+                    <div style={{ fontSize: 16, color: '#0E6B3B', marginTop: 2 }}>Approved — nothing more to do.</div>
                   )}
                 </div>
-                <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: m.bg, color: m.fg, flexShrink: 0 }}>
+                <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 15, fontWeight: 700, background: m.bg, color: m.fg, flexShrink: 0 }}>
                   {m.label}
                 </span>
               </div>

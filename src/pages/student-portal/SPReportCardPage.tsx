@@ -109,21 +109,21 @@ export function SPReportCardPage() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <button
           onClick={() => navigate(`${prefix}/grades`)}
-          style={{ background: '#F0F4F8', border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 700, color: SP_NAVY, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+          style={{ background: '#F0F4F8', border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: 16, fontWeight: 700, color: SP_NAVY, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
         >
           <ArrowLeft size={13} /> Back to My Grades
         </button>
-        <div style={{ fontSize: 18, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 8 }}><FileText size={18} /> Report Card</div>
+        <div style={{ fontSize: 20, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 8 }}><FileText size={18} /> Report Card</div>
       </div>
 
       {!isHS && avg !== null && (
         <div style={{ ...card, display: 'flex', gap: 20, alignItems: 'center' }}>
           <div style={{ width: 70, height: 70, borderRadius: '50%', background: gradeColor(avg), display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <span style={{ fontSize: 22, fontWeight: 800, color: '#fff' }}>{letterGrade(avg).replace('+', '')}</span>
+            <span style={{ fontSize: 24, fontWeight: 800, color: '#fff' }}>{letterGrade(avg).replace('+', '')}</span>
           </div>
           <div>
-            <div style={{ fontSize: 28, fontWeight: 800, color: SP_NAVY }}>{avg}%</div>
-            <div style={{ fontSize: 13, color: '#7A92B0' }}>Overall Average · {grades.length} grade{grades.length !== 1 ? 's' : ''} recorded</div>
+            <div style={{ fontSize: 30, fontWeight: 800, color: SP_NAVY }}>{avg}%</div>
+            <div style={{ fontSize: 16, color: '#7A92B0' }}>Overall Average · {grades.length} grade{grades.length !== 1 ? 's' : ''} recorded</div>
           </div>
         </div>
       )}
@@ -133,17 +133,17 @@ export function SPReportCardPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: '#F7F9FC' }}>
-                <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Subject</th>
-                <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Term</th>
-                <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Score</th>
+                <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 15, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Subject</th>
+                <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 15, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Term</th>
+                <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 15, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Score</th>
               </tr>
             </thead>
             <tbody>
               {grades.map((grade) => (
                 <tr key={grade.id}>
-                  <td style={{ padding: '10px 14px', fontSize: 12, color: SP_NAVY, borderBottom: '1px solid #F0F4F8', fontWeight: 700 }}>{grade.subject}</td>
-                  <td style={{ padding: '10px 14px', fontSize: 12, color: '#7A92B0', borderBottom: '1px solid #F0F4F8' }}>{grade.term || '—'}{grade.course_code ? ` · ${grade.course_code}` : ''}</td>
-                  <td style={{ padding: '10px 14px', fontSize: 12, color: gradeColor(grade.grade), borderBottom: '1px solid #F0F4F8', textAlign: 'right', fontWeight: 800 }}>{grade.grade}% {grade.letter_grade ? `· ${grade.letter_grade}` : ''}</td>
+                  <td style={{ padding: '10px 14px', fontSize: 16, color: SP_NAVY, borderBottom: '1px solid #F0F4F8', fontWeight: 700 }}>{grade.subject}</td>
+                  <td style={{ padding: '10px 14px', fontSize: 16, color: '#7A92B0', borderBottom: '1px solid #F0F4F8' }}>{grade.term || '—'}{grade.course_code ? ` · ${grade.course_code}` : ''}</td>
+                  <td style={{ padding: '10px 14px', fontSize: 16, color: gradeColor(grade.grade), borderBottom: '1px solid #F0F4F8', textAlign: 'right', fontWeight: 800 }}>{grade.grade}% {grade.letter_grade ? `· ${grade.letter_grade}` : ''}</td>
                 </tr>
               ))}
             </tbody>
@@ -159,9 +159,9 @@ export function SPReportCardPage() {
             const subjectAvg = Math.round(rows.reduce((sum, row) => sum + row.grade, 0) / rows.length)
             return (
               <div key={subject} style={card}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: SP_NAVY, marginBottom: 6 }}>{subject}</div>
-                <div style={{ fontSize: 26, fontWeight: 800, color: gradeColor(subjectAvg) }}>{subjectAvg}%</div>
-                <div style={{ fontSize: 11, color: '#7A92B0' }}>{rows.length} grade{rows.length !== 1 ? 's' : ''}</div>
+                <div style={{ fontSize: 17, fontWeight: 700, color: SP_NAVY, marginBottom: 6 }}>{subject}</div>
+                <div style={{ fontSize: 28, fontWeight: 800, color: gradeColor(subjectAvg) }}>{subjectAvg}%</div>
+                <div style={{ fontSize: 15, color: '#7A92B0' }}>{rows.length} grade{rows.length !== 1 ? 's' : ''}</div>
                 <div style={{ marginTop: 8, height: 5, background: '#E4EAF2', borderRadius: 3 }}>
                   <div style={{ height: '100%', width: `${subjectAvg}%`, background: gradeColor(subjectAvg), borderRadius: 3 }} />
                 </div>
@@ -177,15 +177,15 @@ export function SPReportCardPage() {
 
       {remarks.length > 0 ? (
         <div style={{ ...card, padding: 18 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}><FileText size={13} /> Teacher Remarks</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: SP_NAVY, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}><FileText size={13} /> Teacher Remarks</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {remarks.map((remark) => (
               <div key={remark.id} style={{ background: '#F7F9FC', borderRadius: 10, padding: '12px 14px', borderLeft: `4px solid ${SP_NAVY}` }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#7A92B0' }}>{remark.term} · {remark.academic_year}</div>
-                  {remark.author && <div style={{ fontSize: 10, color: '#94A3B8' }}>{remark.author}</div>}
+                  <div style={{ fontSize: 15, fontWeight: 700, color: '#7A92B0' }}>{remark.term} · {remark.academic_year}</div>
+                  {remark.author && <div style={{ fontSize: 14, color: '#94A3B8' }}>{remark.author}</div>}
                 </div>
-                <div style={{ fontSize: 12, color: '#3D5475', lineHeight: 1.6 }}>{remark.content}</div>
+                <div style={{ fontSize: 16, color: '#3D5475', lineHeight: 1.6 }}>{remark.content}</div>
               </div>
             ))}
           </div>
@@ -196,19 +196,19 @@ export function SPReportCardPage() {
 
       <div style={{ ...card, padding: '12px 20px', background: '#F7F9FC', display: 'flex', gap: 20, flexWrap: 'wrap' }}>
         <div>
-          <span style={{ fontSize: 11, color: '#7A92B0', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Attendance Rate</span>
-          <span style={{ fontSize: 14, fontWeight: 800, color: attRate !== null ? (attRate >= 90 ? SP_GREEN : attRate >= 80 ? SP_GOLD : SP_RED) : '#7A92B0', marginLeft: 8 }}>
+          <span style={{ fontSize: 15, color: '#7A92B0', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Attendance Rate</span>
+          <span style={{ fontSize: 17, fontWeight: 800, color: attRate !== null ? (attRate >= 90 ? SP_GREEN : attRate >= 80 ? SP_GOLD : SP_RED) : '#7A92B0', marginLeft: 8 }}>
             {attRate !== null ? `${attRate}%` : '—'}
           </span>
         </div>
         <div>
-          <span style={{ fontSize: 11, color: '#7A92B0', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Days Recorded</span>
-          <span style={{ fontSize: 14, fontWeight: 800, color: SP_NAVY, marginLeft: 8 }}>{attendance.length}</span>
+          <span style={{ fontSize: 15, color: '#7A92B0', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Days Recorded</span>
+          <span style={{ fontSize: 17, fontWeight: 800, color: SP_NAVY, marginLeft: 8 }}>{attendance.length}</span>
         </div>
         {isHS && (
           <div>
-            <span style={{ fontSize: 11, color: '#7A92B0', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Weighted GPA</span>
-            <span style={{ fontSize: 14, fontWeight: 800, color: gpaColor(wGpa), marginLeft: 8 }}>{wGpa.toFixed(2)}</span>
+            <span style={{ fontSize: 15, color: '#7A92B0', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Weighted GPA</span>
+            <span style={{ fontSize: 17, fontWeight: 800, color: gpaColor(wGpa), marginLeft: 8 }}>{wGpa.toFixed(2)}</span>
           </div>
         )}
       </div>

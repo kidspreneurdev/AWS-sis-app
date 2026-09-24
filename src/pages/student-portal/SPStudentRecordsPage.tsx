@@ -62,9 +62,9 @@ function PdfModal({ url, title, fileName, onClose }: { url: string; title: strin
     >
       <div style={{ background: '#fff', borderRadius: 14, flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', maxWidth: 1000, width: '100%', margin: '0 auto' }}>
         <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</div>
+          <div style={{ fontSize: 17, fontWeight: 700, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
-            <button onClick={() => void downloadUrl(url, fileName)} style={{ fontSize: 12, color: '#9EB3C8', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer' }}>Download</button>
+            <button onClick={() => void downloadUrl(url, fileName)} style={{ fontSize: 16, color: '#9EB3C8', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer' }}>Download</button>
             <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#9EB3C8', cursor: 'pointer', display: 'inline-flex', padding: 0 }}><X size={20} /></button>
           </div>
         </div>
@@ -101,11 +101,11 @@ function GeneratedDocModal({ doc, onClose }: { doc: GenDoc; onClose: () => void 
     >
       <div style={{ background: '#fff', borderRadius: 14, flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', maxWidth: 1000, width: '100%', margin: '0 auto' }}>
         <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>{label}</div>
+          <div style={{ fontSize: 17, fontWeight: 700, color: '#fff' }}>{label}</div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <button
               onClick={() => printDocument(docRef.current, `${label} — ${doc.data.studentName}`)}
-              style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: '#D61F31', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+              style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: '#D61F31', color: '#fff', fontSize: 16, fontWeight: 700, cursor: 'pointer' }}
             >
               Print / Save as PDF
             </button>
@@ -303,19 +303,19 @@ export function SPStudentRecordsPage({ categoryFilter }: { categoryFilter?: Reco
       <div key={def.type} style={{ border: '1px solid #EEF2F7', borderRadius: 10, padding: '12px 14px', background: available ? '#fff' : '#FBFCFE' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
                 <div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#1A365E' }}>{def.label}</div>
-                  <div style={{ fontSize: 12, color: '#7A92B0', marginTop: 2 }}>{subtitle}</div>
+                  <div style={{ fontSize: 17, fontWeight: 700, color: '#1A365E' }}>{def.label}</div>
+                  <div style={{ fontSize: 16, color: '#7A92B0', marginTop: 2 }}>{subtitle}</div>
                 </div>
                 {available ? (
                   <button
                     onClick={() => (genDoc ? setDocViewer(genDoc) : void handleView(def))}
                     disabled={busy}
-                    style={{ padding: '7px 16px', borderRadius: 8, border: 'none', background: '#1A365E', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}
+                    style={{ padding: '7px 16px', borderRadius: 8, border: 'none', background: '#1A365E', color: '#fff', fontSize: 16, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}
                   >
                     {busy ? 'Opening…' : showSigned ? 'View / Download' : 'View'}
                   </button>
                 ) : (
-                  <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: generated ? '#EEF3FF' : '#FFF4E5', color: generated ? '#3557A6' : '#9A5B00', flexShrink: 0 }}>
+                  <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 15, fontWeight: 700, background: generated ? '#EEF3FF' : '#FFF4E5', color: generated ? '#3557A6' : '#9A5B00', flexShrink: 0 }}>
                     {generated ? 'Coming soon' : 'Pending'}
                   </span>
                 )}
@@ -324,30 +324,30 @@ export function SPStudentRecordsPage({ categoryFilter }: { categoryFilter?: Reco
               {showSigned && (
                 <div style={{ marginTop: 12, background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 10, padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#1A365E' }}>Signed copy</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: '#1A365E' }}>Signed copy</div>
                     {signedMeta && (
-                      <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: signedMeta.bg, color: signedMeta.fg }}>{signedMeta.label}</span>
+                      <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 15, fontWeight: 700, background: signedMeta.bg, color: signedMeta.fg }}>{signedMeta.label}</span>
                     )}
                   </div>
 
                   {signedStatus === 'rejected' && rec?.signedReviewNote && (
-                    <div style={{ fontSize: 12, color: '#991B1B' }}>Rejected: {rec.signedReviewNote}. Please upload a corrected copy.</div>
+                    <div style={{ fontSize: 16, color: '#991B1B' }}>Rejected: {rec.signedReviewNote}. Please upload a corrected copy.</div>
                   )}
                   {signedStatus === 'submitted' && (
-                    <div style={{ fontSize: 12, color: '#7A92B0' }}>Uploaded — waiting for the school to review.</div>
+                    <div style={{ fontSize: 16, color: '#7A92B0' }}>Uploaded — waiting for the school to review.</div>
                   )}
                   {signedStatus === 'approved' && (
-                    <div style={{ fontSize: 12, color: '#0E6B3B' }}>Approved — nothing more to do.</div>
+                    <div style={{ fontSize: 16, color: '#0E6B3B' }}>Approved — nothing more to do.</div>
                   )}
                   {!signedStatus && !readOnly && (
-                    <div style={{ fontSize: 12, color: '#7A92B0' }}>Download this document, sign it, then upload the signed copy.</div>
+                    <div style={{ fontSize: 16, color: '#7A92B0' }}>Download this document, sign it, then upload the signed copy.</div>
                   )}
 
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     {rec?.signedFileUrl && (
                       <button
                         onClick={() => void downloadUrl(rec.signedFileUrl!, rec.signedFileName || `${def.label} (signed).pdf`)}
-                        style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #E4EAF2', background: '#fff', color: '#1A365E', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                        style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #E4EAF2', background: '#fff', color: '#1A365E', fontSize: 16, fontWeight: 700, cursor: 'pointer' }}
                       >
                         View my upload
                       </button>
@@ -368,7 +368,7 @@ export function SPStudentRecordsPage({ categoryFilter }: { categoryFilter?: Reco
                         <button
                           onClick={() => signedInputs.current[def.type]?.click()}
                           disabled={busy}
-                          style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: '#D61F31', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                          style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: '#D61F31', color: '#fff', fontSize: 16, fontWeight: 700, cursor: 'pointer' }}
                         >
                           {busy ? 'Uploading…' : rec?.signedFileUrl ? 'Replace signed copy' : 'Upload signed copy'}
                         </button>
@@ -387,13 +387,13 @@ export function SPStudentRecordsPage({ categoryFilter }: { categoryFilter?: Reco
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {!categoryFilter && (
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1A365E', margin: 0 }}>My Records</h1>
-          <p style={{ fontSize: 13, color: '#7A92B0', margin: '4px 0 0' }}>Your school documents, grouped by category</p>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: '#1A365E', margin: 0 }}>My Records</h1>
+          <p style={{ fontSize: 16, color: '#7A92B0', margin: '4px 0 0' }}>Your school documents, grouped by category</p>
         </div>
       )}
 
       {error && (
-        <div style={{ ...card, background: '#FFF8F8', border: '1px solid #F5C2C7', color: '#991B1B', fontSize: 13 }}>{error}</div>
+        <div style={{ ...card, background: '#FFF8F8', border: '1px solid #F5C2C7', color: '#991B1B', fontSize: 16 }}>{error}</div>
       )}
 
       {loading ? (
@@ -421,7 +421,7 @@ export function SPStudentRecordsPage({ categoryFilter }: { categoryFilter?: Reco
               .filter(Boolean)
             body = sems.length > 0
               ? sems
-              : <div style={{ fontSize: 13, color: '#7A92B0' }}>Your diagnostic reports will appear here once the school uploads them.</div>
+              : <div style={{ fontSize: 16, color: '#7A92B0' }}>Your diagnostic reports will appear here once the school uploads them.</div>
           } else {
             body = defs.map(renderRow)
           }

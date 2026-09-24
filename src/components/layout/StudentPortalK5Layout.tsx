@@ -63,14 +63,14 @@ export function StudentPortalK5Layout() {
             width: 52, height: 52, borderRadius: '50%',
             background: '#FAC600',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 22, fontWeight: 900, color: '#1A365E',
+            fontSize: 24, fontWeight: 900, color: '#1A365E',
             margin: '0 auto 8px',
             border: '3px solid rgba(255,255,255,.2)',
           }}>
             {initials}
           </div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#fff', lineHeight: 1.3 }}>{session.fullName}</div>
-          <div style={{ fontSize: 10, color: 'rgba(255,255,255,.45)', marginTop: 3 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#fff', lineHeight: 1.3 }}>{session.fullName}</div>
+          <div style={{ fontSize: 14, color: 'rgba(255,255,255,.45)', marginTop: 3 }}>
             Grade {session.grade}{session.campus ? ` · ${session.campus}` : ''}
           </div>
         </div>
@@ -90,7 +90,7 @@ export function StudentPortalK5Layout() {
                   background: isActive ? 'rgba(214,31,49,.22)' : 'transparent',
                   borderLeft: `3px solid ${isActive ? '#D61F31' : 'transparent'}`,
                   color: isActive ? '#fff' : 'rgba(255,255,255,.58)',
-                  fontSize: 12,
+                  fontSize: 16,
                   fontWeight: 700,
                   cursor: 'pointer',
                   transition: 'background .15s, color .15s',
@@ -112,7 +112,7 @@ export function StudentPortalK5Layout() {
             style={{
               width: '100%', padding: '8px', background: 'rgba(255,255,255,.07)',
               border: '1px solid rgba(255,255,255,.14)', borderRadius: 8,
-              color: 'rgba(255,255,255,.55)', fontSize: 11, cursor: 'pointer',
+              color: 'rgba(255,255,255,.55)', fontSize: 15, cursor: 'pointer',
               fontFamily: 'inherit',
             }}
           >
@@ -129,8 +129,8 @@ export function StudentPortalK5Layout() {
           flexShrink: 0, gap: 10,
         }}>
           <Star size={16} color="#FAC600" fill="#FAC600" />
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#FAC600' }}>K–5 Learning Portal</span>
-          <span style={{ fontSize: 10, color: 'rgba(255,255,255,.3)', marginLeft: 4 }}>2025–26</span>
+          <span style={{ fontSize: 16, fontWeight: 700, color: '#FAC600' }}>K–5 Learning Portal</span>
+          <span style={{ fontSize: 14, color: 'rgba(255,255,255,.3)', marginLeft: 4 }}>2025–26</span>
         </header>
         <main style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
           <Outlet />

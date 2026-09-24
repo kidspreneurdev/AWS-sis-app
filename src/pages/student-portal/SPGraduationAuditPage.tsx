@@ -332,10 +332,10 @@ export function SPGraduationAuditPage() {
           >
             <div style={{ padding: '16px 20px', borderBottom: '1px solid #E4EAF2', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: SP_NAVY }}>
+                <div style={{ fontSize: 18, fontWeight: 800, color: SP_NAVY }}>
                   {breakdownData.req.label} Credit Breakdown
                 </div>
-                <div style={{ fontSize: 12, color: '#7A92B0', marginTop: 3 }}>
+                <div style={{ fontSize: 16, color: '#7A92B0', marginTop: 3 }}>
                   Required: {breakdownData.req.required_credits} cr · Earned: {breakdownData.earned} cr · Still Needed: {breakdownData.stillNeeded} cr
                 </div>
               </div>
@@ -352,38 +352,38 @@ export function SPGraduationAuditPage() {
                 { label: 'STILL NEEDED', value: breakdownData.stillNeeded, color: breakdownData.stillNeeded > 0 ? SP_RED : SP_GREEN },
               ].map(s => (
                 <div key={s.label} style={{ background: s.label === 'EARNED' ? '#F0FDF4' : '#F7F9FC', borderRadius: 10, padding: '14px 16px', border: `1px solid ${s.label === 'EARNED' ? '#BBF7D0' : '#E4EAF2'}` }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: '#7A92B0', letterSpacing: '0.08em', marginBottom: 6 }}>{s.label}</div>
-                  <div style={{ fontSize: 28, fontWeight: 900, color: s.color }}>{s.value}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#7A92B0', letterSpacing: '0.08em', marginBottom: 6 }}>{s.label}</div>
+                  <div style={{ fontSize: 30, fontWeight: 900, color: s.color }}>{s.value}</div>
                 </div>
               ))}
             </div>
 
             <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px 20px' }}>
               {breakdownData.rows.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '30px 0', color: '#7A92B0', fontSize: 13 }}>
+                <div style={{ textAlign: 'center', padding: '30px 0', color: '#7A92B0', fontSize: 16 }}>
                   No completed credits recorded for this requirement yet.
                 </div>
               ) : (
                 <>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: SP_NAVY, marginBottom: 10 }}>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: SP_NAVY, marginBottom: 10 }}>
                     Completed Credits ({breakdownData.rows.length})
                   </div>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ borderBottom: '1px solid #E4EAF2' }}>
                         {['Course / Credit', 'Source', 'Area', 'Grade', 'Credits Counted'].map(h => (
-                          <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                          <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontSize: 15, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {breakdownData.rows.map((row, i) => (
                         <tr key={i} style={{ borderBottom: '1px solid #F0F4F8' }}>
-                          <td style={{ padding: '10px', fontSize: 13, fontWeight: 600, color: SP_NAVY }}>{row.title}</td>
-                          <td style={{ padding: '10px', fontSize: 12, color: '#7A92B0' }}>{row.source}</td>
-                          <td style={{ padding: '10px', fontSize: 12, color: '#7A92B0' }}>{row.area}</td>
-                          <td style={{ padding: '10px', fontSize: 12, color: SP_NAVY }}>{row.grade}</td>
-                          <td style={{ padding: '10px', fontSize: 13, fontWeight: 700, color: SP_GREEN }}>{row.credits}</td>
+                          <td style={{ padding: '10px', fontSize: 16, fontWeight: 600, color: SP_NAVY }}>{row.title}</td>
+                          <td style={{ padding: '10px', fontSize: 16, color: '#7A92B0' }}>{row.source}</td>
+                          <td style={{ padding: '10px', fontSize: 16, color: '#7A92B0' }}>{row.area}</td>
+                          <td style={{ padding: '10px', fontSize: 16, color: SP_NAVY }}>{row.grade}</td>
+                          <td style={{ padding: '10px', fontSize: 16, fontWeight: 700, color: SP_GREEN }}>{row.credits}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -398,11 +398,11 @@ export function SPGraduationAuditPage() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <button
           onClick={() => navigate(`${prefix}/grades`)}
-          style={{ background: '#F0F4F8', border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 700, color: SP_NAVY, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+          style={{ background: '#F0F4F8', border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: 16, fontWeight: 700, color: SP_NAVY, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
         >
           <ArrowLeft size={13} /> Back to My Grades
         </button>
-        <div style={{ fontSize: 18, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 8 }}><GraduationCap size={18} /> Graduation Audit</div>
+        <div style={{ fontSize: 20, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 8 }}><GraduationCap size={18} /> Graduation Audit</div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
@@ -415,9 +415,9 @@ export function SPGraduationAuditPage() {
           <div key={item.label} style={{ ...card, padding: 16 }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
               <div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: 1 }}>{item.label}</div>
-                <div style={{ fontSize: 26, fontWeight: 900, color: item.color, marginTop: 8 }}>{item.value}</div>
-                <div style={{ fontSize: 11, color: '#7A92B0', marginTop: 6 }}>{item.sub}</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: 1 }}>{item.label}</div>
+                <div style={{ fontSize: 28, fontWeight: 900, color: item.color, marginTop: 8 }}>{item.value}</div>
+                <div style={{ fontSize: 15, color: '#7A92B0', marginTop: 6 }}>{item.sub}</div>
               </div>
               <div style={{ width: 38, height: 38, borderRadius: 10, background: `${item.color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: item.color }}><item.icon size={18} /></div>
             </div>
@@ -427,12 +427,12 @@ export function SPGraduationAuditPage() {
 
       {failedCourses.length > 0 && (
         <div style={{ background: '#FEE2E2', borderLeft: `4px solid ${SP_RED}`, borderRadius: 8, padding: '12px 16px' }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#7F1D1D', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#7F1D1D', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
             <AlertTriangle size={12} /> Failed Course{failedCourses.length > 1 ? 's' : ''} - No Credit Awarded
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             {failedCourses.map((course) => (
-              <div key={course.id} style={{ fontSize: 11, color: '#7F1D1D' }}>
+              <div key={course.id} style={{ fontSize: 15, color: '#7F1D1D' }}>
                 • {course.title} ({course.academic_year || 'Current Year'}) - Must repeat to earn credit
               </div>
             ))}
@@ -443,23 +443,23 @@ export function SPGraduationAuditPage() {
       {hasTransferCredits && (
         <div style={{ background: residencyMet ? '#F0FDF4' : '#FEF3C7', borderLeft: `4px solid ${residencyMet ? SP_GREEN : '#D97706'}`, borderRadius: 8, padding: '12px 16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, flexWrap: 'wrap', gap: 6 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: residencyMet ? '#166534' : '#92400E', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: residencyMet ? '#166534' : '#92400E', display: 'flex', alignItems: 'center', gap: 6 }}>
               {residencyMet ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />} American World School Credit Requirement
             </div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#7A92B0' }}>{awsCreditsEarned} / {awsResidencyCredits} cr required at AWS</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: '#7A92B0' }}>{awsCreditsEarned} / {awsResidencyCredits} cr required at AWS</div>
           </div>
           <div style={{ background: '#E4EAF2', borderRadius: 4, height: 8 }}>
             <div style={{ background: residencyMet ? SP_GREEN : '#D97706', width: `${Math.min(100, Math.round((awsCreditsEarned / awsResidencyCredits) * 100))}%`, height: '100%', borderRadius: 4 }} />
           </div>
-          <div style={{ fontSize: 11, color: '#3D5475', marginTop: 8 }}>
+          <div style={{ fontSize: 15, color: '#3D5475', marginTop: 8 }}>
             <strong>{awsCreditsEarned} cr</strong> earned directly through American World School coursework · <strong>{transferCreditsEarned} cr</strong> from external transfer credit
           </div>
           {residencyMet ? (
-            <div style={{ fontSize: 11, color: '#166534', marginTop: 4 }}>
+            <div style={{ fontSize: 15, color: '#166534', marginTop: 4 }}>
               At least 25% of the {graduationCreditsRequired}-credit diploma ({awsResidencyCredits} credits) has been completed through American World School, satisfying WASC (Western Association of Schools and Colleges) accreditation requirements.
             </div>
           ) : (
-            <div style={{ fontSize: 11, color: '#92400E', marginTop: 4, fontWeight: 600 }}>
+            <div style={{ fontSize: 15, color: '#92400E', marginTop: 4, fontWeight: 600 }}>
               To satisfy WASC (Western Association of Schools and Colleges) accreditation requirements, a student must complete at least 25% of their credits with us — at least {awsResidencyCredits} credits must be earned in our school. {residencyRemaining} more AWS credit{residencyRemaining === 1 ? '' : 's'} needed.
             </div>
           )}
@@ -468,7 +468,7 @@ export function SPGraduationAuditPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 14, alignItems: 'start' }}>
         <div style={{ ...card, padding: 20, textAlign: 'center' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Graduation Progress</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Graduation Progress</div>
           <div style={{ position: 'relative', width: 180, height: 180, margin: '0 auto' }}>
             <svg width="180" height="180" viewBox="0 0 180 180">
               <circle cx="90" cy="90" r="80" fill="none" stroke="#E4EAF2" strokeWidth="14" />
@@ -485,11 +485,11 @@ export function SPGraduationAuditPage() {
               />
             </svg>
               <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-              <div style={{ fontSize: 30, fontWeight: 900, color: allMet ? SP_GREEN : SP_GOLD }}>{pctDone}%</div>
-              <div style={{ fontSize: 12, color: '#7A92B0' }}>{totalEarned} of {graduationCreditsRequired || '—'} cr</div>
+              <div style={{ fontSize: 32, fontWeight: 900, color: allMet ? SP_GREEN : SP_GOLD }}>{pctDone}%</div>
+              <div style={{ fontSize: 16, color: '#7A92B0' }}>{totalEarned} of {graduationCreditsRequired || '—'} cr</div>
             </div>
           </div>
-          {allMet && <div style={{ fontSize: 12, fontWeight: 800, color: SP_GREEN, marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><PartyPopper size={13} /> Graduation Requirements Met!</div>}
+          {allMet && <div style={{ fontSize: 16, fontWeight: 800, color: SP_GREEN, marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><PartyPopper size={13} /> Graduation Requirements Met!</div>}
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -507,12 +507,12 @@ export function SPGraduationAuditPage() {
               >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    {req.icon ? <span style={{ fontSize: 16 }}>{req.icon}</span> : <Circle size={8} fill="#94A3B8" color="#94A3B8" />}
-                    <span style={{ fontSize: 12, fontWeight: 700, color: SP_NAVY }}>{req.label}</span>
+                    {req.icon ? <span style={{ fontSize: 18 }}>{req.icon}</span> : <Circle size={8} fill="#94A3B8" color="#94A3B8" />}
+                    <span style={{ fontSize: 16, fontWeight: 700, color: SP_NAVY }}>{req.label}</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 12, fontWeight: 800, color, display: 'inline-flex', alignItems: 'center', gap: 4 }}>{earned} / {req.required_credits} cr {pct >= 100 ? <CheckCircle2 size={12} /> : null}</span>
-                    <span style={{ fontSize: 10, color: '#94A3B8', display: 'inline-flex', alignItems: 'center', gap: 3 }}>View breakdown <ArrowRight size={10} /></span>
+                    <span style={{ fontSize: 16, fontWeight: 800, color, display: 'inline-flex', alignItems: 'center', gap: 4 }}>{earned} / {req.required_credits} cr {pct >= 100 ? <CheckCircle2 size={12} /> : null}</span>
+                    <span style={{ fontSize: 14, color: '#94A3B8', display: 'inline-flex', alignItems: 'center', gap: 3 }}>View breakdown <ArrowRight size={10} /></span>
                   </div>
                 </div>
                 <div style={{ background: '#E4EAF2', borderRadius: 4, height: 8 }}>
@@ -526,8 +526,8 @@ export function SPGraduationAuditPage() {
 
       {requirements.length === 0 && configLoaded && (
         <div style={{ ...card, padding: 18, borderLeft: `4px solid ${SP_GOLD}`, background: '#FFFDF5' }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, marginBottom: 6 }}>Graduation requirements are not configured</div>
-          <div style={{ fontSize: 12, color: '#7A92B0' }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: SP_NAVY, marginBottom: 6 }}>Graduation requirements are not configured</div>
+          <div style={{ fontSize: 16, color: '#7A92B0' }}>
             Graduation requirements have not been set up yet. Once they are configured, this audit will populate automatically.
           </div>
         </div>
@@ -535,7 +535,7 @@ export function SPGraduationAuditPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }}>
         <div style={{ ...card, padding: 18 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}><Trophy size={13} /> Graduation Distinctions</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: SP_NAVY, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}><Trophy size={13} /> Graduation Distinctions</div>
           {distinctions.length > 0 ? (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
               {distinctions.map((item) => {
@@ -551,10 +551,10 @@ export function SPGraduationAuditPage() {
                       textAlign: 'center',
                     }}
                   >
-                    <div style={{ fontSize: 24, marginBottom: 6, display: 'flex', justifyContent: 'center', color: achieved ? (item.color ?? SP_NAVY) : '#7A92B0' }}>{item.icon ?? <Medal size={24} />}</div>
-                    <div style={{ fontSize: 11, fontWeight: 800, color: achieved ? SP_NAVY : '#7A92B0' }}>{item.label}</div>
-                    <div style={{ fontSize: 10, color: '#7A92B0', marginTop: 3 }}>WGPA ≥ {item.weighted_gpa_required.toFixed(1)}</div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: achieved ? SP_GREEN : SP_RED, marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                    <div style={{ fontSize: 26, marginBottom: 6, display: 'flex', justifyContent: 'center', color: achieved ? (item.color ?? SP_NAVY) : '#7A92B0' }}>{item.icon ?? <Medal size={24} />}</div>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: achieved ? SP_NAVY : '#7A92B0' }}>{item.label}</div>
+                    <div style={{ fontSize: 14, color: '#7A92B0', marginTop: 3 }}>WGPA ≥ {item.weighted_gpa_required.toFixed(1)}</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: achieved ? SP_GREEN : SP_RED, marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
                       {achieved ? <><CheckCircle2 size={11} /> Achieved</> : `Current: ${wGpa.toFixed(2)}`}
                     </div>
                   </div>
@@ -567,20 +567,20 @@ export function SPGraduationAuditPage() {
         </div>
 
         <div style={{ ...card, padding: 18, borderLeft: `4px solid ${SP_PURPLE}` }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}><GraduationCap size={13} /> Associate Degree Track</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: SP_NAVY, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}><GraduationCap size={13} /> Associate Degree Track</div>
             {associateDegreeCreditsRequired > 0 ? (
               <>
-                <div style={{ fontSize: 11, color: '#3D5475', marginBottom: 12 }}>
+                <div style={{ fontSize: 15, color: '#3D5475', marginBottom: 12 }}>
                   Students completing {associateDegreeCreditsRequired} college credits earn an Associate Degree alongside the AWS Diploma.
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: SP_NAVY }}>College Credits</span>
-                  <span style={{ fontSize: 12, fontWeight: 800, color: SP_PURPLE }}>{associateDegreeCollegeCredits} / {associateDegreeCreditsRequired}</span>
+                  <span style={{ fontSize: 16, fontWeight: 700, color: SP_NAVY }}>College Credits</span>
+                  <span style={{ fontSize: 16, fontWeight: 800, color: SP_PURPLE }}>{associateDegreeCollegeCredits} / {associateDegreeCreditsRequired}</span>
                 </div>
                 <div style={{ background: '#E4EAF2', borderRadius: 6, height: 10 }}>
                   <div style={{ background: SP_PURPLE, width: `${associateDegreePct}%`, height: '100%', borderRadius: 6 }} />
                 </div>
-                <div style={{ fontSize: 10, color: '#7A92B0', marginTop: 8 }}>
+                <div style={{ fontSize: 14, color: '#7A92B0', marginTop: 8 }}>
                   Includes DE/EC coursework and approved college-credit equivalents.
                 </div>
               </>
@@ -591,18 +591,18 @@ export function SPGraduationAuditPage() {
       </div>
 
       <div style={{ ...card, padding: 18, borderLeft: '4px solid #0A6B64' }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}><Landmark size={13} /> Transfer &amp; EC Credits</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: SP_NAVY, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}><Landmark size={13} /> Transfer &amp; EC Credits</div>
 
           {approvedTransfers.length > 0 && (
             <div style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: SP_GREEN, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: SP_GREEN, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
                 <CheckCircle2 size={11} /> Approved ({approvedTransfers.length} record{approvedTransfers.length !== 1 ? 's' : ''})
               </div>
               {approvedTransfers.map((item) => (
                 <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderBottom: '1px solid #F0F4FA' }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: SP_NAVY }}>{item.course_title}</div>
-                    <div style={{ fontSize: 10, color: '#7A92B0' }}>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: SP_NAVY }}>{item.course_title}</div>
+                    <div style={{ fontSize: 14, color: '#7A92B0' }}>
                       {item.institution}
                       {item.area ? ` · ${item.area}` : ''}
                       {item.type ? ` · ${item.type}` : ''}
@@ -610,12 +610,12 @@ export function SPGraduationAuditPage() {
                     </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: SP_GREEN }}>{item.credits} cr</div>
-                    <div style={{ fontSize: 9, color: SP_GREEN }}>Approved</div>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: SP_GREEN }}>{item.credits} cr</div>
+                    <div style={{ fontSize: 14, color: SP_GREEN }}>Approved</div>
                   </div>
                 </div>
               ))}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8, fontSize: 12, fontWeight: 800, color: SP_GREEN }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8, fontSize: 16, fontWeight: 800, color: SP_GREEN }}>
                 Total: {transferTotal} credits
               </div>
             </div>
@@ -623,22 +623,22 @@ export function SPGraduationAuditPage() {
 
           {ecdeCredits.length > 0 && (
             <div style={{ marginBottom: pendingTransfers.length > 0 ? 12 : 0 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: SP_PURPLE, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: SP_PURPLE, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
                 <GraduationCap size={11} /> EC / DE Credit ({ecdeCredits.length} record{ecdeCredits.length !== 1 ? 's' : ''})
               </div>
               {ecdeCredits.map((item) => (
                 <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderBottom: '1px solid #F0F4FA' }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: SP_NAVY }}>{item.course_title}</div>
-                    <div style={{ fontSize: 10, color: '#7A92B0' }}>{item.institution} · {item.type}</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: SP_NAVY }}>{item.course_title}</div>
+                    <div style={{ fontSize: 14, color: '#7A92B0' }}>{item.institution} · {item.type}</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: SP_PURPLE }}>{item.hs_credits} HS</div>
-                    <div style={{ fontSize: 10, color: '#7A92B0' }}>{item.college_credits} college</div>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: SP_PURPLE }}>{item.hs_credits} HS</div>
+                    <div style={{ fontSize: 14, color: '#7A92B0' }}>{item.college_credits} college</div>
                   </div>
                 </div>
               ))}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8, fontSize: 12, fontWeight: 800, color: SP_PURPLE }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8, fontSize: 16, fontWeight: 800, color: SP_PURPLE }}>
                 Total: {ecdeHsCredits} HS credits
               </div>
             </div>
@@ -646,19 +646,19 @@ export function SPGraduationAuditPage() {
 
           {pendingTransfers.length > 0 && (
             <div style={{ background: '#FEF3C7', borderRadius: 8, padding: '10px 14px', marginTop: 6 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#92400E', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#92400E', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
                 <Hourglass size={11} /> Pending Approval ({pendingTransfers.length} record{pendingTransfers.length !== 1 ? 's' : ''})
               </div>
-              <div style={{ fontSize: 11, color: '#7A5100', marginBottom: 8 }}>
+              <div style={{ fontSize: 15, color: '#7A5100', marginBottom: 8 }}>
                 These credits are not yet counted toward your graduation total. Ask your admin to mark them as approved.
               </div>
               {pendingTransfers.map((item) => (
                 <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 0' }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#92400E' }}>{item.course_title}</div>
-                    <div style={{ fontSize: 10, color: '#B45309' }}>{item.institution}{item.area ? ` · ${item.area}` : ''}</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: '#92400E' }}>{item.course_title}</div>
+                    <div style={{ fontSize: 14, color: '#B45309' }}>{item.institution}{item.area ? ` · ${item.area}` : ''}</div>
                   </div>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: '#B45309' }}>{item.credits} cr pending</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: '#B45309' }}>{item.credits} cr pending</div>
                 </div>
               ))}
             </div>
@@ -678,7 +678,7 @@ export function SPGraduationAuditPage() {
             color: '#fff',
             border: 'none',
             borderRadius: 9,
-            fontSize: 12,
+            fontSize: 16,
             fontWeight: 700,
             cursor: 'pointer',
             fontFamily: 'Poppins,sans-serif',

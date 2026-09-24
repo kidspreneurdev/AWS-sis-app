@@ -45,15 +45,15 @@ export function SPAcademicCalendarPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1A365E', margin: 0 }}>Academic Calendar</h1>
-          <p style={{ fontSize: 13, color: '#7A92B0', margin: '4px 0 0' }}>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: '#1A365E', margin: 0 }}>Academic Calendar</h1>
+          <p style={{ fontSize: 16, color: '#7A92B0', margin: '4px 0 0' }}>
             {calendar ? `School year ${calendar.academicYear}` : 'The school’s annual academic calendar'}
           </p>
         </div>
         {calendar && (
           <button
             onClick={() => void downloadUrl(calendar.fileUrl, calendar.fileName || `Academic Calendar ${calendar.academicYear}.pdf`)}
-            style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#D61F31', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+            style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#D61F31', color: '#fff', fontSize: 16, fontWeight: 700, cursor: 'pointer' }}
           >
             Download PDF
           </button>
@@ -61,7 +61,7 @@ export function SPAcademicCalendarPage() {
       </div>
 
       {error && (
-        <div style={{ ...card, background: '#FFF8F8', border: '1px solid #F5C2C7', color: '#991B1B', fontSize: 13 }}>{error}</div>
+        <div style={{ ...card, background: '#FFF8F8', border: '1px solid #F5C2C7', color: '#991B1B', fontSize: 16 }}>{error}</div>
       )}
 
       {loading ? (
@@ -69,7 +69,7 @@ export function SPAcademicCalendarPage() {
           <div style={{ width: 28, height: 28, borderRadius: '50%', border: '3px solid #E4EAF2', borderTopColor: '#D61F31', animation: 'spin 0.7s linear infinite' }} />
         </div>
       ) : !calendar ? (
-        <div style={{ ...card, textAlign: 'center', color: '#7A92B0', fontSize: 13 }}>
+        <div style={{ ...card, textAlign: 'center', color: '#7A92B0', fontSize: 16 }}>
           The academic calendar has not been published yet. Please check back later.
         </div>
       ) : (

@@ -1,51 +1,33 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import {
   CheckCircle2, Circle, Rabbit, Footprints, Turtle, Hourglass, ClipboardList,
   Check, Target, Timer, BookOpen, Scale, Calculator,
   Upload, Link2, Trophy, Flag, FileText, CalendarDays, Megaphone, FolderKanban,
-  FolderOpen, PartyPopper, Frown, RefreshCw, X, Play, Video, Link as LinkIcon,
-  Paperclip, HelpCircle, MonitorPlay, ChevronDown, ChevronRight, Search,
-  ArrowLeft, ArrowRight, type LucideIcon,
+  FolderOpen, PartyPopper, Frown, RefreshCw, X, Play, Video,
+  ChevronDown, ChevronRight, Search,
+  ArrowLeft, ArrowRight, Star, Lock, AlertTriangle, ExternalLink, Info,
+  type LucideIcon,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { uploadFile } from '@/lib/uploadFile'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
 import { SUBJECT_COLORS, isActiveBool, type LMSCourse, type LMSContent, type LMSEnrolment, type LMSProgress, type LMSQuestion } from '@/pages/lms/lmsStore'
+import { portalPrefix } from './gradesShared'
 
-const CONTENT_TYPE_ICONS: Record<string, LucideIcon> = {
-  video: Video, article: FileText, link: LinkIcon, file: Paperclip, quiz: HelpCircle, presentation: MonitorPlay,
-}
 import { ACTIVE_SCORE_COMPONENT_TYPES, getEffectiveRubric, finalGrade, type ScoreComponentType, type RubricOverrides } from '@/lib/lms/caseStudyRubric'
 import { toLegacyStudentGradeValue } from '@/types/student'
 import { K5MyLearningPage } from '@/pages/student-portal/K5MyLearningPage'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 14, border: '1px solid #E4EAF2', boxShadow: '0 1px 6px rgba(26,54,94,.06)' }
-const emptyState: React.CSSProperties = { padding: '16px 18px', borderRadius: 10, background: '#F8FAFC', border: '1px dashed #D7E0EA', fontSize: 12, color: '#7A92B0' }
+const emptyState: React.CSSProperties = { padding: '16px 18px', borderRadius: 10, background: '#F8FAFC', border: '1px dashed #D7E0EA', fontSize: 16, color: '#7A92B0' }
 const SP_NAVY = '#1A365E'
 const SP_RED = '#D61F31'
 const SP_GREEN = '#1DBD6A'
 
 function getLessonTimerKey(studentId: string, lessonId: string) {
   return `sp_learning_started_${studentId}_${lessonId}`
-}
-
-// Tree row styles for the per-module outline (Learn It / Do It / Show It / Prove It /
-// Master It). sectionLabelStyle marks a category; partRowStyle is a clickable leaf one
-// level in; partRowStyleNested is a leaf under a lesson, one level deeper still.
-const sectionLabelStyle: React.CSSProperties = {
-  fontSize: 10, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: 1,
-  padding: '10px 18px 4px', display: 'flex', alignItems: 'center', gap: 4,
-}
-const partRowStyle: React.CSSProperties = {
-  display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 18px 6px 40px',
-  background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
-  fontSize: 12, color: '#3D5475', fontWeight: 600,
-}
-const partRowStyleNested: React.CSSProperties = { ...partRowStyle, padding: '6px 18px 6px 64px', fontSize: 11, color: '#5A7290', fontWeight: 400 }
-const lessonHeaderStyle: React.CSSProperties = {
-  display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 18px 8px 40px',
-  background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
 }
 
 
@@ -151,7 +133,7 @@ function MasteryQuiz({ item, prog, studentId, coursePassMark, onUpdate }: {
 
   if (!questions.length) {
     return (
-      <div style={{ padding: '14px 16px', background: '#F7F9FC', borderRadius: 10, border: '1px solid #E4EAF2', fontSize: 11, color: '#94A3B8', display: 'flex', alignItems: 'center', gap: 6 }}>
+      <div style={{ padding: '14px 16px', background: '#F7F9FC', borderRadius: 10, border: '1px solid #E4EAF2', fontSize: 15, color: '#94A3B8', display: 'flex', alignItems: 'center', gap: 6 }}>
         <Target size={12} /> No mastery questions have been configured for this lesson yet.
       </div>
     )
@@ -229,41 +211,41 @@ function MasteryQuiz({ item, prog, studentId, coursePassMark, onUpdate }: {
         <div style={{ background: result.passed ? 'linear-gradient(135deg,#059669,#047857)' : 'linear-gradient(135deg,#DC2626,#B91C1C)', borderRadius: 14, padding: '20px 22px', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', top: -20, right: -20, width: 100, height: 100, borderRadius: '50%', background: 'rgba(255,255,255,.07)' }} />
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8, color: '#fff' }}>{result.passed ? <PartyPopper size={36} /> : <Frown size={36} />}</div>
-          <div style={{ fontSize: 16, fontWeight: 900, color: '#fff', marginBottom: 4 }}>{result.passed ? 'Congratulations!' : 'Not quite there yet'}</div>
-          <div style={{ fontSize: 12, color: 'rgba(255,255,255,.85)', marginBottom: 14 }}>
+          <div style={{ fontSize: 18, fontWeight: 900, color: '#fff', marginBottom: 4 }}>{result.passed ? 'Congratulations!' : 'Not quite there yet'}</div>
+          <div style={{ fontSize: 16, color: 'rgba(255,255,255,.85)', marginBottom: 14 }}>
             {result.passed ? `You passed with ${result.score}%` : `You scored ${result.score}% — you need ${passMark}% to pass`}
           </div>
           {!result.passed && remainingRetakes > 0 && (
-            <button onClick={retry} style={{ padding: '9px 20px', background: '#fff', color: '#DC2626', border: 'none', borderRadius: 9, fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
+            <button onClick={retry} style={{ padding: '9px 20px', background: '#fff', color: '#DC2626', border: 'none', borderRadius: 9, fontSize: 16, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><RefreshCw size={13} /> Try Again ({remainingRetakes} attempt{remainingRetakes !== 1 ? 's' : ''} left)</span>
             </button>
           )}
           {!result.passed && remainingRetakes <= 0 && (
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,.75)' }}>No more attempts remaining. Contact your teacher.</div>
+            <div style={{ fontSize: 15, color: 'rgba(255,255,255,.75)' }}>No more attempts remaining. Contact your teacher.</div>
           )}
         </div>
         <div style={{ background: '#fff', border: '1px solid #E4EAF2', borderRadius: 13, overflow: 'hidden' }}>
-          <div style={{ padding: '10px 14px', background: '#F7F9FC', borderBottom: '1px solid #E4EAF2', fontSize: 11, fontWeight: 800, color: '#1A365E', display: 'flex', alignItems: 'center', gap: 6 }}><FileText size={12} /> Answer Review</div>
+          <div style={{ padding: '10px 14px', background: '#F7F9FC', borderBottom: '1px solid #E4EAF2', fontSize: 15, fontWeight: 800, color: '#1A365E', display: 'flex', alignItems: 'center', gap: 6 }}><FileText size={12} /> Answer Review</div>
           {questions.map((q, qi) => {
             const isShort = q.type === 'short' || !q.opts?.length
             const studentAns = answers[qi]
             const correct = !isShort && studentAns === q.ans
             return (
               <div key={qi} style={{ padding: '12px 14px', borderBottom: qi < questions.length - 1 ? '1px solid #F0F4FA' : 'none', background: isShort ? '#F7F9FC' : correct ? '#F0FDF4' : '#FFF7F7' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#1A365E', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: '#1A365E', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
                   {isShort ? <FileText size={11} /> : correct ? <CheckCircle2 size={11} color="#059669" /> : <X size={11} color="#DC2626" />} Q{qi + 1}: {q.q}
                 </div>
                 {isShort ? (
                   <>
-                    <div style={{ fontSize: 10, color: '#5A7290' }}>Short answer — teacher will review your response.</div>
-                    {studentAns !== undefined && <div style={{ fontSize: 10, color: '#3D5475', marginTop: 4, padding: '5px 8px', background: '#F7F9FC', borderRadius: 6 }}><em>{String(studentAns)}</em></div>}
+                    <div style={{ fontSize: 14, color: '#5A7290' }}>Short answer — teacher will review your response.</div>
+                    {studentAns !== undefined && <div style={{ fontSize: 14, color: '#3D5475', marginTop: 4, padding: '5px 8px', background: '#F7F9FC', borderRadius: 6 }}><em>{String(studentAns)}</em></div>}
                   </>
                 ) : (
                   <>
-                    <div style={{ fontSize: 10, color: correct ? '#059669' : '#DC2626', marginBottom: 3 }}>
+                    <div style={{ fontSize: 14, color: correct ? '#059669' : '#DC2626', marginBottom: 3 }}>
                       Your answer: {studentAns !== undefined ? `${String.fromCharCode(65 + Number(studentAns))}. ${q.opts?.[Number(studentAns)] ?? ''}` : 'Not answered'}
                     </div>
-                    {!correct && <div style={{ fontSize: 10, fontWeight: 700, color: '#059669' }}>Correct answer: {String.fromCharCode(65 + (q.ans ?? 0))}. {q.opts?.[q.ans ?? 0] ?? ''}</div>}
+                    {!correct && <div style={{ fontSize: 14, fontWeight: 700, color: '#059669' }}>Correct answer: {String.fromCharCode(65 + (q.ans ?? 0))}. {q.opts?.[q.ans ?? 0] ?? ''}</div>}
                   </>
                 )}
               </div>
@@ -285,20 +267,20 @@ function MasteryQuiz({ item, prog, studentId, coursePassMark, onUpdate }: {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', background: '#FFF7ED', border: '1px solid #FDE68A', borderRadius: 8, marginBottom: 10 }}>
           <Timer size={18} color="#92400E" />
           <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#92400E', textTransform: 'uppercase' }}>Time Remaining</div>
-            <div style={{ fontSize: 18, fontWeight: 900, color: timeLeft < 60 ? SP_RED : '#D97706', fontVariantNumeric: 'tabular-nums' }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#92400E', textTransform: 'uppercase' }}>Time Remaining</div>
+            <div style={{ fontSize: 20, fontWeight: 900, color: timeLeft < 60 ? SP_RED : '#D97706', fontVariantNumeric: 'tabular-nums' }}>
               {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}
             </div>
           </div>
         </div>
       )}
       {timedOut && (
-        <div style={{ padding: '8px 12px', background: '#FEE2E2', borderRadius: 8, fontSize: 11, fontWeight: 700, color: SP_RED, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ padding: '8px 12px', background: '#FEE2E2', borderRadius: 8, fontSize: 15, fontWeight: 700, color: SP_RED, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
           <Timer size={12} /> Time's up! Please submit your answers.
         </div>
       )}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: '#7A92B0' }}>Question {qIdx + 1} of {questions.length}</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: '#7A92B0' }}>Question {qIdx + 1} of {questions.length}</div>
         <div style={{ display: 'flex', gap: 5 }}>
           {questions.map((_, i) => (
             <div key={i} style={{ width: i === qIdx ? 20 : 8, height: 8, borderRadius: 4, background: i < qIdx ? '#059669' : i === qIdx ? '#1A365E' : '#E4EAF2', transition: 'all .3s' }} />
@@ -306,14 +288,14 @@ function MasteryQuiz({ item, prog, studentId, coursePassMark, onUpdate }: {
         </div>
       </div>
       <div style={{ background: '#fff', border: '1.5px solid #E4EAF2', borderRadius: 12, padding: '16px 18px', marginBottom: 14 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#1A365E', lineHeight: 1.6, marginBottom: 14 }}>{currentQ.q}</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#1A365E', lineHeight: 1.6, marginBottom: 14 }}>{currentQ.q}</div>
         {isShort ? (
           <textarea
             rows={3}
             placeholder="Type your answer here..."
             value={String(answers[qIdx] ?? '')}
             onChange={(e) => setAnswers((p) => ({ ...p, [qIdx]: e.target.value }))}
-            style={{ width: '100%', padding: 10, border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 12, fontFamily: 'Poppins,sans-serif', resize: 'vertical', boxSizing: 'border-box' }}
+            style={{ width: '100%', padding: 10, border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 16, fontFamily: 'Poppins,sans-serif', resize: 'vertical', boxSizing: 'border-box' }}
           />
         ) : (
           currentQ.opts?.map((opt, oi) => {
@@ -321,11 +303,11 @@ function MasteryQuiz({ item, prog, studentId, coursePassMark, onUpdate }: {
             return (
               <label
                 key={oi}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 9, cursor: 'pointer', fontSize: 12, color: selected ? '#1A365E' : '#3D5475', marginBottom: 6, background: selected ? '#EEF3FF' : '#fff', border: `1.5px solid ${selected ? '#1A365E' : '#E4EAF2'}`, transition: 'all .15s' }}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 9, cursor: 'pointer', fontSize: 16, color: selected ? '#1A365E' : '#3D5475', marginBottom: 6, background: selected ? '#EEF3FF' : '#fff', border: `1.5px solid ${selected ? '#1A365E' : '#E4EAF2'}`, transition: 'all .15s' }}
                 onClick={() => setAnswers((p) => ({ ...p, [qIdx]: oi }))}
               >
                 <input type="radio" name={`q_${qIdx}`} value={oi} checked={selected} onChange={() => setAnswers((p) => ({ ...p, [qIdx]: oi }))} style={{ flexShrink: 0, accentColor: '#1A365E' }} readOnly />
-                <span style={{ fontSize: 10, fontWeight: 800, color: '#7A92B0', background: '#F0F4FA', padding: '2px 7px', borderRadius: 4, flexShrink: 0 }}>{String.fromCharCode(65 + oi)}</span>
+                <span style={{ fontSize: 14, fontWeight: 800, color: '#7A92B0', background: '#F0F4FA', padding: '2px 7px', borderRadius: 4, flexShrink: 0 }}>{String.fromCharCode(65 + oi)}</span>
                 <span>{opt}</span>
               </label>
             )
@@ -336,7 +318,7 @@ function MasteryQuiz({ item, prog, studentId, coursePassMark, onUpdate }: {
         onClick={isLast || timedOut ? () => void submitQuiz(answers) : () => setQIdx((p) => p + 1)}
         disabled={readOnly || saving || (!timedOut && answers[qIdx] === undefined)}
         title={readOnly ? 'View-only access' : undefined}
-        style={{ width: '100%', padding: 11, background: saving ? '#94A3B8' : (answers[qIdx] !== undefined || timedOut) ? '#1A365E' : '#E4EAF2', color: (answers[qIdx] !== undefined || timedOut) ? '#fff' : '#94A3B8', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: readOnly || (answers[qIdx] === undefined && !timedOut) ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: readOnly ? 0.5 : 1 }}
+        style={{ width: '100%', padding: 11, background: saving ? '#94A3B8' : (answers[qIdx] !== undefined || timedOut) ? '#1A365E' : '#E4EAF2', color: (answers[qIdx] !== undefined || timedOut) ? '#fff' : '#94A3B8', border: 'none', borderRadius: 10, fontSize: 16, fontWeight: 700, cursor: readOnly || (answers[qIdx] === undefined && !timedOut) ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: readOnly ? 0.5 : 1 }}
       >
         {saving ? 'Saving…' : readOnly ? 'View-only access' : (isLast || timedOut) ? `Submit Mastery Test (${questions.length} question${questions.length !== 1 ? 's' : ''})` : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>Next Question <ArrowRight size={13} /></span>}
       </button>
@@ -377,6 +359,14 @@ interface CaseStudyBundle {
 }
 
 interface MySubmission { contentId: string; kind: string; note: string | null; linkUrl: string | null; submittedAt: string }
+
+// A unit's content flattens into one row per "activity" — the case study (Learn It),
+// each lesson (Do It), and the module's Show It / Prove It / Master It slots. The last
+// four of those all live on the single hasAssignment carrier row, so a contentId alone
+// can't tell them apart — activeGroupKind disambiguates which of the four is open.
+type PartKind = 'tutorial' | 'video' | 'mastery' | 'lessonNotes' | 'caseStudyView' | 'caseStudyNotes' | 'socratic' | 'omr' | 'presentation'
+type ActivityGroupKind = 'learn' | 'lesson' | 'show' | 'prove' | 'master'
+interface ActivityGroupRef { key: string; kind: ActivityGroupKind; contentId: string }
 
 /** Loads the fixed-flow score/appeal bundle for one module's case-study carrier item.
  *  Used by the Socratic/OMR/Presentation detail panels via useModuleScoring below. */
@@ -436,21 +426,21 @@ function NotesUploadRow({ contentId, kind, studentId, submission, onSubmitted }:
   if (submission) {
     return (
       <div style={{ background: '#F0FDF4', borderRadius: 8, padding: '10px 12px', border: '1px solid #BBF7D0' }}>
-        <div style={{ fontSize: 11, color: '#059669', fontWeight: 700, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}><CheckCircle2 size={11} /> Submitted {new Date(submission.submittedAt).toLocaleDateString()}</div>
-        {submission.note && <div style={{ fontSize: 11, color: '#3D5475', marginBottom: 4, whiteSpace: 'pre-wrap' }}>{submission.note}</div>}
-        {submission.linkUrl && <a href={submission.linkUrl} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#1A365E', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Link2 size={11} /> View your notes</a>}
+        <div style={{ fontSize: 15, color: '#059669', fontWeight: 700, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}><CheckCircle2 size={11} /> Submitted {new Date(submission.submittedAt).toLocaleDateString()}</div>
+        {submission.note && <div style={{ fontSize: 15, color: '#3D5475', marginBottom: 4, whiteSpace: 'pre-wrap' }}>{submission.note}</div>}
+        {submission.linkUrl && <a href={submission.linkUrl} target="_blank" rel="noreferrer" style={{ fontSize: 15, color: '#1A365E', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Link2 size={11} /> View your notes</a>}
       </div>
     )
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Notes for your teacher (optional)..." style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 11, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
-      <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, border: `2px dashed ${file ? '#1DBD6A' : '#CBD5E0'}`, background: file ? '#F0FDF4' : '#F8FAFC', cursor: 'pointer', fontSize: 11, color: file ? '#1DBD6A' : '#7A92B0', fontWeight: file ? 700 : 400 }}>
+      <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Notes for your teacher (optional)..." style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 15, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
+      <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, border: `2px dashed ${file ? '#1DBD6A' : '#CBD5E0'}`, background: file ? '#F0FDF4' : '#F8FAFC', cursor: 'pointer', fontSize: 15, color: file ? '#1DBD6A' : '#7A92B0', fontWeight: file ? 700 : 400 }}>
         <input type="file" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) setFile(f) }} />
         {file ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><CheckCircle2 size={12} /> {file.name}</span> : '+ Choose file (PDF, image…)'}
       </label>
-      <button onClick={() => void submit()} disabled={readOnly || submitting || !file} style={{ padding: '9px 16px', background: file && !readOnly ? '#1A365E' : '#E4EAF2', color: file && !readOnly ? '#fff' : '#94A3B8', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: file && !readOnly ? 'pointer' : 'not-allowed', alignSelf: 'flex-end' }}>
+      <button onClick={() => void submit()} disabled={readOnly || submitting || !file} style={{ padding: '9px 16px', background: file && !readOnly ? '#1A365E' : '#E4EAF2', color: file && !readOnly ? '#fff' : '#94A3B8', border: 'none', borderRadius: 8, fontSize: 16, fontWeight: 700, cursor: file && !readOnly ? 'pointer' : 'not-allowed', alignSelf: 'flex-end' }}>
         {submitting ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Hourglass size={12} /> Uploading…</span> : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Upload size={12} /> Submit Notes</span>}
       </button>
     </div>
@@ -463,18 +453,18 @@ function CaseStudyDocPanel({ carrierItem }: { carrierItem: LMSContent }) {
   const caseStudyUrl = carrierItem.caseStudyUrl ?? null
   return (
     <div style={{ ...card, overflow: 'hidden' }}>
-      <div style={{ padding: '10px 16px', background: '#F7F9FC', borderBottom: '1px solid #E4EAF2', fontSize: 12, fontWeight: 800, color: '#1A365E' }}>Explore the {carrierItem.title} case study</div>
+      <div style={{ padding: '10px 16px', background: '#F7F9FC', borderBottom: '1px solid #E4EAF2', fontSize: 16, fontWeight: 800, color: '#1A365E' }}>Explore the {carrierItem.title} case study</div>
       {caseStudyUrl ? (
         <>
           <div style={{ position: 'relative', paddingBottom: '65%', height: 0 }}>
             <iframe src={getCaseStudyEmbedUrl(caseStudyUrl)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }} title="Case Study" loading="lazy" />
           </div>
           <div style={{ padding: '8px 16px', textAlign: 'right' }}>
-            <a href={caseStudyUrl} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#1A365E', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Link2 size={11} /> Open in new tab</a>
+            <a href={caseStudyUrl} target="_blank" rel="noreferrer" style={{ fontSize: 15, color: '#1A365E', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Link2 size={11} /> Open in new tab</a>
           </div>
         </>
       ) : (
-        <div style={{ padding: 20, color: '#94A3B8', fontSize: 12 }}>No case study document has been uploaded yet.</div>
+        <div style={{ padding: 20, color: '#94A3B8', fontSize: 16 }}>No case study document has been uploaded yet.</div>
       )}
     </div>
   )
@@ -538,10 +528,10 @@ function RubricViewer({ type, overrides }: { type: ScoreComponentType; overrides
   const cat = getEffectiveRubric(overrides, type)
   return (
     <div style={{ ...card, padding: '14px 16px' }}>
-      <div style={{ fontSize: 12, fontWeight: 800, color: '#1A365E', marginBottom: 8 }}>Rubric — {cat.label} ({cat.weight} pts)</div>
+      <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E', marginBottom: 8 }}>Rubric — {cat.label} ({cat.weight} pts)</div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {cat.criteria.map((c) => (
-          <span key={c.key} style={{ fontSize: 11, fontWeight: 700, color: '#3D5475', background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 6, padding: '4px 8px' }}>{c.label}: {c.max} pts</span>
+          <span key={c.key} style={{ fontSize: 15, fontWeight: 700, color: '#3D5475', background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 6, padding: '4px 8px' }}>{c.label}: {c.max} pts</span>
         ))}
       </div>
     </div>
@@ -556,12 +546,12 @@ function SocraticPanel({ carrierItem }: { carrierItem: LMSContent }) {
   return (
     <>
       {carrierItem.socraticBrief ? (
-        <div style={{ ...card, padding: '14px 16px', fontSize: 12, color: '#3D5475', lineHeight: 1.6 }}>{carrierItem.socraticBrief}</div>
+        <div style={{ ...card, padding: '14px 16px', fontSize: 16, color: '#3D5475', lineHeight: 1.6 }}>{carrierItem.socraticBrief}</div>
       ) : (
         <div style={{ ...card, ...emptyState }}>No activity description has been added yet.</div>
       )}
       {carrierItem.socraticDate && (
-        <div style={{ fontSize: 11, fontWeight: 700, color: '#7A92B0', display: 'flex', alignItems: 'center', gap: 4 }}><CalendarDays size={11} /> Scheduled {carrierItem.socraticDate}</div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: '#7A92B0', display: 'flex', alignItems: 'center', gap: 4 }}><CalendarDays size={11} /> Scheduled {carrierItem.socraticDate}</div>
       )}
       <RubricViewer type="debate" overrides={carrierItem.rubricOverrides} />
       <CSScoreBlock type="debate" overrides={carrierItem.rubricOverrides} icon={Scale} title="Socratic Seminar Score" order={1} score={scoreByType.debate} appealControl={renderAppealControl('debate')} />
@@ -612,7 +602,7 @@ function OmrQuiz({ carrierItem, score, onSubmitted }: {
 
   if (!questions.length) {
     return (
-      <div style={{ padding: '14px 16px', background: '#F7F9FC', borderRadius: 10, border: '1px solid #E4EAF2', fontSize: 11, color: '#94A3B8', display: 'flex', alignItems: 'center', gap: 6 }}>
+      <div style={{ padding: '14px 16px', background: '#F7F9FC', borderRadius: 10, border: '1px solid #E4EAF2', fontSize: 15, color: '#94A3B8', display: 'flex', alignItems: 'center', gap: 6 }}>
         <Calculator size={12} /> No OMR questions have been configured for this module yet.
       </div>
     )
@@ -649,17 +639,17 @@ function OmrQuiz({ carrierItem, score, onSubmitted }: {
       <div style={{ background: result.passed ? 'linear-gradient(135deg,#059669,#047857)' : 'linear-gradient(135deg,#DC2626,#B91C1C)', borderRadius: 14, padding: '20px 22px', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', top: -20, right: -20, width: 100, height: 100, borderRadius: '50%', background: 'rgba(255,255,255,.07)' }} />
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8, color: '#fff' }}>{result.passed ? <PartyPopper size={36} /> : <Frown size={36} />}</div>
-        <div style={{ fontSize: 16, fontWeight: 900, color: '#fff', marginBottom: 4 }}>{result.passed ? 'Congratulations!' : 'Not quite there yet'}</div>
-        <div style={{ fontSize: 12, color: 'rgba(255,255,255,.85)', marginBottom: 14 }}>
+        <div style={{ fontSize: 18, fontWeight: 900, color: '#fff', marginBottom: 4 }}>{result.passed ? 'Congratulations!' : 'Not quite there yet'}</div>
+        <div style={{ fontSize: 16, color: 'rgba(255,255,255,.85)', marginBottom: 14 }}>
           {result.passed ? `You passed with ${result.score}% (${result.correct}/${result.total} correct)` : `You scored ${result.score}% (${result.correct}/${result.total} correct) — you need ${passMark}% to pass`}
         </div>
         {!result.passed && remainingAttempts > 0 && (
-          <button onClick={retry} style={{ padding: '9px 20px', background: '#fff', color: '#DC2626', border: 'none', borderRadius: 9, fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
+          <button onClick={retry} style={{ padding: '9px 20px', background: '#fff', color: '#DC2626', border: 'none', borderRadius: 9, fontSize: 16, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><RefreshCw size={13} /> Try Again ({remainingAttempts} attempt{remainingAttempts !== 1 ? 's' : ''} left)</span>
           </button>
         )}
         {!result.passed && remainingAttempts <= 0 && (
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,.75)' }}>No more attempts remaining. Contact your teacher.</div>
+          <div style={{ fontSize: 15, color: 'rgba(255,255,255,.75)' }}>No more attempts remaining. Contact your teacher.</div>
         )}
       </div>
     )
@@ -675,20 +665,20 @@ function OmrQuiz({ carrierItem, score, onSubmitted }: {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', background: '#FFF7ED', border: '1px solid #FDE68A', borderRadius: 8, marginBottom: 10 }}>
           <Timer size={18} color="#92400E" />
           <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#92400E', textTransform: 'uppercase' }}>Time Remaining</div>
-            <div style={{ fontSize: 18, fontWeight: 900, color: timeLeft < 60 ? SP_RED : '#D97706', fontVariantNumeric: 'tabular-nums' }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#92400E', textTransform: 'uppercase' }}>Time Remaining</div>
+            <div style={{ fontSize: 20, fontWeight: 900, color: timeLeft < 60 ? SP_RED : '#D97706', fontVariantNumeric: 'tabular-nums' }}>
               {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}
             </div>
           </div>
         </div>
       )}
       {timedOut && (
-        <div style={{ padding: '8px 12px', background: '#FEE2E2', borderRadius: 8, fontSize: 11, fontWeight: 700, color: SP_RED, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ padding: '8px 12px', background: '#FEE2E2', borderRadius: 8, fontSize: 15, fontWeight: 700, color: SP_RED, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
           <Timer size={12} /> Time's up! Please submit your answers.
         </div>
       )}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: '#7A92B0' }}>Question {qIdx + 1} of {questions.length}</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: '#7A92B0' }}>Question {qIdx + 1} of {questions.length}</div>
         <div style={{ display: 'flex', gap: 5 }}>
           {questions.map((_, i) => (
             <div key={i} style={{ width: i === qIdx ? 20 : 8, height: 8, borderRadius: 4, background: i < qIdx ? '#059669' : i === qIdx ? '#1A365E' : '#E4EAF2', transition: 'all .3s' }} />
@@ -696,17 +686,17 @@ function OmrQuiz({ carrierItem, score, onSubmitted }: {
         </div>
       </div>
       <div style={{ background: '#fff', border: '1.5px solid #E4EAF2', borderRadius: 12, padding: '16px 18px', marginBottom: 14 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#1A365E', lineHeight: 1.6, marginBottom: 14 }}>{currentQ.q}</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#1A365E', lineHeight: 1.6, marginBottom: 14 }}>{currentQ.q}</div>
         {currentQ.opts.map((opt, oi) => {
           const selected = answers[qIdx] === oi
           return (
             <label
               key={oi}
-              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 9, cursor: 'pointer', fontSize: 12, color: selected ? '#1A365E' : '#3D5475', marginBottom: 6, background: selected ? '#EEF3FF' : '#fff', border: `1.5px solid ${selected ? '#1A365E' : '#E4EAF2'}`, transition: 'all .15s' }}
+              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 9, cursor: 'pointer', fontSize: 16, color: selected ? '#1A365E' : '#3D5475', marginBottom: 6, background: selected ? '#EEF3FF' : '#fff', border: `1.5px solid ${selected ? '#1A365E' : '#E4EAF2'}`, transition: 'all .15s' }}
               onClick={() => setAnswers((p) => ({ ...p, [qIdx]: oi }))}
             >
               <input type="radio" name={`omr_q_${qIdx}`} value={oi} checked={selected} onChange={() => setAnswers((p) => ({ ...p, [qIdx]: oi }))} style={{ flexShrink: 0, accentColor: '#1A365E' }} readOnly />
-              <span style={{ fontSize: 10, fontWeight: 800, color: '#7A92B0', background: '#F0F4FA', padding: '2px 7px', borderRadius: 4, flexShrink: 0 }}>{String.fromCharCode(65 + oi)}</span>
+              <span style={{ fontSize: 14, fontWeight: 800, color: '#7A92B0', background: '#F0F4FA', padding: '2px 7px', borderRadius: 4, flexShrink: 0 }}>{String.fromCharCode(65 + oi)}</span>
               <span>{opt}</span>
             </label>
           )
@@ -716,7 +706,7 @@ function OmrQuiz({ carrierItem, score, onSubmitted }: {
         onClick={isLast || timedOut ? () => void submitQuiz(answers) : () => setQIdx((p) => p + 1)}
         disabled={readOnly || saving || (!timedOut && answers[qIdx] === undefined)}
         title={readOnly ? 'View-only access' : undefined}
-        style={{ width: '100%', padding: 11, background: saving ? '#94A3B8' : (answers[qIdx] !== undefined || timedOut) ? '#1A365E' : '#E4EAF2', color: (answers[qIdx] !== undefined || timedOut) ? '#fff' : '#94A3B8', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: readOnly || (answers[qIdx] === undefined && !timedOut) ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: readOnly ? 0.5 : 1 }}
+        style={{ width: '100%', padding: 11, background: saving ? '#94A3B8' : (answers[qIdx] !== undefined || timedOut) ? '#1A365E' : '#E4EAF2', color: (answers[qIdx] !== undefined || timedOut) ? '#fff' : '#94A3B8', border: 'none', borderRadius: 10, fontSize: 16, fontWeight: 700, cursor: readOnly || (answers[qIdx] === undefined && !timedOut) ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: readOnly ? 0.5 : 1 }}
       >
         {saving ? 'Saving…' : readOnly ? 'View-only access' : (isLast || timedOut) ? `Submit OMR Test (${questions.length} question${questions.length !== 1 ? 's' : ''})` : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>Next Question <ArrowRight size={13} /></span>}
       </button>
@@ -767,24 +757,24 @@ function PresentationPanel({ carrierItem, studentId }: { carrierItem: LMSContent
   return (
     <>
       {carrierItem.presentationBrief && (
-        <div style={{ ...card, padding: '14px 16px', fontSize: 12, color: '#3D5475', lineHeight: 1.6 }}>{carrierItem.presentationBrief}</div>
+        <div style={{ ...card, padding: '14px 16px', fontSize: 16, color: '#3D5475', lineHeight: 1.6 }}>{carrierItem.presentationBrief}</div>
       )}
       <div style={{ ...card, padding: '14px 16px' }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: '#1A365E', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}><Upload size={13} /> Submit Final Presentation</div>
+        <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}><Upload size={13} /> Submit Final Presentation</div>
         {bundle.presentation ? (
           <div style={{ background: '#F0FDF4', borderRadius: 8, padding: '10px 12px', border: '1px solid #BBF7D0' }}>
-            <div style={{ fontSize: 11, color: '#059669', fontWeight: 700, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}><CheckCircle2 size={11} /> Submitted {new Date(bundle.presentation.submittedAt).toLocaleDateString()}</div>
-            {bundle.presentation.note && <div style={{ fontSize: 11, color: '#3D5475', marginBottom: 4, whiteSpace: 'pre-wrap' }}>{bundle.presentation.note}</div>}
-            {bundle.presentation.linkUrl && <a href={bundle.presentation.linkUrl} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#1A365E', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Link2 size={11} /> View your presentation</a>}
+            <div style={{ fontSize: 15, color: '#059669', fontWeight: 700, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}><CheckCircle2 size={11} /> Submitted {new Date(bundle.presentation.submittedAt).toLocaleDateString()}</div>
+            {bundle.presentation.note && <div style={{ fontSize: 15, color: '#3D5475', marginBottom: 4, whiteSpace: 'pre-wrap' }}>{bundle.presentation.note}</div>}
+            {bundle.presentation.linkUrl && <a href={bundle.presentation.linkUrl} target="_blank" rel="noreferrer" style={{ fontSize: 15, color: '#1A365E', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Link2 size={11} /> View your presentation</a>}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <textarea rows={2} value={presNote} onChange={(e) => setPresNote(e.target.value)} placeholder="Notes for your teacher (optional)..." style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 11, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
-            <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, border: `2px dashed ${presFile ? '#1DBD6A' : '#CBD5E0'}`, background: presFile ? '#F0FDF4' : '#F8FAFC', cursor: 'pointer', fontSize: 11, color: presFile ? '#1DBD6A' : '#7A92B0', fontWeight: presFile ? 700 : 400 }}>
+            <textarea rows={2} value={presNote} onChange={(e) => setPresNote(e.target.value)} placeholder="Notes for your teacher (optional)..." style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 15, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, border: `2px dashed ${presFile ? '#1DBD6A' : '#CBD5E0'}`, background: presFile ? '#F0FDF4' : '#F8FAFC', cursor: 'pointer', fontSize: 15, color: presFile ? '#1DBD6A' : '#7A92B0', fontWeight: presFile ? 700 : 400 }}>
               <input type="file" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) setPresFile(f) }} />
               {presFile ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><CheckCircle2 size={12} /> {presFile.name}</span> : '+ Choose file (PDF, PPT…)'}
             </label>
-            <button onClick={() => void submitPresentation()} disabled={readOnly || presSubmitting || !presFile} style={{ padding: '9px 16px', background: presFile && !readOnly ? '#1A365E' : '#E4EAF2', color: presFile && !readOnly ? '#fff' : '#94A3B8', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: presFile && !readOnly ? 'pointer' : 'not-allowed', alignSelf: 'flex-end' }}>
+            <button onClick={() => void submitPresentation()} disabled={readOnly || presSubmitting || !presFile} style={{ padding: '9px 16px', background: presFile && !readOnly ? '#1A365E' : '#E4EAF2', color: presFile && !readOnly ? '#fff' : '#94A3B8', border: 'none', borderRadius: 8, fontSize: 16, fontWeight: 700, cursor: presFile && !readOnly ? 'pointer' : 'not-allowed', alignSelf: 'flex-end' }}>
               {presSubmitting ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Hourglass size={12} /> Uploading…</span> : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Upload size={12} /> Submit Presentation</span>}
             </button>
           </div>
@@ -794,8 +784,8 @@ function PresentationPanel({ carrierItem, studentId }: { carrierItem: LMSContent
       <CSScoreBlock type="presentation" overrides={carrierItem.rubricOverrides} icon={Trophy} title="Presentation Score" order={3} score={scoreByType.presentation} appealControl={renderAppealControl('presentation')} />
 
       <div style={{ ...card, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: '#5A7290' }}>Module Final Grade</span>
-        <span style={{ fontSize: 16, fontWeight: 900, color: overallFinalGrade !== null ? (overallFinalGrade >= 70 ? '#059669' : SP_RED) : '#94A3B8' }}>{overallFinalGrade !== null ? `${overallFinalGrade}/100` : '—'}</span>
+        <span style={{ fontSize: 15, fontWeight: 700, color: '#5A7290' }}>Module Final Grade</span>
+        <span style={{ fontSize: 18, fontWeight: 900, color: overallFinalGrade !== null ? (overallFinalGrade >= 70 ? '#059669' : SP_RED) : '#94A3B8' }}>{overallFinalGrade !== null ? `${overallFinalGrade}/100` : '—'}</span>
       </div>
     </>
   )
@@ -814,7 +804,7 @@ function CSAppealControl({ appeal, isOpen, draftText, filing, readOnly, onOpen, 
 }) {
   if (appeal) {
     return (
-      <div style={{ marginTop: 8, padding: '8px 10px', background: appeal.status === 'open' ? '#FEF3C7' : '#F0FDF4', border: `1px solid ${appeal.status === 'open' ? '#FDE68A' : '#BBF7D0'}`, borderRadius: 8, fontSize: 11 }}>
+      <div style={{ marginTop: 8, padding: '8px 10px', background: appeal.status === 'open' ? '#FEF3C7' : '#F0FDF4', border: `1px solid ${appeal.status === 'open' ? '#FDE68A' : '#BBF7D0'}`, borderRadius: 8, fontSize: 15 }}>
         {appeal.status === 'open'
           ? <span style={{ color: '#92400E', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Flag size={11} /> Appeal sent — pending review.</span>
           : <span style={{ color: '#059669', display: 'inline-flex', alignItems: 'center', gap: 4 }}><CheckCircle2 size={11} /> <strong>Appeal resolved:</strong> {appeal.adminReply}</span>}
@@ -825,14 +815,14 @@ function CSAppealControl({ appeal, isOpen, draftText, filing, readOnly, onOpen, 
     <div style={{ marginTop: 8 }}>
       {isOpen ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <textarea rows={2} value={draftText} onChange={(e) => onDraftChange(e.target.value)} placeholder="Explain the discrepancy you'd like reviewed..." style={{ width: '100%', padding: '7px 9px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 11, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
+          <textarea rows={2} value={draftText} onChange={(e) => onDraftChange(e.target.value)} placeholder="Explain the discrepancy you'd like reviewed..." style={{ width: '100%', padding: '7px 9px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 15, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
           <div style={{ display: 'flex', gap: 6 }}>
-            <button onClick={onFile} disabled={filing} style={{ padding: '5px 12px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>{filing ? 'Sending…' : 'Send Appeal'}</button>
-            <button onClick={onCancel} style={{ padding: '5px 12px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+            <button onClick={onFile} disabled={filing} style={{ padding: '5px 12px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 6, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>{filing ? 'Sending…' : 'Send Appeal'}</button>
+            <button onClick={onCancel} style={{ padding: '5px 12px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 6, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
           </div>
         </div>
       ) : (
-        <button onClick={onOpen} disabled={readOnly} style={{ padding: '4px 10px', background: 'none', color: '#D97706', border: '1px solid #FDE68A', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: readOnly ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Flag size={10} /> Appeal this score</button>
+        <button onClick={onOpen} disabled={readOnly} style={{ padding: '4px 10px', background: 'none', color: '#D97706', border: '1px solid #FDE68A', borderRadius: 6, fontSize: 14, fontWeight: 700, cursor: readOnly ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Flag size={10} /> Appeal this score</button>
       )}
     </div>
   )
@@ -852,24 +842,24 @@ function CSScoreBlock({ type, overrides, icon: Icon, title, order, score, appeal
   return (
     <div style={{ background: '#fff', border: '1px solid #E4EAF2', borderRadius: 12, padding: '14px 16px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: '#1A365E', display: 'flex', alignItems: 'center', gap: 6 }}><Icon size={13} /> {order}. {title}</div>
+        <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E', display: 'flex', alignItems: 'center', gap: 6 }}><Icon size={13} /> {order}. {title}</div>
         {isScored
-          ? <span style={{ background: '#DCFCE7', color: '#059669', fontSize: 12, fontWeight: 900, padding: '4px 12px', borderRadius: 20 }}>{score!.subtotal}/{cat.weight}</span>
-          : <span style={{ background: '#F0F4FA', color: '#7A92B0', fontSize: 10, fontWeight: 700, padding: '4px 10px', borderRadius: 20, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Hourglass size={10} /> Pending</span>}
+          ? <span style={{ background: '#DCFCE7', color: '#059669', fontSize: 16, fontWeight: 900, padding: '4px 12px', borderRadius: 20 }}>{score!.subtotal}/{cat.weight}</span>
+          : <span style={{ background: '#F0F4FA', color: '#7A92B0', fontSize: 14, fontWeight: 700, padding: '4px 10px', borderRadius: 20, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Hourglass size={10} /> Pending</span>}
       </div>
       {isScored && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
           {cat.criteria.map((c) => (
-            <span key={c.key} style={{ fontSize: 10, fontWeight: 700, color: '#3D5475', background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 6, padding: '4px 8px' }}>{c.label}: {score!.criteriaScores[c.key] ?? 0}/{c.max}</span>
+            <span key={c.key} style={{ fontSize: 14, fontWeight: 700, color: '#3D5475', background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 6, padding: '4px 8px' }}>{c.label}: {score!.criteriaScores[c.key] ?? 0}/{c.max}</span>
           ))}
         </div>
       )}
       {isScored && score!.feedback && (
-        <div style={{ background: '#EEF3FF', borderRadius: 8, padding: '8px 10px', fontSize: 11, color: '#3D5475', whiteSpace: 'pre-wrap' }}>
+        <div style={{ background: '#EEF3FF', borderRadius: 8, padding: '8px 10px', fontSize: 15, color: '#3D5475', whiteSpace: 'pre-wrap' }}>
           <strong style={{ color: '#1A365E' }}>Teacher feedback:</strong> {score!.feedback}
         </div>
       )}
-      {!isScored && <div style={{ fontSize: 11, color: '#94A3B8' }}>Your teacher hasn't scored this yet.</div>}
+      {!isScored && <div style={{ fontSize: 15, color: '#94A3B8' }}>Your teacher hasn't scored this yet.</div>}
       {appealControl}
     </div>
   )
@@ -907,7 +897,7 @@ function LessonPreviewContent({
     if (item.type === 'article') {
       const content = item.body || item.url || ''
       return content
-        ? <div style={{ padding: 20, lineHeight: 1.7, fontSize: 13, color: '#1A365E', whiteSpace: 'pre-wrap' }}>{content}</div>
+        ? <div style={{ padding: 20, lineHeight: 1.7, fontSize: 16, color: '#1A365E', whiteSpace: 'pre-wrap' }}>{content}</div>
         : <div style={{ padding: 20, color: '#94A3B8' }}>No article content.</div>
     }
 
@@ -936,7 +926,7 @@ function LessonPreviewContent({
               {/* loading overlay — hides page-1 flash while PDF navigates to #page=N */}
               {pdfLoading && (
                 <div style={{ position: 'absolute', inset: 0, zIndex: 8, background: '#1A1A2E', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <div style={{ color: '#9EB3C8', fontSize: 12, fontWeight: 600 }}>Loading slide…</div>
+                  <div style={{ color: '#9EB3C8', fontSize: 16, fontWeight: 600 }}>Loading slide…</div>
                 </div>
               )}
               {/* blocks scroll so only app nav works */}
@@ -947,9 +937,9 @@ function LessonPreviewContent({
                 <div style={{ height: '100%', width: `${pct2}%`, background: '#1A365E', borderRadius: 3, transition: 'width .2s' }} />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <button onClick={() => { setPdfLoading(true); setSlideIdx(p => Math.max(0, p - 1)) }} disabled={isFirst2} style={{ padding: '7px 18px', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: isFirst2 ? 'not-allowed' : 'pointer', background: isFirst2 ? '#E4EAF2' : '#1A365E', color: isFirst2 ? '#94A3B8' : '#fff' }}>◀ Prev</button>
-                <div style={{ flex: 1, textAlign: 'center', fontSize: 13, fontWeight: 800, color: '#1A365E' }}>Slide {slideIdx + 1} <span style={{ color: '#94A3B8', fontWeight: 400 }}>of {slideCount}</span></div>
-                <button onClick={() => { setPdfLoading(true); setSlideIdx(p => Math.min(slideCount - 1, p + 1)) }} disabled={isLast2} style={{ padding: '7px 18px', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: isLast2 ? 'not-allowed' : 'pointer', background: isLast2 ? '#E4EAF2' : '#1A365E', color: isLast2 ? '#94A3B8' : '#fff' }}>Next ▶</button>
+                <button onClick={() => { setPdfLoading(true); setSlideIdx(p => Math.max(0, p - 1)) }} disabled={isFirst2} style={{ padding: '7px 18px', border: 'none', borderRadius: 8, fontSize: 16, fontWeight: 700, cursor: isFirst2 ? 'not-allowed' : 'pointer', background: isFirst2 ? '#E4EAF2' : '#1A365E', color: isFirst2 ? '#94A3B8' : '#fff' }}>◀ Prev</button>
+                <div style={{ flex: 1, textAlign: 'center', fontSize: 16, fontWeight: 800, color: '#1A365E' }}>Slide {slideIdx + 1} <span style={{ color: '#94A3B8', fontWeight: 400 }}>of {slideCount}</span></div>
+                <button onClick={() => { setPdfLoading(true); setSlideIdx(p => Math.min(slideCount - 1, p + 1)) }} disabled={isLast2} style={{ padding: '7px 18px', border: 'none', borderRadius: 8, fontSize: 16, fontWeight: 700, cursor: isLast2 ? 'not-allowed' : 'pointer', background: isLast2 ? '#E4EAF2' : '#1A365E', color: isLast2 ? '#94A3B8' : '#fff' }}>Next ▶</button>
               </div>
             </div>
           </div>
@@ -976,9 +966,9 @@ function LessonPreviewContent({
               <div style={{ height: '100%', width: `${pct}%`, background: '#1A365E', borderRadius: 3, transition: 'width .2s' }} />
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <button onClick={() => setSlideIdx((p) => Math.max(0, p - 1))} disabled={isFirst} style={{ padding: '7px 18px', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: isFirst ? 'not-allowed' : 'pointer', background: isFirst ? '#E4EAF2' : '#1A365E', color: isFirst ? '#94A3B8' : '#fff' }}>◀ Prev</button>
-              <div style={{ flex: 1, textAlign: 'center', fontSize: 13, fontWeight: 800, color: '#1A365E' }}>Slide {slideIdx + 1} <span style={{ color: '#94A3B8', fontWeight: 400 }}>of {slideCount}</span></div>
-              <button onClick={() => setSlideIdx((p) => Math.min(slideCount - 1, p + 1))} disabled={isLast} style={{ padding: '7px 18px', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: isLast ? 'not-allowed' : 'pointer', background: isLast ? '#E4EAF2' : '#1A365E', color: isLast ? '#94A3B8' : '#fff' }}>Next ▶</button>
+              <button onClick={() => setSlideIdx((p) => Math.max(0, p - 1))} disabled={isFirst} style={{ padding: '7px 18px', border: 'none', borderRadius: 8, fontSize: 16, fontWeight: 700, cursor: isFirst ? 'not-allowed' : 'pointer', background: isFirst ? '#E4EAF2' : '#1A365E', color: isFirst ? '#94A3B8' : '#fff' }}>◀ Prev</button>
+              <div style={{ flex: 1, textAlign: 'center', fontSize: 16, fontWeight: 800, color: '#1A365E' }}>Slide {slideIdx + 1} <span style={{ color: '#94A3B8', fontWeight: 400 }}>of {slideCount}</span></div>
+              <button onClick={() => setSlideIdx((p) => Math.min(slideCount - 1, p + 1))} disabled={isLast} style={{ padding: '7px 18px', border: 'none', borderRadius: 8, fontSize: 16, fontWeight: 700, cursor: isLast ? 'not-allowed' : 'pointer', background: isLast ? '#E4EAF2' : '#1A365E', color: isLast ? '#94A3B8' : '#fff' }}>Next ▶</button>
             </div>
           </div>
         </div>
@@ -994,7 +984,7 @@ function LessonPreviewContent({
     if (item.type === 'link' && url) {
       return (
         <div style={{ padding: 16 }}>
-          <div style={{ fontSize: 11, color: '#7A92B0', marginBottom: 8 }}>Loading external content inline...</div>
+          <div style={{ fontSize: 15, color: '#7A92B0', marginBottom: 8 }}>Loading external content inline...</div>
           <iframe src={url} style={{ width: '100%', height: 500, border: '1.5px solid #E4EAF2', borderRadius: 10 }} sandbox="allow-scripts allow-same-origin allow-forms" loading="lazy" title={item.title} />
         </div>
       )
@@ -1008,9 +998,9 @@ function LessonPreviewContent({
         <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
           {questions.map((q, qi) => (
             <div key={qi} style={{ background: '#F7F9FC', borderRadius: 10, padding: '12px 14px', border: '1px solid #E4EAF2' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#1A365E', marginBottom: 8 }}>{qi + 1}. {q.q}</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: '#1A365E', marginBottom: 8 }}>{qi + 1}. {q.q}</div>
               {q.opts && q.opts.map((opt, oi) => (
-                <div key={oi} style={{ padding: '6px 10px', marginBottom: 4, borderRadius: 6, background: oi === q.ans ? '#DCFCE7' : '#fff', border: `1px solid ${oi === q.ans ? '#86EFAC' : '#E4EAF2'}`, fontSize: 11, color: oi === q.ans ? '#15803D' : '#3D5475', fontWeight: oi === q.ans ? 700 : 400, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <div key={oi} style={{ padding: '6px 10px', marginBottom: 4, borderRadius: 6, background: oi === q.ans ? '#DCFCE7' : '#fff', border: `1px solid ${oi === q.ans ? '#86EFAC' : '#E4EAF2'}`, fontSize: 15, color: oi === q.ans ? '#15803D' : '#3D5475', fontWeight: oi === q.ans ? 700 : 400, display: 'flex', alignItems: 'center', gap: 4 }}>
                   {String.fromCharCode(65 + oi)}. {opt}{oi === q.ans ? <Check size={11} strokeWidth={3} /> : null}
                 </div>
               ))}
@@ -1026,9 +1016,153 @@ function LessonPreviewContent({
   return (
     <div style={{ background: '#fff', borderRadius: 13, border: '1px solid #E4EAF2', overflow: 'hidden' }}>
       <div style={{ padding: '10px 14px', borderBottom: '1px solid #F0F4FA', background: '#F7F9FC' }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: '#1A365E' }}>{item.unitTitle || 'Lesson Content'}</span>
+        <span style={{ fontSize: 15, fontWeight: 700, color: '#1A365E' }}>{item.unitTitle || 'Lesson Content'}</span>
       </div>
       {renderContent()}
+    </div>
+  )
+}
+
+// ─── Course-detail content list: dated, filterable, flat rows ─────────────────
+// "Teacher Needed" has no backing status anywhere yet (no field on lms_progress
+// tracks it), so its chip stays disabled rather than pretending to filter something
+// real. Bookmarking is the same story — shown as a dashed, disabled affordance.
+type ContentFilterId = 'all' | 'weekly_target' | 'past_target' | 'not_started' | 'in_progress' | 'not_mastered' | 'completed'
+type RowStatus = 'completed' | 'in_progress' | 'not_started' | 'not_mastered'
+
+const CONTENT_FILTERS: { id: ContentFilterId | 'teacher_needed'; label: string; dot: string; disabled?: boolean }[] = [
+  { id: 'all', label: 'All', dot: '#94A3B8' },
+  { id: 'weekly_target', label: 'Weekly Target', dot: '#2563EB' },
+  { id: 'past_target', label: 'Past Target', dot: SP_RED },
+  { id: 'not_started', label: 'Not Started', dot: '#94A3B8' },
+  { id: 'in_progress', label: 'In Progress', dot: '#2563EB' },
+  { id: 'not_mastered', label: 'Not Mastered', dot: '#D97706' },
+  { id: 'teacher_needed', label: 'Teacher Needed', dot: SP_RED, disabled: true },
+  { id: 'completed', label: 'Completed', dot: SP_GREEN },
+]
+
+const ROW_STATUS_META: Record<RowStatus, { bar: string; textColor: string; icon: LucideIcon }> = {
+  completed: { bar: SP_GREEN, textColor: SP_GREEN, icon: CheckCircle2 },
+  not_mastered: { bar: SP_RED, textColor: SP_RED, icon: AlertTriangle },
+  in_progress: { bar: '#2563EB', textColor: '#2563EB', icon: Play },
+  not_started: { bar: '#E4EAF2', textColor: '#94A3B8', icon: Circle },
+}
+
+function rowBuckets(status: RowStatus, targetDate?: string | null): ContentFilterId[] {
+  const buckets: ContentFilterId[] = ['all', status]
+  if (targetDate && status !== 'completed') {
+    const diffDays = Math.round((new Date(`${targetDate}T00:00:00`).getTime() - Date.now()) / 86400000)
+    if (diffDays < 0) buckets.push('past_target')
+    else if (diffDays <= 7) buckets.push('weekly_target')
+  }
+  return buckets
+}
+
+function formatShortDate(targetDate: string) {
+  const d = new Date(`${targetDate}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return null
+  return {
+    dow: d.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase(),
+    short: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toUpperCase(),
+    overdue: d.getTime() < new Date(new Date().toDateString()).getTime(),
+  }
+}
+
+const contentRowStyle: React.CSSProperties = {
+  display: 'grid', gridTemplateColumns: '4px 54px 62px 1fr auto', gap: 10, alignItems: 'center',
+  width: '100%', padding: '10px 18px 10px 10px', background: 'none', border: 'none',
+  cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+}
+
+function ContentRow({ icon, kindLabel, title, targetDate, status, statusText, score, passMark, timeMins, locked, onClick, activeFilter }: {
+  icon: LucideIcon
+  kindLabel: string
+  title: string
+  targetDate?: string | null
+  status: RowStatus
+  statusText: string
+  score?: number | null
+  passMark?: number
+  timeMins?: number | null
+  locked?: boolean
+  onClick?: () => void
+  activeFilter: ContentFilterId
+}) {
+  const buckets = rowBuckets(status, targetDate)
+  if (activeFilter !== 'all' && !buckets.includes(activeFilter)) return null
+
+  const meta = ROW_STATUS_META[status]
+  const dateInfo = targetDate ? formatShortDate(targetDate) : null
+  const Icon = locked ? Lock : icon
+  const StatusIcon = meta.icon
+
+  return (
+    <button onClick={onClick} disabled={!onClick} style={{ ...contentRowStyle, opacity: locked ? .6 : 1, cursor: onClick ? 'pointer' : 'default' }}>
+      <span style={{ alignSelf: 'stretch', minHeight: 28, borderRadius: 2, background: meta.bar }} />
+      <span style={{ fontSize: 14, fontWeight: 800, color: dateInfo?.overdue && status !== 'completed' ? SP_RED : '#94A3B8', textAlign: 'center', lineHeight: 1.3 }}>
+        {dateInfo ? <>{dateInfo.dow}<br />{dateInfo.short}</> : 'No Target Date'}
+      </span>
+      <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, flexShrink: 0 }}>
+        <span style={{ width: 44, height: 44, borderRadius: 11, background: '#F0F4FA', color: '#5A7290', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Icon size={22} />
+        </span>
+        <span style={{ fontSize: 9, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '.3px', textAlign: 'center', lineHeight: 1.1 }}>{kindLabel}</span>
+      </span>
+      <span style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: locked ? '#94A3B8' : '#1A365E', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
+        <div style={{ fontSize: 14, fontWeight: 600, color: meta.textColor, display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+          <StatusIcon size={10} />{statusText}
+        </div>
+      </span>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 8, justifySelf: 'end' }}>
+        {typeof score === 'number' && <span style={{ fontSize: 16, fontWeight: 800, color: score >= (passMark ?? 80) ? SP_GREEN : SP_RED }}>{score}%</span>}
+        {!!timeMins && <span style={{ fontSize: 14, color: '#94A3B8' }}>{timeMins}m</span>}
+        <span
+          title="Bookmarking isn't available yet — needs a new field"
+          onClick={(e) => e.stopPropagation()}
+          style={{ width: 20, height: 20, borderRadius: 6, border: '1px dashed #D7E0EA', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#D7E0EA', cursor: 'not-allowed', flexShrink: 0 }}
+        >
+          <Star size={11} />
+        </span>
+      </span>
+    </button>
+  )
+}
+
+function formatLongDate(targetDate: string) {
+  const d = new Date(`${targetDate}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: '2-digit', year: 'numeric' })
+}
+
+// One Play row inside an activity's overview (e.g. "Expressions: Tutorial").
+function OverviewPartRow({ title, status, statusText, score, passMark, onClick }: {
+  title: string
+  status: RowStatus
+  statusText: string
+  score?: number | null
+  passMark?: number
+  onClick: () => void
+}) {
+  const meta = ROW_STATUS_META[status]
+  const StatusIcon = meta.icon
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px', border: '1px solid #E4EAF2', borderRadius: 12, background: '#fff' }}>
+      <span style={{ width: 32, height: 32, borderRadius: '50%', background: meta.bar, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <StatusIcon size={16} />
+      </span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#1A365E', display: 'flex', alignItems: 'center', gap: 6 }}>
+          {title}
+          <span title="Bookmarking isn't available yet — needs a new field" style={{ display: 'inline-flex', color: '#D7E0EA', cursor: 'not-allowed' }}><Star size={13} /></span>
+        </div>
+        <div style={{ fontSize: 15, color: meta.textColor, marginTop: 2, fontWeight: 600 }}>
+          {statusText}{typeof score === 'number' ? ` · ${score}%${passMark != null ? ` (pass ${passMark}%)` : ''}` : ''}
+        </div>
+      </div>
+      <button onClick={onClick} style={{ padding: '8px 18px', background: '#fff', color: SP_NAVY, border: `1.5px solid ${SP_NAVY}`, borderRadius: 20, fontSize: 16, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
+        <Play size={12} /> Play
+      </button>
     </div>
   )
 }
@@ -1036,6 +1170,8 @@ function LessonPreviewContent({
 export function SPMyLearningPage() {
   const { session, getToken } = useStudentPortal()
   const { readOnly } = usePortalReadOnly()
+  const navigate = useNavigate()
+  const location = useLocation()
   const [courses, setCourses] = useState<LMSCourse[]>([])
   const [content, setContent] = useState<LMSContent[]>([])
   const [progress, setProgress] = useState<LMSProgress[]>([])
@@ -1045,8 +1181,11 @@ export function SPMyLearningPage() {
   const [activeCourse, setActiveCourse] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [subjectFilter, setSubjectFilter] = useState('All')
+  const [contentFilter, setContentFilter] = useState<ContentFilterId>('all')
+  const [sectionDetailsOpen, setSectionDetailsOpen] = useState(false)
   const [activeLessonId, setActiveLessonId] = useState<string | null>(null)
-  const [activePart, setActivePart] = useState<'tutorial' | 'video' | 'mastery' | 'lessonNotes' | 'caseStudyView' | 'caseStudyNotes' | 'socratic' | 'omr' | 'presentation' | null>(null)
+  const [activeGroupKind, setActiveGroupKind] = useState<ActivityGroupKind | null>(null)
+  const [activePart, setActivePart] = useState<PartKind | null>(null)
   const [collapsedLessonIds, setCollapsedLessonIds] = useState<Set<string>>(new Set())
   const [openedAtMap, setOpenedAtMap] = useState<Record<string, number>>({})
   const [, setTimerNow] = useState(Date.now())
@@ -1058,6 +1197,14 @@ export function SPMyLearningPage() {
     if (!session) return
     void load()
   }, [session])
+
+  useEffect(() => {
+    setContentFilter('all')
+    setSectionDetailsOpen(false)
+    setActiveGroupKind(null)
+    setActiveLessonId(null)
+    setActivePart(null)
+  }, [activeCourse])
 
   useEffect(() => {
     if (!session) return
@@ -1255,7 +1402,7 @@ export function SPMyLearningPage() {
     if (error) console.error('markComplete error:', error)
   }
 
-  function openPart(item: LMSContent, part: 'tutorial' | 'video' | 'mastery' | 'lessonNotes' | 'caseStudyView' | 'caseStudyNotes' | 'socratic' | 'omr' | 'presentation') {
+  function openPart(item: LMSContent, part: PartKind) {
     if (part === 'tutorial' && session) {
       const existing = openedAtMap[item.id]
       if (!existing) {
@@ -1272,10 +1419,28 @@ export function SPMyLearningPage() {
     setActivePart(part)
   }
 
+  // Opens an activity's overview (the Tutorial/Notes/Mastery-style checklist) —
+  // clicking a Play row from there calls openPart for that specific part.
+  function openGroup(kind: ActivityGroupKind, contentId: string) {
+    setActiveGroupKind(kind)
+    setActiveLessonId(contentId)
+    setActivePart(null)
+  }
+
+  // From inside a part (Tutorial, Mastery Test, ...), "Back" returns to that
+  // activity's overview rather than all the way out to the unit list.
   function backToLessonList() {
+    setActivePart(null)
+  }
+
+  // From the overview itself, "Close" returns all the way out to the unit list.
+  function closeActivity() {
+    setActiveGroupKind(null)
     setActiveLessonId(null)
     setActivePart(null)
   }
+
+  const hasSubmission = (contentId: string, kind: string) => mySubmissions.some((s) => s.contentId === contentId && s.kind === kind)
 
   function toggleLessonExpanded(itemId: string) {
     setCollapsedLessonIds((prev) => {
@@ -1360,23 +1525,57 @@ export function SPMyLearningPage() {
   }, [courseItems])
   const activeLesson = activeLessonId ? courseItems.find((item) => item.id === activeLessonId) ?? null : null
 
+  // Flat, ordered list of every activity across every unit — powers Previous/Next
+  // Activity navigation on the overview screen, independent of which unit it's in.
+  const allGroups = useMemo(() => {
+    const out: ActivityGroupRef[] = []
+    groupedModules.forEach((module) => {
+      module.units.forEach((items) => {
+        const carrierItem = items.find((i) => i.hasAssignment === true || i.hasAssignment === 'TRUE') ?? null
+        const lessonItems = items.filter((i) => i !== carrierItem)
+        if (carrierItem) out.push({ key: `learn:${carrierItem.id}`, kind: 'learn', contentId: carrierItem.id })
+        lessonItems.forEach((item) => out.push({ key: `lesson:${item.id}`, kind: 'lesson', contentId: item.id }))
+        if (carrierItem) {
+          out.push({ key: `show:${carrierItem.id}`, kind: 'show', contentId: carrierItem.id })
+          out.push({ key: `prove:${carrierItem.id}`, kind: 'prove', contentId: carrierItem.id })
+          out.push({ key: `master:${carrierItem.id}`, kind: 'master', contentId: carrierItem.id })
+        }
+      })
+    })
+    return out
+  }, [groupedModules])
+  const activeGroupIndex = activeLessonId && activeGroupKind ? allGroups.findIndex((g) => g.kind === activeGroupKind && g.contentId === activeLessonId) : -1
+  const prevGroup = activeGroupIndex > 0 ? allGroups[activeGroupIndex - 1] : null
+  const nextGroup = activeGroupIndex >= 0 && activeGroupIndex < allGroups.length - 1 ? allGroups[activeGroupIndex + 1] : null
+
+  function groupDisplay(ref: ActivityGroupRef): { title: string; icon: LucideIcon } {
+    const item = courseItems.find((i) => i.id === ref.contentId)
+    switch (ref.kind) {
+      case 'learn': return { title: `Learn It: ${item?.title || 'Case Study'}`, icon: FileText }
+      case 'show': return { title: 'Show It: Socratic Seminar', icon: Scale }
+      case 'prove': return { title: 'Prove It: OMR Test', icon: Calculator }
+      case 'master': return { title: 'Master It: Presentation', icon: Trophy }
+      default: return { title: item?.title || 'Lesson', icon: BookOpen }
+    }
+  }
+
   if (loading) {
-    return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 220, color: '#7A92B0', fontSize: 13 }}>Loading your courses…</div>
+    return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 220, color: '#7A92B0', fontSize: 16 }}>Loading your courses…</div>
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
         <div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: '#1A365E', display: 'flex', alignItems: 'center', gap: 8 }}><BookOpen size={18} /> My Learning</div>
-          <div style={{ fontSize: 11, color: '#7A92B0', marginTop: 2 }}>{courses.length} course{courses.length !== 1 ? 's' : ''} assigned to you</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: '#1A365E', display: 'flex', alignItems: 'center', gap: 8 }}><BookOpen size={18} /> My Learning</div>
+          <div style={{ fontSize: 15, color: '#7A92B0', marginTop: 2 }}>{courses.length} course{courses.length !== 1 ? 's' : ''} assigned to you</div>
         </div>
         {!selectedCourse && (
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search courses…"
-            style={{ padding: '8px 12px', border: '1.5px solid #E4EAF2', borderRadius: 9, fontSize: 12, minWidth: 190, outline: 'none', fontFamily: 'Poppins,sans-serif' }}
+            style={{ padding: '8px 12px', border: '1.5px solid #E4EAF2', borderRadius: 9, fontSize: 16, minWidth: 190, outline: 'none', fontFamily: 'Poppins,sans-serif' }}
           />
         )}
       </div>
@@ -1397,7 +1596,7 @@ export function SPMyLearningPage() {
                       border: `1.5px solid ${active ? SP_NAVY : '#E4EAF2'}`,
                       background: active ? SP_NAVY : '#fff',
                       color: active ? '#fff' : '#5A7290',
-                      fontSize: 10,
+                      fontSize: 14,
                       fontWeight: 700,
                       cursor: 'pointer',
                       fontFamily: 'Poppins,sans-serif',
@@ -1412,18 +1611,18 @@ export function SPMyLearningPage() {
 
           {courses.length > 0 && (
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {paceSummary.ahead > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: '#DCFCE7', borderRadius: 10, border: '1px solid #059669' }}><Rabbit size={16} color="#059669" /><div><div style={{ fontSize: 11, fontWeight: 800, color: '#059669' }}>{paceSummary.ahead}</div><div style={{ fontSize: 9, color: '#059669' }}>Ahead of Pace</div></div></div>}
-              {paceSummary.on > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: '#DBEAFE', borderRadius: 10, border: '1px solid #2563EB' }}><Footprints size={16} color="#2563EB" /><div><div style={{ fontSize: 11, fontWeight: 800, color: '#2563EB' }}>{paceSummary.on}</div><div style={{ fontSize: 9, color: '#2563EB' }}>On Pace</div></div></div>}
-              {paceSummary.off > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: '#FEE2E2', borderRadius: 10, border: '1px solid #D61F31' }}><Turtle size={16} color="#D61F31" /><div><div style={{ fontSize: 11, fontWeight: 800, color: '#D61F31' }}>{paceSummary.off}</div><div style={{ fontSize: 9, color: '#D61F31' }}>Off Pace</div></div></div>}
-              {paceSummary.notStarted > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: '#F1F5F9', borderRadius: 10, border: '1px solid #94A3B8' }}><Circle size={16} color="#64748B" /><div><div style={{ fontSize: 11, fontWeight: 800, color: '#64748B' }}>{paceSummary.notStarted}</div><div style={{ fontSize: 9, color: '#64748B' }}>Not Started</div></div></div>}
+              {paceSummary.ahead > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: '#DCFCE7', borderRadius: 10, border: '1px solid #059669' }}><Rabbit size={16} color="#059669" /><div><div style={{ fontSize: 15, fontWeight: 800, color: '#059669' }}>{paceSummary.ahead}</div><div style={{ fontSize: 14, color: '#059669' }}>Ahead of Pace</div></div></div>}
+              {paceSummary.on > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: '#DBEAFE', borderRadius: 10, border: '1px solid #2563EB' }}><Footprints size={16} color="#2563EB" /><div><div style={{ fontSize: 15, fontWeight: 800, color: '#2563EB' }}>{paceSummary.on}</div><div style={{ fontSize: 14, color: '#2563EB' }}>On Pace</div></div></div>}
+              {paceSummary.off > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: '#FEE2E2', borderRadius: 10, border: '1px solid #D61F31' }}><Turtle size={16} color="#D61F31" /><div><div style={{ fontSize: 15, fontWeight: 800, color: '#D61F31' }}>{paceSummary.off}</div><div style={{ fontSize: 14, color: '#D61F31' }}>Off Pace</div></div></div>}
+              {paceSummary.notStarted > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: '#F1F5F9', borderRadius: 10, border: '1px solid #94A3B8' }}><Circle size={16} color="#64748B" /><div><div style={{ fontSize: 15, fontWeight: 800, color: '#64748B' }}>{paceSummary.notStarted}</div><div style={{ fontSize: 14, color: '#64748B' }}>Not Started</div></div></div>}
             </div>
           )}
 
           {courses.length === 0 ? (
             <div style={{ ...card, padding: 48, textAlign: 'center' }}>
               <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12, color: '#94A3B8' }}><BookOpen size={40} /></div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: '#1A365E' }}>No courses assigned yet</div>
-              <div style={{ fontSize: 12, color: '#7A92B0', marginTop: 6 }}>Once courses are assigned, they will appear here.</div>
+              <div style={{ fontSize: 17, fontWeight: 700, color: '#1A365E' }}>No courses assigned yet</div>
+              <div style={{ fontSize: 16, color: '#7A92B0', marginTop: 6 }}>Once courses are assigned, they will appear here.</div>
             </div>
           ) : filteredCourses.length === 0 ? (
             <div style={{ ...card, ...emptyState, textAlign: 'center' }}>No courses match your search right now.</div>
@@ -1448,41 +1647,41 @@ export function SPMyLearningPage() {
                   <div key={course.id} style={{ ...card, padding: 0, overflow: 'hidden', cursor: 'pointer' }} onClick={() => setActiveCourse(course.id)}>
                     <div style={{ height: 6, background: subjectCol }} />
                     <div style={{ padding: '14px 16px' }}>
-                      <div style={{ fontSize: 13, fontWeight: 800, color: '#1A365E', marginBottom: 4 }}>{course.title}</div>
-                      <div style={{ fontSize: 11, color: '#7A92B0', marginBottom: 10 }}>{course.subject}{course.gradeLevel ? ` · ${course.gradeLevel}` : ''}</div>
-                      <div style={{ fontSize: 11, color: '#3D5475', marginBottom: 10, lineHeight: 1.5 }}>{course.description ? `${course.description.slice(0, 80)}${course.description.length > 80 ? '…' : ''}` : 'No course description available yet.'}</div>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E', marginBottom: 4 }}>{course.title}</div>
+                      <div style={{ fontSize: 15, color: '#7A92B0', marginBottom: 10 }}>{course.subject}{course.gradeLevel ? ` · ${course.gradeLevel}` : ''}</div>
+                      <div style={{ fontSize: 15, color: '#3D5475', marginBottom: 10, lineHeight: 1.5 }}>{course.description ? `${course.description.slice(0, 80)}${course.description.length > 80 ? '…' : ''}` : 'No course description available yet.'}</div>
                       <div style={{ marginBottom: 8 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                          <span style={{ fontSize: 10, color: '#7A92B0' }}>{doneCount}/{courseContent.length} lessons</span>
-                          <span style={{ fontSize: 10, fontWeight: 700, color: pct >= 80 ? SP_GREEN : pct >= 40 ? '#D97706' : SP_NAVY }}>{pct}%</span>
+                          <span style={{ fontSize: 14, color: '#7A92B0' }}>{doneCount}/{courseContent.length} lessons</span>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: pct >= 80 ? SP_GREEN : pct >= 40 ? '#D97706' : SP_NAVY }}>{pct}%</span>
                         </div>
                         <div style={{ height: 6, background: '#F0F4FA', borderRadius: 3, overflow: 'hidden' }}>
                           <div style={{ height: '100%', width: `${pct}%`, background: pct >= 80 ? SP_GREEN : pct >= 40 ? '#D97706' : subjectCol, borderRadius: 3, transition: 'width .5s' }} />
                         </div>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
-                        <div style={{ display: 'flex', gap: 8, fontSize: 10, color: '#7A92B0', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', gap: 8, fontSize: 14, color: '#7A92B0', flexWrap: 'wrap' }}>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><FileText size={10} /> {courseContent.length} lessons</span>
                           {enrolment?.dueDate && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><CalendarDays size={10} /> Due: {enrolment.dueDate}</span>}
                         </div>
-                        <span style={{ fontSize: 10, fontWeight: 800, color: pace.color, background: pace.bg, padding: '4px 10px', borderRadius: 20, whiteSpace: 'nowrap', border: `1px solid ${pace.color}33`, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ fontSize: 14, fontWeight: 800, color: pace.color, background: pace.bg, padding: '4px 10px', borderRadius: 20, whiteSpace: 'nowrap', border: `1px solid ${pace.color}33`, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                           <pace.icon size={11} /> {pace.label}
                         </span>
                       </div>
                       {pendingAssignments > 0 && (
-                        <div style={{ marginBottom: 6, padding: '5px 10px', background: '#FEF3C7', borderRadius: 7, fontSize: 10, fontWeight: 700, color: '#92400E', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ marginBottom: 6, padding: '5px 10px', background: '#FEF3C7', borderRadius: 7, fontSize: 14, fontWeight: 700, color: '#92400E', display: 'flex', alignItems: 'center', gap: 6 }}>
                           <ClipboardList size={12} /><span>{pendingAssignments} assignment{pendingAssignments !== 1 ? 's' : ''} need attention</span>
                         </div>
                       )}
                       {course.announcement?.trim() ? (
                         <div style={{ marginBottom: 8, padding: '7px 10px', background: '#1A365E0D', borderLeft: '3px solid #1A365E', borderRadius: '0 7px 7px 0', display: 'flex', alignItems: 'flex-start', gap: 7 }}>
                           <Megaphone size={13} color="#1A365E" style={{ flexShrink: 0 }} />
-                          <div style={{ fontSize: 10, color: '#1A365E', lineHeight: 1.5 }}>{course.announcement.length > 80 ? `${course.announcement.slice(0, 80)}…` : course.announcement}</div>
+                          <div style={{ fontSize: 14, color: '#1A365E', lineHeight: 1.5 }}>{course.announcement.length > 80 ? `${course.announcement.slice(0, 80)}…` : course.announcement}</div>
                         </div>
                       ) : (
                         <div style={{ ...emptyState, marginBottom: 8, padding: '8px 10px' }}>No course announcement posted yet.</div>
                       )}
-                      <div style={{ marginTop: 8, padding: '8px 12px', background: subjectCol, color: '#fff', borderRadius: 8, fontSize: 11, fontWeight: 700, textAlign: 'center' }}>
+                      <div style={{ marginTop: 8, padding: '8px 12px', background: subjectCol, color: '#fff', borderRadius: 8, fontSize: 15, fontWeight: 700, textAlign: 'center' }}>
                         <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                           {pct === 0 ? <><Play size={12} /> Start Course</> : pct === 100 ? <><RefreshCw size={12} /> Review</> : <><Play size={12} /> Continue</>}
                         </span>
@@ -1496,14 +1695,24 @@ export function SPMyLearningPage() {
         </>
       )}
 
-      {selectedCourse && !activeLesson && (
+      {selectedCourse && !activeLesson && (() => {
+        const paceInfo = paceMeta(courseProgress(selectedCourse), selectedEnrolment)
+        const totalTimeMins = progress
+          .filter((entry) => entry.courseId === (selectedCourse.groupId ?? selectedCourse.id) && entry.studentId === session?.dbId)
+          .reduce((sum, entry) => sum + (entry.timeSpentMins || 0), 0)
+        const daysRemaining = selectedEnrolment?.dueDate
+          ? Math.ceil((new Date(`${selectedEnrolment.dueDate}T00:00:00`).getTime() - Date.now()) / 86400000)
+          : null
+        const doneCount = courseItems.filter((item) => progress.find((entry) => entry.contentId === item.id && entry.studentId === session?.dbId && entry.status === 'completed')).length
+
+        return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {selectedCourse.announcement?.trim() ? (
             <div style={{ background: 'linear-gradient(135deg,#1A365E,#0F2240)', borderRadius: 11, padding: '12px 16px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
               <Megaphone size={20} color="#fff" style={{ flexShrink: 0 }} />
               <div>
-                <div style={{ fontSize: 10, fontWeight: 800, color: 'rgba(255,255,255,.6)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>Course Announcement</div>
-                <div style={{ fontSize: 12, color: '#fff', lineHeight: 1.6 }}>{selectedCourse.announcement}</div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: 'rgba(255,255,255,.6)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>Course Announcement</div>
+                <div style={{ fontSize: 16, color: '#fff', lineHeight: 1.6 }}>{selectedCourse.announcement}</div>
               </div>
             </div>
           ) : (
@@ -1512,21 +1721,37 @@ export function SPMyLearningPage() {
 
           <div style={{ ...card, overflow: 'hidden' }}>
             <div style={{ height: 6, background: SUBJECT_COLORS[selectedCourse.subject] || SP_NAVY }} />
-            <div style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12 }}>
-              <button onClick={() => setActiveCourse(null)} style={{ padding: '6px 12px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back</button>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 15, fontWeight: 800, color: '#1A365E' }}>{selectedCourse.title}</div>
-                <div style={{ fontSize: 11, color: '#7A92B0' }}>{selectedCourse.subject || 'No subject'} · Pass: {selectedCourse.passMark || 80}%</div>
+            <div style={{ padding: '14px 18px 10px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <button onClick={() => setActiveCourse(null)} style={{ padding: '6px 12px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back</button>
+              <div style={{ flex: 1, minWidth: 160 }}>
+                <div style={{ fontSize: 18, fontWeight: 800, color: '#1A365E' }}>{selectedCourse.title}</div>
+                <div style={{ fontSize: 15, color: '#7A92B0' }}>
+                  {selectedCourse.subject || 'No subject'} · Pass: {selectedCourse.passMark || 80}%
+                  {selectedEnrolment?.dueDate && <> · Due {selectedEnrolment.dueDate}{daysRemaining !== null && daysRemaining >= 0 ? ` (${daysRemaining} days remaining)` : ''}</>}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => setSectionDetailsOpen(true)} style={{ padding: '7px 12px', background: '#F0F4FA', color: '#1A365E', border: '1px solid #E4EAF2', borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  <Info size={12} /> Section Details
+                </button>
+                <button onClick={() => navigate(`${portalPrefix(location.pathname)}/grades`)} style={{ padding: '7px 12px', background: SP_NAVY, color: '#fff', border: `1px solid ${SP_NAVY}`, borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  <ExternalLink size={12} /> View Gradebook
+                </button>
               </div>
             </div>
           </div>
 
           <div style={{ ...card, padding: '12px 16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <div style={{ fontSize: 11, fontWeight: 800, color: '#1A365E' }}>
-                {courseItems.filter((item) => progress.find((entry) => entry.contentId === item.id && entry.studentId === session?.dbId && entry.status === 'completed')).length} / {courseItems.length} lessons completed
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 10, flexWrap: 'wrap' }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#1A365E' }}>
+                {doneCount} / {courseItems.length} lessons completed
               </div>
-              <div style={{ fontSize: 13, fontWeight: 900, color: courseProgress(selectedCourse) === 100 ? SP_GREEN : courseProgress(selectedCourse) >= 50 ? '#D97706' : SP_NAVY }}>{courseProgress(selectedCourse)}%</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 14, fontWeight: 800, color: paceInfo.color, background: paceInfo.bg, padding: '4px 10px', borderRadius: 20, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <paceInfo.icon size={11} /> {paceInfo.label}
+                </span>
+                <span style={{ fontSize: 16, fontWeight: 900, color: courseProgress(selectedCourse) === 100 ? SP_GREEN : courseProgress(selectedCourse) >= 50 ? '#D97706' : SP_NAVY }}>{courseProgress(selectedCourse)}%</span>
+              </div>
             </div>
             <div style={{ height: 8, background: '#F0F4FA', borderRadius: 4, overflow: 'hidden' }}>
               <div style={{ height: '100%', width: `${courseProgress(selectedCourse)}%`, background: courseProgress(selectedCourse) === 100 ? SP_GREEN : courseProgress(selectedCourse) >= 50 ? '#D97706' : SP_NAVY, borderRadius: 4 }} />
@@ -1544,16 +1769,42 @@ export function SPMyLearningPage() {
                 {selectedCourse.requiredHours > 0 ? `${selectedCourse.requiredHours} hrs required` : 'No time requirement set'}
               </div>
               <div style={{ ...emptyState, padding: '10px 12px' }}>
-                <strong style={{ color: '#1A365E' }}>Due date</strong><br />
-                {selectedEnrolment?.dueDate || 'No due date set'}
+                <strong style={{ color: '#1A365E' }}>Time on task</strong><br />
+                {totalTimeMins > 0 ? `${Math.floor(totalTimeMins / 60)}h ${totalTimeMins % 60}m` : 'Not tracked yet'}
               </div>
             </div>
           </div>
 
           {selectedCourse.description ? (
-            <div style={{ ...card, padding: '14px 16px', fontSize: 12, color: '#5A7290', lineHeight: 1.6 }}>{selectedCourse.description}</div>
+            <div style={{ ...card, padding: '14px 16px', fontSize: 16, color: '#5A7290', lineHeight: 1.6 }}>{selectedCourse.description}</div>
           ) : (
             <div style={{ ...card, ...emptyState }}>No course description is available yet.</div>
+          )}
+
+          {courseItems.length > 0 && (
+            <div style={{ position: 'sticky', top: 0, zIndex: 2, background: '#F7F9FC', margin: '0 -4px', padding: '6px 4px', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {CONTENT_FILTERS.map((f) => {
+                const active = contentFilter === f.id
+                return (
+                  <button
+                    key={f.id}
+                    disabled={f.disabled}
+                    title={f.disabled ? "Not tracked yet — needs a new status field" : undefined}
+                    onClick={() => !f.disabled && setContentFilter(f.id as ContentFilterId)}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 20,
+                      border: `1.5px solid ${active ? SP_NAVY : f.disabled ? '#D7E0EA' : '#E4EAF2'}`,
+                      borderStyle: f.disabled ? 'dashed' : 'solid',
+                      background: active ? SP_NAVY : '#fff', color: active ? '#fff' : f.disabled ? '#B9C6D6' : '#5A7290',
+                      fontSize: 15, fontWeight: 700, cursor: f.disabled ? 'not-allowed' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: f.dot, flexShrink: 0 }} />
+                    {f.label}
+                  </button>
+                )
+              })}
+            </div>
           )}
 
           {courseItems.length === 0 ? (
@@ -1561,13 +1812,12 @@ export function SPMyLearningPage() {
           ) : (
             groupedModules.map((module, moduleIdx) => (
               <div key={`${module.label || 'default'}-${moduleIdx}`} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {module.label ? <div style={{ fontSize: 10, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 4 }}><FolderKanban size={11} /> {module.label}</div> : null}
+                {module.label ? <div style={{ fontSize: 14, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 4 }}><FolderKanban size={11} /> {module.label}</div> : null}
                 {[...module.units.entries()].map(([unit, items]) => {
                   const carrierItem = items.find((i) => i.hasAssignment === true || i.hasAssignment === 'TRUE') ?? null
                   const lessonItems = items.filter((i) => i !== carrierItem)
                   const moduleKey = `unit:${unit}`
                   const moduleExpanded = !collapsedLessonIds.has(moduleKey)
-                  const hasSubmission = (contentId: string, kind: string) => mySubmissions.some((s) => s.contentId === contentId && s.kind === kind)
                   return (
                     <div key={unit} style={{ ...card, overflow: 'hidden' }}>
                       <button
@@ -1576,85 +1826,70 @@ export function SPMyLearningPage() {
                       >
                         <span style={{ width: 20, height: 20, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #E4EAF2', borderRadius: 4, background: '#fff', color: '#5A7290' }}>{moduleExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</span>
                         <FolderOpen size={13} style={{ flexShrink: 0, color: '#5A7290' }} />
-                        <span style={{ fontSize: 13, fontWeight: 800, color: '#1A365E', flex: 1, minWidth: 0 }}>{unit}</span>
+                        <span style={{ fontSize: 16, fontWeight: 800, color: '#1A365E', flex: 1, minWidth: 0 }}>{unit}</span>
                       </button>
                       {moduleExpanded && (
                         <div style={{ display: 'flex', flexDirection: 'column', paddingBottom: 6 }}>
                           {carrierItem?.moduleDescription && (
-                            <div style={{ padding: '10px 18px', fontSize: 12, color: '#5A7290', lineHeight: 1.6, borderBottom: '1px solid #F0F4FA' }}>{carrierItem.moduleDescription}</div>
+                            <div style={{ padding: '10px 18px', fontSize: 16, color: '#5A7290', lineHeight: 1.6, borderBottom: '1px solid #F0F4FA' }}>{carrierItem.moduleDescription}</div>
                           )}
 
                           {carrierItem && (
-                            <>
-                              <div style={sectionLabelStyle}><Search size={11} /> Learn It</div>
-                              <button onClick={() => openPart(carrierItem, 'caseStudyView')} style={partRowStyle}>
-                                <FileText size={14} />
-                                <span>View case study</span>
-                              </button>
-                              <button onClick={() => openPart(carrierItem, 'caseStudyNotes')} style={partRowStyle}>
-                                <Upload size={14} />
-                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>Notes Upload{hasSubmission(carrierItem.id, 'case_study_notes') ? <> · <Check size={11} strokeWidth={3} /> Done</> : ''}</span>
-                              </button>
-                            </>
+                            <ContentRow
+                              icon={FileText} kindLabel="Learn It" title={`Learn It · ${carrierItem.title || 'Case Study'}`} targetDate={carrierItem.targetDate}
+                              status={hasSubmission(carrierItem.id, 'case_study_notes') ? 'completed' : 'not_started'}
+                              statusText={hasSubmission(carrierItem.id, 'case_study_notes') ? 'Notes submitted' : 'Not started'}
+                              onClick={() => openGroup('learn', carrierItem.id)} activeFilter={contentFilter}
+                            />
                           )}
 
-                          <div style={sectionLabelStyle}><CheckCircle2 size={11} /> Do It</div>
                           {lessonItems.map((item, idx) => {
                             const itemProgress = progress.find((entry) => entry.contentId === item.id && entry.studentId === session?.dbId)
-                            const done = itemProgress?.status === 'completed'
+                            const tutorialDone = itemProgress?.status === 'completed'
                             const itemHasMastery = item.hasMastery === true || item.hasMastery === 'TRUE'
                             const masteryScore = itemProgress?.masteryScore != null && !Number.isNaN(Number(itemProgress.masteryScore)) ? Number(itemProgress.masteryScore) : null
-                            const lessonExpanded = !collapsedLessonIds.has(item.id)
+                            const masteryPassed = itemProgress?.masteryPassed === true || itemProgress?.masteryPassed === 'TRUE'
+                            const masteryAttempted = (itemProgress?.masteryAttempts ?? 0) > 0 || masteryScore !== null
+                            const notesDone = hasSubmission(item.id, 'lesson_notes')
+                            const status: RowStatus = itemHasMastery && masteryAttempted && !masteryPassed
+                              ? 'not_mastered'
+                              : tutorialDone && notesDone && (!itemHasMastery || masteryPassed)
+                              ? 'completed'
+                              : tutorialDone || notesDone || masteryAttempted
+                              ? 'in_progress'
+                              : 'not_started'
+                            const statusText = status === 'completed' ? 'Completed'
+                              : status === 'not_mastered' ? 'Not mastered · retake available'
+                              : status === 'in_progress' ? 'In Progress' : 'Not started'
                             return (
-                              <div key={item.id}>
-                                <button onClick={() => toggleLessonExpanded(item.id)} style={lessonHeaderStyle}>
-                                  <span style={{ width: 18, height: 18, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94A3B8' }}>{lessonExpanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}</span>
-                                  <span style={{ flexShrink: 0, display: 'inline-flex', color: '#5A7290' }}>{(() => { const TI = CONTENT_TYPE_ICONS[item.type] || FileText; return <TI size={14} /> })()}</span>
-                                  <span style={{ fontSize: 12, fontWeight: 700, color: '#1A365E', flex: 1, minWidth: 0 }}>Lesson {idx + 1}: {item.title}</span>
-                                </button>
-                                {lessonExpanded && (
-                                  <>
-                                    <button onClick={() => openPart(item, 'tutorial')} style={partRowStyleNested}>
-                                      <span>Tutorial{done ? <> · <Check size={11} strokeWidth={3} /> Done</> : ''}</span>
-                                    </button>
-                                    {item.videoUrl && (
-                                      <button onClick={() => openPart(item, 'video')} style={partRowStyleNested}>
-                                        <span>Video</span>
-                                      </button>
-                                    )}
-                                    <button onClick={() => openPart(item, 'lessonNotes')} style={partRowStyleNested}>
-                                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>Notes: Upload{hasSubmission(item.id, 'lesson_notes') ? <> · <Check size={11} strokeWidth={3} /> Done</> : ''}</span>
-                                    </button>
-                                    {itemHasMastery && (
-                                      <button onClick={() => openPart(item, 'mastery')} style={partRowStyleNested}>
-                                        <span>Mastery Test{masteryScore !== null ? ` · ${masteryScore}%` : ''}</span>
-                                      </button>
-                                    )}
-                                  </>
-                                )}
-                              </div>
+                              <ContentRow
+                                key={item.id}
+                                icon={BookOpen} kindLabel="Do It" title={`Do It · Lesson ${idx + 1}: ${item.title}`} targetDate={item.targetDate}
+                                status={status} statusText={statusText}
+                                score={itemHasMastery ? masteryScore : null} passMark={item.masteryPassMark ?? selectedCourse.passMark}
+                                onClick={() => openGroup('lesson', item.id)} activeFilter={contentFilter}
+                              />
                             )
                           })}
 
                           {carrierItem && (
                             <>
-                              <div style={sectionLabelStyle}><Scale size={11} /> Show It</div>
-                              <button onClick={() => openPart(carrierItem, 'socratic')} style={partRowStyle}>
-                                <Scale size={14} />
-                                <span>Socratic Seminar</span>
-                              </button>
-
-                              <div style={sectionLabelStyle}><Calculator size={11} /> Prove It</div>
-                              <button onClick={() => openPart(carrierItem, 'omr')} style={partRowStyle}>
-                                <Calculator size={14} />
-                                <span>OMR Test</span>
-                              </button>
-
-                              <div style={sectionLabelStyle}><Trophy size={11} /> Master It</div>
-                              <button onClick={() => openPart(carrierItem, 'presentation')} style={partRowStyle}>
-                                <Trophy size={14} />
-                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>Presentation{hasSubmission(carrierItem.id, 'presentation') ? <> · <Check size={11} strokeWidth={3} /> Submitted</> : ''}</span>
-                              </button>
+                              <ContentRow
+                                icon={Scale} kindLabel="Show It" title="Show It · Socratic Seminar" targetDate={carrierItem.socraticDate || carrierItem.targetDate}
+                                status="not_started" statusText="Not started"
+                                onClick={() => openGroup('show', carrierItem.id)} activeFilter={contentFilter}
+                              />
+                              <ContentRow
+                                icon={Calculator} kindLabel="Prove It" title="Prove It · OMR Test" targetDate={carrierItem.targetDate}
+                                status="not_started" statusText="Not started"
+                                onClick={() => openGroup('prove', carrierItem.id)} activeFilter={contentFilter}
+                              />
+                              <ContentRow
+                                icon={Trophy} kindLabel="Master It" title="Master It · Presentation" targetDate={carrierItem.targetDate}
+                                status={hasSubmission(carrierItem.id, 'presentation') ? 'completed' : 'not_started'}
+                                statusText={hasSubmission(carrierItem.id, 'presentation') ? 'Submitted' : 'Not started'}
+                                onClick={() => openGroup('master', carrierItem.id)} activeFilter={contentFilter}
+                              />
                             </>
                           )}
                         </div>
@@ -1668,20 +1903,151 @@ export function SPMyLearningPage() {
 
           {/* Course Discussion — parked pending future exploration; not deleted.
           <div style={{ ...card, padding: 16 }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: '#1A365E', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}><MessageSquare size={13} /> Course Discussion</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}><MessageSquare size={13} /> Course Discussion</div>
             <div style={emptyState}>Course discussion is not yet wired in this React page, so no discussion data is available here yet.</div>
           </div>
           */}
+
+          {sectionDetailsOpen && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,24,50,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }} onClick={() => setSectionDetailsOpen(false)}>
+              <div style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 420, boxShadow: '0 20px 60px rgba(0,0,0,0.25)', overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
+                <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: 'rgba(255,255,255,.6)', textTransform: 'uppercase', letterSpacing: '.5px' }}>Section Details</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: '#fff', marginTop: 2 }}>{selectedCourse.title}</div>
+                  </div>
+                  <button onClick={() => setSectionDetailsOpen(false)} style={{ background: 'none', border: 'none', color: '#9EB3C8', cursor: 'pointer', display: 'inline-flex', padding: 0 }}><X size={20} /></button>
+                </div>
+                <div style={{ padding: '8px 20px 18px', display: 'flex', flexDirection: 'column' }}>
+                  {[
+                    ['Subject', selectedCourse.subject || '—'],
+                    ['Grade level', selectedCourse.gradeLevel || '—'],
+                    ['Credit hours', selectedCourse.creditHours ? String(selectedCourse.creditHours) : '—'],
+                    ['Required hours', selectedCourse.requiredHours > 0 ? `${selectedCourse.requiredHours} hrs` : 'Not set'],
+                    ['Pass mark', `${selectedCourse.passMark || 80}%`],
+                    ['Pacing', selectedEnrolment?.paceType ? `${selectedEnrolment.paceType}${selectedEnrolment.paceDaysPerLesson ? ` · ${selectedEnrolment.paceDaysPerLesson} days/lesson` : ''}` : 'Not set'],
+                    ['Start date', selectedCourse.startDate || 'Not set'],
+                    ['Due date', selectedEnrolment?.dueDate || 'Not set'],
+                  ].map(([k, v]) => (
+                    <div key={k} style={{ padding: '10px 0', borderTop: '1px solid #F0F4FA', display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 16 }}>
+                      <span style={{ color: '#7A92B0', fontWeight: 600 }}>{k}</span>
+                      <span style={{ color: '#1A365E', fontWeight: 700, textAlign: 'right' }}>{v}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
-      )}
+        )
+      })()}
+
+      {selectedCourse && activeLesson && activeGroupKind && !activePart && (() => {
+        const kind = activeGroupKind
+        const GroupIcon: LucideIcon = kind === 'learn' ? FileText : kind === 'show' ? Scale : kind === 'prove' ? Calculator : kind === 'master' ? Trophy : BookOpen
+        const groupTitle = kind === 'learn' ? (activeLesson.title || 'Case Study')
+          : kind === 'show' ? 'Socratic Seminar'
+          : kind === 'prove' ? 'OMR Test'
+          : kind === 'master' ? 'Presentation'
+          : activeLesson.title
+        const groupTargetDate = kind === 'show' ? (activeLesson.socraticDate || activeLesson.targetDate) : activeLesson.targetDate
+
+        type PartRow = { key: PartKind; title: string; status: RowStatus; statusText: string; score?: number | null; passMark?: number }
+        let parts: PartRow[] = []
+        if (kind === 'learn') {
+          const notesDone = hasSubmission(activeLesson.id, 'case_study_notes')
+          parts = [
+            { key: 'caseStudyView', title: `${groupTitle}: View Case Study`, status: 'not_started', statusText: 'Not started' },
+            { key: 'caseStudyNotes', title: `${groupTitle}: Notes Upload`, status: notesDone ? 'completed' : 'not_started', statusText: notesDone ? 'Done' : 'Not started' },
+          ]
+        } else if (kind === 'lesson') {
+          const itemProgress = progress.find((entry) => entry.contentId === activeLesson.id && entry.studentId === session?.dbId)
+          const tutorialDone = itemProgress?.status === 'completed'
+          const itemHasMastery = activeLesson.hasMastery === true || activeLesson.hasMastery === 'TRUE'
+          const masteryScore = itemProgress?.masteryScore != null && !Number.isNaN(Number(itemProgress.masteryScore)) ? Number(itemProgress.masteryScore) : null
+          const masteryPassed = itemProgress?.masteryPassed === true || itemProgress?.masteryPassed === 'TRUE'
+          const masteryAttempted = (itemProgress?.masteryAttempts ?? 0) > 0 || masteryScore !== null
+          const notesDone = hasSubmission(activeLesson.id, 'lesson_notes')
+          parts = [
+            { key: 'tutorial', title: `${groupTitle}: Tutorial`, status: tutorialDone ? 'completed' : itemProgress?.status === 'in_progress' ? 'in_progress' : 'not_started', statusText: tutorialDone ? 'Completed' : itemProgress?.status === 'in_progress' ? 'In Progress' : 'Not started' },
+            ...(activeLesson.videoUrl ? [{ key: 'video' as PartKind, title: `${groupTitle}: Video`, status: 'not_started' as RowStatus, statusText: 'Not started' }] : []),
+            { key: 'lessonNotes', title: `${groupTitle}: Notes Upload`, status: notesDone ? 'completed' : 'not_started', statusText: notesDone ? 'Done' : 'Not started' },
+            ...(itemHasMastery ? [{ key: 'mastery' as PartKind, title: `${groupTitle}: Mastery Test`, status: (masteryPassed ? 'completed' : masteryAttempted ? 'not_mastered' : 'not_started') as RowStatus, statusText: masteryPassed ? 'Passed' : masteryAttempted ? 'Not mastered · retake available' : 'Not started', score: masteryScore, passMark: activeLesson.masteryPassMark ?? selectedCourse.passMark }] : []),
+          ]
+        } else if (kind === 'show') {
+          parts = [{ key: 'socratic', title: 'Socratic Seminar', status: 'not_started', statusText: 'Not started' }]
+        } else if (kind === 'prove') {
+          parts = [{ key: 'omr', title: 'OMR Test', status: 'not_started', statusText: 'Not started' }]
+        } else {
+          const submitted = hasSubmission(activeLesson.id, 'presentation')
+          parts = [{ key: 'presentation', title: 'Presentation', status: submitted ? 'completed' : 'not_started', statusText: submitted ? 'Submitted' : 'Not started' }]
+        }
+
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+              {prevGroup ? (
+                <button onClick={() => openGroup(prevGroup.kind, prevGroup.contentId)} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', maxWidth: '38%' }}>
+                  <ArrowLeft size={16} color="#94A3B8" style={{ flexShrink: 0 }} />
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                    {(() => { const D = groupDisplay(prevGroup); const Icon = D.icon; return <span style={{ width: 30, height: 30, borderRadius: 8, background: '#F0F4FA', color: '#5A7290', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Icon size={14} /></span> })()}
+                    <span style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '.5px' }}>Previous Activity</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: '#1A365E', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{groupDisplay(prevGroup).title}</div>
+                    </span>
+                  </span>
+                </button>
+              ) : <span />}
+              {nextGroup ? (
+                <button onClick={() => openGroup(nextGroup.kind, nextGroup.contentId)} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'right', maxWidth: '38%' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                    <span style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '.5px' }}>Next Activity</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: '#1A365E', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{groupDisplay(nextGroup).title}</div>
+                    </span>
+                    {(() => { const D = groupDisplay(nextGroup); const Icon = D.icon; return <span style={{ width: 30, height: 30, borderRadius: 8, background: '#F0F4FA', color: '#5A7290', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Icon size={14} /></span> })()}
+                  </span>
+                  <ArrowRight size={16} color="#94A3B8" style={{ flexShrink: 0 }} />
+                </button>
+              ) : <span />}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, textAlign: 'center' }}>
+              <span style={{ width: 56, height: 56, borderRadius: 14, background: '#F0F4FA', color: SP_NAVY, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <GroupIcon size={26} />
+              </span>
+              <div style={{ fontSize: 22, fontWeight: 800, color: '#1A365E', marginTop: 4 }}>{groupTitle}</div>
+              {groupTargetDate && (
+                <div style={{ fontSize: 16, color: '#5A7290' }}><strong style={{ color: '#1A365E' }}>Target Date:</strong> {formatLongDate(groupTargetDate) || groupTargetDate}</div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 640, width: '100%', margin: '0 auto' }}>
+              {parts.map((part) => (
+                <OverviewPartRow
+                  key={part.key}
+                  title={part.title} status={part.status} statusText={part.statusText}
+                  score={part.score} passMark={part.passMark}
+                  onClick={() => openPart(activeLesson, part.key)}
+                />
+              ))}
+            </div>
+
+            <button onClick={closeActivity} style={{ alignSelf: 'center', padding: '10px 32px', background: '#fff', color: '#1A365E', border: '1.5px solid #E4EAF2', borderRadius: 24, fontSize: 16, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
+              Close
+            </button>
+          </div>
+        )
+      })()}
+
       {selectedCourse && activeLesson && activePart === 'tutorial' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ background: 'linear-gradient(135deg,#059669,#047857)', borderRadius: 11, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back to Lessons</button>
+              <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back</button>
               <div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><BookOpen size={15} /> {activeLesson.title} · Tutorial</div>
-                <div style={{ fontSize: 11, color: 'rgba(255,255,255,.78)' }}>{activeLesson.type}{activeLesson.estimatedMins ? ` · ${activeLesson.estimatedMins} min` : ''}</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><BookOpen size={15} /> {activeLesson.title} · Tutorial</div>
+                <div style={{ fontSize: 15, color: 'rgba(255,255,255,.78)' }}>{activeLesson.type}{activeLesson.estimatedMins ? ` · ${activeLesson.estimatedMins} min` : ''}</div>
               </div>
             </div>
           </div>
@@ -1700,8 +2066,8 @@ export function SPMyLearningPage() {
               return (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: '#1A365E' }}>Lesson Progress</div>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 11, color: '#7A92B0' }}>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E' }}>Lesson Progress</div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 15, color: '#7A92B0' }}>
                       <span>{activeLesson.type.charAt(0).toUpperCase() + activeLesson.type.slice(1)}</span>
                       {activeLesson.estimatedMins ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Timer size={11} /> {activeLesson.estimatedMins} min required</span> : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Timer size={11} /> No minimum time</span>}
                       {badge ? <span style={{ color: badge.color, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}><badge.icon size={11} /> {badge.text}</span> : null}
@@ -1712,7 +2078,7 @@ export function SPMyLearningPage() {
                       ) : null}
                     </div>
                   </div>
-                  {!readOnly && <button disabled={!done && !canMarkDone} onClick={() => void markComplete(activeLesson)} title={readOnly ? 'View-only access' : undefined} style={{ padding: '9px 16px', background: done ? '#DCFCE7' : canMarkDone ? '#1A365E' : '#E5E7EB', color: done ? '#059669' : canMarkDone ? '#fff' : '#94A3B8', border: `1px solid ${done ? '#86EFAC' : canMarkDone ? '#1A365E' : '#E5E7EB'}`, borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: done || canMarkDone ? 'pointer' : 'not-allowed', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                  {!readOnly && <button disabled={!done && !canMarkDone} onClick={() => void markComplete(activeLesson)} title={readOnly ? 'View-only access' : undefined} style={{ padding: '9px 16px', background: done ? '#DCFCE7' : canMarkDone ? '#1A365E' : '#E5E7EB', color: done ? '#059669' : canMarkDone ? '#fff' : '#94A3B8', border: `1px solid ${done ? '#86EFAC' : canMarkDone ? '#1A365E' : '#E5E7EB'}`, borderRadius: 9, fontSize: 16, fontWeight: 700, cursor: done || canMarkDone ? 'pointer' : 'not-allowed', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
                     {done ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Check size={12} strokeWidth={3} /> Done</span> : 'Mark done'}
                   </button>}
                 </div>
@@ -1725,9 +2091,9 @@ export function SPMyLearningPage() {
       {selectedCourse && activeLesson && activePart === 'video' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ background: 'linear-gradient(135deg,#059669,#047857)', borderRadius: 11, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-            <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back to Lessons</button>
+            <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back</button>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Video size={15} /> {activeLesson.title} · Video</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Video size={15} /> {activeLesson.title} · Video</div>
             </div>
           </div>
           <div style={{ ...card, padding: 12 }}>
@@ -1743,10 +2109,10 @@ export function SPMyLearningPage() {
       {selectedCourse && activeLesson && activePart === 'mastery' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ background: 'linear-gradient(135deg,#2563EB,#1D4ED8)', borderRadius: 11, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-            <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back to Lessons</button>
+            <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back</button>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Target size={15} /> {activeLesson.title} · Mastery Test</div>
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,.78)' }}>Pass mark: {activeLesson.masteryPassMark ?? 80}%</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Target size={15} /> {activeLesson.title} · Mastery Test</div>
+              <div style={{ fontSize: 15, color: 'rgba(255,255,255,.78)' }}>Pass mark: {activeLesson.masteryPassMark ?? 80}%</div>
             </div>
           </div>
 
@@ -1763,9 +2129,9 @@ export function SPMyLearningPage() {
       {selectedCourse && activeLesson && activePart === 'lessonNotes' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ background: 'linear-gradient(135deg,#0891B2,#0E7490)', borderRadius: 11, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-            <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back to Lessons</button>
+            <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back</button>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Upload size={15} /> {activeLesson.title} · Show it: Notes</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Upload size={15} /> {activeLesson.title} · Show it: Notes</div>
             </div>
           </div>
           <div style={{ ...card, padding: '14px 16px' }}>
@@ -1777,9 +2143,9 @@ export function SPMyLearningPage() {
       {selectedCourse && activeLesson && activePart === 'caseStudyView' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ background: 'linear-gradient(135deg,#7C3AED,#6D28D9)', borderRadius: 11, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-            <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back to Lessons</button>
+            <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back</button>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Search size={15} /> Learn it · Case Study</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Search size={15} /> Learn it · Case Study</div>
             </div>
           </div>
           <CaseStudyDocPanel carrierItem={activeLesson} />
@@ -1789,9 +2155,9 @@ export function SPMyLearningPage() {
       {selectedCourse && activeLesson && activePart === 'caseStudyNotes' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ background: 'linear-gradient(135deg,#7C3AED,#6D28D9)', borderRadius: 11, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-            <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back to Lessons</button>
+            <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back</button>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Upload size={15} /> Learn it · Show it: Notes</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Upload size={15} /> Learn it · Show it: Notes</div>
             </div>
           </div>
           <div style={{ ...card, padding: '14px 16px' }}>
@@ -1803,9 +2169,9 @@ export function SPMyLearningPage() {
       {selectedCourse && activeLesson && activePart === 'socratic' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', borderRadius: 11, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-            <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back to Lessons</button>
+            <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back</button>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Scale size={15} /> Show it · Socratic Seminar</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Scale size={15} /> Show it · Socratic Seminar</div>
             </div>
           </div>
           <SocraticPanel carrierItem={activeLesson} />
@@ -1815,9 +2181,9 @@ export function SPMyLearningPage() {
       {selectedCourse && activeLesson && activePart === 'omr' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', borderRadius: 11, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-            <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back to Lessons</button>
+            <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back</button>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Calculator size={15} /> Prove it · OMR Test</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Calculator size={15} /> Prove it · OMR Test</div>
             </div>
           </div>
           <OmrPanel carrierItem={activeLesson} />
@@ -1827,9 +2193,9 @@ export function SPMyLearningPage() {
       {selectedCourse && activeLesson && activePart === 'presentation' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', borderRadius: 11, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-            <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back to Lessons</button>
+            <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back</button>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Trophy size={15} /> Master it · Presentation</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Trophy size={15} /> Master it · Presentation</div>
             </div>
           </div>
           <PresentationPanel carrierItem={activeLesson} studentId={session?.dbId ?? ''} />

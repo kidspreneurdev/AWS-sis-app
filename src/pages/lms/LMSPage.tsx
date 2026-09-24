@@ -2944,11 +2944,12 @@ export function LMSPage() {
       const itemHasMastery = hasMasteryBool(item.hasMastery)
       const itemHasAssignment = hasAssignBool(item.hasAssignment)
       // Every item has expandable sub-detail now: a case study is Learn It (View case
-      // study / Notes Upload); a lesson is Do It (Tutorial / Notes: Upload / Mastery Test).
+      // study / Notes Upload); a lesson is Do It (Tutorial / Video / Notes: Upload /
+      // Mastery Test) — Video only shows once one's actually been uploaded.
       const hasSub = true
       const subLabels = itemHasAssignment
         ? ['View case study', 'Notes Upload']
-        : ['Tutorial', 'Notes: Upload', ...(itemHasMastery ? ['Mastery Test'] : [])]
+        : ['Tutorial', ...(item.videoUrl ? ['Video'] : []), 'Notes: Upload', ...(itemHasMastery ? ['Mastery Test'] : [])]
       const key = 'topic:' + item.id
       const expanded = isExpanded(key)
       const isPretest = item.type === 'quiz' && item.title.toLowerCase().startsWith('pretest')
@@ -4016,6 +4017,8 @@ export function LMSPage() {
     const [lessonSubType, setLessonSubType] = useState(item?.lessonSubType ?? '')
     const [url, setUrl] = useState(item?.url ?? item?.body ?? '')
     const [contentFile, setContentFile] = useState<File | null>(null)
+    const [videoFile, setVideoFile] = useState<File | null>(null)
+    const [videoFileName, setVideoFileName] = useState(item?.videoFileName ?? '')
     const [estimatedMins, setEstimatedMins] = useState(String(item?.estimatedMins ?? ''))
     const [order, setOrder] = useState(String(item?.order ?? ''))
     const [hasMastery, setHasMastery] = useState(hasMasteryBool(item?.hasMastery))
@@ -4070,6 +4073,21 @@ export function LMSPage() {
           return
         }
       }
+      let finalVideoUrl = item?.videoUrl
+      let finalVideoFileName = videoFileName
+      if (videoFile) {
+        try {
+          const path = `lms-content-video/${Date.now()}_${videoFile.name}`
+          finalVideoUrl = await uploadFile(path, videoFile)
+          finalVideoFileName = videoFile.name
+        } catch {
+          alert('Video upload failed. Please try again.')
+          return
+        }
+      } else if (!videoFileName) {
+        // "Remove video" was clicked — no new file chosen and the filename was cleared.
+        finalVideoUrl = undefined
+      }
       const obj: LMSContent = {
         id: item?.id ?? lmsId(),
         courseId,
@@ -4078,6 +4096,8 @@ export function LMSPage() {
         type,
         lessonSubType,
         url: finalUrl,
+        videoUrl: finalVideoUrl || undefined,
+        videoFileName: finalVideoFileName || undefined,
         estimatedMins: parseInt(estimatedMins) || undefined,
         hasMastery,
         masteryPassMark: parseInt(masteryPassMark) || 80,
@@ -4188,6 +4208,16 @@ export function LMSPage() {
                       {contentFile ? `✅ ${contentFile.name}` : '+ Choose file'}
                     </label>
                   </div>
+                </div>
+                <div style={{ padding: 12, background: '#F0F4FA', borderRadius: 10, border: '1px solid #D7E0EA', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <label style={{ ...labelStyle, marginBottom: 0 }}>🎬 Video (optional — shown as its own "Video" row under Do It, between Tutorial and Notes: Upload)</label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 8, border: `2px dashed ${videoFile ? '#059669' : '#CBD5E0'}`, background: videoFile ? '#F0FDF4' : '#fff', cursor: 'pointer', fontSize: 12, color: videoFile ? '#059669' : '#7A92B0', fontWeight: videoFile ? 700 : 400 }}>
+                    <input type="file" accept="video/*" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) setVideoFile(f) }} />
+                    {videoFile ? `✅ ${videoFile.name}` : videoFileName ? `📎 ${videoFileName} (uploaded — choose a new file to replace)` : '+ Choose video file'}
+                  </label>
+                  {(videoFile || videoFileName) && (
+                    <button type="button" onClick={() => { setVideoFile(null); setVideoFileName('') }} style={{ alignSelf: 'flex-start', padding: '4px 10px', background: '#FFF0F1', color: '#D61F31', border: '1px solid #F5C2C7', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Remove video</button>
+                  )}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   <div><label style={labelStyle}>Est. Minutes</label><input value={estimatedMins} onChange={e => setEstimatedMins(e.target.value)} type="number" min={1} placeholder="15" style={inputStyle} /></div>

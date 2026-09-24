@@ -1046,7 +1046,7 @@ export function SPMyLearningPage() {
   const [search, setSearch] = useState('')
   const [subjectFilter, setSubjectFilter] = useState('All')
   const [activeLessonId, setActiveLessonId] = useState<string | null>(null)
-  const [activePart, setActivePart] = useState<'tutorial' | 'mastery' | 'lessonNotes' | 'caseStudyView' | 'caseStudyNotes' | 'socratic' | 'omr' | 'presentation' | null>(null)
+  const [activePart, setActivePart] = useState<'tutorial' | 'video' | 'mastery' | 'lessonNotes' | 'caseStudyView' | 'caseStudyNotes' | 'socratic' | 'omr' | 'presentation' | null>(null)
   const [collapsedLessonIds, setCollapsedLessonIds] = useState<Set<string>>(new Set())
   const [openedAtMap, setOpenedAtMap] = useState<Record<string, number>>({})
   const [, setTimerNow] = useState(Date.now())
@@ -1160,6 +1160,8 @@ export function SPMyLearningPage() {
         type: (r.type as LMSContent['type']) ?? 'article',
         url: (extra.url as string) ?? '',
         body: (extra.body as string) ?? '',
+        videoUrl: (extra.videoUrl as string) ?? undefined,
+        videoFileName: (extra.videoFileName as string) ?? undefined,
         unitTitle: (r.unit_title as string) ?? '',
         unitOrder: r.unit_order == null ? undefined : Number(r.unit_order),
         order: Number(r.order_idx ?? 0),
@@ -1253,7 +1255,7 @@ export function SPMyLearningPage() {
     if (error) console.error('markComplete error:', error)
   }
 
-  function openPart(item: LMSContent, part: 'tutorial' | 'mastery' | 'lessonNotes' | 'caseStudyView' | 'caseStudyNotes' | 'socratic' | 'omr' | 'presentation') {
+  function openPart(item: LMSContent, part: 'tutorial' | 'video' | 'mastery' | 'lessonNotes' | 'caseStudyView' | 'caseStudyNotes' | 'socratic' | 'omr' | 'presentation') {
     if (part === 'tutorial' && session) {
       const existing = openedAtMap[item.id]
       if (!existing) {
@@ -1615,6 +1617,11 @@ export function SPMyLearningPage() {
                                     <button onClick={() => openPart(item, 'tutorial')} style={partRowStyleNested}>
                                       <span>Tutorial{done ? <> · <Check size={11} strokeWidth={3} /> Done</> : ''}</span>
                                     </button>
+                                    {item.videoUrl && (
+                                      <button onClick={() => openPart(item, 'video')} style={partRowStyleNested}>
+                                        <span>Video</span>
+                                      </button>
+                                    )}
                                     <button onClick={() => openPart(item, 'lessonNotes')} style={partRowStyleNested}>
                                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>Notes: Upload{hasSubmission(item.id, 'lesson_notes') ? <> · <Check size={11} strokeWidth={3} /> Done</> : ''}</span>
                                     </button>
@@ -1711,6 +1718,24 @@ export function SPMyLearningPage() {
                 </div>
               )
             })()}
+          </div>
+        </div>
+      )}
+
+      {selectedCourse && activeLesson && activePart === 'video' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ background: 'linear-gradient(135deg,#059669,#047857)', borderRadius: 11, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back to Lessons</button>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Video size={15} /> {activeLesson.title} · Video</div>
+            </div>
+          </div>
+          <div style={{ ...card, padding: 12 }}>
+            {activeLesson.videoUrl ? (
+              <video controls src={activeLesson.videoUrl} style={{ width: '100%', borderRadius: 10, background: '#000', display: 'block' }} />
+            ) : (
+              <div style={{ ...emptyState }}>No video has been uploaded for this lesson yet.</div>
+            )}
           </div>
         </div>
       )}

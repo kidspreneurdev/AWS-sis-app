@@ -7,30 +7,269 @@ import { syncAuthState } from '@/hooks/useAuth'
 
 type LoginTab = 'staff' | 'student' | 'parent'
 
-const shell: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  minHeight: '100vh',
-  padding: 20,
-  background: 'linear-gradient(135deg,#0F2240 0%,#1A365E 60%,#D61F31 100%)',
-  fontFamily: 'Poppins, sans-serif',
-}
+const BRAND_GRADIENT = 'linear-gradient(135deg,#0F2240 0%,#1A365E 60%,#D61F31 100%)'
 
-const panel: React.CSSProperties = {
-  background: '#fff',
-  borderRadius: 20,
-  padding: 36,
-  width: '100%',
-  maxWidth: 420,
-  boxShadow: '0 24px 60px rgba(0,0,0,.4)',
-}
+const pageStyles = `
+  .awsc-login-shell {
+    display: flex;
+    min-height: 100vh;
+    width: 100%;
+    font-family: 'Poppins', sans-serif;
+    background: ${BRAND_GRADIENT};
+  }
+
+  .awsc-login-brand {
+    container-type: inline-size;
+    position: relative;
+    flex: 1.35 1 0%;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 48px;
+  }
+
+  .awsc-brand-watermark {
+    position: absolute;
+    left: -9%;
+    bottom: -14%;
+    width: min(46cqw, 380px);
+    opacity: 0.1;
+    transform: rotate(16deg);
+    pointer-events: none;
+    user-select: none;
+    -webkit-mask-image: radial-gradient(circle at 50% 50%, black 0%, black 35%, transparent 75%);
+    mask-image: radial-gradient(circle at 50% 50%, black 0%, black 35%, transparent 75%);
+  }
+
+  .awsc-brand-content {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    max-width: 100%;
+    animation: awsc-rise-in 620ms cubic-bezier(0.23, 1, 0.32, 1) both;
+  }
+
+  .awsc-brand-logo {
+    width: clamp(300px, 46cqw, 560px);
+    height: auto;
+    filter: drop-shadow(0 16px 28px rgba(0,0,0,0.35));
+    animation: awsc-float 6s ease-in-out infinite;
+    animation-delay: 620ms;
+  }
+
+  .awsc-brand-rule {
+    width: 56px;
+    height: 3px;
+    margin: 24px 0 16px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent);
+    border-radius: 2px;
+  }
+
+  .awsc-brand-caption {
+    max-width: 100%;
+    font-family: 'Poppins', sans-serif;
+    font-size: clamp(0.65rem, 2.4cqw, 0.8rem);
+    font-weight: 500;
+    letter-spacing: 0.32em;
+    color: rgba(255,255,255,0.62);
+    text-transform: uppercase;
+  }
+
+  .awsc-brand-bullets {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px 28px;
+    margin: 40px 0 0;
+    padding: 0;
+  }
+
+  .awsc-brand-bullets li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: rgba(255,255,255,0.78);
+  }
+
+  .awsc-brand-bullets li::before {
+    content: '';
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #D61F31;
+    box-shadow: 0 0 0 3px rgba(214,31,49,0.25);
+    flex-shrink: 0;
+  }
+
+  .awsc-login-panel {
+    flex: 1 1 0%;
+    min-width: 420px;
+    max-width: 560px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+  }
+
+  .awsc-login-card {
+    width: 100%;
+    max-width: 400px;
+    background: #fff;
+    border-radius: 26px;
+    padding: 44px 38px;
+    border: 1px solid rgba(16,35,63,0.06);
+    box-shadow: 0 1px 2px rgba(16,35,63,0.04), 0 24px 48px -16px rgba(16,35,63,0.18);
+    animation: awsc-card-in 520ms cubic-bezier(0.23, 1, 0.32, 1) both;
+  }
+
+  .awsc-mobile-brand {
+    display: none;
+  }
+
+  .awsc-card-icon {
+    width: 46px;
+    height: auto;
+    margin-bottom: 18px;
+    filter: drop-shadow(0 6px 14px rgba(16,35,63,0.18));
+  }
+
+  .awsc-card-eyebrow {
+    font-size: 12px;
+    font-weight: 600;
+    color: #7A92B0;
+    margin-bottom: 6px;
+  }
+
+  .awsc-card-eyebrow strong {
+    color: #1A365E;
+    font-weight: 700;
+  }
+
+  .awsc-card-title {
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+    color: #10233F;
+    margin: 0 0 6px;
+  }
+
+  .awsc-card-subtitle {
+    font-size: 12.5px;
+    color: #7A92B0;
+    margin-bottom: 26px;
+  }
+
+  .awsc-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    background: #F1F4F9;
+    border-radius: 13px;
+    margin-bottom: 22px;
+  }
+
+  .awsc-tab {
+    flex: 1;
+    padding: 9px 6px;
+    border: none;
+    border-radius: 9px;
+    font-size: 11.5px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: 'Poppins', sans-serif;
+    background: transparent;
+    transition: background-color 180ms ease, color 180ms ease, transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  .awsc-tab:active {
+    transform: scale(0.96);
+  }
+
+  .awsc-input {
+    transition: border-color 160ms ease, box-shadow 160ms ease;
+  }
+
+  .awsc-input:focus {
+    border-color: #1A365E;
+    box-shadow: 0 0 0 4px rgba(26,54,94,0.12);
+  }
+
+  .awsc-btn {
+    transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1), filter 160ms ease;
+  }
+
+  .awsc-btn:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+
+  .awsc-btn:not(:disabled):hover {
+    filter: brightness(1.06);
+  }
+
+  .awsc-error {
+    animation: awsc-fade-up 220ms ease-out both;
+  }
+
+  @keyframes awsc-card-in {
+    from { opacity: 0; transform: translateY(14px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  @keyframes awsc-rise-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes awsc-fade-up {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes awsc-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+  }
+
+  @media (max-width: 900px) {
+    .awsc-login-brand { display: none; }
+    .awsc-login-panel {
+      flex: 1 1 100%;
+      max-width: 100%;
+      min-width: 0;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .awsc-mobile-brand {
+      display: block;
+      background: #0F2240;
+      border-radius: 14px;
+      padding: 16px 12px;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .awsc-card-icon {
+      display: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .awsc-brand-content, .awsc-login-card, .awsc-error { animation-duration: 1ms; }
+    .awsc-brand-crest { animation: none; }
+  }
+`
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
-  padding: '10px 13px',
-  border: '2px solid #E4EAF2',
-  borderRadius: 9,
+  padding: '11px 14px',
+  border: '1.5px solid #E4EAF2',
+  borderRadius: 10,
   fontSize: 13,
   color: '#1A365E',
   outline: 'none',
@@ -184,42 +423,60 @@ export function LoginPage({ initialTab = 'staff' }: { initialTab?: LoginTab }) {
   }
 
   return (
-    <div style={shell}>
-      <div style={panel}>
-        <div style={{ background: '#0F2240', borderRadius: 14, padding: '16px 12px', textAlign: 'center', marginBottom: 20 }}>
-          <img
-            src="/Logo_w.png"
-            alt="AWS"
-            style={{ width: '100%', maxWidth: 280, height: 'auto', objectFit: 'contain', margin: '0 auto' }}
-          />
-        </div>
+    <div className="awsc-login-shell">
+      <style>{pageStyles}</style>
 
-        <h1 style={{ fontSize: 17, fontWeight: 700, color: '#1A365E', marginBottom: 4 }}>Student Information System</h1>
-        <div style={{ fontSize: 12, color: '#7A92B0', marginBottom: 20 }}>American World School · K-12 Admissions &amp; Enrollment</div>
-
-        <div style={{ display: 'flex', gap: 0, borderRadius: 10, overflow: 'hidden', border: '1.5px solid #E4EAF2', marginBottom: 18 }}>
-          {([
-            { key: 'staff',  label: '👤 Staff',  activeColor: '#1A365E' },
-            { key: 'student',label: '🎓 Student', activeColor: '#1A365E' },
-            { key: 'parent', label: '👨‍👩‍👧 Parent', activeColor: '#6B21A8' },
-          ] as const).map(t => (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => switchTab(t.key)}
-              style={{
-                flex: 1, padding: 9, border: 'none', fontSize: 11, fontWeight: 700,
-                cursor: 'pointer',
-                background: tab === t.key ? t.activeColor : '#F7F9FC',
-                color: tab === t.key ? '#fff' : '#7A92B0',
-                fontFamily: 'Poppins, sans-serif',
-                transition: 'background 160ms, color 160ms',
-              }}
-            >
-              {t.label}
-            </button>
-          ))}
+      <div className="awsc-login-brand">
+        <img src="/Logo_a.png" alt="" className="awsc-brand-watermark" aria-hidden="true" />
+        <div className="awsc-brand-content">
+          <img src="/Logo_w_trim.png" alt="American World School" className="awsc-brand-logo" />
+          <div className="awsc-brand-rule" />
+          <div className="awsc-brand-caption">Student Information System</div>
+          <ul className="awsc-brand-bullets">
+            <li>Secure Student Records</li>
+            <li>Real-Time Enrollment Tracking</li>
+            <li>Built for K&ndash;12 Excellence</li>
+          </ul>
         </div>
+      </div>
+
+      <div className="awsc-login-panel">
+        <div className="awsc-login-card">
+          <div className="awsc-mobile-brand">
+            <img
+              src="/Logo_w_trim.png"
+              alt="AWS"
+              style={{ width: '100%', maxWidth: 280, height: 'auto', objectFit: 'contain', margin: '0 auto', display: 'block' }}
+            />
+          </div>
+
+          <img src="/Logo_a.png" alt="" className="awsc-card-icon" aria-hidden="true" />
+          <div className="awsc-card-eyebrow">Welcome to <strong>American World School</strong></div>
+          <h1 className="awsc-card-title">Sign in to your account</h1>
+          <div className="awsc-card-subtitle">K-12 Admissions &amp; Enrollment Portal</div>
+
+          <div className="awsc-tabs">
+            {([
+              { key: 'staff',  label: 'Staff',  activeColor: '#1A365E' },
+              { key: 'student',label: 'Student', activeColor: '#1A365E' },
+              { key: 'parent', label: 'Parent', activeColor: '#6B21A8' },
+            ] as const).map(t => (
+              <button
+                key={t.key}
+                type="button"
+                className="awsc-tab"
+                data-active={tab === t.key}
+                onClick={() => switchTab(t.key)}
+                style={{
+                  background: tab === t.key ? t.activeColor : 'transparent',
+                  color: tab === t.key ? '#fff' : '#7A92B0',
+                  boxShadow: tab === t.key ? '0 2px 8px rgba(16,35,63,0.16)' : 'none',
+                }}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
 
         {tab === 'parent' ? (
           <form onSubmit={handleParentLogin}>
@@ -233,6 +490,7 @@ export function LoginPage({ initialTab = 'staff' }: { initialTab?: LoginTab }) {
                 value={parentEmail}
                 onChange={(e) => setParentEmail(e.target.value)}
                 style={inputStyle}
+                className="awsc-input"
                 required
               />
             </div>
@@ -246,12 +504,14 @@ export function LoginPage({ initialTab = 'staff' }: { initialTab?: LoginTab }) {
                 value={parentPassword}
                 onChange={(e) => setParentPassword(e.target.value)}
                 style={inputStyle}
+                className="awsc-input"
                 required
               />
             </div>
             <button
               type="submit"
               disabled={parentLoading}
+              className="awsc-btn"
               style={{
                 width: '100%', padding: 13, border: 'none', borderRadius: 11,
                 fontSize: 14, fontWeight: 700, marginTop: 6,
@@ -259,12 +519,11 @@ export function LoginPage({ initialTab = 'staff' }: { initialTab?: LoginTab }) {
                 color: '#fff',
                 cursor: parentLoading ? 'not-allowed' : 'pointer',
                 fontFamily: 'Poppins, sans-serif',
-                transition: 'background 160ms',
               }}
             >
               {parentLoading ? 'Signing in…' : 'Sign In to Parent Portal'}
             </button>
-            {parentError && <div style={errorStyle}>{parentError}</div>}
+            {parentError && <div style={errorStyle} className="awsc-error">{parentError}</div>}
             <div style={{ fontSize: 11, color: '#7A92B0', textAlign: 'center', marginTop: 10 }}>
               Don&apos;t have an account? Contact your school admin to set one up.
             </div>
@@ -281,6 +540,7 @@ export function LoginPage({ initialTab = 'staff' }: { initialTab?: LoginTab }) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 style={inputStyle}
+                className="awsc-input"
                 required
               />
             </div>
@@ -295,6 +555,7 @@ export function LoginPage({ initialTab = 'staff' }: { initialTab?: LoginTab }) {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 style={inputStyle}
+                className="awsc-input"
                 required
               />
             </div>
@@ -302,6 +563,7 @@ export function LoginPage({ initialTab = 'staff' }: { initialTab?: LoginTab }) {
             <button
               type="submit"
               disabled={staffLoading}
+              className="awsc-btn"
               style={{
                 width: '100%',
                 padding: 13,
@@ -314,13 +576,12 @@ export function LoginPage({ initialTab = 'staff' }: { initialTab?: LoginTab }) {
                 marginTop: 6,
                 cursor: staffLoading ? 'not-allowed' : 'pointer',
                 fontFamily: 'Poppins, sans-serif',
-                transition: 'background 160ms cubic-bezier(0.23, 1, 0.32, 1), transform 120ms cubic-bezier(0.23, 1, 0.32, 1)',
               }}
             >
               {staffLoading ? 'Signing in…' : 'Sign In'}
             </button>
 
-            {staffError && <div style={errorStyle}>{staffError}</div>}
+            {staffError && <div style={errorStyle} className="awsc-error">{staffError}</div>}
           </form>
         ) : (
           <form onSubmit={handleStudentLogin}>
@@ -334,6 +595,7 @@ export function LoginPage({ initialTab = 'staff' }: { initialTab?: LoginTab }) {
                 value={studentId}
                 onChange={(e) => setStudentId(e.target.value)}
                 style={inputStyle}
+                className="awsc-input"
                 required
               />
             </div>
@@ -348,6 +610,7 @@ export function LoginPage({ initialTab = 'staff' }: { initialTab?: LoginTab }) {
                 value={studentPassword}
                 onChange={(e) => setStudentPassword(e.target.value)}
                 style={inputStyle}
+                className="awsc-input"
                 required
               />
             </div>
@@ -355,6 +618,7 @@ export function LoginPage({ initialTab = 'staff' }: { initialTab?: LoginTab }) {
             <button
               type="submit"
               disabled={studentLoading}
+              className="awsc-btn"
               style={{
                 width: '100%',
                 padding: 12,
@@ -367,19 +631,19 @@ export function LoginPage({ initialTab = 'staff' }: { initialTab?: LoginTab }) {
                 marginTop: 4,
                 cursor: studentLoading ? 'not-allowed' : 'pointer',
                 fontFamily: 'Poppins, sans-serif',
-                transition: 'background 160ms cubic-bezier(0.23, 1, 0.32, 1), transform 120ms cubic-bezier(0.23, 1, 0.32, 1)',
               }}
             >
-              {studentLoading ? 'Signing in…' : 'Sign In to Student Portal'}
+              {studentLoading ? 'Signing in…' : 'Sign In'}
             </button>
 
-            {studentError && <div style={errorStyle}>{studentError}</div>}
+            {studentError && <div style={errorStyle} className="awsc-error">{studentError}</div>}
 
             <div style={{ fontSize: 11, color: '#7A92B0', textAlign: 'center', marginTop: 10 }}>
               Don&apos;t have a password? Ask your school admin to set one for you.
             </div>
           </form>
         )}
+        </div>
       </div>
     </div>
   )

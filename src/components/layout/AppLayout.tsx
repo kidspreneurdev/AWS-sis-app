@@ -21,7 +21,7 @@ import {
   BarChart, Clock, Target, FileCheck, StickyNote, Printer,
   PlusSquare, Activity, CheckSquare, FileBarChart, Telescope, Flag,
   Library, UserCog, BarChart3, LayoutList, Inbox,
-  ShieldCheck, ListChecks, Puzzle, FolderArchive, CalendarDays,
+  ShieldCheck, ListChecks, Puzzle, FolderArchive, CalendarDays, Send,
 } from 'lucide-react'
 import { PageHeaderProvider, useSetActionsTarget } from '@/contexts/PageHeaderContext'
 
@@ -52,6 +52,7 @@ const NAV: NavGroup[] = [
       { title: 'Student Records', icon: FolderArchive, to: '/students/records' },
       { title: 'Onboarding', icon: ListChecks, to: '/students/onboarding' },
       { title: 'Policy Documents', icon: FileCheck, to: '/students/policy-documents' },
+      { title: 'Notifications', icon: Send, to: '/students/notifications' },
       { title: 'Student Goals', icon: Flag, to: '/students/goals' },
       { title: 'Student 360°', icon: Telescope, to: '/students/360' },
     ],

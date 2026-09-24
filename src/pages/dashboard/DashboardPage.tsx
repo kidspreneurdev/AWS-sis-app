@@ -12,6 +12,7 @@ function fromRow(row: Record<string, unknown>): Student {
   return {
     id: row.id as string, studentId: row.student_id as string ?? '',
     firstName: row.first_name as string ?? '', lastName: row.last_name as string ?? '',
+    photoUrl: (ext.photoUrl as string) ?? null,
     dob: null, gender: null, nationality: row.nationality as string ?? null, lang: null,
     grade: normalizeStudentGrade(row.grade), status: row.status as StudentStatus ?? 'Inquiry',
     campus: row.campus as string ?? null, cohort: row.cohort as string ?? null,

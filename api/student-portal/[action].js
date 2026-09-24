@@ -1305,6 +1305,182 @@ async function listMyOnboarding(req, res, adminClient) {
   return json(res, 200, { steps, transferringCredits: !!metaRow?.transferring_credits })
 }
 
+const NOTIFICATIONS_PAGE_SIZE_DEFAULT = 5
+
+async function listMyNotifications(req, res, adminClient) {
+  if (req.method !== 'GET') {
+    res.setHeader('Allow', 'GET')
+    return json(res, 405, { error: 'Method not allowed' })
+  }
+
+  const studentDbId = requireStudentToken(req, res, json)
+  if (!studentDbId) return
+
+  const limit = Math.min(Math.max(parseInt(req.query?.limit, 10) || NOTIFICATIONS_PAGE_SIZE_DEFAULT, 1), 50)
+  const offset = Math.max(parseInt(req.query?.offset, 10) || 0, 0)
+
+  const { data: rows, error, count } = await adminClient
+    .from('notification_recipients')
+    .select('id,read,read_at,notifications(id,subject,content,attachments,sent_at)', { count: 'exact' })
+    .eq('student_id', studentDbId)
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1)
+
+  if (error) return json(res, 500, { error: error.message })
+
+  const { count: unreadCount, error: unreadError } = await adminClient
+    .from('notification_recipients')
+    .select('id', { count: 'exact', head: true })
+    .eq('student_id', studentDbId)
+    .eq('read', false)
+
+  if (unreadError) return json(res, 500, { error: unreadError.message })
+
+  const notifications = (rows ?? [])
+    .filter((r) => r.notifications)
+    .map((r) => ({
+      id: r.notifications.id,
+      recipientId: r.id,
+      subject: r.notifications.subject,
+      content: r.notifications.content,
+      attachments: r.notifications.attachments ?? [],
+      sentAt: r.notifications.sent_at,
+      read: !!r.read,
+      readAt: r.read_at ?? null,
+    }))
+
+  return json(res, 200, {
+    notifications,
+    unreadCount: unreadCount ?? 0,
+    hasMore: typeof count === 'number' ? offset + limit < count : false,
+  })
+}
+
+async function markNotificationRead(req, res, adminClient) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST')
+    return json(res, 405, { error: 'Method not allowed' })
+  }
+
+  const studentDbId = requireStudentToken(req, res, json)
+  if (!studentDbId) return
+
+  const { notificationId } = req.body || {}
+  if (typeof notificationId !== 'string' || !notificationId.trim()) {
+    return json(res, 400, { error: 'notificationId is required.' })
+  }
+
+  const { error } = await adminClient
+    .from('notification_recipients')
+    .update({ read: true, read_at: new Date().toISOString() })
+    .eq('student_id', studentDbId)
+    .eq('notification_id', notificationId)
+
+  if (error) return json(res, 500, { error: error.message })
+
+  return json(res, 200, { ok: true })
+}
+
+async function changePortalPassword(req, res, adminClient) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST')
+    return json(res, 405, { error: 'Method not allowed' })
+  }
+
+  const studentDbId = requireStudentToken(req, res, json)
+  if (!studentDbId) return
+
+  const { currentPassword, newPassword } = req.body || {}
+  if (typeof currentPassword !== 'string' || !currentPassword.trim()
+    || typeof newPassword !== 'string' || newPassword.length < 6) {
+    return json(res, 400, { error: 'Please provide your current password and a new password of at least 6 characters.' })
+  }
+
+  const { data, error: dbError } = await adminClient
+    .from('students')
+    .select('portal_password')
+    .eq('id', studentDbId)
+    .single()
+
+  if (dbError || !data) {
+    return json(res, 404, { error: 'Student account not found.' })
+  }
+
+  if (!data.portal_password || data.portal_password !== currentPassword) {
+    return json(res, 401, { error: 'Current password is incorrect.' })
+  }
+
+  const { error: updateError } = await adminClient
+    .from('students')
+    .update({ portal_password: newPassword })
+    .eq('id', studentDbId)
+
+  if (updateError) return json(res, 500, { error: updateError.message })
+
+  return json(res, 200, { ok: true })
+}
+
+/** Persists a student's uploaded profile photo URL into their `notes` JSON blob
+ *  (same pattern as address/ecName/etc — see StudentsPage.tsx toRow/fromRow, which
+ *  must also carry `photoUrl` through so an admin edit-save doesn't wipe it out). */
+async function updateProfilePhoto(req, res, adminClient) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST')
+    return json(res, 405, { error: 'Method not allowed' })
+  }
+
+  const studentDbId = requireStudentToken(req, res, json)
+  if (!studentDbId) return
+
+  const { photoUrl } = req.body || {}
+  if (typeof photoUrl !== 'string' || !photoUrl.trim()) {
+    return json(res, 400, { error: 'photoUrl is required.' })
+  }
+
+  const { data, error: dbError } = await adminClient
+    .from('students')
+    .select('notes')
+    .eq('id', studentDbId)
+    .single()
+
+  if (dbError || !data) {
+    return json(res, 404, { error: 'Student account not found.' })
+  }
+
+  let ext = {}
+  try { ext = JSON.parse(data.notes || '{}') } catch { /* ignore malformed notes */ }
+  ext.photoUrl = photoUrl.trim()
+
+  const { error: updateError } = await adminClient
+    .from('students')
+    .update({ notes: JSON.stringify(ext), updated_at: new Date().toISOString() })
+    .eq('id', studentDbId)
+
+  if (updateError) return json(res, 500, { error: updateError.message })
+
+  return json(res, 200, { ok: true })
+}
+
+async function markAllNotificationsRead(req, res, adminClient) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST')
+    return json(res, 405, { error: 'Method not allowed' })
+  }
+
+  const studentDbId = requireStudentToken(req, res, json)
+  if (!studentDbId) return
+
+  const { error } = await adminClient
+    .from('notification_recipients')
+    .update({ read: true, read_at: new Date().toISOString() })
+    .eq('student_id', studentDbId)
+    .eq('read', false)
+
+  if (error) return json(res, 500, { error: error.message })
+
+  return json(res, 200, { ok: true })
+}
+
 async function listMyPolicyDocuments(req, res, adminClient) {
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET')
@@ -1384,6 +1560,11 @@ const ACTIONS = {
   'submit-record-signed': submitRecordSigned,
   'list-my-onboarding': listMyOnboarding,
   'list-my-policy-documents': listMyPolicyDocuments,
+  'list-my-notifications': listMyNotifications,
+  'mark-notification-read': markNotificationRead,
+  'mark-all-notifications-read': markAllNotificationsRead,
+  'change-password': changePortalPassword,
+  'update-profile-photo': updateProfilePhoto,
   'submit-policy-document': submitPolicyDocument,
   'list-my-components': listMyComponents,
   'submit-discussion-post': submitDiscussionPost,

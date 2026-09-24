@@ -3,7 +3,6 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
-import { useParentPortal } from '@/contexts/ParentPortalContext'
 import { toLegacyStudentGradeValue } from '@/types/student'
 import { K5DashboardPage } from '@/pages/student-portal/K5DashboardPage'
 import {
@@ -12,7 +11,7 @@ import {
   type CourseType,
 } from '@/pages/student-portal/gradesShared'
 import {
-  ClipboardList, Target, FolderKanban, HeartPulse, Lightbulb, Hand, Users,
+  ClipboardList, Target, FolderKanban, HeartPulse, Lightbulb,
   GraduationCap, CalendarDays, Radio, Book, MapPin, Link2,
   AlertTriangle, FileText, Pencil, Clock, CheckCircle2, Zap, Medal, ArrowRight,
   type LucideIcon,
@@ -27,14 +26,6 @@ const emptyState: React.CSSProperties = {
   border: '1px dashed #D7E0EA',
   borderRadius: 10,
 }
-
-const motivations = [
-  'Every expert was once a beginner. Keep building.',
-  'Your portfolio is your proof of work. Make it count.',
-  "Asia's first entrepreneurial school - you're making history.",
-  'Small daily improvements lead to stunning results.',
-  'Your ideas have the power to change the world.',
-]
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
@@ -96,11 +87,6 @@ interface CoachReportRow {
   generated_at: string
 }
 
-function getGreeting() {
-  const h = new Date().getHours()
-  return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'
-}
-
 function parseGradeLevel(value: string) {
   const match = value.match(/\d+/)
   if (!match) return null
@@ -132,7 +118,6 @@ function ProgressRing({ pct, color, size = 84, strokeWidth = 8, children }: { pc
 export function SPDashboardPage() {
   const { session } = useStudentPortal()
   const { readOnly } = usePortalReadOnly()
-  const parentPortal = useParentPortal()
   const navigate = useNavigate()
   const location = useLocation()
   const prefix = portalPrefix(location.pathname)
@@ -365,10 +350,6 @@ export function SPDashboardPage() {
   const gradeNum = toLegacyStudentGradeValue(session.grade)
   if (!readOnly && gradeNum !== null && gradeNum <= 5) return <K5DashboardPage />
 
-  const greeting = getGreeting()
-  const firstName = readOnly
-    ? (parentPortal.session?.parentName.split(' ')[0] ?? 'Parent')
-    : (session.fullName.split(' ')[0] ?? 'Student')
   const gradeLevel = parseGradeLevel(session.grade)
   const isHS = gradeLevel !== null && gradeLevel >= 9
 
@@ -407,35 +388,6 @@ export function SPDashboardPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ background: 'linear-gradient(135deg,#080F1E 0%,#0F2240 40%,#1A365E 75%,#6B1020 100%)', borderRadius: 18, padding: '24px 28px', position: 'relative', overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', top: -40, right: -40, width: 200, height: 200, borderRadius: '50%', background: 'rgba(255,255,255,.03)' }} />
-        <div style={{ position: 'relative', zIndex: 1 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,.4)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 6 }}>
-            Student Portal · 2025-2026
-          </div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
-            {greeting}, {firstName}! {readOnly ? <Users size={20} /> : <Hand size={20} />}
-          </div>
-          {readOnly ? (
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,.5)' }}>
-              Viewing <strong style={{ color: 'rgba(255,255,255,.8)' }}>{session?.fullName}</strong>
-              {session?.grade ? ` · Grade ${session.grade}` : ''}
-              {session?.campus ? ` · ${session.campus}` : ''}
-              {` · ID: ${session?.studentId || '—'}`}
-            </div>
-          ) : (
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,.5)' }}>
-              {session?.grade || ''}{session?.campus ? ` · ${session.campus}` : ''} · Student ID: {session?.studentId || '—'}
-            </div>
-          )}
-          <div style={{ marginTop: 12, padding: '8px 12px', background: 'rgba(250,198,0,.1)', borderRadius: 8, borderLeft: `3px solid ${SP_GOLD}` }}>
-            <div style={{ fontSize: 11, color: SP_GOLD, fontStyle: 'italic' }}>
-              "{motivations[new Date().getDay() % motivations.length]}"
-            </div>
-          </div>
-        </div>
-      </div>
-
       {blocksError && (
         <div style={{ ...card, padding: '10px 16px', borderLeft: `4px solid ${SP_GOLD}`, fontSize: 11, color: '#7A92B0', display: 'flex', alignItems: 'center', gap: 8 }}>
           <AlertTriangle size={12} color={SP_GOLD} />
@@ -449,56 +401,66 @@ export function SPDashboardPage() {
         </div>
       )}
 
-      {/* Zone 1 — Next Class Banner */}
-      {nextClass && (
-        <div style={{ ...card, padding: '16px 20px', borderLeft: `4px solid ${nextClass.isLive ? SP_GREEN : SP_NAVY}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: nextClass.isLive ? '#DCFCE7' : '#EEF2FF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: nextClass.isLive ? SP_GREEN : SP_NAVY, flexShrink: 0 }}>
-              {nextClass.sessionType === 'Live Session' ? <Radio size={20} /> : <Book size={20} />}
-            </div>
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 800, color: nextClass.isLive ? SP_GREEN : '#7A92B0', textTransform: 'uppercase', letterSpacing: 1 }}>
-                {nextClass.isLive ? 'Live now' : nextClass.isToday ? 'Next class today' : `Next class · ${nextClass.day}`}
+      {/* Zone 1 — Progress / Next Class */}
+      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+        {/* Column 1 — Progress */}
+        <div style={{ ...card, padding: 18, flex: 1, minWidth: 260 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 6 }}><GraduationCap size={13} /> Progress</div>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+            {ringMetrics.map((m) => (
+              <div key={m.key} style={{ textAlign: 'center', minWidth: 68 }}>
+                <ProgressRing pct={m.pct} color={m.color} size={66} strokeWidth={7}>
+                  <span title={m.pct === null ? 'Not yet calculated' : undefined} style={{ fontSize: 11, fontWeight: 900, color: m.pct === null ? '#94A3B8' : m.color }}>{m.display}</span>
+                </ProgressRing>
+                <div style={{ fontSize: 10, fontWeight: 700, color: SP_NAVY, marginTop: 7 }}>{m.label}</div>
+                {m.sub && <div style={{ fontSize: 8, color: '#7A92B0', marginTop: 1 }}>{m.sub}</div>}
               </div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: SP_NAVY }}>{nextClass.name || nextClass.subject || 'Class'}</div>
-              <div style={{ fontSize: 11, color: '#7A92B0', display: 'flex', gap: 10, marginTop: 2, flexWrap: 'wrap' }}>
+            ))}
+          </div>
+        </div>
+
+        {/* Column 2 — Next Class */}
+        <div style={{ ...card, padding: 18, flex: 1, minWidth: 260, borderLeft: nextClass ? `4px solid ${nextClass.isLive ? SP_GREEN : SP_NAVY}` : undefined }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+            {nextClass?.sessionType === 'Live Session' ? <Radio size={13} /> : <Book size={13} />} Next Class
+          </div>
+          {nextClass ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: nextClass.isLive ? '#DCFCE7' : '#EEF2FF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: nextClass.isLive ? SP_GREEN : SP_NAVY, flexShrink: 0 }}>
+                  {nextClass.sessionType === 'Live Session' ? <Radio size={18} /> : <Book size={18} />}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 9, fontWeight: 800, color: nextClass.isLive ? SP_GREEN : '#7A92B0', textTransform: 'uppercase', letterSpacing: 1 }}>
+                    {nextClass.isLive ? 'Live now' : nextClass.isToday ? 'Today' : nextClass.day}
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: SP_NAVY }}>{nextClass.name || nextClass.subject || 'Class'}</div>
+                </div>
+              </div>
+              <div style={{ fontSize: 11, color: '#7A92B0', display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
                 <span>{nextClass.time || nextClass.period}</span>
                 {nextClass.room && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><MapPin size={10} /> {nextClass.room}</span>}
               </div>
-            </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {nextClass.sessionType === 'Live Session' && nextClass.meetLink && (
-              <a
-                href={nextClass.meetLink} target="_blank" rel="noreferrer"
-                style={{ fontSize: 11, fontWeight: 800, background: nextClass.isLive ? SP_GREEN : '#E0F2FE', color: nextClass.isLive ? '#fff' : '#0369A1', padding: '8px 16px', borderRadius: 8, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}
-              >
-                <Link2 size={12} /> Join
-              </a>
-            )}
-            <button
-              onClick={() => navigate(`${prefix}/timetable`)}
-              style={{ fontSize: 11, color: '#7A92B0', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Poppins,sans-serif', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-            >
-              Full timetable <ArrowRight size={11} />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Zone 2 — Progress Rings */}
-      <div style={{ ...card, padding: 18 }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 6 }}><GraduationCap size={13} /> Progress</div>
-        <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap' }}>
-          {ringMetrics.map((m) => (
-            <div key={m.key} style={{ textAlign: 'center', minWidth: 84 }}>
-              <ProgressRing pct={m.pct} color={m.color}>
-                <span title={m.pct === null ? 'Not yet calculated' : undefined} style={{ fontSize: 13, fontWeight: 900, color: m.pct === null ? '#94A3B8' : m.color }}>{m.display}</span>
-              </ProgressRing>
-              <div style={{ fontSize: 11, fontWeight: 700, color: SP_NAVY, marginTop: 8 }}>{m.label}</div>
-              {m.sub && <div style={{ fontSize: 9, color: '#7A92B0', marginTop: 1 }}>{m.sub}</div>}
-            </div>
-          ))}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                {nextClass.sessionType === 'Live Session' && nextClass.meetLink && (
+                  <a
+                    href={nextClass.meetLink} target="_blank" rel="noreferrer"
+                    style={{ fontSize: 11, fontWeight: 800, background: nextClass.isLive ? SP_GREEN : '#E0F2FE', color: nextClass.isLive ? '#fff' : '#0369A1', padding: '8px 16px', borderRadius: 8, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                  >
+                    <Link2 size={12} /> Join Now
+                  </a>
+                )}
+                <button
+                  onClick={() => navigate(`${prefix}/timetable`)}
+                  style={{ fontSize: 11, color: '#7A92B0', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Poppins,sans-serif', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                >
+                  Full timetable <ArrowRight size={11} />
+                </button>
+              </div>
+            </>
+          ) : (
+            <div style={emptyState}>No upcoming classes scheduled</div>
+          )}
         </div>
       </div>
 
@@ -528,67 +490,81 @@ export function SPDashboardPage() {
         </div>
       )}
 
-      {/* Zone 4 — This Week */}
+      {/* Zone 4 — Quick Actions / This Week & Upcoming Deadlines */}
       <div style={{ ...card, padding: 18 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 6 }}><CalendarDays size={13} /> This Week</div>
-          <button
-            onClick={() => navigate(`${prefix}/timetable`)}
-            style={{ fontSize: 11, color: '#7A92B0', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Poppins,sans-serif', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-          >
-            Full timetable <ArrowRight size={10} />
-          </button>
-        </div>
-
-        <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
-          {weekStrip.map((d) => (
-            <div key={d.dateIso} style={{ flex: 1, textAlign: 'center', padding: '8px 4px', borderRadius: 8, background: d.isToday ? SP_NAVY : '#F7F9FC', border: `1px solid ${d.isToday ? SP_NAVY : '#E4EAF2'}` }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: d.isToday ? 'rgba(255,255,255,.7)' : '#94A3B8', textTransform: 'uppercase' }}>{d.label}</div>
-              <div style={{ fontSize: 14, fontWeight: 800, color: d.isToday ? '#fff' : SP_NAVY, marginTop: 2 }}>{d.dayNum}</div>
-              {d.count > 0 && <div style={{ fontSize: 8, fontWeight: 700, color: d.isToday ? SP_GOLD : SP_NAVY, marginTop: 2 }}>{d.count} class{d.count !== 1 ? 'es' : ''}</div>}
+        <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+          {/* Column 1 — Quick Actions */}
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}><Zap size={13} /> Quick Actions</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {quickActions.map((action) => (
+                <button
+                  key={action.label}
+                  onClick={() => navigate(action.to)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '7px 10px', background: `${action.color}10`, border: `1.5px solid ${action.color}25`, borderRadius: 9, cursor: 'pointer', fontFamily: 'Poppins,sans-serif' }}
+                >
+                  <span style={{ display: 'inline-flex', color: action.color }}><action.icon size={14} /></span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: SP_NAVY }}>{action.label}</span>
+                  <span style={{ marginLeft: 'auto', color: '#7A92B0', display: 'inline-flex' }}><ArrowRight size={11} /></span>
+                </button>
+              ))}
             </div>
-          ))}
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-          <div>
-            <div style={{ fontSize: 11, fontWeight: 800, color: SP_NAVY, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 5 }}><Clock size={11} /> Upcoming Deadlines</div>
-            {upcomingDeadlines.length === 0 ? (
-              <div style={{ ...emptyState, padding: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}><CheckCircle2 size={11} /> Nothing due in the next 7 days</div>
-            ) : (
-              upcomingDeadlines.map((row) => {
-                const due = new Date(`${row.dueDate}T00:00:00`)
-                const daysLeft = Math.ceil((due.getTime() - new Date(`${todayIso}T00:00:00`).getTime()) / 86400000)
-                const color = daysLeft <= 1 ? SP_RED : daysLeft <= 3 ? SP_GOLD : SP_NAVY
-                return (
-                  <div key={row.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid #F0F4FA' }}>
-                    <div style={{ width: 32, height: 32, borderRadius: 8, background: `${color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', color, flexShrink: 0 }}><FileText size={13} /></div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: SP_NAVY }}>{row.title}</div>
-                      <div style={{ fontSize: 10, color: '#7A92B0' }}>{row.subject || ''}</div>
-                    </div>
-                    <div style={{ fontSize: 10, fontWeight: 800, color, flexShrink: 0 }}>
-                      {daysLeft === 0 ? 'Today' : daysLeft === 1 ? 'Tomorrow' : `${daysLeft}d`}
-                    </div>
-                  </div>
-                )
-              })
-            )}
           </div>
 
-          <div>
-            <div style={{ fontSize: 11, fontWeight: 800, color: SP_NAVY, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 5 }}><Zap size={11} /> Quick Actions</div>
-            {quickActions.map((action) => (
+          {/* Column 2 — This Week + Upcoming Deadlines */}
+          <div style={{ flex: 1.4, minWidth: 280 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 6 }}><CalendarDays size={13} /> This Week</div>
               <button
-                key={action.label}
-                onClick={() => navigate(action.to)}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '7px 10px', marginBottom: 6, background: `${action.color}10`, border: `1.5px solid ${action.color}25`, borderRadius: 9, cursor: 'pointer', fontFamily: 'Poppins,sans-serif' }}
+                onClick={() => navigate(`${prefix}/timetable`)}
+                style={{ fontSize: 11, color: '#7A92B0', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Poppins,sans-serif', display: 'inline-flex', alignItems: 'center', gap: 4 }}
               >
-                <span style={{ display: 'inline-flex', color: action.color }}><action.icon size={14} /></span>
-                <span style={{ fontSize: 11, fontWeight: 600, color: SP_NAVY }}>{action.label}</span>
-                <span style={{ marginLeft: 'auto', color: '#7A92B0', display: 'inline-flex' }}><ArrowRight size={11} /></span>
+                Full timetable <ArrowRight size={10} />
               </button>
-            ))}
+            </div>
+
+            <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+              {weekStrip.map((d) => (
+                <div key={d.dateIso} style={{ flex: 1, textAlign: 'center', padding: '8px 4px', borderRadius: 8, background: d.isToday ? SP_NAVY : '#F7F9FC', border: `1px solid ${d.isToday ? SP_NAVY : '#E4EAF2'}` }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: d.isToday ? 'rgba(255,255,255,.7)' : '#94A3B8', textTransform: 'uppercase' }}>{d.label}</div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: d.isToday ? '#fff' : SP_NAVY, marginTop: 2 }}>{d.dayNum}</div>
+                  {d.count > 0 && <div style={{ fontSize: 8, fontWeight: 700, color: d.isToday ? SP_GOLD : SP_NAVY, marginTop: 2 }}>{d.count} class{d.count !== 1 ? 'es' : ''}</div>}
+                </div>
+              ))}
+            </div>
+
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: SP_NAVY, display: 'flex', alignItems: 'center', gap: 5 }}><Clock size={11} /> Upcoming Deadlines</div>
+                <button
+                  onClick={() => navigate(`${prefix}/assignments`)}
+                  style={{ fontSize: 10, color: '#7A92B0', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Poppins,sans-serif', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+                >
+                  View all <ArrowRight size={9} />
+                </button>
+              </div>
+              {upcomingDeadlines.length === 0 ? (
+                <div style={{ ...emptyState, padding: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}><CheckCircle2 size={11} /> Nothing due in the next 7 days</div>
+              ) : (
+                upcomingDeadlines.map((row) => {
+                  const due = new Date(`${row.dueDate}T00:00:00`)
+                  const daysLeft = Math.ceil((due.getTime() - new Date(`${todayIso}T00:00:00`).getTime()) / 86400000)
+                  const color = daysLeft <= 1 ? SP_RED : daysLeft <= 3 ? SP_GOLD : SP_NAVY
+                  return (
+                    <div key={row.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid #F0F4FA' }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 8, background: `${color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', color, flexShrink: 0 }}><FileText size={13} /></div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: SP_NAVY }}>{row.title}</div>
+                        <div style={{ fontSize: 10, color: '#7A92B0' }}>{row.subject || ''}</div>
+                      </div>
+                      <div style={{ fontSize: 10, fontWeight: 800, color, flexShrink: 0 }}>
+                        {daysLeft === 0 ? 'Today' : daysLeft === 1 ? 'Tomorrow' : `${daysLeft}d`}
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
           </div>
         </div>
 

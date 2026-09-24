@@ -254,7 +254,7 @@ export function SPGraduationAuditPage() {
             <button class="button" onclick="window.print()">Print / Save PDF</button>
           </div>
           <h1 style="margin:0 0 8px;font-size:28px">Graduation Audit</h1>
-          <div style="font-size:13px;color:#64748B;margin-bottom:18px">American World School Student Portal</div>
+          <div style="font-size:13px;color:#64748B;margin-bottom:18px">American World School</div>
           <div class="meta">
             <div><strong>Student:</strong> ${studentName}</div>
             <div><strong>Student ID:</strong> ${studentPortalId}</div>

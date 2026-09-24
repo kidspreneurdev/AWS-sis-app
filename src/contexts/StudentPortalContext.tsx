@@ -10,6 +10,13 @@ export interface StudentSession {
   cohort: string
   dbId: string
   email: string
+  address: string
+  parent: string
+  relation: string
+  ecName: string
+  ecPhone: string
+  bloodGroup: string
+  photoUrl: string | null
 }
 
 interface StudentPortalContextType {
@@ -26,6 +33,8 @@ interface StudentPortalContextType {
 export const StudentPortalContext = createContext<StudentPortalContextType | null>(null)
 
 function mapStudentSession(row: Record<string, unknown>): StudentSession {
+  let ext: Record<string, unknown> = {}
+  try { ext = JSON.parse((row.notes as string) || '{}') } catch { /* */ }
   return {
     studentId: (row.student_id as string) ?? '',
     fullName: `${(row.first_name as string) ?? ''} ${(row.last_name as string) ?? ''}`.trim(),
@@ -34,6 +43,13 @@ function mapStudentSession(row: Record<string, unknown>): StudentSession {
     cohort: (row.cohort as string) ?? '',
     dbId: row.id as string,
     email: (row.email as string) ?? '',
+    address: (ext.address as string) ?? '',
+    parent: (row.parent as string) ?? '',
+    relation: (ext.relation as string) ?? '',
+    ecName: (ext.ecName as string) ?? '',
+    ecPhone: (ext.ecPhone as string) ?? '',
+    bloodGroup: (ext.bloodGroup as string) ?? '',
+    photoUrl: (ext.photoUrl as string) ?? null,
   }
 }
 
@@ -72,7 +88,7 @@ export function StudentPortalProvider({ children }: { children: ReactNode }) {
       // Rehydrate from DB so grade/cohort/campus changes are reflected immediately.
       const { data, error } = await supabase
         .from('students')
-        .select('id,first_name,last_name,student_id,grade,cohort,campus,email')
+        .select('id,first_name,last_name,student_id,grade,cohort,campus,email,parent,notes')
         .eq('id', stored.dbId)
         .single()
       if (!error && data) {
@@ -100,7 +116,7 @@ export function StudentPortalProvider({ children }: { children: ReactNode }) {
 
     const { data, error } = await supabase
       .from('students')
-      .select('id,first_name,last_name,student_id,grade,cohort,campus,email')
+      .select('id,first_name,last_name,student_id,grade,cohort,campus,email,parent,notes')
       .eq('email', email)
       .single()
 

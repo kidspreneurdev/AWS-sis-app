@@ -1,34 +1,73 @@
-import { useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { useRef, useState } from 'react'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
+import { authedFetch } from '@/lib/studentPortalApi'
+import { uploadFile } from '@/lib/uploadFile'
+import { Camera, Loader2 } from 'lucide-react'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 20 }
 
 export function SPProfilePage() {
-  const { session } = useStudentPortal()
+  const { session, getToken, refreshSession } = useStudentPortal()
   const { readOnly } = usePortalReadOnly()
   const [oldPw, setOldPw] = useState('')
   const [newPw, setNewPw] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
   const [pwMsg, setPwMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [saving, setSaving] = useState(false)
+  const [photoUploading, setPhotoUploading] = useState(false)
+  const [photoError, setPhotoError] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const initials = session?.fullName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() ?? '??'
+
+  async function handlePhotoSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || !session) return
+
+    if (!file.type.startsWith('image/')) { setPhotoError('Please choose an image file.'); return }
+    if (file.size > 5 * 1024 * 1024) { setPhotoError('Image must be smaller than 5MB.'); return }
+
+    const token = getToken()
+    if (!token) { setPhotoError('Your session has expired. Please log in again.'); return }
+
+    setPhotoError('')
+    setPhotoUploading(true)
+    try {
+      const path = `student-photos/${session.dbId}/${Date.now()}_${file.name}`
+      const url = await uploadFile(path, file)
+      await authedFetch(token, '/api/student-portal/update-profile-photo', {
+        method: 'POST',
+        body: JSON.stringify({ photoUrl: url }),
+      })
+      await refreshSession()
+    } catch (err) {
+      setPhotoError(err instanceof Error ? err.message : 'Failed to upload photo.')
+    } finally {
+      setPhotoUploading(false)
+    }
+  }
 
   async function changePassword(e: React.FormEvent) {
     e.preventDefault()
     if (newPw !== confirmPw) { setPwMsg({ ok: false, text: 'Passwords do not match.' }); return }
     if (newPw.length < 6) { setPwMsg({ ok: false, text: 'Password must be at least 6 characters.' }); return }
-    if (!session?.email) { setPwMsg({ ok: false, text: 'No email is linked to this student account.' }); return }
+    const token = getToken()
+    if (!token) { setPwMsg({ ok: false, text: 'Your session has expired. Please log in again.' }); return }
     setSaving(true)
-    const { error: reauthError } = await supabase.auth.signInWithPassword({ email: session.email, password: oldPw })
-    if (reauthError) { setPwMsg({ ok: false, text: 'Current password is incorrect.' }); setSaving(false); return }
-    const { error: updateError } = await supabase.auth.updateUser({ password: newPw })
-    if (updateError) { setPwMsg({ ok: false, text: updateError.message }); setSaving(false); return }
-    setPwMsg({ ok: true, text: 'Password changed successfully!' })
-    setOldPw(''); setNewPw(''); setConfirmPw('')
-    setSaving(false)
+    try {
+      await authedFetch(token, '/api/student-portal/change-password', {
+        method: 'POST',
+        body: JSON.stringify({ currentPassword: oldPw, newPassword: newPw }),
+      })
+      setPwMsg({ ok: true, text: 'Password changed successfully!' })
+      setOldPw(''); setNewPw(''); setConfirmPw('')
+    } catch (err) {
+      setPwMsg({ ok: false, text: err instanceof Error ? err.message : 'Failed to change password.' })
+    } finally {
+      setSaving(false)
+    }
   }
 
   const inp: React.CSSProperties = { width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #E4EAF2', fontSize: 13, color: '#1A365E', background: '#fff', boxSizing: 'border-box' }
@@ -43,19 +82,55 @@ export function SPProfilePage() {
 
       {/* Profile card */}
       <div style={{ ...card, display: 'flex', alignItems: 'center', gap: 20 }}>
-        <div style={{ width: 72, height: 72, borderRadius: 18, background: '#1A365E', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, fontWeight: 800, flexShrink: 0 }}>
-          {initials}
+        <div
+          style={{ position: 'relative', width: 72, height: 72, flexShrink: 0, borderRadius: 18, cursor: readOnly ? 'default' : 'pointer' }}
+          onClick={() => { if (!readOnly && !photoUploading) fileInputRef.current?.click() }}
+          role={readOnly ? undefined : 'button'}
+          aria-label={readOnly ? undefined : 'Change profile photo'}
+        >
+          <div style={{
+            width: 72, height: 72, borderRadius: 18, background: '#1A365E', color: '#fff',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, fontWeight: 800,
+            overflow: 'hidden',
+          }}>
+            {session?.photoUrl
+              ? <img src={session.photoUrl} alt={session.fullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : initials}
+          </div>
+
+          {!readOnly && (
+            <div
+              className="sp-avatar-edit"
+              style={{
+                position: 'absolute', inset: 0, borderRadius: 18,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: 'rgba(15,34,64,0.55)', opacity: photoUploading ? 1 : 0,
+                transition: 'opacity 150ms ease-out',
+              }}
+            >
+              {photoUploading ? <Loader2 size={20} color="#fff" style={{ animation: 'spin 0.8s linear infinite' }} /> : <Camera size={20} color="#fff" />}
+            </div>
+          )}
+
+          {!readOnly && (
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handlePhotoSelected}
+              style={{ display: 'none' }}
+            />
+          )}
         </div>
         <div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: '#1A365E' }}>{session?.fullName}</div>
-          <div style={{ display: 'flex', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 6, background: '#E6F4FF', color: '#0369A1' }}>{session?.studentId}</span>
-            {session?.grade && <span style={{ fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 6, background: '#EDE9FE', color: '#5B21B6' }}>{session.grade}</span>}
-            {session?.cohort && <span style={{ fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 6, background: '#E8FBF0', color: '#0E6B3B' }}>{session.cohort}</span>}
-            {session?.campus && <span style={{ fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 6, background: '#FFF3E0', color: '#B45309' }}>{session.campus}</span>}
-          </div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: '#1A365E' }}>{session?.fullName}</div>
+          {photoError && <div style={{ fontSize: 12, fontWeight: 600, color: '#D61F31', marginTop: 4 }}>{photoError}</div>}
         </div>
       </div>
+      <style>{`
+        .sp-avatar-edit:hover, .sp-avatar-edit:focus-visible { opacity: 1 !important; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
 
       {/* Info */}
       <div style={card}>
@@ -67,6 +142,12 @@ export function SPProfilePage() {
             { label: 'Grade', value: session?.grade || '—' },
             { label: 'Cohort', value: session?.cohort || '—' },
             { label: 'Campus', value: session?.campus || '—' },
+            { label: 'Address', value: session?.address || '—' },
+            { label: 'Emergency Contact', value: [session?.ecName, session?.ecPhone].filter(Boolean).join(' · ') || '—' },
+            { label: 'Parent Contact', value: [session?.parent, session?.relation].filter(Boolean).join(' · ') || '—' },
+            { label: 'Email', value: session?.email || '—' },
+            { label: 'Blood Group', value: session?.bloodGroup || '—' },
+            { label: 'Aadhar/Passport - Identification', value: 'Not provided' },
           ].map(row => (
             <div key={row.label}>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase', marginBottom: 2 }}>{row.label}</div>

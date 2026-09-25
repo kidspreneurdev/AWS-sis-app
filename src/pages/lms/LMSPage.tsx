@@ -4630,7 +4630,6 @@ export function LMSPage() {
   // Focused popup for Show It (Socratic Seminar) / Prove It (OMR Test) / Master It
   // (Presentation) — each edits only its own fields on the case-study content record,
   // instead of the case-study modal's everything-in-one-place editor.
-  interface McqQuestion { q: string; type?: 'mcq' | 'short'; opts: string[]; ans: number }
 
   // MCQ question builder — same shape/UX as a lesson's Mastery Test questions, including
   // the short-answer (free-text) option type. Short-answer questions are excluded from
@@ -5430,6 +5429,8 @@ export function LMSPage() {
     </div>
   )
 }
+
+interface McqQuestion { q: string; type?: 'mcq' | 'short'; opts: string[]; ans: number }
 
 interface CaseStudyGradingData {
   studentId: string

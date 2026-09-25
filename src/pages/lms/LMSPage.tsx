@@ -8,6 +8,7 @@ import { useCampuses } from '@/hooks/useCampuses'
 import { useAuthStore } from '@/store/auth.store'
 import { GRADES } from '@/types/student'
 import { StudentCombobox } from '@/components/shared/StudentCombobox'
+import { DiscussionBoard, type DiscussionPost } from '@/components/lms/DiscussionBoard'
 import {
   loadLMS, saveLMS, loadLMSFromDB, deleteLMSCourse, deleteLMSCourseGroup, deleteLMSContent, deleteLMSEnrolment,
   lmsId, fmtTime, hasMasteryBool, hasAssignBool, isActiveBool,
@@ -15,7 +16,7 @@ import {
   SUBJECT_COLORS, SUBJECTS, GRADE_LEVELS, TYPE_ICONS,
   type LMSCourse, type LMSContent, type LMSEnrolment, type LMSProgress, type LMSStore, type LMSCourseGroup
 } from './lmsStore'
-import { CASE_STUDY_RUBRIC, SCORE_COMPONENT_TYPES, categorySubtotalOf, getEffectiveRubric, finalGrade, type ScoreComponentType, type RubricCategory, type RubricOverrides } from '@/lib/lms/caseStudyRubric'
+import { CASE_STUDY_RUBRIC, SCORE_COMPONENT_TYPES, categorySubtotalOf, getEffectiveRubric, finalGrade, DEFAULT_PRESENTATION_BRIEF, type ScoreComponentType, type RubricCategory, type RubricOverrides } from '@/lib/lms/caseStudyRubric'
 
 interface Student { id: string; lastName: string; firstName: string; fullName: string; cohort: string; grade: string; studentId: string; campus: string; status: string }
 type LMSSubmissionRow = Record<string, unknown>
@@ -473,6 +474,182 @@ function StudentNotesModal({ sectionId, studentId, studentName, courseTitle, aut
   )
 }
 
+// ─── EDIT COURSE MODAL (course-group level: title, subject, grade, credit hours) ─
+interface CourseDocFieldProps {
+  label: string
+  url: string
+  fileName: string
+  file: File | null
+  onPick: (f: File) => void
+  onRemove: () => void
+}
+function CourseDocField({ label, url, fileName, file, onPick, onRemove }: CourseDocFieldProps) {
+  return (
+    <div>
+      <label style={labelStyle}>{label}</label>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 8, border: `2px dashed ${file ? '#059669' : '#CBD5E0'}`, background: file ? '#F0FDF4' : '#F8FAFC', cursor: 'pointer', fontSize: 12, color: file ? '#059669' : '#7A92B0', fontWeight: file ? 700 : 400 }}>
+        <input type="file" accept=".pdf,.doc,.docx" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) onPick(f) }} />
+        {file ? `✅ ${file.name}` : fileName ? `📎 ${fileName} (uploaded — choose a new file to replace)` : '+ Choose file'}
+      </label>
+      {(url || fileName) && !file && (
+        <div style={{ display: 'flex', gap: 12, marginTop: 6 }}>
+          {url && <a href={url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#2563EB', fontWeight: 700 }}>↗ View current file</a>}
+          <button type="button" onClick={onRemove} style={{ background: 'none', border: 'none', color: '#D61F31', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>Remove</button>
+        </div>
+      )}
+    </div>
+  )
+}
+interface EditCourseModalProps {
+  isGrouped: boolean
+  sectionCount: number
+  initialTitle: string
+  initialSubject: string
+  initialGradeLevel: string
+  initialDescription: string
+  initialCreditHours: number
+  initialRequiredHours: number
+  initialPassMark: number
+  initialDescriptionDocUrl: string
+  initialDescriptionDocFileName: string
+  initialSyllabusUrl: string
+  initialSyllabusFileName: string
+  initialStudentOrientationUrl: string
+  initialStudentOrientationFileName: string
+  onClose: () => void
+  onSave: (fields: {
+    title: string; subject: string; gradeLevel: string; description: string
+    creditHours: number; requiredHours: number; passMark: number
+    descriptionDocUrl: string; descriptionDocFileName: string
+    syllabusUrl: string; syllabusFileName: string
+    studentOrientationUrl: string; studentOrientationFileName: string
+  }) => void | Promise<void>
+}
+function EditCourseModal({
+  isGrouped, sectionCount, initialTitle, initialSubject, initialGradeLevel, initialDescription,
+  initialCreditHours, initialRequiredHours, initialPassMark,
+  initialDescriptionDocUrl, initialDescriptionDocFileName, initialSyllabusUrl, initialSyllabusFileName,
+  initialStudentOrientationUrl, initialStudentOrientationFileName,
+  onClose, onSave,
+}: EditCourseModalProps) {
+  const [title, setTitle] = useState(initialTitle)
+  const [subject, setSubject] = useState(initialSubject || SUBJECTS[0])
+  const [gradeLevel, setGradeLevel] = useState(initialGradeLevel || GRADE_LEVELS[0])
+  const [description, setDescription] = useState(initialDescription)
+  const [creditHours, setCreditHours] = useState(String(initialCreditHours ?? 1))
+  const [requiredHours, setRequiredHours] = useState(String(initialRequiredHours ?? 0))
+  const [passMark, setPassMark] = useState(String(initialPassMark ?? 80))
+  const [descDocUrl, setDescDocUrl] = useState(initialDescriptionDocUrl)
+  const [descDocFileName, setDescDocFileName] = useState(initialDescriptionDocFileName)
+  const [descDocFile, setDescDocFile] = useState<File | null>(null)
+  const [syllabusUrl, setSyllabusUrl] = useState(initialSyllabusUrl)
+  const [syllabusFileName, setSyllabusFileName] = useState(initialSyllabusFileName)
+  const [syllabusFile, setSyllabusFile] = useState<File | null>(null)
+  const [orientationUrl, setOrientationUrl] = useState(initialStudentOrientationUrl)
+  const [orientationFileName, setOrientationFileName] = useState(initialStudentOrientationFileName)
+  const [orientationFile, setOrientationFile] = useState<File | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  async function save() {
+    if (!title.trim()) { alert('Course title is required'); return }
+    setSaving(true)
+    let finalDescDocUrl = descDocUrl
+    let finalDescDocFileName = descDocFileName
+    if (descDocFile) {
+      try {
+        finalDescDocUrl = await uploadFile(`lms-course-description/${Date.now()}_${descDocFile.name}`, descDocFile)
+        finalDescDocFileName = descDocFile.name
+      } catch { alert('Course description upload failed. Please try again.'); setSaving(false); return }
+    }
+    let finalSyllabusUrl = syllabusUrl
+    let finalSyllabusFileName = syllabusFileName
+    if (syllabusFile) {
+      try {
+        finalSyllabusUrl = await uploadFile(`lms-course-syllabus/${Date.now()}_${syllabusFile.name}`, syllabusFile)
+        finalSyllabusFileName = syllabusFile.name
+      } catch { alert('Course syllabus upload failed. Please try again.'); setSaving(false); return }
+    }
+    let finalOrientationUrl = orientationUrl
+    let finalOrientationFileName = orientationFileName
+    if (orientationFile) {
+      try {
+        finalOrientationUrl = await uploadFile(`lms-course-orientation/${Date.now()}_${orientationFile.name}`, orientationFile)
+        finalOrientationFileName = orientationFile.name
+      } catch { alert('Student orientation upload failed. Please try again.'); setSaving(false); return }
+    }
+    await onSave({
+      title: title.trim(), subject, gradeLevel, description: description.trim(),
+      creditHours: parseFloat(creditHours) || 1,
+      requiredHours: parseFloat(requiredHours) || 0,
+      passMark: parseInt(passMark) || 80,
+      descriptionDocUrl: finalDescDocUrl, descriptionDocFileName: finalDescDocFileName,
+      syllabusUrl: finalSyllabusUrl, syllabusFileName: finalSyllabusFileName,
+      studentOrientationUrl: finalOrientationUrl, studentOrientationFileName: finalOrientationFileName,
+    })
+    setSaving(false)
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, backdropFilter: 'blur(4px)' }} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 520, maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 60px rgba(0,0,0,.3)' }}>
+        <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '18px 24px', borderRadius: '18px 18px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>✏️ Edit Course</div>
+            <div style={{ fontSize: 11, color: '#B9C7DC', marginTop: 2 }}>{isGrouped ? `Applies to all ${sectionCount} section${sectionCount !== 1 ? 's' : ''}` : 'Standalone course'}</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 16, cursor: 'pointer', fontFamily: 'inherit' }}>✕</button>
+        </div>
+        <div style={{ padding: '20px 24px', overflowY: 'auto', flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div><label style={labelStyle}>Course Title</label><input value={title} onChange={e => setTitle(e.target.value)} style={inputStyle} placeholder="Example: Algebra I" /></div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div><label style={labelStyle}>Subject</label>
+              <select value={subject} onChange={e => setSubject(e.target.value)} style={selectStyle}>
+                {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div><label style={labelStyle}>Grade Level</label>
+              <select value={gradeLevel} onChange={e => setGradeLevel(e.target.value)} style={selectStyle}>
+                {GRADE_LEVELS.filter(g => g !== 'All Grades').map(g => <option key={g} value={g}>{g}</option>)}
+              </select>
+            </div>
+          </div>
+          <div><label style={labelStyle}>Description</label><textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} style={taStyle} /></div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+            <div><label style={labelStyle}>Credit Hours</label><input value={creditHours} onChange={e => setCreditHours(e.target.value)} type="number" min={0} step={0.5} style={inputStyle} /></div>
+            <div><label style={labelStyle}>Required Hours</label><input value={requiredHours} onChange={e => setRequiredHours(e.target.value)} type="number" min={0} style={inputStyle} /></div>
+            <div><label style={labelStyle}>Mastery Pass Mark %</label><input value={passMark} onChange={e => setPassMark(e.target.value)} type="number" min={0} max={100} style={inputStyle} /></div>
+          </div>
+          {isGrouped && <div style={{ fontSize: 10, color: '#94A3B8' }}>Subject, grade level, credit hours, required hours and pass mark update every section in this course. Section names stay as-is — edit those from each section's ⋯ menu.</div>}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <CourseDocField
+              label="Course Description"
+              url={descDocUrl} fileName={descDocFileName} file={descDocFile}
+              onPick={f => setDescDocFile(f)}
+              onRemove={() => { setDescDocUrl(''); setDescDocFileName(''); setDescDocFile(null) }}
+            />
+            <CourseDocField
+              label="Course Syllabus"
+              url={syllabusUrl} fileName={syllabusFileName} file={syllabusFile}
+              onPick={f => setSyllabusFile(f)}
+              onRemove={() => { setSyllabusUrl(''); setSyllabusFileName(''); setSyllabusFile(null) }}
+            />
+            <CourseDocField
+              label="Student Orientation"
+              url={orientationUrl} fileName={orientationFileName} file={orientationFile}
+              onPick={f => setOrientationFile(f)}
+              onRemove={() => { setOrientationUrl(''); setOrientationFileName(''); setOrientationFile(null) }}
+            />
+          </div>
+        </div>
+        <div style={{ padding: '14px 24px 20px', borderTop: '1px solid #E4EAF2', display: 'flex', justifyContent: 'flex-end', gap: 8, flexShrink: 0 }}>
+          <button onClick={onClose} style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+          <button onClick={save} disabled={saving} style={{ padding: '9px 20px', background: saving ? '#B7C3D6' : '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit' }}>{saving ? 'Saving…' : 'Save Changes'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── STUDENT DIRECTORY (used by the New Section "Add Students" step) ─────────
 interface DirStudent { id: string; firstName: string; lastName: string; grade: string; studentId: string; campus: string }
 
@@ -914,6 +1091,7 @@ export function LMSPage() {
   const [sectionMenuOpenId, setSectionMenuOpenId] = useState<string | null>(null)
   const sectionMenuRef = useRef<HTMLDivElement>(null)
   const [notesSectionId, setNotesSectionId] = useState<string | null>(null)
+  const [editCourseGroupKey, setEditCourseGroupKey] = useState<string | null>(null)
   const [curriculumExpanded, setCurriculumExpanded] = useState<Record<string, boolean>>({})
   const [curriculumSettingsOpen, setCurriculumSettingsOpen] = useState(false)
   const [curriculumMenuOpenId, setCurriculumMenuOpenId] = useState<string | null>(null)
@@ -1558,6 +1736,9 @@ export function LMSPage() {
         },
       })
     }
+    function editCourseRow(g: CourseGroupRow) {
+      setEditCourseGroupKey(g.key)
+    }
     function deleteCourse(g: CourseGroupRow) {
       if (!g.groupId) { deleteSection(g.sections[0]); return }
       setConfirmDialog({
@@ -1646,7 +1827,7 @@ export function LMSPage() {
           </select>
         </div>
         <div style={{ background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 12 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 130px 130px 150px', padding: '8px 16px', borderBottom: '1px solid #E4EAF2', gap: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 130px 130px 190px', padding: '8px 16px', borderBottom: '1px solid #E4EAF2', gap: 8 }}>
             {['Course', 'Enrollments', 'Time on Task', 'Credits Earned', ''].map((h, i) => (
               <div key={i} style={{ fontSize: 10, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '.8px', textAlign: i > 0 ? 'center' : 'left' }}>{h}</div>
             ))}
@@ -1665,7 +1846,7 @@ export function LMSPage() {
             const rowBg = idx % 2 === 0 ? '#fff' : '#FAFBFF'
             return (
               <div key={g.key} style={{ background: rowBg, borderBottom: '1px solid #F0F4FA' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 130px 130px 150px', padding: '12px 16px', gap: 8, alignItems: 'center' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 130px 130px 190px', padding: '12px 16px', gap: 8, alignItems: 'center' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <button onClick={() => setManageExpanded(prev => ({ ...prev, [g.key]: !prev[g.key] }))}
                       style={{ width: 24, height: 24, borderRadius: 5, border: '1px solid #E4EAF2', background: '#F7F9FC', cursor: 'pointer', fontSize: 11, color: '#5A7290', flexShrink: 0, fontFamily: 'inherit' }}>
@@ -1683,6 +1864,7 @@ export function LMSPage() {
                   <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                     <button onClick={() => navigate('/lms/overview')} title="Reports" style={{ ...actionBtnStyle, background: '#EEF3FF' }}>📊</button>
                     <button onClick={() => { setCurriculumCourseId(g.key); navTab('curriculum') }} title="Curriculum" style={{ ...actionBtnStyle, background: '#F0F4FA' }}>🧩</button>
+                    <button onClick={() => editCourseRow(g)} title="Edit Course" style={{ ...actionBtnStyle, background: '#EFF6FF', color: '#2563EB' }}>✏️</button>
                     <button onClick={() => addSectionToGroupRow(g)} title="Add Section" style={{ ...actionBtnStyle, background: '#E8FBF0', color: '#059669' }}>📑➕</button>
                     <button onClick={() => deleteCourse(g)} title="Delete Course" style={{ ...actionBtnStyle, background: '#FFF0F1', color: '#D61F31' }}>🗑</button>
                   </div>
@@ -1698,7 +1880,7 @@ export function LMSPage() {
                       {g.sections.map(co => {
                         const st = sectionStats(co)
                         return (
-                          <div key={co.id} style={{ display: 'grid', gridTemplateColumns: '1fr 110px 130px 130px 150px', gap: 8, padding: '10px 0', borderBottom: '1px solid #E9EEF5', alignItems: 'center' }}>
+                          <div key={co.id} style={{ display: 'grid', gridTemplateColumns: '1fr 110px 130px 130px 190px', gap: 8, padding: '10px 0', borderBottom: '1px solid #E9EEF5', alignItems: 'center' }}>
                             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                               <input type="checkbox" checked={selectedSectionIds.has(co.id)} onChange={() => toggleSectionSelected(co.id)} style={{ marginTop: 3, cursor: 'pointer' }} />
                               <div>
@@ -2986,18 +3168,38 @@ export function LMSPage() {
               )}
             </td>
           </tr>
-          {hasSub && expanded && subLabels.map(label => (
-            <tr key={item.id + '-' + label} style={{ borderBottom: '1px solid #F0F4FA' }}>
-              <td style={{ padding: '6px 10px', paddingLeft: 12 + (depth + 1) * 26 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 14 }}>📋</span>
-                  <span style={{ fontSize: 11, color: '#5A7290' }}>{item.title}: {label}</span>
-                </div>
-              </td>
-              <td colSpan={4} />
-              <td />
-            </tr>
-          ))}
+          {hasSub && expanded && subLabels.map(label => {
+            // A lesson's Notes/Mastery can each optionally override the lesson's own
+            // deadline above — left blank, they just fall back to it. Doesn't apply to
+            // the case-study carrier row's own "Notes Upload" (that's Learn It's date).
+            const dateField = itemHasAssignment ? null
+              : label === 'Notes: Upload' ? 'notesTargetDate'
+              : label === 'Mastery Test' ? 'masteryTargetDate'
+              : null
+            return (
+              <tr key={item.id + '-' + label} style={{ borderBottom: '1px solid #F0F4FA' }}>
+                <td style={{ padding: '6px 10px', paddingLeft: 12 + (depth + 1) * 26 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 14 }}>📋</span>
+                    <span style={{ fontSize: 11, color: '#5A7290' }}>{item.title}: {label}</span>
+                  </div>
+                </td>
+                <td style={{ padding: '6px 10px', textAlign: 'center' }}>
+                  {dateField && (
+                    <input
+                      type="date"
+                      value={item[dateField] ? (item[dateField] as string).slice(0, 10) : ''}
+                      onChange={e => patchContent(item.id, { [dateField]: e.target.value || null })}
+                      title="Optional — falls back to the lesson deadline above if left blank"
+                      style={{ border: '1px solid #E4EAF2', borderRadius: 6, fontSize: 11, padding: '3px 5px', color: '#1A365E', fontFamily: 'inherit', width: 118 }}
+                    />
+                  )}
+                </td>
+                <td colSpan={3} />
+                <td />
+              </tr>
+            )
+          })}
         </>
       )
     }
@@ -4485,7 +4687,7 @@ export function LMSPage() {
 
     const [socraticBrief, setSocraticBrief] = useState(item?.socraticBrief ?? '')
     const [socraticDate, setSocraticDate] = useState(item?.socraticDate ?? '')
-    const [presentationBrief, setPresentationBrief] = useState(item?.presentationBrief ?? '')
+    const [presentationBrief, setPresentationBrief] = useState(item?.presentationBrief ?? DEFAULT_PRESENTATION_BRIEF)
     const [presentationBriefUrl, setPresentationBriefUrl] = useState(item?.presentationBriefUrl ?? '')
     const [presentationBriefFileName, setPresentationBriefFileName] = useState(item?.presentationBriefFileName ?? '')
     const [presentationBriefFile, setPresentationBriefFile] = useState<File | null>(null)
@@ -4500,13 +4702,17 @@ export function LMSPage() {
     const [omrRetakes, setOmrRetakes] = useState(String(item?.omrRetakes ?? 3))
     const [omrTimeLimit, setOmrTimeLimit] = useState(String(item?.omrTimeLimit ?? ''))
     const [omrWeight, setOmrWeight] = useState(String(item?.omrWeight ?? CASE_STUDY_RUBRIC.omr.weight))
+    const [omrTargetDate, setOmrTargetDate] = useState(item?.omrTargetDate ?? '')
+    const [presentationTargetDate, setPresentationTargetDate] = useState(item?.presentationTargetDate ?? '')
 
     if (!item) return null
 
     async function save() {
       if (type === 'socratic' && !socraticBrief.trim()) { alert('Add a Socratic Seminar activity description'); return }
       if (type === 'omr' && omrQuestions.length === 0) { alert('Add at least one OMR question'); return }
-      if (type !== 'omr' && !rubric.criteria.length) { alert('Add at least one rubric criterion'); return }
+      // Presentation's rubric editor is temporarily disabled (see the commented RubricEditor
+      // block below) — skip its required-criteria check while it's off.
+      if (type === 'socratic' && !rubric.criteria.length) { alert('Add at least one rubric criterion'); return }
       let finalBriefUrl = presentationBriefUrl.trim()
       let finalBriefFileName = presentationBriefFileName
       let finalVideoUrl = presentationVideoUrl.trim()
@@ -4533,6 +4739,7 @@ export function LMSPage() {
           omrRetakes: parseInt(omrRetakes) || 0,
           omrTimeLimit: parseInt(omrTimeLimit) || undefined,
           omrWeight: parseInt(omrWeight) || CASE_STUDY_RUBRIC.omr.weight,
+          omrTargetDate: omrTargetDate || null,
         } :
         {
           presentationBrief: presentationBrief.trim() || undefined,
@@ -4540,10 +4747,12 @@ export function LMSPage() {
           presentationBriefFileName: finalBriefFileName || undefined,
           presentationVideoUrl: finalVideoUrl || undefined,
           presentationVideoFileName: finalVideoFileName || undefined,
+          presentationTargetDate: presentationTargetDate || null,
         }
       // OMR is auto-graded from its questions now, not a rubric admins score by hand —
-      // don't write a rubricOverrides entry for it (leave any old one untouched).
-      const patch: Partial<LMSContent> = type === 'omr' ? fieldPatch : { ...fieldPatch, rubricOverrides: { ...item?.rubricOverrides, [meta.rubricType]: rubric } }
+      // don't write a rubricOverrides entry for it (leave any old one untouched). Presentation's
+      // rubric editor is also disabled for now (see above) — same treatment, for the same reason.
+      const patch: Partial<LMSContent> = (type === 'omr' || type === 'presentation') ? fieldPatch : { ...fieldPatch, rubricOverrides: { ...item?.rubricOverrides, [meta.rubricType]: rubric } }
       persist({ ...store, content: store.content.map(c => c.id === contentId ? { ...c, ...patch } : c) })
       onClose()
     }
@@ -4582,9 +4791,9 @@ export function LMSPage() {
                   <div><label style={labelStyle}>Retakes</label><input type="number" min={0} value={omrRetakes} onChange={e => setOmrRetakes(e.target.value)} style={inputStyle} /></div>
                   <div><label style={labelStyle}>Time Limit (min)</label><input type="number" min={1} placeholder="None" value={omrTimeLimit} onChange={e => setOmrTimeLimit(e.target.value)} style={inputStyle} /></div>
                 </div>
-                <div>
-                  <label style={labelStyle}>Category Weight (points toward final grade)</label>
-                  <input type="number" min={0} max={100} value={omrWeight} onChange={e => setOmrWeight(e.target.value)} style={{ ...inputStyle, maxWidth: 120 }} />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <div><label style={labelStyle}>Category Weight (points toward final grade)</label><input type="number" min={0} max={100} value={omrWeight} onChange={e => setOmrWeight(e.target.value)} style={inputStyle} /></div>
+                  <div><label style={labelStyle}>OMR Test Deadline</label><input type="date" value={omrTargetDate} onChange={e => setOmrTargetDate(e.target.value)} style={inputStyle} /></div>
                 </div>
                 <McqQuestionEditor questions={omrQuestions} onChange={setOmrQuestions} />
               </>
@@ -4594,6 +4803,10 @@ export function LMSPage() {
                 <div>
                   <label style={labelStyle}>Instructions</label>
                   <textarea value={presentationBrief} onChange={e => setPresentationBrief(e.target.value)} rows={3} placeholder="What students should prepare and submit for the final presentation — shown to students on the Master It page." style={taStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Presentation Deadline</label>
+                  <input type="date" value={presentationTargetDate} onChange={e => setPresentationTargetDate(e.target.value)} style={{ ...inputStyle, maxWidth: 180 }} />
                 </div>
                 <div>
                   <label style={labelStyle}>Assignment Brief — Presentation (URL or uploaded file)</label>
@@ -4623,9 +4836,22 @@ export function LMSPage() {
                     <button type="button" onClick={() => { setPresentationVideoFile(null); setPresentationVideoFileName(''); setPresentationVideoUrl('') }} style={{ alignSelf: 'flex-start', padding: '4px 10px', background: '#FFF0F1', color: '#D61F31', border: '1px solid #F5C2C7', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Remove video</button>
                   )}
                 </div>
-                <div>
+                {/* Rubric editor — temporarily disabled in favor of the static Presentation
+                    Content Guide and Presentation Rubric PDFs below; grading happens on
+                    paper via the Rubric PDF until this is re-enabled. Restore by
+                    uncommenting this block and the two spots noted in save() above
+                    (the rubric-required check and the rubricOverrides patch). */}
+                {/* <div>
                   <label style={{ ...labelStyle, marginBottom: 4 }}>Rubric — {CASE_STUDY_RUBRIC[meta.rubricType].label}</label>
                   <RubricEditor value={rubric} onChange={setRubric} />
+                </div> */}
+                <div>
+                  <label style={labelStyle}>Presentation Content Guide</label>
+                  <a href="/LMS/Presentation Content Guide.pdf" target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', border: '1.5px solid #E4EAF2', borderRadius: 8, textDecoration: 'none', fontSize: 12, color: '#1A365E', fontWeight: 700 }}>📘 Presentation Content Guide.pdf</a>
+                </div>
+                <div>
+                  <label style={labelStyle}>Presentation Rubric</label>
+                  <a href="/LMS/Presentation Rubric.pdf" target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', border: '1.5px solid #E4EAF2', borderRadius: 8, textDecoration: 'none', fontSize: 12, color: '#1A365E', fontWeight: 700 }}>📋 Presentation Rubric.pdf</a>
                 </div>
               </>
             )}
@@ -4642,41 +4868,15 @@ export function LMSPage() {
   // Master It — Discussion Board moderation view. Reads/writes lms_discussion_posts
   // directly via the Supabase client (staff are real Supabase Auth users, so RLS's
   // staff-role write policy covers this — no student-portal API broker needed here,
-  // matching how every other admin LMS write in this file already works).
-  interface AdminDiscussionPost {
-    id: string
-    studentId: string | null
-    authorName: string
-    isStaff: boolean
-    isAnnouncement: boolean
-    isPinned: boolean
-    isLocked: boolean
-    title: string | null
-    body: string | null
-    deletedAt: string | null
-    parentPostId: string | null
-    createdAt: string
-    attachmentUrl: string | null
-    attachmentFileName: string | null
-    reactionCount: number
-  }
-
-  function fmtPostTime(iso: string) {
-    return new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
-  }
-
+  // matching how every other admin LMS write in this file already works). Renders the
+  // same shared <DiscussionBoard> the student portal uses (SPMyLearningPage.tsx), with
+  // moderation callbacks (pin/lock/delete) instead of the student's own-post edit/like.
   function DiscussionBoardModal({ contentId, onClose }: { contentId: string; onClose: () => void }) {
     const profile = useAuthStore(s => s.profile)
     const item = store.content.find(c => c.id === contentId)
     const [loading, setLoading] = useState(true)
-    const [posts, setPosts] = useState<AdminDiscussionPost[]>([])
-    const [expandedTopicId, setExpandedTopicId] = useState<string | null>(null)
+    const [posts, setPosts] = useState<DiscussionPost[]>([])
     const [busy, setBusy] = useState(false)
-    const [replyDraft, setReplyDraft] = useState<Record<string, string>>({})
-    const [composerOpen, setComposerOpen] = useState(false)
-    const [newTitle, setNewTitle] = useState('')
-    const [newBody, setNewBody] = useState('')
-    const [newIsAnnouncement, setNewIsAnnouncement] = useState(false)
 
     async function load() {
       setLoading(true)
@@ -4699,9 +4899,9 @@ export function LMSPage() {
         const studentRow = studentRows?.find(s => s.id === r.student_id)
         return {
           id: r.id as string,
-          studentId: r.student_id as string | null,
           authorName: (r.author_staff_name as string) || (studentRow ? `${studentRow.first_name ?? ''} ${studentRow.last_name ?? ''}`.trim() : 'Student'),
           isStaff: !!r.author_staff_name,
+          isMine: false,
           isAnnouncement: r.is_announcement === true,
           isPinned: r.is_pinned === true,
           isLocked: r.is_locked === true,
@@ -4722,14 +4922,6 @@ export function LMSPage() {
 
     if (!item) return null
 
-    const topics = posts.filter(p => !p.parentPostId)
-    const repliesOf = (topicId: string) => posts.filter(p => p.parentPostId === topicId)
-    const lastActivityOf = (topic: AdminDiscussionPost) => {
-      const replies = repliesOf(topic.id)
-      return replies.length ? replies[replies.length - 1].createdAt : topic.createdAt
-    }
-    const sortedTopics = [...topics].sort((a, b) => (a.isPinned !== b.isPinned) ? (a.isPinned ? -1 : 1) : lastActivityOf(b).localeCompare(lastActivityOf(a)))
-
     async function postAsStaff(parentPostId: string | null, title: string | null, body: string, announce: boolean) {
       if (!body.trim()) return
       setBusy(true)
@@ -4745,136 +4937,42 @@ export function LMSPage() {
       await load()
     }
 
-    async function togglePin(post: AdminDiscussionPost) {
+    async function togglePin(post: DiscussionPost) {
       await supabase.from('lms_discussion_posts').update({ is_pinned: !post.isPinned }).eq('id', post.id)
       await load()
     }
-    async function toggleLock(post: AdminDiscussionPost) {
+    async function toggleLock(post: DiscussionPost) {
       await supabase.from('lms_discussion_posts').update({ is_locked: !post.isLocked }).eq('id', post.id)
       await load()
     }
-    async function deletePost(post: AdminDiscussionPost) {
+    async function deletePost(post: DiscussionPost) {
       await supabase.from('lms_discussion_posts').update({ deleted_at: new Date().toISOString() }).eq('id', post.id)
       await load()
     }
 
-    function moderationButtons(post: AdminDiscussionPost, isTopic: boolean) {
-      return (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-          {isTopic && (
-            <>
-              <button onClick={() => void togglePin(post)} title={post.isPinned ? 'Unpin' : 'Pin'} style={{ padding: '3px 7px', background: post.isPinned ? '#FEF3C7' : '#F0F4FA', color: post.isPinned ? '#92400E' : '#5A7290', border: 'none', borderRadius: 5, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>📌 {post.isPinned ? 'Unpin' : 'Pin'}</button>
-              <button onClick={() => void toggleLock(post)} title={post.isLocked ? 'Unlock' : 'Lock'} style={{ padding: '3px 7px', background: post.isLocked ? '#FEE2E2' : '#F0F4FA', color: post.isLocked ? '#B91C1C' : '#5A7290', border: 'none', borderRadius: 5, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>🔒 {post.isLocked ? 'Unlock' : 'Lock'}</button>
-            </>
-          )}
-          {!post.deletedAt && (
-            <button
-              onClick={() => setConfirmDialog({ title: 'Delete Post', message: 'Delete this post? This cannot be undone.', danger: true, confirmLabel: 'Delete', onConfirm: () => deletePost(post) })}
-              title="Delete" style={{ padding: '3px 7px', background: '#FFF0F1', color: '#D61F31', border: '1px solid #F5C2C7', borderRadius: 5, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
-            >Delete</button>
-          )}
-        </div>
-      )
-    }
-
     return (
       <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 450, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto', backdropFilter: 'blur(4px)' }} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
-        <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 640, maxHeight: '94vh', overflowY: 'auto', boxShadow: '0 24px 60px rgba(0,0,0,.3)', margin: 'auto' }}>
+        <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 860, maxHeight: '94vh', overflowY: 'auto', boxShadow: '0 24px 60px rgba(0,0,0,.3)', margin: 'auto' }}>
           <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '18px 24px', borderRadius: '18px 18px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>💬 Master It — Discussion Board</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>Master It — Discussion Board</div>
               <div style={{ fontSize: 10, color: 'rgba(255,255,255,.65)', marginTop: 2 }}>{item.title}</div>
             </div>
             <button onClick={onClose} style={{ padding: '6px 10px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Close</button>
           </div>
 
-          <div style={{ padding: '18px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {!composerOpen ? (
-              <button onClick={() => setComposerOpen(true)} style={{ alignSelf: 'flex-start', padding: '8px 14px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>+ New Post</button>
-            ) : (
-              <div style={{ border: '1px solid #E4EAF2', borderRadius: 10, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="Title" style={inputStyle} />
-                <textarea rows={3} value={newBody} onChange={e => setNewBody(e.target.value)} placeholder="Write a post..." style={taStyle} />
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#5A7290', cursor: 'pointer' }}>
-                    <input type="checkbox" checked={newIsAnnouncement} onChange={e => setNewIsAnnouncement(e.target.checked)} /> Post as Instructor Announcement (pins it)
-                  </label>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={() => { setComposerOpen(false); setNewTitle(''); setNewBody(''); setNewIsAnnouncement(false) }} style={{ padding: '7px 14px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-                    <button
-                      onClick={() => void postAsStaff(null, newTitle, newBody, newIsAnnouncement).then(() => { setComposerOpen(false); setNewTitle(''); setNewBody(''); setNewIsAnnouncement(false) })}
-                      disabled={busy || !newTitle.trim() || !newBody.trim()}
-                      style={{ padding: '7px 14px', background: newTitle.trim() && newBody.trim() ? '#1A365E' : '#E4EAF2', color: newTitle.trim() && newBody.trim() ? '#fff' : '#94A3B8', border: 'none', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
-                    >Post</button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {loading ? (
-              <div style={{ fontSize: 12, color: '#94A3B8', padding: '12px 0' }}>Loading…</div>
-            ) : sortedTopics.length === 0 ? (
-              <div style={{ fontSize: 12, color: '#94A3B8', padding: '12px 0' }}>No discussions yet.</div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {sortedTopics.map(topic => {
-                  const replies = repliesOf(topic.id)
-                  const expanded = expandedTopicId === topic.id
-                  return (
-                    <div key={topic.id} style={{ border: '1px solid #E4EAF2', borderRadius: 10, overflow: 'hidden' }}>
-                      <div style={{ padding: '10px 12px', background: topic.isAnnouncement ? '#F0F4FA' : '#fff', cursor: 'pointer' }} onClick={() => setExpandedTopicId(expanded ? null : topic.id)}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                          <div style={{ minWidth: 0 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
-                              {topic.isPinned && <span title="Pinned" style={{ fontSize: 11 }}>📌</span>}
-                              {topic.isLocked && <span title="Locked" style={{ fontSize: 11 }}>🔒</span>}
-                              <span style={{ fontSize: 12, fontWeight: 800, color: '#1A365E' }}>{topic.deletedAt ? '[deleted]' : topic.title}</span>
-                            </div>
-                            <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>{topic.isStaff ? topic.authorName : `Started by ${topic.authorName}`} · {fmtPostTime(topic.createdAt)} · {replies.length} repl{replies.length === 1 ? 'y' : 'ies'} · 👍 {topic.reactionCount}</div>
-                          </div>
-                          <div onClick={e => e.stopPropagation()}>{moderationButtons(topic, true)}</div>
-                        </div>
-                      </div>
-                      {expanded && (
-                        <div style={{ borderTop: '1px solid #E4EAF2', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                          {!topic.deletedAt && <div style={{ fontSize: 12, color: '#3D5475', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{topic.body}</div>}
-                          {topic.attachmentUrl && (
-                            <a href={topic.attachmentUrl} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#1A365E', fontWeight: 700 }}>📎 {topic.attachmentFileName || 'Attachment'}</a>
-                          )}
-                          {replies.map(reply => (
-                            <div key={reply.id} style={{ background: '#F8FAFC', border: '1px solid #E4EAF2', borderRadius: 8, padding: '8px 10px', marginLeft: 12 }}>
-                              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                                <div style={{ fontSize: 11, fontWeight: 800, color: '#1A365E' }}>{reply.authorName} <span style={{ fontWeight: 400, color: '#94A3B8' }}>· {fmtPostTime(reply.createdAt)}</span></div>
-                                {moderationButtons(reply, false)}
-                              </div>
-                              <div style={{ fontSize: 12, color: '#3D5475', marginTop: 4, whiteSpace: 'pre-wrap' }}>{reply.deletedAt ? '[deleted]' : reply.body}</div>
-                              {reply.attachmentUrl && !reply.deletedAt && (
-                                <a href={reply.attachmentUrl} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#1A365E', fontWeight: 700 }}>📎 {reply.attachmentFileName || 'Attachment'}</a>
-                              )}
-                            </div>
-                          ))}
-                          {!topic.deletedAt && (
-                            <div style={{ display: 'flex', gap: 8, marginLeft: 12 }}>
-                              <input
-                                value={replyDraft[topic.id] ?? ''}
-                                onChange={e => setReplyDraft(p => ({ ...p, [topic.id]: e.target.value }))}
-                                placeholder="Reply as instructor..."
-                                style={{ ...inputStyle, flex: 1 }}
-                              />
-                              <button
-                                onClick={() => void postAsStaff(topic.id, null, replyDraft[topic.id] ?? '', false).then(() => setReplyDraft(p => ({ ...p, [topic.id]: '' })))}
-                                disabled={busy || !(replyDraft[topic.id] ?? '').trim()}
-                                style={{ padding: '7px 14px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}
-                              >Reply</button>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
+          <div style={{ padding: '18px 24px' }}>
+            <DiscussionBoard
+              mode="staff"
+              posts={posts}
+              loading={loading}
+              busy={busy}
+              onCreateTopic={({ title, body, announce }) => postAsStaff(null, title, body, announce)}
+              onCreateReply={(topicId, { body }) => postAsStaff(topicId, null, body, false)}
+              onDeletePost={deletePost}
+              onTogglePin={togglePin}
+              onToggleLock={toggleLock}
+            />
           </div>
         </div>
       </div>
@@ -5047,6 +5145,62 @@ export function LMSPage() {
       {showEnrolModal && <EnrolModal courses={store.courses} students={students} cohorts={cohorts} onSave={enrolment => persist({ ...store, enrolments: [...store.enrolments, enrolment] })} onClose={() => setShowEnrolModal(false)} />}
       {confirmDialog && <ConfirmDialog state={confirmDialog} onClose={() => setConfirmDialog(null)} />}
       {promptDialog && <PromptDialog state={promptDialog} onClose={() => setPromptDialog(null)} />}
+      {editCourseGroupKey && (() => {
+        const sections = store.courses.filter(c => (c.groupId || c.id) === editCourseGroupKey)
+        if (!sections.length) return null
+        const first = sections[0]
+        const groupId = first.groupId ?? null
+        const group = groupId ? store.courseGroups.find(g => g.id === groupId) : undefined
+        return (
+          <EditCourseModal
+            isGrouped={!!groupId}
+            sectionCount={sections.length}
+            initialTitle={group?.title ?? first.title}
+            initialSubject={group?.subject ?? first.subject}
+            initialGradeLevel={group?.gradeLevel ?? first.gradeLevel}
+            initialDescription={group?.description ?? first.description}
+            initialCreditHours={group?.creditHours ?? first.creditHours}
+            initialRequiredHours={group?.requiredHours ?? first.requiredHours}
+            initialPassMark={group?.passMark ?? first.passMark}
+            initialDescriptionDocUrl={group?.descriptionDocUrl ?? first.descriptionDocUrl ?? ''}
+            initialDescriptionDocFileName={group?.descriptionDocFileName ?? first.descriptionDocFileName ?? ''}
+            initialSyllabusUrl={group?.syllabusUrl ?? first.syllabusUrl ?? ''}
+            initialSyllabusFileName={group?.syllabusFileName ?? first.syllabusFileName ?? ''}
+            initialStudentOrientationUrl={group?.studentOrientationUrl ?? first.studentOrientationUrl ?? ''}
+            initialStudentOrientationFileName={group?.studentOrientationFileName ?? first.studentOrientationFileName ?? ''}
+            onClose={() => setEditCourseGroupKey(null)}
+            onSave={async fields => {
+              const nextCourseGroups = !groupId ? store.courseGroups
+                : store.courseGroups.some(g => g.id === groupId)
+                  ? store.courseGroups.map(g => g.id === groupId ? { ...g, ...fields } : g)
+                  : [...store.courseGroups, { id: groupId, ...fields }]
+              const sectionIds = new Set(sections.map(s => s.id))
+              const nextCourses = store.courses.map(c => {
+                if (!sectionIds.has(c.id)) return c
+                return {
+                  ...c,
+                  title: groupId ? c.title : fields.title,
+                  description: groupId ? c.description : fields.description,
+                  subject: fields.subject,
+                  gradeLevel: fields.gradeLevel,
+                  creditHours: fields.creditHours,
+                  requiredHours: fields.requiredHours,
+                  passMark: fields.passMark,
+                  descriptionDocUrl: groupId ? c.descriptionDocUrl : fields.descriptionDocUrl,
+                  descriptionDocFileName: groupId ? c.descriptionDocFileName : fields.descriptionDocFileName,
+                  syllabusUrl: groupId ? c.syllabusUrl : fields.syllabusUrl,
+                  syllabusFileName: groupId ? c.syllabusFileName : fields.syllabusFileName,
+                  studentOrientationUrl: groupId ? c.studentOrientationUrl : fields.studentOrientationUrl,
+                  studentOrientationFileName: groupId ? c.studentOrientationFileName : fields.studentOrientationFileName,
+                  updatedAt: new Date().toISOString(),
+                }
+              })
+              await persist({ ...store, courseGroups: nextCourseGroups, courses: nextCourses })
+              setEditCourseGroupKey(null)
+            }}
+          />
+        )
+      })()}
       {notesSectionId && (
         <SectionNotesModal
           sectionId={notesSectionId}
@@ -5315,11 +5469,14 @@ function CaseStudyGradingPanel({ data, onClose, onFinalGradeChange }: {
                 )}
               </div>
 
-              {/* Presentation Score */}
+              {/* Presentation Score — temporarily disabled alongside the rubric editor in
+              SectionModal; grading happens on paper via the Rubric PDF for now. Restore by
+              uncommenting this block.
               <div>
                 <div style={{ fontSize: 11, fontWeight: 800, color: '#1A365E', marginBottom: 6 }}>Presentation Score</div>
                 {renderCategoryEditor('presentation')}
               </div>
+              */}
             </>
           )}
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>

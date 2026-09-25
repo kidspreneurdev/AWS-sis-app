@@ -7,17 +7,18 @@ import {
   FolderOpen, PartyPopper, Frown, RefreshCw, X, Play, Video,
   ChevronDown, ChevronRight, Search,
   ArrowLeft, ArrowRight, Star, Lock, AlertTriangle, ExternalLink, Info,
-  MessageSquare, Pin, ThumbsUp, Trash2, Pencil,
+  MessageSquare, Eye,
   type LucideIcon,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { uploadFile } from '@/lib/uploadFile'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
+import { DiscussionBoard, type DiscussionPost } from '@/components/lms/DiscussionBoard'
 import { SUBJECT_COLORS, isActiveBool, type LMSCourse, type LMSContent, type LMSEnrolment, type LMSProgress, type LMSQuestion } from '@/pages/lms/lmsStore'
 import { portalPrefix } from './gradesShared'
 
-import { ACTIVE_SCORE_COMPONENT_TYPES, getEffectiveRubric, finalGrade, type ScoreComponentType, type RubricOverrides } from '@/lib/lms/caseStudyRubric'
+import { ACTIVE_SCORE_COMPONENT_TYPES, getEffectiveRubric, finalGrade, DEFAULT_PRESENTATION_BRIEF, type ScoreComponentType, type RubricOverrides } from '@/lib/lms/caseStudyRubric'
 import { toLegacyStudentGradeValue } from '@/types/student'
 import { K5MyLearningPage } from '@/pages/student-portal/K5MyLearningPage'
 
@@ -43,17 +44,6 @@ function formatRemaining(ms: number) {
   const mins = Math.floor(totalSeconds / 60)
   const secs = totalSeconds % 60
   return `${mins}:${String(secs).padStart(2, '0')}`
-}
-
-function formatRelativeTime(iso: string): string {
-  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins}m ago`
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  if (days < 7) return `${days}d ago`
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
 function paceMeta(progressPct: number, enrolment?: LMSEnrolment | null) {
@@ -746,7 +736,9 @@ function OmrPanel({ carrierItem }: { carrierItem: LMSContent }) {
 function PresentationPanel({ carrierItem, studentId }: { carrierItem: LMSContent; studentId: string }) {
   const { readOnly } = usePortalReadOnly()
   const { getToken } = useStudentPortal()
-  const { loading, bundle, refresh, scoreByType, renderAppealControl } = useModuleScoring(carrierItem)
+  // renderAppealControl is unused while the presentation rubric/score block below is
+  // commented out — re-destructure it when that block is restored.
+  const { loading, bundle, refresh, scoreByType } = useModuleScoring(carrierItem)
   const [presFile, setPresFile] = useState<File | null>(null)
   const [presNote, setPresNote] = useState('')
   const [presSubmitting, setPresSubmitting] = useState(false)
@@ -779,9 +771,7 @@ function PresentationPanel({ carrierItem, studentId }: { carrierItem: LMSContent
 
   return (
     <>
-      {carrierItem.presentationBrief && (
-        <div style={{ ...card, padding: '14px 16px', fontSize: 16, color: '#3D5475', lineHeight: 1.6 }}>{carrierItem.presentationBrief}</div>
-      )}
+      <div style={{ ...card, padding: '14px 16px', fontSize: 16, color: '#3D5475', lineHeight: 1.6 }}>{carrierItem.presentationBrief || DEFAULT_PRESENTATION_BRIEF}</div>
       {carrierItem.presentationBriefUrl && (
         <a href={carrierItem.presentationBriefUrl} target="_blank" rel="noreferrer" style={{ ...card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
           <FileText size={18} color="#1A365E" />
@@ -828,7 +818,26 @@ function PresentationPanel({ carrierItem, studentId }: { carrierItem: LMSContent
         )}
       </div>
 
-      <CSScoreBlock type="presentation" overrides={carrierItem.rubricOverrides} icon={Trophy} title="Presentation Score" order={3} score={scoreByType.presentation} appealControl={renderAppealControl('presentation')} />
+      {/* Presentation rubric/score — temporarily disabled; grading happens on paper via the
+          Rubric PDF below until this is re-enabled. Restore by uncommenting this line. */}
+      {/* <CSScoreBlock type="presentation" overrides={carrierItem.rubricOverrides} icon={Trophy} title="Presentation Score" order={3} score={scoreByType.presentation} appealControl={renderAppealControl('presentation')} /> */}
+
+      <a href="/LMS/Presentation Content Guide.pdf" target="_blank" rel="noreferrer" style={{ ...card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
+        <FileText size={18} color="#1A365E" />
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E' }}>Presentation Content Guide</div>
+          <div style={{ fontSize: 13, color: '#7A92B0' }}>How to structure and prepare your presentation</div>
+        </div>
+        <ExternalLink size={14} color="#7A92B0" />
+      </a>
+      <a href="/LMS/Presentation Rubric.pdf" target="_blank" rel="noreferrer" style={{ ...card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
+        <Trophy size={18} color="#1A365E" />
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E' }}>Presentation Rubric</div>
+          <div style={{ fontSize: 13, color: '#7A92B0' }}>How your presentation will be graded</div>
+        </div>
+        <ExternalLink size={14} color="#7A92B0" />
+      </a>
 
       <div style={{ ...card, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={{ fontSize: 15, fontWeight: 700, color: '#5A7290' }}>Module Final Grade</span>
@@ -838,99 +847,29 @@ function PresentationPanel({ carrierItem, studentId }: { carrierItem: LMSContent
   )
 }
 
-/** A single post or reply row — shared by the topic header and each reply in the thread. */
-function DiscussionPostRow({ post, isTopic, readOnly, onReact, onStartEdit, onDelete, onCancelDelete, confirmingDelete }: {
-  post: CSPostData
-  isTopic: boolean
-  readOnly: boolean
-  onReact: () => void
-  onStartEdit: () => void
-  onDelete: () => void
-  onCancelDelete: () => void
-  confirmingDelete: boolean
-}) {
-  const isDeleted = !!post.deletedAt
-  return (
-    <div style={{ padding: isTopic ? '14px 16px' : '10px 12px', background: post.isAnnouncement ? '#F0F4FA' : isTopic ? 'transparent' : '#F8FAFC', borderRadius: isTopic ? 0 : 10, border: isTopic ? undefined : '1px solid #E4EAF2' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 14, fontWeight: 800, color: '#1A365E' }}>{post.isMine ? 'You' : post.authorName}</span>
-          {post.isAnnouncement && (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 800, color: '#1A365E', background: '#E4EAF2', padding: '2px 7px', borderRadius: 20 }}><Megaphone size={9} /> Instructor</span>
-          )}
-          <span style={{ fontSize: 12, color: '#94A3B8' }}>· {formatRelativeTime(post.createdAt)}{post.edited && !isDeleted ? ' · edited' : ''}</span>
-        </div>
-        {!isDeleted && post.isMine && !readOnly && (
-          confirmingDelete ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-              <span style={{ fontSize: 11, color: SP_RED, fontWeight: 700 }}>Delete?</span>
-              <button onClick={onDelete} style={{ padding: '3px 8px', background: SP_RED, color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Yes</button>
-              <button onClick={onCancelDelete} style={{ padding: '3px 8px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>No</button>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-              <button onClick={onStartEdit} title="Edit" style={{ padding: 5, background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', display: 'flex' }}><Pencil size={13} /></button>
-              <button onClick={onDelete} title="Delete" style={{ padding: 5, background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', display: 'flex' }}><Trash2 size={13} /></button>
-            </div>
-          )
-        )}
-      </div>
-      {isDeleted ? (
-        <div style={{ fontSize: 14, color: '#94A3B8', fontStyle: 'italic', marginTop: 6 }}>[deleted]</div>
-      ) : (
-        <>
-          <div style={{ fontSize: 15, color: '#3D5475', lineHeight: 1.6, marginTop: 6, whiteSpace: 'pre-wrap' }}>{post.body}</div>
-          {post.attachmentUrl && (
-            <a href={post.attachmentUrl} target="_blank" rel="noreferrer" style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', background: '#fff', border: '1px solid #E4EAF2', borderRadius: 8, textDecoration: 'none', maxWidth: 320 }}>
-              <FileText size={14} color="#1A365E" style={{ flexShrink: 0 }} />
-              <span style={{ fontSize: 13, color: '#1A365E', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{post.attachmentFileName || 'Attachment'}</span>
-              <ExternalLink size={11} color="#94A3B8" style={{ flexShrink: 0, marginLeft: 'auto' }} />
-            </a>
-          )}
-          <button onClick={onReact} disabled={readOnly} style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', background: post.reactedByMe ? '#EFF6FF' : 'transparent', border: `1px solid ${post.reactedByMe ? '#BFDBFE' : '#E4EAF2'}`, borderRadius: 20, fontSize: 12, fontWeight: 700, color: post.reactedByMe ? '#1A365E' : '#7A92B0', cursor: readOnly ? 'not-allowed' : 'pointer' }}>
-            <ThumbsUp size={11} fill={post.reactedByMe ? '#1A365E' : 'none'} /> {post.reactionCount > 0 ? post.reactionCount : 'Like'}
-          </button>
-        </>
-      )}
-    </div>
-  )
-}
-
 /** Master It — Discussion Board. Top-level posts are discussion topics; replies hang one
  *  level deep off a topic (matching the schema — no deeper nesting in this pass). Staff
- *  post/pin/lock/moderate from the admin LMS page; students get create/reply/edit/delete
- *  own/like here. */
+ *  post/pin/lock/moderate from the admin LMS page (LMSPage.tsx's DiscussionBoardModal);
+ *  students get create/reply/edit/delete own/like here. Both surfaces render the shared
+ *  <DiscussionBoard> component — this wrapper just adapts this page's data source
+ *  (useCaseStudyBundle + the student-portal API broker) to its props. */
 function DiscussionBoardPanel({ carrierItem, studentId }: { carrierItem: LMSContent; studentId: string }) {
   const { readOnly } = usePortalReadOnly()
   const { getToken } = useStudentPortal()
   const { loading, bundle, refresh } = useCaseStudyBundle(carrierItem.id)
-  const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null)
-  const [composerOpen, setComposerOpen] = useState(false)
-  const [newTitle, setNewTitle] = useState('')
-  const [newBody, setNewBody] = useState('')
-  const [newFile, setNewFile] = useState<File | null>(null)
-  const [replyBody, setReplyBody] = useState('')
-  const [replyFile, setReplyFile] = useState<File | null>(null)
-  const [editingPostId, setEditingPostId] = useState<string | null>(null)
-  const [editBody, setEditBody] = useState('')
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   if (loading) return <div style={{ ...card, ...emptyState }}>Loading…</div>
   if (!bundle) return <div style={{ ...card, ...emptyState }}>Couldn't load this. Try refreshing.</div>
 
-  const posts = bundle.discussion.posts
-  const topics = posts.filter((p) => !p.parentPostId)
-  const repliesOf = (topicId: string) => posts.filter((p) => p.parentPostId === topicId).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-  const lastActivityOf = (topic: CSPostData) => {
-    const replies = repliesOf(topic.id)
-    return replies.length ? replies[replies.length - 1].createdAt : topic.createdAt
-  }
-  const sortedTopics = [...topics].sort((a, b) => {
-    if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1
-    return lastActivityOf(b).localeCompare(lastActivityOf(a))
-  })
-  const selectedTopic = selectedTopicId ? posts.find((p) => p.id === selectedTopicId) ?? null : null
+  const posts: DiscussionPost[] = bundle.discussion.posts.map((p) => ({
+    id: p.id, authorName: p.authorName, isStaff: p.isStaff, isMine: p.isMine,
+    isAnnouncement: p.isAnnouncement, isPinned: p.isPinned, isLocked: p.isLocked,
+    title: p.title, body: p.body, deletedAt: p.deletedAt, edited: p.edited,
+    parentPostId: p.parentPostId, createdAt: p.createdAt,
+    attachmentUrl: p.attachmentUrl, attachmentFileName: p.attachmentFileName,
+    reactionCount: p.reactionCount, reactedByMe: p.reactedByMe,
+  }))
 
   async function uploadAttachment(file: File) {
     const path = `lms-discussion/${studentId}/${carrierItem.id}/${Date.now()}_${file.name}`
@@ -938,16 +877,14 @@ function DiscussionBoardPanel({ carrierItem, studentId }: { carrierItem: LMSCont
     return { url, name: file.name }
   }
 
-  async function postTopic() {
-    if (!newTitle.trim() || !newBody.trim()) return
+  async function handleCreateTopic({ title, body, file }: { title: string; body: string; file: File | null }) {
     setBusy(true)
     try {
-      const attachment = newFile ? await uploadAttachment(newFile) : null
+      const attachment = file ? await uploadAttachment(file) : null
       await studentPortalFetch(getToken(), '/api/student-portal/lms-submit-discussion-post', {
         method: 'POST',
-        body: JSON.stringify({ contentId: carrierItem.id, title: newTitle.trim(), body: newBody.trim(), attachmentUrl: attachment?.url, attachmentFileName: attachment?.name }),
+        body: JSON.stringify({ contentId: carrierItem.id, title, body, attachmentUrl: attachment?.url, attachmentFileName: attachment?.name }),
       })
-      setNewTitle(''); setNewBody(''); setNewFile(null); setComposerOpen(false)
       await refresh()
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to post. Please try again.')
@@ -955,16 +892,14 @@ function DiscussionBoardPanel({ carrierItem, studentId }: { carrierItem: LMSCont
     setBusy(false)
   }
 
-  async function postReply(topicId: string) {
-    if (!replyBody.trim()) return
+  async function handleCreateReply(topicId: string, { body, file }: { body: string; file: File | null }) {
     setBusy(true)
     try {
-      const attachment = replyFile ? await uploadAttachment(replyFile) : null
+      const attachment = file ? await uploadAttachment(file) : null
       await studentPortalFetch(getToken(), '/api/student-portal/lms-submit-discussion-post', {
         method: 'POST',
-        body: JSON.stringify({ contentId: carrierItem.id, parentPostId: topicId, body: replyBody.trim(), attachmentUrl: attachment?.url, attachmentFileName: attachment?.name }),
+        body: JSON.stringify({ contentId: carrierItem.id, parentPostId: topicId, body, attachmentUrl: attachment?.url, attachmentFileName: attachment?.name }),
       })
-      setReplyBody(''); setReplyFile(null)
       await refresh()
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to reply. Please try again.')
@@ -972,14 +907,12 @@ function DiscussionBoardPanel({ carrierItem, studentId }: { carrierItem: LMSCont
     setBusy(false)
   }
 
-  async function saveEdit(post: CSPostData) {
-    if (!editBody.trim()) return
+  async function handleEdit(post: DiscussionPost, newBody: string) {
     setBusy(true)
     try {
       await studentPortalFetch(getToken(), '/api/student-portal/lms-edit-discussion-post', {
-        method: 'POST', body: JSON.stringify({ postId: post.id, body: editBody.trim() }),
+        method: 'POST', body: JSON.stringify({ postId: post.id, body: newBody }),
       })
-      setEditingPostId(null)
       await refresh()
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to save changes.')
@@ -987,13 +920,12 @@ function DiscussionBoardPanel({ carrierItem, studentId }: { carrierItem: LMSCont
     setBusy(false)
   }
 
-  async function deletePost(postId: string) {
+  async function handleDelete(post: DiscussionPost) {
     setBusy(true)
     try {
       await studentPortalFetch(getToken(), '/api/student-portal/lms-delete-discussion-post', {
-        method: 'POST', body: JSON.stringify({ postId }),
+        method: 'POST', body: JSON.stringify({ postId: post.id }),
       })
-      setConfirmDeleteId(null)
       await refresh()
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to delete post.')
@@ -1001,166 +933,27 @@ function DiscussionBoardPanel({ carrierItem, studentId }: { carrierItem: LMSCont
     setBusy(false)
   }
 
-  async function toggleReaction(postId: string) {
+  async function handleReact(post: DiscussionPost) {
     try {
-      await studentPortalFetch(getToken(), '/api/student-portal/lms-react-discussion-post', { method: 'POST', body: JSON.stringify({ postId }) })
+      await studentPortalFetch(getToken(), '/api/student-portal/lms-react-discussion-post', { method: 'POST', body: JSON.stringify({ postId: post.id }) })
       await refresh()
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to react.')
     }
   }
 
-  // ─── Thread view ──────────────────────────────────────────────────────────
-  if (selectedTopic) {
-    const replies = repliesOf(selectedTopic.id)
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <button onClick={() => setSelectedTopicId(null)} style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 4px', background: 'none', border: 'none', color: '#5A7290', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-          <ArrowLeft size={13} /> Back to Discussions
-        </button>
-        <div style={{ ...card, overflow: 'hidden' }}>
-          <div style={{ padding: '14px 16px 0' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
-              {selectedTopic.isPinned && <Pin size={13} color="#D97706" />}
-              {selectedTopic.isLocked && <Lock size={13} color="#94A3B8" />}
-              <div style={{ fontSize: 18, fontWeight: 800, color: '#1A365E' }}>{selectedTopic.deletedAt ? '[deleted]' : selectedTopic.title}</div>
-            </div>
-          </div>
-          {editingPostId === selectedTopic.id ? (
-            <div style={{ padding: '0 16px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <textarea rows={4} value={editBody} onChange={(e) => setEditBody(e.target.value)} style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 15, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                <button onClick={() => setEditingPostId(null)} style={{ padding: '7px 14px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-                <button onClick={() => void saveEdit(selectedTopic)} disabled={busy} style={{ padding: '7px 14px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Save</button>
-              </div>
-            </div>
-          ) : (
-            <DiscussionPostRow
-              post={selectedTopic}
-              isTopic
-              readOnly={readOnly}
-              onReact={() => void toggleReaction(selectedTopic.id)}
-              onStartEdit={() => { setEditingPostId(selectedTopic.id); setEditBody(selectedTopic.body ?? '') }}
-              onDelete={() => confirmDeleteId === selectedTopic.id ? void deletePost(selectedTopic.id) : setConfirmDeleteId(selectedTopic.id)}
-              onCancelDelete={() => setConfirmDeleteId(null)}
-              confirmingDelete={confirmDeleteId === selectedTopic.id}
-            />
-          )}
-        </div>
-
-        <div style={{ fontSize: 13, fontWeight: 800, color: '#5A7290', textTransform: 'uppercase', letterSpacing: '.4px', marginTop: 4 }}>
-          Replies {replies.length > 0 && `(${replies.length})`}
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {replies.length === 0 && <div style={{ ...emptyState, fontSize: 14 }}>No replies yet.</div>}
-          {replies.map((reply) => (
-            editingPostId === reply.id ? (
-              <div key={reply.id} style={{ padding: '10px 12px', background: '#F8FAFC', border: '1px solid #E4EAF2', borderRadius: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <textarea rows={3} value={editBody} onChange={(e) => setEditBody(e.target.value)} style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 15, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
-                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                  <button onClick={() => setEditingPostId(null)} style={{ padding: '6px 12px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-                  <button onClick={() => void saveEdit(reply)} disabled={busy} style={{ padding: '6px 12px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Save</button>
-                </div>
-              </div>
-            ) : (
-              <DiscussionPostRow
-                key={reply.id}
-                post={reply}
-                isTopic={false}
-                readOnly={readOnly}
-                onReact={() => void toggleReaction(reply.id)}
-                onStartEdit={() => { setEditingPostId(reply.id); setEditBody(reply.body ?? '') }}
-                onDelete={() => confirmDeleteId === reply.id ? void deletePost(reply.id) : setConfirmDeleteId(reply.id)}
-                onCancelDelete={() => setConfirmDeleteId(null)}
-                confirmingDelete={confirmDeleteId === reply.id}
-              />
-            )
-          ))}
-        </div>
-
-        {selectedTopic.isLocked ? (
-          <div style={{ ...card, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 8, color: '#7A92B0', fontSize: 14 }}>
-            <Lock size={13} /> This discussion is locked. You can view the conversation but cannot add a reply.
-          </div>
-        ) : !selectedTopic.deletedAt && (
-          <div style={{ ...card, padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <textarea rows={2} value={replyBody} onChange={(e) => setReplyBody(e.target.value)} placeholder="Write a reply..." disabled={readOnly} style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 15, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: replyFile ? '#1DBD6A' : '#7A92B0', fontWeight: replyFile ? 700 : 400, cursor: 'pointer' }}>
-                <input type="file" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) setReplyFile(f) }} />
-                <Upload size={12} /> {replyFile ? replyFile.name : 'Attach'}
-              </label>
-              <button onClick={() => void postReply(selectedTopic.id)} disabled={readOnly || busy || !replyBody.trim()} style={{ padding: '8px 16px', background: replyBody.trim() && !readOnly ? '#1A365E' : '#E4EAF2', color: replyBody.trim() && !readOnly ? '#fff' : '#94A3B8', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: replyBody.trim() && !readOnly ? 'pointer' : 'not-allowed' }}>
-                Post Reply
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  // ─── Topic list view ──────────────────────────────────────────────────────
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <div style={{ fontSize: 14, color: '#7A92B0' }}>Ask questions, share ideas, and discuss your presentation with classmates.</div>
-        {!composerOpen && (
-          <button onClick={() => setComposerOpen(true)} disabled={readOnly} style={{ flexShrink: 0, padding: '8px 14px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: readOnly ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <MessageSquare size={12} /> New Discussion
-          </button>
-        )}
-      </div>
-
-      {composerOpen && (
-        <div style={{ ...card, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Title" style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 15, fontFamily: 'inherit', boxSizing: 'border-box' }} />
-          <textarea rows={3} value={newBody} onChange={(e) => setNewBody(e.target.value)} placeholder="What's on your mind?" style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 15, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: newFile ? '#1DBD6A' : '#7A92B0', fontWeight: newFile ? 700 : 400, cursor: 'pointer' }}>
-              <input type="file" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) setNewFile(f) }} />
-              <Upload size={12} /> {newFile ? newFile.name : 'Attach'}
-            </label>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => { setComposerOpen(false); setNewTitle(''); setNewBody(''); setNewFile(null) }} style={{ padding: '8px 14px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-              <button onClick={() => void postTopic()} disabled={busy || !newTitle.trim() || !newBody.trim()} style={{ padding: '8px 14px', background: newTitle.trim() && newBody.trim() ? '#1A365E' : '#E4EAF2', color: newTitle.trim() && newBody.trim() ? '#fff' : '#94A3B8', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: newTitle.trim() && newBody.trim() ? 'pointer' : 'not-allowed' }}>Post</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {sortedTopics.length === 0 ? (
-        <div style={{ ...card, ...emptyState, textAlign: 'center', padding: '32px 20px' }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: '#1A365E', marginBottom: 4 }}>No discussions yet</div>
-          <div>Start the first conversation for this presentation.</div>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {sortedTopics.map((topic) => {
-            const replyCount = repliesOf(topic.id).length
-            return (
-              <button key={topic.id} onClick={() => setSelectedTopicId(topic.id)} style={{ ...card, padding: '14px 16px', textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                  {topic.isPinned && <Pin size={12} color="#D97706" />}
-                  {topic.isLocked && <Lock size={12} color="#94A3B8" />}
-                  {topic.isAnnouncement && (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 800, color: '#1A365E', background: '#E4EAF2', padding: '2px 7px', borderRadius: 20 }}><Megaphone size={9} /> Instructor</span>
-                  )}
-                  <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E' }}>{topic.deletedAt ? '[deleted]' : topic.title}</div>
-                </div>
-                {!topic.deletedAt && (
-                  <div style={{ fontSize: 14, color: '#7A92B0', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const }}>{topic.body}</div>
-                )}
-                <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 2 }}>
-                  {replyCount} repl{replyCount === 1 ? 'y' : 'ies'} · Last activity {formatRelativeTime(lastActivityOf(topic))} · Started by {topic.isMine ? 'you' : topic.authorName}
-                  {topic.reactionCount > 0 && ` · 👍 ${topic.reactionCount}`}
-                </div>
-              </button>
-            )
-          })}
-        </div>
-      )}
-    </div>
+    <DiscussionBoard
+      mode="student"
+      posts={posts}
+      busy={busy}
+      readOnly={readOnly}
+      onCreateTopic={({ title, body, file }) => handleCreateTopic({ title, body, file })}
+      onCreateReply={handleCreateReply}
+      onEditPost={handleEdit}
+      onDeletePost={handleDelete}
+      onReact={handleReact}
+    />
   )
 }
 
@@ -1516,16 +1309,19 @@ function formatLongDate(targetDate: string) {
 }
 
 // One Play row inside an activity's overview (e.g. "Expressions: Tutorial").
-function OverviewPartRow({ title, status, statusText, score, passMark, onClick }: {
+function OverviewPartRow({ title, status, statusText, score, passMark, targetDate, isVideo, onClick }: {
   title: string
   status: RowStatus
   statusText: string
   score?: number | null
   passMark?: number
+  targetDate?: string | null
+  isVideo?: boolean
   onClick: () => void
 }) {
   const meta = ROW_STATUS_META[status]
   const StatusIcon = meta.icon
+  const dateInfo = targetDate ? formatShortDate(targetDate) : null
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px', border: '1px solid #E4EAF2', borderRadius: 12, background: '#fff' }}>
       <span style={{ width: 32, height: 32, borderRadius: '50%', background: meta.bar, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -1539,9 +1335,14 @@ function OverviewPartRow({ title, status, statusText, score, passMark, onClick }
         <div style={{ fontSize: 15, color: meta.textColor, marginTop: 2, fontWeight: 600 }}>
           {statusText}{typeof score === 'number' ? ` · ${score}%${passMark != null ? ` (pass ${passMark}%)` : ''}` : ''}
         </div>
+        {dateInfo && (
+          <div style={{ fontSize: 13, color: dateInfo.overdue && status !== 'completed' ? SP_RED : '#94A3B8', marginTop: 2, fontWeight: 600 }}>
+            Due {dateInfo.dow} {dateInfo.short}
+          </div>
+        )}
       </div>
       <button onClick={onClick} style={{ padding: '8px 18px', background: '#fff', color: SP_NAVY, border: `1.5px solid ${SP_NAVY}`, borderRadius: 20, fontSize: 16, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
-        <Play size={12} /> Play
+        {isVideo ? <><Play size={12} /> Play</> : <><Eye size={12} /> View</>}
       </button>
     </div>
   )
@@ -1713,6 +1514,7 @@ export function SPMyLearningPage() {
         caseStudyFileName: (extra.caseStudyFileName as string) ?? undefined,
         moduleDescription: (extra.moduleDescription as string) ?? undefined,
         omrFormUrl: (extra.omrFormUrl as string) ?? undefined,
+        omrTargetDate: (extra.omrTargetDate as string) ?? null,
         socraticDate: (extra.socraticDate as string) ?? undefined,
         socraticBrief: (extra.socraticBrief as string) ?? undefined,
         presentationBrief: (extra.presentationBrief as string) ?? undefined,
@@ -1720,7 +1522,10 @@ export function SPMyLearningPage() {
         presentationBriefFileName: (extra.presentationBriefFileName as string) ?? undefined,
         presentationVideoUrl: (extra.presentationVideoUrl as string) ?? undefined,
         presentationVideoFileName: (extra.presentationVideoFileName as string) ?? undefined,
+        presentationTargetDate: (extra.presentationTargetDate as string) ?? null,
         targetDate: (extra.targetDate as string) ?? null,
+        notesTargetDate: (extra.notesTargetDate as string) ?? null,
+        masteryTargetDate: (extra.masteryTargetDate as string) ?? null,
         locked: extra.locked === true,
       }
     })
@@ -2319,14 +2124,14 @@ export function SPMyLearningPage() {
                                 onClick={() => openGroup('show', carrierItem.id)} activeFilter={contentFilter}
                               />
                               <ContentRow
-                                icon={Calculator} kindLabel="Prove It" title="Prove It · OMR Test" targetDate={carrierItem.targetDate}
+                                icon={Calculator} kindLabel="Prove It" title="Prove It · OMR Test" targetDate={carrierItem.omrTargetDate}
                                 status="not_started" statusText="Not started"
                                 locked={isGroupLocked({ key: `prove:${carrierItem.id}`, kind: 'prove', contentId: carrierItem.id })}
                                 lockReason={groupLockReason({ key: `prove:${carrierItem.id}`, kind: 'prove', contentId: carrierItem.id })}
                                 onClick={() => openGroup('prove', carrierItem.id)} activeFilter={contentFilter}
                               />
                               <ContentRow
-                                icon={Trophy} kindLabel="Master It" title="Master It · Presentation" targetDate={carrierItem.targetDate}
+                                icon={Trophy} kindLabel="Master It" title="Master It · Presentation" targetDate={carrierItem.presentationTargetDate}
                                 status={hasSubmission(carrierItem.id, 'presentation') ? 'completed' : 'not_started'}
                                 statusText={hasSubmission(carrierItem.id, 'presentation') ? 'Submitted' : 'Not started'}
                                 locked={isGroupLocked({ key: `master:${carrierItem.id}`, kind: 'master', contentId: carrierItem.id })}
@@ -2401,15 +2206,18 @@ export function SPMyLearningPage() {
           : kind === 'master' ? 'Presentation'
           : kind === 'discussion' ? 'Discussion Board'
           : activeLesson.title
-        const groupTargetDate = kind === 'show' ? (activeLesson.socraticDate || activeLesson.targetDate) : activeLesson.targetDate
+        const groupTargetDate = kind === 'show' ? (activeLesson.socraticDate || activeLesson.targetDate)
+          : kind === 'prove' ? activeLesson.omrTargetDate
+          : kind === 'master' ? activeLesson.presentationTargetDate
+          : activeLesson.targetDate
 
-        type PartRow = { key: PartKind; title: string; status: RowStatus; statusText: string; score?: number | null; passMark?: number }
+        type PartRow = { key: PartKind; title: string; status: RowStatus; statusText: string; score?: number | null; passMark?: number; targetDate?: string | null; isVideo?: boolean }
         let parts: PartRow[] = []
         if (kind === 'learn') {
           const notesDone = hasSubmission(activeLesson.id, 'case_study_notes')
           parts = [
-            { key: 'caseStudyView', title: `${groupTitle}: View Case Study`, status: 'not_started', statusText: 'Not started' },
-            { key: 'caseStudyNotes', title: `${groupTitle}: Notes Upload`, status: notesDone ? 'completed' : 'not_started', statusText: notesDone ? 'Done' : 'Not started' },
+            { key: 'caseStudyView', title: `${groupTitle}: View Case Study`, status: 'not_started', statusText: 'Not started', targetDate: activeLesson.targetDate },
+            { key: 'caseStudyNotes', title: `${groupTitle}: Notes Upload`, status: notesDone ? 'completed' : 'not_started', statusText: notesDone ? 'Done' : 'Not started', targetDate: activeLesson.targetDate },
           ]
         } else if (kind === 'lesson') {
           const itemProgress = progress.find((entry) => entry.contentId === activeLesson.id && entry.studentId === session?.dbId)
@@ -2420,20 +2228,20 @@ export function SPMyLearningPage() {
           const masteryAttempted = (itemProgress?.masteryAttempts ?? 0) > 0 || masteryScore !== null
           const notesDone = hasSubmission(activeLesson.id, 'lesson_notes')
           parts = [
-            { key: 'tutorial', title: `${groupTitle}: Tutorial`, status: tutorialDone ? 'completed' : itemProgress?.status === 'in_progress' ? 'in_progress' : 'not_started', statusText: tutorialDone ? 'Completed' : itemProgress?.status === 'in_progress' ? 'In Progress' : 'Not started' },
-            ...(activeLesson.videoUrl ? [{ key: 'video' as PartKind, title: `${groupTitle}: Video`, status: 'not_started' as RowStatus, statusText: 'Not started' }] : []),
-            { key: 'lessonNotes', title: `${groupTitle}: Notes Upload`, status: notesDone ? 'completed' : 'not_started', statusText: notesDone ? 'Done' : 'Not started' },
-            ...(itemHasMastery ? [{ key: 'mastery' as PartKind, title: `${groupTitle}: Mastery Test`, status: (masteryPassed ? 'completed' : masteryAttempted ? 'not_mastered' : 'not_started') as RowStatus, statusText: masteryPassed ? 'Passed' : masteryAttempted ? 'Not mastered · retake available' : 'Not started', score: masteryScore, passMark: activeLesson.masteryPassMark ?? selectedCourse.passMark }] : []),
+            { key: 'tutorial', title: `${groupTitle}: Tutorial`, status: tutorialDone ? 'completed' : itemProgress?.status === 'in_progress' ? 'in_progress' : 'not_started', statusText: tutorialDone ? 'Completed' : itemProgress?.status === 'in_progress' ? 'In Progress' : 'Not started', targetDate: activeLesson.targetDate, isVideo: activeLesson.type === 'video' },
+            ...(activeLesson.videoUrl ? [{ key: 'video' as PartKind, title: `${groupTitle}: Video`, status: 'not_started' as RowStatus, statusText: 'Not started', targetDate: activeLesson.targetDate, isVideo: true }] : []),
+            { key: 'lessonNotes', title: `${groupTitle}: Notes Upload`, status: notesDone ? 'completed' : 'not_started', statusText: notesDone ? 'Done' : 'Not started', targetDate: activeLesson.notesTargetDate || activeLesson.targetDate },
+            ...(itemHasMastery ? [{ key: 'mastery' as PartKind, title: `${groupTitle}: Mastery Test`, status: (masteryPassed ? 'completed' : masteryAttempted ? 'not_mastered' : 'not_started') as RowStatus, statusText: masteryPassed ? 'Passed' : masteryAttempted ? 'Not mastered · retake available' : 'Not started', score: masteryScore, passMark: activeLesson.masteryPassMark ?? selectedCourse.passMark, targetDate: activeLesson.masteryTargetDate || activeLesson.targetDate }] : []),
           ]
         } else if (kind === 'show') {
-          parts = [{ key: 'socratic', title: 'Socratic Seminar', status: 'not_started', statusText: 'Not started' }]
+          parts = [{ key: 'socratic', title: 'Socratic Seminar', status: 'not_started', statusText: 'Not started', targetDate: activeLesson.socraticDate || activeLesson.targetDate }]
         } else if (kind === 'prove') {
-          parts = [{ key: 'omr', title: 'OMR Test', status: 'not_started', statusText: 'Not started' }]
+          parts = [{ key: 'omr', title: 'OMR Test', status: 'not_started', statusText: 'Not started', targetDate: activeLesson.omrTargetDate }]
         } else if (kind === 'discussion') {
           parts = [{ key: 'discussion', title: 'Discussion Board', status: 'not_started', statusText: 'Join the conversation' }]
         } else {
           const submitted = hasSubmission(activeLesson.id, 'presentation')
-          parts = [{ key: 'presentation', title: 'Presentation', status: submitted ? 'completed' : 'not_started', statusText: submitted ? 'Submitted' : 'Not started' }]
+          parts = [{ key: 'presentation', title: 'Presentation', status: submitted ? 'completed' : 'not_started', statusText: submitted ? 'Submitted' : 'Not started', targetDate: activeLesson.presentationTargetDate }]
         }
 
         const nextLocked = !!nextGroup && isGroupLocked(nextGroup)
@@ -2490,14 +2298,19 @@ export function SPMyLearningPage() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 640, width: '100%', margin: '0 auto' }}>
-              {parts.map((part) => (
-                <OverviewPartRow
-                  key={part.key}
-                  title={part.title} status={part.status} statusText={part.statusText}
-                  score={part.score} passMark={part.passMark}
-                  onClick={() => openPart(activeLesson, part.key)}
-                />
-              ))}
+              {parts.map((part) => {
+                // Only surface a row's own date when it's actually an override the
+                // teacher set — otherwise it just duplicates the header above.
+                const rowDate = part.targetDate && part.targetDate !== groupTargetDate ? part.targetDate : null
+                return (
+                  <OverviewPartRow
+                    key={part.key}
+                    title={part.title} status={part.status} statusText={part.statusText}
+                    score={part.score} passMark={part.passMark} targetDate={rowDate} isVideo={part.isVideo}
+                    onClick={() => openPart(activeLesson, part.key)}
+                  />
+                )
+              })}
             </div>
 
             <button onClick={closeActivity} style={{ alignSelf: 'center', padding: '10px 32px', background: '#fff', color: '#1A365E', border: '1.5px solid #E4EAF2', borderRadius: 24, fontSize: 16, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -2627,6 +2440,14 @@ export function SPMyLearningPage() {
               <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Upload size={15} /> Learn it · Show it: Notes</div>
             </div>
           </div>
+          <a href="/LMS/Case Study Note-Taking Guide.pdf" target="_blank" rel="noreferrer" style={{ ...card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
+            <FileText size={18} color="#1A365E" />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E' }}>Case Study Note-Taking Guide</div>
+              <div style={{ fontSize: 13, color: '#7A92B0' }}>How to organize and score your notebook — worth 15% of your grade</div>
+            </div>
+            <ExternalLink size={14} color="#7A92B0" />
+          </a>
           <div style={{ ...card, padding: '14px 16px' }}>
             <NotesUploadRow contentId={activeLesson.id} kind="case_study_notes" studentId={session?.dbId ?? ''} submission={mySubmissions.find((s) => s.contentId === activeLesson.id && s.kind === 'case_study_notes')} onSubmitted={onSubmissionAdded} />
           </div>

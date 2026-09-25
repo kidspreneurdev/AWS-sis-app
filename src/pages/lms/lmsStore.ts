@@ -27,6 +27,12 @@ export interface LMSCourse {
   selfEnrollPassword?: string | null
   studentInstructions?: string
   instructorIds?: string[]
+  descriptionDocUrl?: string | null
+  descriptionDocFileName?: string | null
+  syllabusUrl?: string | null
+  syllabusFileName?: string | null
+  studentOrientationUrl?: string | null
+  studentOrientationFileName?: string | null
 }
 
 // A "Course Group" is the real "Course" (e.g. "Business English 2.0"). It owns the
@@ -44,6 +50,12 @@ export interface LMSCourseGroup {
   requiredHours?: number
   passMark?: number
   createdAt?: string
+  descriptionDocUrl?: string | null
+  descriptionDocFileName?: string | null
+  syllabusUrl?: string | null
+  syllabusFileName?: string | null
+  studentOrientationUrl?: string | null
+  studentOrientationFileName?: string | null
 }
 
 export interface LMSQuestion {
@@ -103,6 +115,9 @@ export interface LMSContent {
   omrRetakes?: number
   omrTimeLimit?: number
   omrWeight?: number
+  // Prove It's own deadline — Show It / Prove It / Master It share this one content
+  // row with Learn It, so each needs its own date field rather than reusing targetDate.
+  omrTargetDate?: string | null
   socraticDate?: string
   socraticBrief?: string
   presentationBrief?: string
@@ -112,8 +127,14 @@ export interface LMSContent {
   presentationBriefFileName?: string
   presentationVideoUrl?: string
   presentationVideoFileName?: string
+  presentationTargetDate?: string | null
   rubricOverrides?: RubricOverrides
+  // A lesson's own deadline (Tutorial/default). Notes and Mastery Test inside that
+  // lesson can each optionally be given their own deadline instead — when unset they
+  // fall back to this one. Not used for the case-study carrier row's own Notes Upload.
   targetDate?: string | null
+  notesTargetDate?: string | null
+  masteryTargetDate?: string | null
   locked?: boolean
   hidden?: boolean
   excludedFromGrade?: boolean
@@ -182,6 +203,12 @@ function rowToLMSCourse(r: Record<string, unknown>): LMSCourse {
     selfEnrollPassword: (r.self_enroll_password as string) ?? null,
     studentInstructions: (r.student_instructions as string) ?? '',
     instructorIds: Array.isArray(r.instructor_ids) ? (r.instructor_ids as string[]) : [],
+    descriptionDocUrl: (r.description_doc_url as string) ?? null,
+    descriptionDocFileName: (r.description_doc_file_name as string) ?? null,
+    syllabusUrl: (r.syllabus_url as string) ?? null,
+    syllabusFileName: (r.syllabus_file_name as string) ?? null,
+    studentOrientationUrl: (r.student_orientation_url as string) ?? null,
+    studentOrientationFileName: (r.student_orientation_file_name as string) ?? null,
   }
 }
 
@@ -196,6 +223,12 @@ function rowToLMSCourseGroup(r: Record<string, unknown>): LMSCourseGroup {
     requiredHours: r.required_hours != null ? Number(r.required_hours) : 0,
     passMark: r.pass_mark != null ? Number(r.pass_mark) : 80,
     createdAt: (r.created_at as string) ?? '',
+    descriptionDocUrl: (r.description_doc_url as string) ?? null,
+    descriptionDocFileName: (r.description_doc_file_name as string) ?? null,
+    syllabusUrl: (r.syllabus_url as string) ?? null,
+    syllabusFileName: (r.syllabus_file_name as string) ?? null,
+    studentOrientationUrl: (r.student_orientation_url as string) ?? null,
+    studentOrientationFileName: (r.student_orientation_file_name as string) ?? null,
   }
 }
 
@@ -244,6 +277,7 @@ function rowToLMSContent(r: Record<string, unknown>): LMSContent {
     omrRetakes: extra.omrRetakes as number | undefined,
     omrTimeLimit: extra.omrTimeLimit as number | undefined,
     omrWeight: extra.omrWeight as number | undefined,
+    omrTargetDate: (extra.omrTargetDate as string) ?? null,
     socraticDate: extra.socraticDate as string | undefined,
     socraticBrief: extra.socraticBrief as string | undefined,
     presentationBrief: extra.presentationBrief as string | undefined,
@@ -251,8 +285,11 @@ function rowToLMSContent(r: Record<string, unknown>): LMSContent {
     presentationBriefFileName: extra.presentationBriefFileName as string | undefined,
     presentationVideoUrl: extra.presentationVideoUrl as string | undefined,
     presentationVideoFileName: extra.presentationVideoFileName as string | undefined,
+    presentationTargetDate: (extra.presentationTargetDate as string) ?? null,
     rubricOverrides: extra.rubricOverrides as RubricOverrides | undefined,
     targetDate: (extra.targetDate as string) ?? null,
+    notesTargetDate: (extra.notesTargetDate as string) ?? null,
+    masteryTargetDate: (extra.masteryTargetDate as string) ?? null,
     locked: extra.locked === true,
     hidden: extra.hidden === true,
     excludedFromGrade: extra.excludedFromGrade === true,
@@ -329,11 +366,15 @@ const OPTIONAL_COURSE_COLUMNS = [
   'pre_test_exemption_threshold', 'mastery_retakes', 'progression_mode',
   'self_enroll_enabled', 'self_enroll_code', 'self_enroll_password',
   'student_instructions', 'instructor_ids',
+  'description_doc_url', 'description_doc_file_name', 'syllabus_url', 'syllabus_file_name',
+  'student_orientation_url', 'student_orientation_file_name',
 ]
 
 // Course-level columns added by 20260914_lms_curriculum_at_course_level.sql
 const OPTIONAL_GROUP_COLUMNS = [
   'subject', 'grade_level', 'description', 'credit_hours', 'required_hours', 'pass_mark',
+  'description_doc_url', 'description_doc_file_name', 'syllabus_url', 'syllabus_file_name',
+  'student_orientation_url', 'student_orientation_file_name',
 ]
 
 async function upsertLmsCourseGroups(payloads: Record<string, unknown>[]): Promise<string | null> {
@@ -374,6 +415,9 @@ export async function saveLMS(store: LMSStore): Promise<string | null> {
       description: g.description ?? null,
       credit_hours: g.creditHours ?? 1, required_hours: g.requiredHours || null,
       pass_mark: g.passMark ?? 80,
+      description_doc_url: g.descriptionDocUrl ?? null, description_doc_file_name: g.descriptionDocFileName ?? null,
+      syllabus_url: g.syllabusUrl ?? null, syllabus_file_name: g.syllabusFileName ?? null,
+      student_orientation_url: g.studentOrientationUrl ?? null, student_orientation_file_name: g.studentOrientationFileName ?? null,
     })))
     // lms_course_groups may not exist yet until the migration is applied — degrade gracefully
     if (err) console.warn('lms_course_groups save error (migration may not be applied yet):', err)
@@ -393,6 +437,9 @@ export async function saveLMS(store: LMSStore): Promise<string | null> {
       self_enroll_password: c.selfEnrollPassword ?? null,
       student_instructions: c.studentInstructions ?? null,
       instructor_ids: c.instructorIds ?? [],
+      description_doc_url: c.descriptionDocUrl ?? null, description_doc_file_name: c.descriptionDocFileName ?? null,
+      syllabus_url: c.syllabusUrl ?? null, syllabus_file_name: c.syllabusFileName ?? null,
+      student_orientation_url: c.studentOrientationUrl ?? null, student_orientation_file_name: c.studentOrientationFileName ?? null,
     }))
     const err = await upsertLmsCourses(payloads)
     if (err) { console.error('lms_courses save error:', err); return err }
@@ -420,12 +467,14 @@ export async function saveLMS(store: LMSStore): Promise<string | null> {
           caseStudyUrl: c.caseStudyUrl, caseStudyFileName: c.caseStudyFileName,
           moduleDescription: c.moduleDescription, omrFormUrl: c.omrFormUrl, socraticDate: c.socraticDate,
           omrQuizJson: c.omrQuizJson, omrPassMark: c.omrPassMark, omrRetakes: c.omrRetakes,
-          omrTimeLimit: c.omrTimeLimit, omrWeight: c.omrWeight,
+          omrTimeLimit: c.omrTimeLimit, omrWeight: c.omrWeight, omrTargetDate: c.omrTargetDate,
           socraticBrief: c.socraticBrief, presentationBrief: c.presentationBrief,
           presentationBriefUrl: c.presentationBriefUrl, presentationBriefFileName: c.presentationBriefFileName,
           presentationVideoUrl: c.presentationVideoUrl, presentationVideoFileName: c.presentationVideoFileName,
+          presentationTargetDate: c.presentationTargetDate,
           rubricOverrides: c.rubricOverrides,
-          targetDate: c.targetDate, locked: c.locked, hidden: c.hidden, excludedFromGrade: c.excludedFromGrade,
+          targetDate: c.targetDate, notesTargetDate: c.notesTargetDate, masteryTargetDate: c.masteryTargetDate,
+          locked: c.locked, hidden: c.hidden, excludedFromGrade: c.excludedFromGrade,
         },
       })),
       { onConflict: 'id' }

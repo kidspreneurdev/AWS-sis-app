@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/auth.store'
 import { toast } from '@/lib/toast'
+import { formatCampusDateTime } from '@/lib/campus'
 
 interface AuditRow {
   id: string
@@ -97,13 +98,6 @@ function changeBg(ct: string) {
       : ct === 'login' || ct === 'logout' ? '#EDE9FE'
         : ct === 'access' ? '#E0F2FE'
           : '#FEF3C7'
-}
-
-function fmtTimestamp(ts: string) {
-  if (!ts) return '—'
-  const d = new Date(ts)
-  if (Number.isNaN(d.getTime())) return ts
-  return `${d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })} ${d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
 }
 
 function fmtJsonPreview(v: string, max = 120) {
@@ -366,7 +360,7 @@ export function AuditLogPage() {
 
                 return (
                   <tr key={r.id + idx} style={{ background: rowBg, borderBottom: '1px solid #F0F4FA' }}>
-                    <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: 10, color: '#5A7290' }}>{fmtTimestamp(r.timestamp)}</td>
+                    <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: 10, color: '#5A7290' }}>{formatCampusDateTime(r.timestamp, profile?.campus)}</td>
                     <td style={{ padding: '8px 12px', fontWeight: 700, color: '#1A365E', whiteSpace: 'nowrap' }}>{r.actor || '—'}</td>
                     <td style={{ padding: '8px 12px' }}><span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 4, background: '#F0F4FA', color: '#5A7290', fontWeight: 700 }}>{r.actorRole || '—'}</span></td>
                     <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}><span style={{ fontSize: 13, marginRight: 4 }}>{moduleIcon(r.module)}</span><span style={{ color: '#3D5475', fontSize: 11 }}>{r.module || '—'}</span></td>

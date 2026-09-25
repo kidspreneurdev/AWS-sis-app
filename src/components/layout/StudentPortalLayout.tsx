@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { Outlet, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { toLegacyStudentGradeValue } from '@/types/student'
+import { isSpainCampus } from '@/lib/campus'
 import { authedFetch, timeAgo, type PortalNotification } from '@/lib/studentPortalApi'
 import {
   Home, GraduationCap, UserCheck, CalendarRange, ClipboardList,
@@ -531,6 +532,7 @@ function NotificationBell({ getToken }: { getToken: () => string | null }) {
 export function StudentPortalLayout() {
   const { session, loading, logout, getToken } = useStudentPortal()
   const navigate = useNavigate()
+  const location = useLocation()
   const [confirmSignOutOpen, setConfirmSignOutOpen] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
   const [collapsed, setCollapsed] = useState(getStoredCollapsed)
@@ -545,8 +547,16 @@ export function StudentPortalLayout() {
 
   if (!session) return <Navigate to="/portal/login" replace />
 
+  const isSpain = isSpainCampus(session.campus)
+  if (isSpain && location.pathname.startsWith('/portal/academic-calendar')) {
+    return <Navigate to="/portal/dashboard" replace />
+  }
+
   const gradeNum = toLegacyStudentGradeValue(session.grade)
   const isK5 = gradeNum !== null && gradeNum <= 5
+  const spGroups = isSpain
+    ? SP_GROUPS.map(group => ({ ...group, items: group.items.filter(item => item.label !== 'Academic Calendar') }))
+    : SP_GROUPS
 
   async function handleLogout() {
     setSigningOut(true)
@@ -687,7 +697,7 @@ export function StudentPortalLayout() {
           {isK5 ? (
             K5_NAV.map((item) => renderNavItem(item))
           ) : (
-            SP_GROUPS.map((group, index) => {
+            spGroups.map((group, index) => {
               const headingId = `sp-group-${group.id}-label`
               return (
                 <div key={group.id} role="group" aria-labelledby={headingId}>

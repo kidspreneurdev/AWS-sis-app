@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import {
-  ArrowLeft, Lock, Megaphone, MessageSquare, Paperclip, Pencil, Pin,
-  Search, LayoutGrid, List, ThumbsUp, Trash2, Upload, ExternalLink, Send,
+  ArrowLeft, Info, Lock, Megaphone, MessageSquare, Paperclip, Pencil, Pin,
+  Search, LayoutGrid, List, ThumbsUp, Trash2, Upload, ExternalLink, Send, X,
 } from 'lucide-react'
 
 /** Shared visual language for Master It's discussion board — used by both the student
@@ -30,6 +30,12 @@ export interface DiscussionPost {
   reactedByMe?: boolean
 }
 
+export interface DiscussionDescription {
+  text: string | null
+  attachmentUrl: string | null
+  attachmentFileName: string | null
+}
+
 export interface DiscussionBoardProps {
   mode: 'student' | 'staff'
   posts: DiscussionPost[]
@@ -37,6 +43,10 @@ export interface DiscussionBoardProps {
   busy?: boolean
   readOnly?: boolean
   introText?: string
+  /** What this board is for — shown in a card above the toolbar and post feed. Hidden
+   *  entirely in student mode when empty; staff always see an "Add description" prompt. */
+  description?: DiscussionDescription
+  onSaveDescription?: (input: { text: string; file: File | null; removeAttachment: boolean }) => Promise<void> | void
   onCreateTopic: (input: { title: string; body: string; file: File | null; announce: boolean }) => Promise<void> | void
   onCreateReply: (topicId: string, input: { body: string; file: File | null }) => Promise<void> | void
   onEditPost?: (post: DiscussionPost, newBody: string) => Promise<void> | void
@@ -150,9 +160,91 @@ function AttachmentChip({ url, name }: { url: string; name: string | null }) {
   )
 }
 
+const iconBtnStyle: React.CSSProperties = { padding: 6, background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', display: 'flex', borderRadius: 6, transition: 'color 150ms ease, background-color 150ms ease' }
+
+/** The board's own "what to discuss" context — sits above the toolbar and post feed.
+ *  Students only ever see it read-only (and not at all when empty); staff get an
+ *  inline editor with its own text + single attachment, independent of any post. */
+function DescriptionCard({ description, editable, busy, onSave }: {
+  description?: DiscussionDescription
+  editable: boolean
+  busy?: boolean
+  onSave?: (input: { text: string; file: File | null; removeAttachment: boolean }) => Promise<void> | void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [text, setText] = useState(description?.text ?? '')
+  const [file, setFile] = useState<File | null>(null)
+  const [removeAttachment, setRemoveAttachment] = useState(false)
+
+  const hasContent = !!(description?.text?.trim() || description?.attachmentUrl)
+  if (!editable && !hasContent) return null
+
+  function startEditing() {
+    setText(description?.text ?? ''); setFile(null); setRemoveAttachment(false); setEditing(true)
+  }
+
+  if (editing) {
+    const showExistingAttachment = !!description?.attachmentUrl && !removeAttachment && !file
+    return (
+      <div style={{ ...card, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: '#5A7290' }}>
+          <Info size={13} /> About this discussion
+        </div>
+        <textarea rows={3} autoFocus value={text} onChange={(e) => setText(e.target.value)} placeholder="What should students discuss here?" style={textareaStyle} />
+        {showExistingAttachment && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <AttachmentChip url={description!.attachmentUrl!} name={description!.attachmentFileName} />
+            <button onClick={() => setRemoveAttachment(true)} title="Remove attachment" style={iconBtnStyle}><X size={13} /></button>
+          </div>
+        )}
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: file ? GREEN : '#7A92B0', fontWeight: file ? 700 : 400, cursor: 'pointer', alignSelf: 'flex-start' }}>
+          <input type="file" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) { setFile(f); setRemoveAttachment(false) } }} />
+          <Upload size={12} /> {file ? file.name : showExistingAttachment ? 'Replace attachment' : 'Attach file'}
+        </label>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button onClick={() => setEditing(false)} style={{ padding: '7px 14px', background: '#F0F4FA', color: NAVY, border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+          <button
+            onClick={async () => { await onSave?.({ text: text.trim(), file, removeAttachment }); setEditing(false) }}
+            disabled={busy}
+            style={{ padding: '7px 14px', background: NAVY, color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+          >Save</button>
+        </div>
+      </div>
+    )
+  }
+
+  if (!hasContent) {
+    return (
+      <button onClick={startEditing} style={{
+        ...card, padding: '14px 16px', border: '1.5px dashed #C9D6E8', background: '#FBFCFE', textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit',
+        display: 'flex', alignItems: 'center', gap: 10, color: '#5A7290',
+      }}>
+        <Info size={16} />
+        <span style={{ fontSize: 13.5, fontWeight: 600 }}>Add a description so students know what to discuss</span>
+      </button>
+    )
+  }
+
+  return (
+    <div style={{ ...card, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 10, background: '#F7F9FC' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: '#5A7290' }}>
+          <Info size={13} /> About this discussion
+        </div>
+        {editable && (
+          <button onClick={startEditing} title="Edit description" style={iconBtnStyle}><Pencil size={13} /></button>
+        )}
+      </div>
+      {description?.text && <p style={{ margin: 0, fontSize: 14.5, color: '#1A2233', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{description.text}</p>}
+      {description?.attachmentUrl && <AttachmentChip url={description.attachmentUrl} name={description.attachmentFileName} />}
+    </div>
+  )
+}
+
 export function DiscussionBoard({
   mode, posts, loading, busy, readOnly,
   introText = mode === 'student' ? 'Ask questions, share ideas, and discuss your presentation with classmates.' : undefined,
+  description, onSaveDescription,
   onCreateTopic, onCreateReply, onEditPost, onDeletePost, onReact, onTogglePin, onToggleLock,
   allowAttachments = mode === 'student', allowAnnouncementToggle = mode === 'staff',
 }: DiscussionBoardProps) {
@@ -432,9 +524,11 @@ export function DiscussionBoard({
     )
   }
 
-  // ─── Board (toolbar + filters + grid) ───────────────────────────────────
+  // ─── Board (description + toolbar + filters + grid) ─────────────────────
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <DescriptionCard description={description} editable={mode === 'staff' && !!onSaveDescription} busy={busy} onSave={onSaveDescription} />
+
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           {introText && <div style={{ fontSize: 13.5, color: '#7A92B0' }}>{introText}</div>}

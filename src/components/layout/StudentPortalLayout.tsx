@@ -548,14 +548,16 @@ export function StudentPortalLayout() {
   if (!session) return <Navigate to="/portal/login" replace />
 
   const isSpain = isSpainCampus(session.campus)
-  if (isSpain && location.pathname.startsWith('/portal/academic-calendar')) {
+  const SPAIN_HIDDEN_LABELS = ['Academic Calendar', 'Onboarding', 'Policy Documents']
+  const SPAIN_BLOCKED_PATHS = ['/portal/academic-calendar', '/portal/documents-hub', '/portal/policy-documents']
+  if (isSpain && SPAIN_BLOCKED_PATHS.some(p => location.pathname.startsWith(p))) {
     return <Navigate to="/portal/dashboard" replace />
   }
 
   const gradeNum = toLegacyStudentGradeValue(session.grade)
   const isK5 = gradeNum !== null && gradeNum <= 5
   const spGroups = isSpain
-    ? SP_GROUPS.map(group => ({ ...group, items: group.items.filter(item => item.label !== 'Academic Calendar') }))
+    ? SP_GROUPS.map(group => ({ ...group, items: group.items.filter(item => !SPAIN_HIDDEN_LABELS.includes(item.label)) }))
     : SP_GROUPS
 
   async function handleLogout() {

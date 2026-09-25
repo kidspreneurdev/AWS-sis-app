@@ -807,13 +807,14 @@ async function lmsGetCaseStudy(req, res, adminClient) {
 
   const extra = content.extra || {}
 
-  const [scRes, dpRes, subRes, apRes] = await Promise.all([
+  const [scRes, dpRes, subRes, apRes, roleRes] = await Promise.all([
     adminClient.from('lms_score_components').select('component_type,criteria_scores,subtotal,feedback,status').eq('content_id', contentId).eq('student_id', studentDbId),
     adminClient.from('lms_discussion_posts')
       .select('id,student_id,parent_post_id,title,body,created_at,updated_at,author_staff_name,is_announcement,is_pinned,is_locked,deleted_at,attachment_url,attachment_file_name')
       .eq('content_id', contentId).eq('phase', 'master').order('created_at', { ascending: true }),
     adminClient.from('lms_submissions').select('kind,note,link_url,submitted_at').eq('content_id', contentId).eq('student_id', studentDbId).order('submitted_at', { ascending: false }),
     adminClient.from('lms_grade_appeals').select('id,component_type,message,status,admin_reply').eq('content_id', contentId).eq('student_id', studentDbId),
+    adminClient.from('lms_presentation_roles').select('role_number,role_label,role_text').eq('content_id', contentId).eq('student_id', studentDbId).maybeSingle(),
   ])
 
   const posts = dpRes.data ?? []
@@ -849,6 +850,7 @@ async function lmsGetCaseStudy(req, res, adminClient) {
       socraticDate: extra.socraticDate ?? null,
       socraticBrief: extra.socraticBrief ?? null,
       presentationBrief: extra.presentationBrief ?? null,
+      assignedRole: roleRes.data ? { number: roleRes.data.role_number, label: roleRes.data.role_label, text: roleRes.data.role_text } : null,
     },
     scores: (scRes.data ?? []).map((s) => ({
       componentType: s.component_type,
@@ -1177,6 +1179,40 @@ async function lmsGetMySubmissions(req, res, adminClient) {
   })
 }
 
+/** Course Progression Settings ("On") needs to know, for every module's carrier item at
+ *  once, whether Show It (debate) and Prove It (omr) are scored and whether Discussion
+ *  Board has a post — students can't query lms_score_components/lms_discussion_posts
+ *  directly (RLS requires real Supabase Auth, which the student portal doesn't use), so
+ *  this mirrors lms-get-my-submissions: unscoped by content/course, one call per load. */
+async function lmsGetMyProgressionStatus(req, res, adminClient) {
+  if (req.method !== 'GET') {
+    res.setHeader('Allow', 'GET')
+    return json(res, 405, { error: 'Method not allowed' })
+  }
+
+  const studentDbId = requireStudentToken(req, res, json)
+  if (!studentDbId) return
+
+  const [scRes, dpRes] = await Promise.all([
+    adminClient.from('lms_score_components').select('content_id,component_type,status').eq('student_id', studentDbId).in('component_type', ['debate', 'omr']),
+    adminClient.from('lms_discussion_posts').select('content_id').eq('student_id', studentDbId).eq('phase', 'master').is('deleted_at', null),
+  ])
+  if (scRes.error) return json(res, 500, { error: scRes.error.message })
+  if (dpRes.error) return json(res, 500, { error: dpRes.error.message })
+
+  const scores = {}
+  for (const row of scRes.data ?? []) {
+    if (!scores[row.content_id]) scores[row.content_id] = {}
+    scores[row.content_id][row.component_type] = row.status
+  }
+  const discussionCounts = {}
+  for (const row of dpRes.data ?? []) {
+    discussionCounts[row.content_id] = (discussionCounts[row.content_id] ?? 0) + 1
+  }
+
+  return json(res, 200, { scores, discussionCounts })
+}
+
 // Default OMR category weight, mirrored from CASE_STUDY_RUBRIC.omr.weight in
 // src/lib/lms/caseStudyRubric.ts (this file can't import from src/).
 const DEFAULT_OMR_WEIGHT = 25
@@ -1228,12 +1264,14 @@ async function lmsSubmitOmrQuiz(req, res, adminClient) {
     return json(res, 409, { error: 'No attempts remaining.' })
   }
 
+  const mcqQuestions = questions.filter((q) => (q.type ?? 'mcq') !== 'short')
   let correct = 0
-  questions.forEach((q, qi) => {
+  mcqQuestions.forEach((q) => {
+    const qi = questions.indexOf(q)
     if (answers[qi] === q.ans) correct++
   })
-  const total = questions.length
-  const pct = total > 0 ? Math.round((correct / total) * 100) : 0
+  const total = mcqQuestions.length
+  const pct = total > 0 ? Math.round((correct / total) * 100) : 100
   const passed = pct >= passMark
   const subtotal = Math.round((pct / 100) * weight)
   const bestSubtotal = Math.max(Number(existing?.subtotal ?? 0), subtotal)
@@ -1706,6 +1744,7 @@ const ACTIONS = {
   'lms-submit-notes': lmsSubmitNotes,
   'lms-get-my-submissions': lmsGetMySubmissions,
   'lms-submit-omr-quiz': lmsSubmitOmrQuiz,
+  'lms-get-my-progression-status': lmsGetMyProgressionStatus,
 }
 
 export default async function handler(req, res) {

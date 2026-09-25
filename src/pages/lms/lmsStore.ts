@@ -128,6 +128,11 @@ export interface LMSContent {
   presentationVideoUrl?: string
   presentationVideoFileName?: string
   presentationTargetDate?: string | null
+  // Master It — Discussion Board description: what students are meant to discuss,
+  // shown above the post feed. Optional attachment (prompt doc, rubric, image).
+  discussionBrief?: string
+  discussionBriefUrl?: string
+  discussionBriefFileName?: string
   rubricOverrides?: RubricOverrides
   // A lesson's own deadline (Tutorial/default). Notes and Mastery Test inside that
   // lesson can each optionally be given their own deadline instead — when unset they
@@ -197,7 +202,7 @@ export function rowToLMSCourse(r: Record<string, unknown>): LMSCourse {
     endDate: (r.end_date as string) ?? null,
     preTestExemptionThreshold: r.pre_test_exemption_threshold != null ? Number(r.pre_test_exemption_threshold) : 80,
     masteryRetakes: (r.mastery_retakes as string) ?? 'unlimited',
-    progressionMode: (r.progression_mode as string) ?? 'open',
+    progressionMode: (r.progression_mode as string) ?? 'off',
     selfEnrollEnabled: r.self_enroll_enabled === true,
     selfEnrollCode: (r.self_enroll_code as string) ?? null,
     selfEnrollPassword: (r.self_enroll_password as string) ?? null,
@@ -286,6 +291,9 @@ export function rowToLMSContent(r: Record<string, unknown>): LMSContent {
     presentationVideoUrl: extra.presentationVideoUrl as string | undefined,
     presentationVideoFileName: extra.presentationVideoFileName as string | undefined,
     presentationTargetDate: (extra.presentationTargetDate as string) ?? null,
+    discussionBrief: extra.discussionBrief as string | undefined,
+    discussionBriefUrl: extra.discussionBriefUrl as string | undefined,
+    discussionBriefFileName: extra.discussionBriefFileName as string | undefined,
     rubricOverrides: extra.rubricOverrides as RubricOverrides | undefined,
     targetDate: (extra.targetDate as string) ?? null,
     notesTargetDate: (extra.notesTargetDate as string) ?? null,
@@ -431,7 +439,7 @@ export async function saveLMS(store: LMSStore): Promise<string | null> {
       group_id: c.groupId ?? null, start_date: c.startDate || null, end_date: c.endDate || null,
       pre_test_exemption_threshold: c.preTestExemptionThreshold ?? 80,
       mastery_retakes: c.masteryRetakes ?? 'unlimited',
-      progression_mode: c.progressionMode ?? 'open',
+      progression_mode: c.progressionMode ?? 'off',
       self_enroll_enabled: c.selfEnrollEnabled === true,
       self_enroll_code: c.selfEnrollCode ?? null,
       self_enroll_password: c.selfEnrollPassword ?? null,
@@ -472,6 +480,7 @@ export async function saveLMS(store: LMSStore): Promise<string | null> {
           presentationBriefUrl: c.presentationBriefUrl, presentationBriefFileName: c.presentationBriefFileName,
           presentationVideoUrl: c.presentationVideoUrl, presentationVideoFileName: c.presentationVideoFileName,
           presentationTargetDate: c.presentationTargetDate,
+          discussionBrief: c.discussionBrief, discussionBriefUrl: c.discussionBriefUrl, discussionBriefFileName: c.discussionBriefFileName,
           rubricOverrides: c.rubricOverrides,
           targetDate: c.targetDate, notesTargetDate: c.notesTargetDate, masteryTargetDate: c.masteryTargetDate,
           locked: c.locked, hidden: c.hidden, excludedFromGrade: c.excludedFromGrade,

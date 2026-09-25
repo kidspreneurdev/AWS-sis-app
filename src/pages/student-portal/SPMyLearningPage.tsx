@@ -363,7 +363,7 @@ interface CSPostData {
 }
 interface CSAppealData { id: string; componentType: string; message: string; status: 'open' | 'resolved'; adminReply: string | null }
 interface CaseStudyBundle {
-  lesson: { id: string; title: string; caseStudyUrl: string | null; moduleDescription: string | null; omrFormUrl: string | null; socraticDate: string | null; socraticBrief: string | null; presentationBrief: string | null }
+  lesson: { id: string; title: string; caseStudyUrl: string | null; moduleDescription: string | null; omrFormUrl: string | null; socraticDate: string | null; socraticBrief: string | null; presentationBrief: string | null; assignedRole: { number: number | null; label: string; text: string | null } | null }
   scores: CSScoreData[]
   discussion: { myStudentId: string; posts: CSPostData[] }
   presentation: { note: string | null; linkUrl: string | null; submittedAt: string } | null
@@ -586,7 +586,7 @@ function OmrQuiz({ carrierItem, score, onSubmitted }: {
   const maxAttempts = carrierItem.omrRetakes ?? 3
   const timeLimitSecs = (carrierItem.omrTimeLimit ?? 0) * 60
 
-  let questions: Array<{ q: string; opts: string[]; ans: number }> = []
+  let questions: Array<{ q: string; type?: 'mcq' | 'short'; opts: string[]; ans: number }> = []
   try { questions = JSON.parse(carrierItem.omrQuizJson ?? '[]') } catch { /* empty */ }
 
   const priorCorrect = score?.criteriaScores?.correct
@@ -597,7 +597,7 @@ function OmrQuiz({ carrierItem, score, onSubmitted }: {
 
   const [phase, setPhase] = useState<'quiz' | 'result'>(alreadyScored ? 'result' : 'quiz')
   const [qIdx, setQIdx] = useState(0)
-  const [answers, setAnswers] = useState<Record<number, number>>({})
+  const [answers, setAnswers] = useState<Record<number, number | string>>({})
   const [attemptsUsed, setAttemptsUsed] = useState(priorAttempts)
   const [result, setResult] = useState<{ score: number; passed: boolean; correct: number; total: number } | null>(
     alreadyScored ? { score: Math.round((priorCorrect! / priorTotal!) * 100), passed: priorPassed, correct: priorCorrect!, total: priorTotal! } : null,
@@ -620,7 +620,7 @@ function OmrQuiz({ carrierItem, score, onSubmitted }: {
     )
   }
 
-  async function submitQuiz(ans: Record<number, number>) {
+  async function submitQuiz(ans: Record<number, number | string>) {
     setSaving(true)
     try {
       const data = await studentPortalFetch(getToken(), '/api/student-portal/lms-submit-omr-quiz', {
@@ -655,6 +655,9 @@ function OmrQuiz({ carrierItem, score, onSubmitted }: {
         <div style={{ fontSize: 16, color: 'rgba(255,255,255,.85)', marginBottom: 14 }}>
           {result.passed ? `You passed with ${result.score}% (${result.correct}/${result.total} correct)` : `You scored ${result.score}% (${result.correct}/${result.total} correct) — you need ${passMark}% to pass`}
         </div>
+        {questions.some(q => (q.type ?? 'mcq') === 'short') && (
+          <div style={{ fontSize: 13, color: 'rgba(255,255,255,.85)', marginBottom: 14 }}>Short-answer questions aren't included in this score — your teacher will review those separately.</div>
+        )}
         {!result.passed && remainingAttempts > 0 && (
           <button onClick={retry} style={{ padding: '9px 20px', background: '#fff', color: '#DC2626', border: 'none', borderRadius: 9, fontSize: 16, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><RefreshCw size={13} /> Try Again ({remainingAttempts} attempt{remainingAttempts !== 1 ? 's' : ''} left)</span>
@@ -669,6 +672,7 @@ function OmrQuiz({ carrierItem, score, onSubmitted }: {
 
   const currentQ = questions[qIdx]
   const isLast = qIdx === questions.length - 1
+  const isShort = (currentQ.type ?? 'mcq') === 'short'
   const timedOut = timeLimitSecs > 0 && timeLeft === 0
 
   return (
@@ -699,20 +703,30 @@ function OmrQuiz({ carrierItem, score, onSubmitted }: {
       </div>
       <div style={{ background: '#fff', border: '1.5px solid #E4EAF2', borderRadius: 12, padding: '16px 18px', marginBottom: 14 }}>
         <div style={{ fontSize: 16, fontWeight: 700, color: '#1A365E', lineHeight: 1.6, marginBottom: 14 }}>{currentQ.q}</div>
-        {currentQ.opts.map((opt, oi) => {
-          const selected = answers[qIdx] === oi
-          return (
-            <label
-              key={oi}
-              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 9, cursor: 'pointer', fontSize: 16, color: selected ? '#1A365E' : '#3D5475', marginBottom: 6, background: selected ? '#EEF3FF' : '#fff', border: `1.5px solid ${selected ? '#1A365E' : '#E4EAF2'}`, transition: 'all .15s' }}
-              onClick={() => setAnswers((p) => ({ ...p, [qIdx]: oi }))}
-            >
-              <input type="radio" name={`omr_q_${qIdx}`} value={oi} checked={selected} onChange={() => setAnswers((p) => ({ ...p, [qIdx]: oi }))} style={{ flexShrink: 0, accentColor: '#1A365E' }} readOnly />
-              <span style={{ fontSize: 14, fontWeight: 800, color: '#7A92B0', background: '#F0F4FA', padding: '2px 7px', borderRadius: 4, flexShrink: 0 }}>{String.fromCharCode(65 + oi)}</span>
-              <span>{opt}</span>
-            </label>
-          )
-        })}
+        {isShort ? (
+          <textarea
+            rows={5}
+            placeholder="Type your answer here..."
+            value={String(answers[qIdx] ?? '')}
+            onChange={(e) => setAnswers((p) => ({ ...p, [qIdx]: e.target.value }))}
+            style={{ width: '100%', padding: 10, border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 16, fontFamily: 'Poppins,sans-serif', resize: 'vertical', boxSizing: 'border-box' }}
+          />
+        ) : (
+          currentQ.opts.map((opt, oi) => {
+            const selected = answers[qIdx] === oi
+            return (
+              <label
+                key={oi}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 9, cursor: 'pointer', fontSize: 16, color: selected ? '#1A365E' : '#3D5475', marginBottom: 6, background: selected ? '#EEF3FF' : '#fff', border: `1.5px solid ${selected ? '#1A365E' : '#E4EAF2'}`, transition: 'all .15s' }}
+                onClick={() => setAnswers((p) => ({ ...p, [qIdx]: oi }))}
+              >
+                <input type="radio" name={`omr_q_${qIdx}`} value={oi} checked={selected} onChange={() => setAnswers((p) => ({ ...p, [qIdx]: oi }))} style={{ flexShrink: 0, accentColor: '#1A365E' }} readOnly />
+                <span style={{ fontSize: 14, fontWeight: 800, color: '#7A92B0', background: '#F0F4FA', padding: '2px 7px', borderRadius: 4, flexShrink: 0 }}>{String.fromCharCode(65 + oi)}</span>
+                <span>{opt}</span>
+              </label>
+            )
+          })
+        )}
       </div>
       <button
         onClick={isLast || timedOut ? () => void submitQuiz(answers) : () => setQIdx((p) => p + 1)}
@@ -775,6 +789,13 @@ function PresentationPanel({ carrierItem, studentId }: { carrierItem: LMSContent
   return (
     <>
       <div style={{ ...card, padding: '14px 16px', fontSize: 16, color: '#3D5475', lineHeight: 1.6 }}>{carrierItem.presentationBrief || DEFAULT_PRESENTATION_BRIEF}</div>
+      {bundle.lesson.assignedRole && (
+        <div style={{ ...card, padding: '14px 16px', borderColor: '#BFDBFE', background: '#EFF6FF' }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: '#1A365E', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 4 }}>Your Assigned Question</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E' }}>{bundle.lesson.assignedRole.label}</div>
+          {bundle.lesson.assignedRole.text && <div style={{ fontSize: 15, color: '#3D5475', lineHeight: 1.6, marginTop: 4 }}>{bundle.lesson.assignedRole.text}</div>}
+        </div>
+      )}
       {carrierItem.presentationBriefUrl && (
         <a href={carrierItem.presentationBriefUrl} target="_blank" rel="noreferrer" style={{ ...card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
           <FileText size={18} color="#1A365E" />
@@ -951,6 +972,7 @@ function DiscussionBoardPanel({ carrierItem, studentId }: { carrierItem: LMSCont
       posts={posts}
       busy={busy}
       readOnly={readOnly}
+      description={{ text: carrierItem.discussionBrief ?? null, attachmentUrl: carrierItem.discussionBriefUrl ?? null, attachmentFileName: carrierItem.discussionBriefFileName ?? null }}
       onCreateTopic={({ title, body, file }) => handleCreateTopic({ title, body, file })}
       onCreateReply={handleCreateReply}
       onEditPost={handleEdit}
@@ -1225,14 +1247,27 @@ const ROW_STATUS_META: Record<RowStatus, { bar: string; textColor: string; icon:
 // below) or a low-opacity tint of a hue that already exists in the design system
 // (Show It / Discussion reuse the English-Arts and World-Language subject colors
 // from SUBJECT_COLORS) — nothing here is a newly invented hue.
-type StageKey = 'learn' | 'do' | 'show' | 'prove' | 'master' | 'discussion'
-const STAGE_META: Record<StageKey, { label: string; icon: LucideIcon; text: string; bg: string }> = {
-  learn: { label: 'Learn It', icon: FileText, text: '#059669', bg: '#DCFCE7' },
-  do: { label: 'Do It', icon: BookOpen, text: '#2563EB', bg: '#DBEAFE' },
-  show: { label: 'Show It', icon: Scale, text: '#8B5CF6', bg: 'rgba(139,92,246,.13)' },
-  prove: { label: 'Prove It', icon: Calculator, text: SP_RED, bg: '#FEE2E2' },
-  master: { label: 'Master It', icon: Trophy, text: '#92400E', bg: '#FEF3C7' },
-  discussion: { label: 'Discuss', icon: MessageSquare, text: '#0891B2', bg: 'rgba(8,145,178,.12)' },
+// Discussion Board isn't its own stage — it's a second Master It activity
+// (alongside the Presentation), so it shares the "master" identity below rather
+// than getting its own StageKey/pill.
+type StageKey = 'learn' | 'do' | 'show' | 'prove' | 'master'
+const STAGE_META: Record<StageKey, { label: string; icon: LucideIcon; img?: string; text: string; bg: string }> = {
+  learn: { label: 'Learn It', icon: FileText, img: '/LMS/icons/learn.png', text: '#059669', bg: '#DCFCE7' },
+  do: { label: 'Do It', icon: BookOpen, img: '/LMS/icons/do.png', text: '#2563EB', bg: '#DBEAFE' },
+  show: { label: 'Show It', icon: Scale, img: '/LMS/icons/show.png', text: '#8B5CF6', bg: 'rgba(139,92,246,.13)' },
+  prove: { label: 'Prove It', icon: Calculator, img: '/LMS/icons/prove.png', text: SP_RED, bg: '#FEE2E2' },
+  master: { label: 'Master It', icon: Trophy, img: '/LMS/icons/master.png', text: '#92400E', bg: '#FEF3C7' },
+}
+
+// The five "It" stages use the brand's hand-drawn multi-color icon set; Discussion
+// Board (not part of that set) falls back to its Lucide icon. Centralized here so
+// ContentRow and the unit stepper never fall out of sync on which to show.
+function StageIcon({ stage, size, locked }: { stage: StageKey; size: number; locked?: boolean }) {
+  if (locked) return <Lock size={size} />
+  const meta = STAGE_META[stage]
+  if (meta.img) return <img src={meta.img} alt="" style={{ width: size * 1.4, height: size * 1.4, objectFit: 'contain' }} />
+  const Icon = meta.icon
+  return <Icon size={size} />
 }
 
 function rowBuckets(status: RowStatus, targetDate?: string | null): ContentFilterId[] {
@@ -1281,7 +1316,6 @@ function ContentRow({ stage, title, targetDate, status, statusText, score, passM
   const stageMeta = STAGE_META[stage]
   const meta = locked ? { bar: '#E4EAF2', textColor: '#94A3B8', icon: Lock } : ROW_STATUS_META[status]
   const dateInfo = targetDate ? formatShortDate(targetDate) : null
-  const Icon = locked ? Lock : stageMeta.icon
   const StatusIcon = meta.icon
   const clickable = !!onClick && !locked
 
@@ -1299,7 +1333,7 @@ function ContentRow({ stage, title, targetDate, status, statusText, score, passM
         {dateInfo ? <>{dateInfo.dow}<br />{dateInfo.short}</> : 'No date'}
       </span>
       <span style={{ width: 40, height: 40, borderRadius: 11, background: locked ? '#F0F4FA' : stageMeta.bg, color: locked ? '#94A3B8' : stageMeta.text, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-        <Icon size={18} />
+        <StageIcon stage={stage} size={18} locked={locked} />
       </span>
       <span style={{ minWidth: 0 }}>
         <div style={{ fontSize: 15, fontWeight: 700, color: locked ? '#94A3B8' : '#1A365E', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
@@ -1382,6 +1416,7 @@ export function SPMyLearningPage() {
   const [progress, setProgress] = useState<LMSProgress[]>([])
   const [enrolments, setEnrolments] = useState<LMSEnrolment[]>([])
   const [mySubmissions, setMySubmissions] = useState<MySubmission[]>([])
+  const [progressionStatus, setProgressionStatus] = useState<{ scores: Record<string, Record<string, string>>; discussionCounts: Record<string, number> }>({ scores: {}, discussionCounts: {} })
   const [loading, setLoading] = useState(true)
   const [activeCourse, setActiveCourse] = useState<string | null>(null)
   const [search, setSearch] = useState('')
@@ -1474,7 +1509,7 @@ export function SPMyLearningPage() {
     // Curriculum belongs to the Course (group), shared by every section — load content by group_id.
     const groupIds = [...new Set((cData ?? []).map((r: Record<string, unknown>) => (r.group_id as string) ?? (r.id as string)).filter(Boolean))]
     const { data: coData } = await supabase.from('lms_content').select('*')
-      .in('course_id', groupIds).order('unit_order').order('module_order').order('order_idx')
+      .in('course_id', groupIds).order('unit_order').order('order_idx')
 
     const mappedCourses: LMSCourse[] = (cData ?? []).map(rowToLMSCourse)
 
@@ -1504,6 +1539,13 @@ export function SPMyLearningPage() {
       setMySubmissions((subsData as { submissions: MySubmission[] }).submissions ?? [])
     } catch {
       setMySubmissions([])
+    }
+
+    try {
+      const progressionData = await studentPortalFetch(getToken(), '/api/student-portal/lms-get-my-progression-status')
+      setProgressionStatus(progressionData as { scores: Record<string, Record<string, string>>; discussionCounts: Record<string, number> })
+    } catch {
+      setProgressionStatus({ scores: {}, discussionCounts: {} })
     }
 
     setLoading(false)
@@ -1651,9 +1693,24 @@ export function SPMyLearningPage() {
   const selectedEnrolment = selectedCourse ? enrolments.find((entry) => entry.courseId === selectedCourse.id) ?? null : null
   const courseItems = useMemo(() => {
     if (!selectedCourse) return []
-    return content
-      .filter((item) => item.courseId === (selectedCourse.groupId ?? selectedCourse.id))
-      .sort((a, b) => (a.unitOrder ?? 0) - (b.unitOrder ?? 0) || (a.moduleOrder ?? 0) - (b.moduleOrder ?? 0) || (a.order ?? 0) - (b.order ?? 0))
+    const items = content.filter((item) => item.courseId === (selectedCourse.groupId ?? selectedCourse.id))
+    // Two-pass sort, mirroring the Curriculum Builder (LMSPage.tsx renderCurriculum): rank
+    // modules (unitTitle) by unitOrder, tie-broken by fetch/order_idx — NOT by moduleOrder,
+    // which is a per-module lesson counter that restarts near 0 in every module. Using it to
+    // break a cross-module tie compares unrelated counters and can flip whole modules out of
+    // order. moduleOrder only matters once we're sequencing lessons inside one module.
+    const unitRank = new Map<string, number>()
+    ;[...items]
+      .sort((a, b) => (a.unitOrder ?? 0) - (b.unitOrder ?? 0) || (a.order ?? 0) - (b.order ?? 0))
+      .forEach((item) => {
+        const key = item.unitTitle || ''
+        if (!unitRank.has(key)) unitRank.set(key, unitRank.size)
+      })
+    return items.sort((a, b) => {
+      const rankDiff = (unitRank.get(a.unitTitle || '') ?? 0) - (unitRank.get(b.unitTitle || '') ?? 0)
+      if (rankDiff !== 0) return rankDiff
+      return (a.moduleOrder ?? 0) - (b.moduleOrder ?? 0) || (a.order ?? 0) - (b.order ?? 0)
+    })
   }, [content, selectedCourse])
 
   const groupedModules = useMemo(() => {
@@ -1706,20 +1763,21 @@ export function SPMyLearningPage() {
     }
   }
 
-  // Sequential Completion / Mastery Learning with Sequential Completion — set per
-  // course by an admin (Course Progression Settings). "Open" and plain "Mastery
-  // Learning" never lock navigation here; only the two sequential modes do.
-  const sequentialLock = selectedCourse?.progressionMode === 'sequential' || selectedCourse?.progressionMode === 'mastery_sequential'
+  // Course Progression Settings, set per course by an admin. "Off" never locks
+  // navigation here; "On" gates each activity behind the previous one.
+  const sequentialLock = selectedCourse?.progressionMode === 'on'
 
-  // Show It / Prove It have no trackable completion signal yet (no submission or
-  // score is recorded for them), so they're treated as auto-complete for gating —
-  // otherwise they'd permanently block Master It with no way for a student to clear them.
+  // Show It (debate) and Prove It (omr) are complete once a teacher has scored that
+  // rubric category; Discussion Board is complete once the student has posted at least
+  // once (it's intentionally excluded from grading — see caseStudyRubric.ts).
   function isGroupComplete(ref: ActivityGroupRef): boolean {
-    if (ref.kind === 'show' || ref.kind === 'prove' || ref.kind === 'discussion') return true
     const item = courseItems.find((i) => i.id === ref.contentId)
     if (!item) return false
     if (ref.kind === 'learn') return hasSubmission(item.id, 'case_study_notes')
+    if (ref.kind === 'show') return progressionStatus.scores[item.id]?.debate === 'scored'
+    if (ref.kind === 'prove') return progressionStatus.scores[item.id]?.omr === 'scored'
     if (ref.kind === 'master') return hasSubmission(item.id, 'presentation')
+    if (ref.kind === 'discussion') return (progressionStatus.discussionCounts[item.id] ?? 0) > 0
     const itemProgress = progress.find((entry) => entry.contentId === item.id && entry.studentId === session?.dbId)
     const tutorialDone = itemProgress?.status === 'completed'
     const hasMastery = item.hasMastery === true || item.hasMastery === 'TRUE'
@@ -1863,13 +1921,11 @@ export function SPMyLearningPage() {
                           <ClipboardList size={12} /><span>{pendingAssignments} assignment{pendingAssignments !== 1 ? 's' : ''} need attention</span>
                         </div>
                       )}
-                      {course.announcement?.trim() ? (
+                      {course.announcement?.trim() && (
                         <div style={{ marginBottom: 8, padding: '7px 10px', background: '#1A365E0D', borderLeft: '3px solid #1A365E', borderRadius: '0 7px 7px 0', display: 'flex', alignItems: 'flex-start', gap: 7 }}>
                           <Megaphone size={13} color="#1A365E" style={{ flexShrink: 0 }} />
                           <div style={{ fontSize: 14, color: '#1A365E', lineHeight: 1.5 }}>{course.announcement.length > 80 ? `${course.announcement.slice(0, 80)}…` : course.announcement}</div>
                         </div>
-                      ) : (
-                        <div style={{ ...emptyState, marginBottom: 8, padding: '8px 10px' }}>No course announcement posted yet.</div>
                       )}
                       <div style={{ marginTop: 8, padding: '8px 12px', background: subjectCol, color: '#fff', borderRadius: 8, fontSize: 15, fontWeight: 700, textAlign: 'center' }}>
                         <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
@@ -1897,7 +1953,7 @@ export function SPMyLearningPage() {
 
         return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {selectedCourse.announcement?.trim() ? (
+          {selectedCourse.announcement?.trim() && (
             <div style={{ background: 'linear-gradient(135deg,#1A365E,#0F2240)', borderRadius: 11, padding: '12px 16px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
               <Megaphone size={20} color="#fff" style={{ flexShrink: 0 }} />
               <div>
@@ -1905,8 +1961,6 @@ export function SPMyLearningPage() {
                 <div style={{ fontSize: 16, color: '#fff', lineHeight: 1.6 }}>{selectedCourse.announcement}</div>
               </div>
             </div>
-          ) : (
-            <div style={{ ...card, ...emptyState }}>No course announcement has been posted for this course yet.</div>
           )}
 
           <div style={{ ...card, padding: '16px 20px' }}>
@@ -2023,8 +2077,10 @@ export function SPMyLearningPage() {
                     do: { done: lessonItems.filter(lessonIsComplete).length, total: lessonItems.length },
                     show: { done: 0, total: carrierItem ? 1 : 0 },
                     prove: { done: 0, total: carrierItem ? 1 : 0 },
-                    master: { done: carrierItem && hasSubmission(carrierItem.id, 'presentation') ? 1 : 0, total: carrierItem ? 1 : 0 },
-                    discussion: { done: 0, total: carrierItem ? 1 : 0 },
+                    // Master It covers two activities — Presentation and Discussion Board.
+                    // Discussion has no completion signal tracked yet, so it always
+                    // contributes to the total but never to done, same as its row below.
+                    master: { done: carrierItem && hasSubmission(carrierItem.id, 'presentation') ? 1 : 0, total: carrierItem ? 2 : 0 },
                   }
                   const unitDone = Object.values(stageCounts).reduce((sum, s) => sum + s.done, 0)
                   const unitTotal = Object.values(stageCounts).reduce((sum, s) => sum + s.total, 0)
@@ -2057,7 +2113,7 @@ export function SPMyLearningPage() {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '0 18px 16px' }}>
 
                           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4, flexWrap: 'wrap' }}>
-                            {(['learn', 'do', 'show', 'prove', 'master', 'discussion'] as StageKey[]).map((key, i, arr) => {
+                            {(['learn', 'do', 'show', 'prove', 'master'] as StageKey[]).map((key, i, arr) => {
                               const meta = STAGE_META[key]
                               const s = stageCounts[key]
                               const stepDone = s.total > 0 && s.done === s.total
@@ -2066,7 +2122,7 @@ export function SPMyLearningPage() {
                                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: 58 }}>
                                     <span style={{ position: 'relative' }}>
                                       <span style={{ width: 34, height: 34, borderRadius: '50%', background: meta.bg, color: meta.text, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                        <meta.icon size={15} />
+                                        <StageIcon stage={key} size={15} />
                                       </span>
                                       {stepDone && (
                                         <span style={{ position: 'absolute', bottom: -2, right: -2, width: 13, height: 13, borderRadius: '50%', background: SP_GREEN, border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -2166,7 +2222,7 @@ export function SPMyLearningPage() {
                                 onClick={() => openGroup('master', carrierItem.id)} activeFilter={contentFilter}
                               />
                               <ContentRow
-                                stage="discussion" title="Master It · Discussion Board" targetDate={carrierItem.targetDate}
+                                stage="master" title="Master It · Discussion Board" targetDate={carrierItem.targetDate}
                                 status="not_started" statusText="Join the conversation"
                                 locked={isGroupLocked({ key: `discussion:${carrierItem.id}`, kind: 'discussion', contentId: carrierItem.id })}
                                 lockReason={groupLockReason({ key: `discussion:${carrierItem.id}`, kind: 'discussion', contentId: carrierItem.id })}

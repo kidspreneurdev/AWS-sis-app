@@ -17,6 +17,7 @@ import {
   type LMSCourse, type LMSContent, type LMSEnrolment, type LMSProgress, type LMSStore, type LMSCourseGroup
 } from './lmsStore'
 import { CASE_STUDY_RUBRIC, SCORE_COMPONENT_TYPES, categorySubtotalOf, getEffectiveRubric, finalGrade, DEFAULT_PRESENTATION_BRIEF, type ScoreComponentType, type RubricCategory, type RubricOverrides } from '@/lib/lms/caseStudyRubric'
+import { PRESENTATION_ROLE_MODULES, guessPresentationRoleModule } from '@/lib/lms/presentationRoles'
 
 interface Student { id: string; lastName: string; firstName: string; fullName: string; cohort: string; grade: string; studentId: string; campus: string; status: string }
 type LMSSubmissionRow = Record<string, unknown>
@@ -32,6 +33,16 @@ const labelStyle: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: 
 const inputStyle: React.CSSProperties = { width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 12, color: '#1A365E', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
 const selectStyle: React.CSSProperties = { ...inputStyle }
 const taStyle: React.CSSProperties = { ...inputStyle, resize: 'vertical' as const }
+
+// Standard modal-header close button — every popup gets one so there's always an obvious
+// way out, independent of whatever action buttons sit in its footer. Two flavors: light
+// circle for a dark/gradient header, dark circle for a plain white one.
+const modalCloseBtnOnDark: React.CSSProperties = { width: 28, height: 28, borderRadius: '50%', border: '1px solid rgba(255,255,255,.3)', background: 'rgba(255,255,255,.12)', color: '#fff', cursor: 'pointer', fontSize: 14, fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }
+const modalCloseBtnOnLight: React.CSSProperties = { width: 28, height: 28, borderRadius: '50%', border: '1px solid #E4EAF2', background: '#F0F4FA', color: '#1A365E', cursor: 'pointer', fontSize: 14, fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }
+// Back-to-parent-popup button — only for a popup that was opened from inside another
+// still-open popup (e.g. Master It's Assign to Students). Distinct from the close button:
+// this returns to the parent popup, close exits the whole stack.
+const modalBackBtnOnDark: React.CSSProperties = { padding: '5px 10px', borderRadius: 20, border: '1px solid rgba(255,255,255,.3)', background: 'rgba(255,255,255,.12)', color: '#fff', cursor: 'pointer', fontSize: 11, fontWeight: 700, fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0 }
 
 // ─── Confirm / Prompt dialogs — in-app replacements for window.confirm() / prompt() ──
 // Native browser dialogs render as unstyled OS chrome (and pick up the OS's dark/light
@@ -59,7 +70,10 @@ function ConfirmDialog({ state, onClose }: { state: ConfirmDialogState; onClose:
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, backdropFilter: 'blur(4px)' }}
       onClick={e => { if (e.target === e.currentTarget && !busy) onClose() }}>
       <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 420, boxShadow: '0 24px 60px rgba(0,0,0,.3)', padding: '22px 24px' }}>
-        <div style={{ fontSize: 15, fontWeight: 800, color: '#1A365E' }}>{state.title}</div>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: '#1A365E' }}>{state.title}</div>
+          <button onClick={onClose} disabled={busy} title="Close" style={modalCloseBtnOnLight}>✕</button>
+        </div>
         <div style={{ fontSize: 12.5, color: '#5A7290', lineHeight: 1.55, marginTop: 8 }}>{state.message}</div>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 20 }}>
           <button onClick={onClose} disabled={busy}
@@ -89,7 +103,10 @@ function PromptDialog({ state, onClose }: { state: PromptDialogState; onClose: (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, backdropFilter: 'blur(4px)' }}
       onClick={e => { if (e.target === e.currentTarget) onClose() }}>
       <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 420, boxShadow: '0 24px 60px rgba(0,0,0,.3)', padding: '22px 24px' }}>
-        <div style={{ fontSize: 15, fontWeight: 800, color: '#1A365E', marginBottom: 12 }}>{state.title}</div>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: '#1A365E' }}>{state.title}</div>
+          <button onClick={onClose} title="Close" style={modalCloseBtnOnLight}>✕</button>
+        </div>
         {state.label && <label style={labelStyle}>{state.label}</label>}
         <input
           ref={inputRef}
@@ -127,7 +144,10 @@ function SectionPickerModal({ state, onPick, onClose }: {
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, backdropFilter: 'blur(4px)' }}
       onClick={e => { if (e.target === e.currentTarget) onClose() }}>
       <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 420, boxShadow: '0 24px 60px rgba(0,0,0,.3)', padding: '22px 24px' }}>
-        <div style={{ fontSize: 15, fontWeight: 800, color: '#1A365E', marginBottom: 4 }}>{SECTION_PICKER_LABELS[state.type]}</div>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: '#1A365E', marginBottom: 4 }}>{SECTION_PICKER_LABELS[state.type]}</div>
+          <button onClick={onClose} title="Close" style={modalCloseBtnOnLight}>✕</button>
+        </div>
         <div style={{ fontSize: 11, color: '#7A92B0', marginBottom: 14 }}>Which module?</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 320, overflowY: 'auto' }}>
           {state.options.map(o => (
@@ -163,7 +183,10 @@ function ModulePickerModal({ state, onPick, onNewModule, onClose }: {
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, backdropFilter: 'blur(4px)' }}
       onClick={e => { if (e.target === e.currentTarget) onClose() }}>
       <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 420, boxShadow: '0 24px 60px rgba(0,0,0,.3)', padding: '22px 24px' }}>
-        <div style={{ fontSize: 15, fontWeight: 800, color: '#1A365E', marginBottom: 4 }}>{MODULE_PICKER_LABELS[state.purpose]}</div>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: '#1A365E', marginBottom: 4 }}>{MODULE_PICKER_LABELS[state.purpose]}</div>
+          <button onClick={onClose} title="Close" style={modalCloseBtnOnLight}>✕</button>
+        </div>
         <div style={{ fontSize: 11, color: '#7A92B0', marginBottom: 14 }}>Which module?</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 320, overflowY: 'auto' }}>
           {state.units.map(u => (
@@ -248,8 +271,9 @@ function EnrolModal({ courses, students, cohorts, onSave, onClose }: EnrolModalP
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, backdropFilter: 'blur(4px)' }} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
       <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 500, boxShadow: '0 24px 60px rgba(0,0,0,.3)' }}>
-        <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '18px 24px', borderRadius: '18px 18px 0 0' }}>
+        <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '18px 24px', borderRadius: '18px 18px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>👥 Assign Course</div>
+          <button onClick={onClose} title="Close" style={modalCloseBtnOnDark}>✕</button>
         </div>
         <div style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div><label style={labelStyle}>Course *</label><select value={courseId} onChange={e => setCourseId(e.target.value)} style={selectStyle}>{courses.map(co => <option key={co.id} value={co.id}>{co.title}</option>)}</select></div>
@@ -1110,6 +1134,8 @@ export function LMSPage() {
   const [sectionModal, setSectionModal] = useState<{ type: 'socratic' | 'omr' | 'presentation'; contentId: string } | null>(null)
   // Master It — Discussion Board moderation view, opened from its own curriculum row.
   const [discussionBoardContentId, setDiscussionBoardContentId] = useState<string | null>(null)
+  // Master It — per-student role/question assignment, opened from its SectionModal popup.
+  const [assignRolesContentId, setAssignRolesContentId] = useState<string | null>(null)
   // "+ Show It / + Prove It / + Master It" toolbar buttons need to know WHICH module's
   // case study to open SectionModal for — if there's more than one candidate, ask first.
   const [sectionPicker, setSectionPicker] = useState<{ type: 'socratic' | 'omr' | 'presentation'; options: { unitTitle: string; contentId: string }[] } | null>(null)
@@ -1121,7 +1147,7 @@ export function LMSPage() {
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null)
   const [promptDialog, setPromptDialog] = useState<PromptDialogState | null>(null)
   const [previewItem, setPreviewItem] = useState<LMSContent | null>(null)
-  const [scoreModal, setScoreModal] = useState<{ studentId: string; studentName: string; contentId: string; courseId: string; lessonTitle: string; caseStudyUrl?: string; omrFormUrl?: string; omrWeight?: number; socraticDate?: string; socraticBrief?: string; presentationBrief?: string; rubricOverrides?: RubricOverrides } | null>(null)
+  const [scoreModal, setScoreModal] = useState<{ studentId: string; studentName: string; contentId: string; courseId: string; lessonTitle: string; caseStudyUrl?: string; omrFormUrl?: string; omrWeight?: number; omrQuizJson?: string; socraticDate?: string; socraticBrief?: string; presentationBrief?: string; rubricOverrides?: RubricOverrides } | null>(null)
   const [studentSubmissions, setStudentSubmissions] = useState<LMSSubmissionRow[]>([])
   const [studentSubmissionsLoading, setStudentSubmissionsLoading] = useState(false)
   const [allSubmissions, setAllSubmissions] = useState<LMSSubmissionRow[]>([])
@@ -2427,6 +2453,7 @@ export function LMSPage() {
         caseStudyUrl: lessonItem?.caseStudyUrl,
         omrFormUrl: lessonItem?.omrFormUrl,
         omrWeight: lessonItem?.omrWeight,
+        omrQuizJson: lessonItem?.omrQuizJson,
         socraticDate: lessonItem?.socraticDate,
         socraticBrief: lessonItem?.socraticBrief,
         presentationBrief: lessonItem?.presentationBrief,
@@ -3361,11 +3388,9 @@ export function LMSPage() {
               </div>
               <div>
                 <label style={labelStyle}>Course Progression Settings</label>
-                <select value={course.progressionMode ?? 'open'} onChange={e => patchCourse({ progressionMode: e.target.value })} style={selectStyle}>
-                  <option value="open">Open</option>
-                  <option value="sequential">Sequential Completion</option>
-                  <option value="mastery">Mastery Learning</option>
-                  <option value="mastery_sequential">Mastery Learning with Sequential Completion</option>
+                <select value={course.progressionMode ?? 'off'} onChange={e => patchCourse({ progressionMode: e.target.value })} style={selectStyle}>
+                  <option value="off">Off</option>
+                  <option value="on">On</option>
                 </select>
               </div>
             </div>
@@ -3704,7 +3729,7 @@ export function LMSPage() {
     const [preTest, setPreTest] = useState(String(editCourse?.preTestExemptionThreshold ?? 80))
     const [masteryThreshold, setMasteryThreshold] = useState(String(editCourse?.passMark ?? 80))
     const [masteryRetakes, setMasteryRetakes] = useState(editCourse?.masteryRetakes ?? 'unlimited')
-    const [progressionMode, setProgressionMode] = useState(editCourse?.progressionMode ?? 'open')
+    const [progressionMode, setProgressionMode] = useState(editCourse?.progressionMode ?? 'off')
     const [selfEnroll, setSelfEnroll] = useState(editCourse?.selfEnrollEnabled ?? false)
     const [selfEnrollCode, setSelfEnrollCode] = useState<string | null>(editCourse?.selfEnrollCode ?? null)
     const [selfEnrollPassword, setSelfEnrollPassword] = useState<string | null>(editCourse?.selfEnrollPassword ?? null)
@@ -4090,10 +4115,8 @@ export function LMSPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#1A365E' }}>Course Progression Settings</div>
                 <select value={progressionMode} onChange={e => setProgressionMode(e.target.value)} style={{ ...selectStyle, width: 280, flexShrink: 0 }}>
-                  <option value="open">Open</option>
-                  <option value="sequential">Sequential Completion</option>
-                  <option value="mastery">Mastery Learning</option>
-                  <option value="mastery_sequential">Mastery Learning with Sequential Completion</option>
+                  <option value="off">Off</option>
+                  <option value="on">On</option>
                 </select>
               </div>
 
@@ -4364,7 +4387,10 @@ export function LMSPage() {
       <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 400, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto', backdropFilter: 'blur(4px)' }} onClick={e => { if (e.target === e.currentTarget) setShowLessonModal(false) }}>
         <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 680, maxHeight: '94vh', overflowY: 'auto', boxShadow: '0 24px 60px rgba(0,0,0,.3)', margin: 'auto' }}>
           <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '18px 24px', borderRadius: '18px 18px 0 0', position: 'sticky', top: 0, zIndex: 10 }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', marginBottom: 12 }}>📄 {isNew ? 'New Lesson' : 'Edit Lesson'}</div>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>📄 {isNew ? 'New Lesson' : 'Edit Lesson'}</div>
+              <button onClick={() => setShowLessonModal(false)} title="Close" style={modalCloseBtnOnDark}>✕</button>
+            </div>
             <div style={{ display: 'flex', gap: 6 }}>
               {([1, 2] as const).map(s => (
                 <button
@@ -4604,10 +4630,11 @@ export function LMSPage() {
   // Focused popup for Show It (Socratic Seminar) / Prove It (OMR Test) / Master It
   // (Presentation) — each edits only its own fields on the case-study content record,
   // instead of the case-study modal's everything-in-one-place editor.
-  interface McqQuestion { q: string; opts: string[]; ans: number }
 
-  // MCQ question builder — same shape/UX as a lesson's Mastery Test questions (minus the
-  // short-answer option type, since OMR is fully auto-graded). Used for Prove It — OMR.
+  // MCQ question builder — same shape/UX as a lesson's Mastery Test questions, including
+  // the short-answer (free-text) option type. Short-answer questions are excluded from
+  // OMR's auto-grading and are reviewed by the teacher in the Grade Case Study panel.
+  // Used for Prove It — OMR.
   function McqQuestionEditor({ questions, onChange }: { questions: McqQuestion[]; onChange: (next: McqQuestion[]) => void }) {
     function update(qi: number, patch: Partial<McqQuestion>) {
       onChange(questions.map((q, i) => i === qi ? { ...q, ...patch } : q))
@@ -4619,7 +4646,7 @@ export function LMSPage() {
       onChange(questions.filter((_, i) => i !== qi))
     }
     function add() {
-      onChange([...questions, { q: '', opts: ['', '', '', ''], ans: 0 }])
+      onChange([...questions, { q: '', type: 'mcq', opts: ['', '', '', ''], ans: 0 }])
     }
     return (
       <div style={{ border: '1px solid #E4EAF2', borderRadius: 10, overflow: 'hidden' }}>
@@ -4640,30 +4667,45 @@ export function LMSPage() {
                   placeholder="Question text..."
                   style={{ flex: 1, padding: '5px 8px', border: '1.5px solid #E4EAF2', borderRadius: 6, fontSize: 11, fontFamily: 'inherit' }}
                 />
+                <select
+                  value={q.type ?? 'mcq'}
+                  onChange={e => {
+                    const nextType = e.target.value as 'mcq' | 'short'
+                    update(qi, { type: nextType, ...(nextType === 'mcq' && !q.opts?.length ? { opts: ['', '', '', ''] } : {}) })
+                  }}
+                  style={{ padding: '4px 6px', border: '1px solid #E4EAF2', borderRadius: 5, fontSize: 10 }}
+                >
+                  <option value="mcq">MCQ</option>
+                  <option value="short">Short answer</option>
+                </select>
                 <button type="button" onClick={() => remove(qi)} style={{ padding: '3px 7px', background: '#FFF0F1', color: '#D61F31', border: '1px solid #F5C2C7', borderRadius: 5, fontSize: 11, cursor: 'pointer' }}>×</button>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {q.opts.map((opt, oi) => (
-                  <div key={oi} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <input
-                      type="radio"
-                      name={`omr_ans_${qi}`}
-                      checked={q.ans === oi}
-                      onChange={() => update(qi, { ans: oi })}
-                      title="Mark as correct answer"
-                      style={{ flexShrink: 0, cursor: 'pointer' }}
-                    />
-                    <span style={{ fontSize: 10, fontWeight: 700, color: '#7A92B0', width: 14 }}>{['A', 'B', 'C', 'D'][oi]}</span>
-                    <input
-                      value={opt}
-                      onChange={e => updateOption(qi, oi, e.target.value)}
-                      placeholder={`Option ${['A', 'B', 'C', 'D'][oi]}...`}
-                      style={{ flex: 1, padding: '4px 8px', border: '1px solid #E4EAF2', borderRadius: 5, fontSize: 11, fontFamily: 'inherit' }}
-                    />
-                  </div>
-                ))}
-                <div style={{ fontSize: 9, color: '#94A3B8', marginTop: 2 }}>Click the radio button to mark the correct answer</div>
-              </div>
+              {(q.type ?? 'mcq') === 'mcq' ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {(q.opts?.length ? q.opts : ['', '', '', '']).map((opt, oi) => (
+                    <div key={oi} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <input
+                        type="radio"
+                        name={`omr_ans_${qi}`}
+                        checked={q.ans === oi}
+                        onChange={() => update(qi, { ans: oi })}
+                        title="Mark as correct answer"
+                        style={{ flexShrink: 0, cursor: 'pointer' }}
+                      />
+                      <span style={{ fontSize: 10, fontWeight: 700, color: '#7A92B0', width: 14 }}>{['A', 'B', 'C', 'D'][oi]}</span>
+                      <input
+                        value={opt}
+                        onChange={e => updateOption(qi, oi, e.target.value)}
+                        placeholder={`Option ${['A', 'B', 'C', 'D'][oi]}...`}
+                        style={{ flex: 1, padding: '4px 8px', border: '1px solid #E4EAF2', borderRadius: 5, fontSize: 11, fontFamily: 'inherit' }}
+                      />
+                    </div>
+                  ))}
+                  <div style={{ fontSize: 9, color: '#94A3B8', marginTop: 2 }}>Click the radio button to mark the correct answer</div>
+                </div>
+              ) : (
+                <div style={{ fontSize: 10, color: '#7A92B0', fontStyle: 'italic' }}>Short answer — student types a multi-line response, which you'll review and grade manually.</div>
+              )}
             </div>
           ))}
           <button type="button" onClick={add} style={{ padding: '8px 14px', background: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', width: '100%' }}>+ Add Question</button>
@@ -4760,9 +4802,12 @@ export function LMSPage() {
     return (
       <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 450, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto', backdropFilter: 'blur(4px)' }} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
         <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 480, maxHeight: '94vh', overflowY: 'auto', boxShadow: '0 24px 60px rgba(0,0,0,.3)', margin: 'auto' }}>
-          <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '18px 24px', borderRadius: '18px 18px 0 0' }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>{meta.icon} {meta.title}</div>
-            <div style={{ fontSize: 10, color: 'rgba(255,255,255,.65)', marginTop: 2 }}>{item.title}</div>
+          <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '18px 24px', borderRadius: '18px 18px 0 0', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>{meta.icon} {meta.title}</div>
+              <div style={{ fontSize: 10, color: 'rgba(255,255,255,.65)', marginTop: 2 }}>{item.title}</div>
+            </div>
+            <button onClick={onClose} title="Close" style={modalCloseBtnOnDark}>✕</button>
           </div>
           <div style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
             {type === 'socratic' && (
@@ -4784,7 +4829,7 @@ export function LMSPage() {
             {type === 'omr' && (
               <>
                 <div style={{ fontSize: 10, color: '#7A92B0' }}>
-                  Students take this as an in-app multiple-choice test — auto-graded on submit, same as a lesson's Mastery Test.
+                  Students take this as an in-app test — MCQ questions are auto-graded on submit; short-answer questions are saved for you to review and grade manually.
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                   <div><label style={labelStyle}>Mastery (%)</label><input type="number" min={0} max={100} value={omrPassMark} onChange={e => setOmrPassMark(e.target.value)} style={inputStyle} /></div>
@@ -4804,6 +4849,7 @@ export function LMSPage() {
                   <label style={labelStyle}>Instructions</label>
                   <textarea value={presentationBrief} onChange={e => setPresentationBrief(e.target.value)} rows={3} placeholder="What students should prepare and submit for the final presentation — shown to students on the Master It page." style={taStyle} />
                 </div>
+                <button type="button" onClick={() => setAssignRolesContentId(contentId)} style={{ alignSelf: 'flex-start', padding: '8px 14px', background: '#F0F4FA', color: '#1A365E', border: '1px solid #DDE6F0', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>🎯 Assign to Students</button>
                 <div>
                   <label style={labelStyle}>Presentation Deadline</label>
                   <input type="date" value={presentationTargetDate} onChange={e => setPresentationTargetDate(e.target.value)} style={{ ...inputStyle, maxWidth: 180 }} />
@@ -4950,6 +4996,29 @@ export function LMSPage() {
       await load()
     }
 
+    async function saveDescription({ text, file, removeAttachment }: { text: string; file: File | null; removeAttachment: boolean }) {
+      setBusy(true)
+      let attachmentUrl = removeAttachment ? undefined : item!.discussionBriefUrl
+      let attachmentFileName = removeAttachment ? undefined : item!.discussionBriefFileName
+      if (file) {
+        try {
+          attachmentUrl = await uploadFile(`lms-discussion-brief/${Date.now()}_${file.name}`, file)
+          attachmentFileName = file.name
+        } catch {
+          alert('Attachment upload failed. Please try again.')
+          setBusy(false)
+          return
+        }
+      }
+      persist({
+        ...store,
+        content: store.content.map(c => c.id === contentId
+          ? { ...c, discussionBrief: text || undefined, discussionBriefUrl: attachmentUrl, discussionBriefFileName: attachmentFileName }
+          : c),
+      })
+      setBusy(false)
+    }
+
     return (
       <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 450, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto', backdropFilter: 'blur(4px)' }} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
         <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 860, maxHeight: '94vh', overflowY: 'auto', boxShadow: '0 24px 60px rgba(0,0,0,.3)', margin: 'auto' }}>
@@ -4958,7 +5027,7 @@ export function LMSPage() {
               <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>Master It — Discussion Board</div>
               <div style={{ fontSize: 10, color: 'rgba(255,255,255,.65)', marginTop: 2 }}>{item.title}</div>
             </div>
-            <button onClick={onClose} style={{ padding: '6px 10px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Close</button>
+            <button onClick={onClose} title="Close" style={modalCloseBtnOnDark}>✕</button>
           </div>
 
           <div style={{ padding: '18px 24px' }}>
@@ -4967,12 +5036,135 @@ export function LMSPage() {
               posts={posts}
               loading={loading}
               busy={busy}
+              description={{ text: item.discussionBrief ?? null, attachmentUrl: item.discussionBriefUrl ?? null, attachmentFileName: item.discussionBriefFileName ?? null }}
+              onSaveDescription={saveDescription}
               onCreateTopic={({ title, body, announce }) => postAsStaff(null, title, body, announce)}
               onCreateReply={(topicId, { body }) => postAsStaff(topicId, null, body, false)}
               onDeletePost={deletePost}
               onTogglePin={togglePin}
               onToggleLock={toggleLock}
             />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Master It — assigns each enrolled student one role/question from the module's fixed
+  // question bank (src/lib/lms/presentationRoles.ts). Curriculum is course-group scoped but
+  // enrolments are per-section, so the roster pools every section under this item's group.
+  function AssignRolesModal({ contentId, onClose, onCloseAll }: { contentId: string; onClose: () => void; onCloseAll: () => void }) {
+    const item = store.content.find(c => c.id === contentId)
+    const [roleModuleKey, setRoleModuleKey] = useState(() => guessPresentationRoleModule(item?.title ?? '')?.key ?? PRESENTATION_ROLE_MODULES[0].key)
+    const [assignments, setAssignments] = useState<Record<string, number | null>>({})
+    const [initialAssignments, setInitialAssignments] = useState<Record<string, number | null>>({})
+    const [loadingExisting, setLoadingExisting] = useState(true)
+    const [saving, setSaving] = useState(false)
+
+    useEffect(() => {
+      let cancelled = false
+      setLoadingExisting(true)
+      supabase.from('lms_presentation_roles').select('student_id,role_number').eq('content_id', contentId).then(({ data, error }) => {
+        if (cancelled) return
+        if (error) console.error('lms_presentation_roles load error:', error)
+        const map: Record<string, number | null> = {}
+        for (const row of data ?? []) map[row.student_id as string] = row.role_number as number | null
+        setAssignments(map)
+        setInitialAssignments(map)
+        setLoadingExisting(false)
+      })
+      return () => { cancelled = true }
+    }, [contentId])
+
+    if (!item) return null
+
+    const sectionIds = new Set(store.courses.filter(c => groupKey(c) === item.courseId).map(c => c.id))
+    const enrolments = store.enrolments.filter(en => sectionIds.has(en.courseId) && isActiveBool(en.active))
+    const enrolledIds = new Set<string>()
+    enrolments.forEach(en => {
+      if (en.targetType === 'student') enrolledIds.add(en.targetValue)
+      else if (en.targetType === 'cohort') students.filter(s => s.cohort === en.targetValue).forEach(s => enrolledIds.add(s.id))
+      else if (en.targetType === 'grade') students.filter(s => s.grade === en.targetValue).forEach(s => enrolledIds.add(s.id))
+    })
+    const roster = students.filter(s => enrolledIds.has(s.id)).sort((a, b) => a.lastName.localeCompare(b.lastName))
+
+    const roleModule = PRESENTATION_ROLE_MODULES.find(m => m.key === roleModuleKey) ?? PRESENTATION_ROLE_MODULES[0]
+
+    async function saveAll() {
+      setSaving(true)
+      const upsertRows: { content_id: string; student_id: string; role_number: number; role_label: string; role_text: string }[] = []
+      const deleteIds: string[] = []
+      for (const s of roster) {
+        const num = assignments[s.id] ?? null
+        if (num == null) {
+          if (initialAssignments[s.id] != null) deleteIds.push(s.id)
+          continue
+        }
+        const role = roleModule.roles.find(r => r.number === num)
+        if (!role) continue
+        upsertRows.push({ content_id: contentId, student_id: s.id, role_number: role.number, role_label: role.label, role_text: role.text })
+      }
+      if (upsertRows.length) {
+        const { error } = await supabase.from('lms_presentation_roles').upsert(upsertRows, { onConflict: 'content_id,student_id' })
+        if (error) { alert('Save failed: ' + error.message); setSaving(false); return }
+      }
+      if (deleteIds.length) {
+        const { error } = await supabase.from('lms_presentation_roles').delete().eq('content_id', contentId).in('student_id', deleteIds)
+        if (error) { alert('Save failed: ' + error.message); setSaving(false); return }
+      }
+      setSaving(false)
+      onClose()
+    }
+
+    return (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 450, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto', backdropFilter: 'blur(4px)' }} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+        <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 560, maxHeight: '94vh', overflowY: 'auto', boxShadow: '0 24px 60px rgba(0,0,0,.3)', margin: 'auto' }}>
+          <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '18px 24px', borderRadius: '18px 18px 0 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 4 }}>
+              <button onClick={onClose} title="Back to Master It" style={modalBackBtnOnDark}>← Back</button>
+              <button onClick={onCloseAll} title="Close" style={modalCloseBtnOnDark}>✕</button>
+            </div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>🎯 Assign to Students</div>
+            <div style={{ fontSize: 10, color: 'rgba(255,255,255,.65)', marginTop: 2 }}>{item.title}</div>
+          </div>
+          <div style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div>
+              <label style={labelStyle}>Question Bank</label>
+              <select value={roleModuleKey} onChange={e => setRoleModuleKey(e.target.value)} style={selectStyle}>
+                {PRESENTATION_ROLE_MODULES.map(m => <option key={m.key} value={m.key}>{m.title}{m.roles.length === 0 ? ' (no questions yet)' : ''}</option>)}
+              </select>
+            </div>
+            {loadingExisting ? (
+              <div style={{ fontSize: 12, color: '#94A3B8', padding: '12px 0' }}>Loading roster…</div>
+            ) : roster.length === 0 ? (
+              <div style={{ fontSize: 12, color: '#94A3B8', padding: '12px 0' }}>No students are enrolled in this course yet.</div>
+            ) : roleModule.roles.length === 0 ? (
+              <div style={{ fontSize: 12, color: '#94A3B8', padding: '12px 0' }}>This question bank has no questions yet — pick a different one above.</div>
+            ) : (
+              <div style={{ border: '1px solid #E4EAF2', borderRadius: 10, overflow: 'hidden' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', background: '#F7F9FC', padding: '8px 12px', borderBottom: '1px solid #E4EAF2' }}>
+                  <span style={{ fontSize: 10, fontWeight: 800, color: '#5A7290', textTransform: 'uppercase' }}>Student</span>
+                  <span style={{ fontSize: 10, fontWeight: 800, color: '#5A7290', textTransform: 'uppercase' }}>Assigned Role</span>
+                </div>
+                {roster.map(s => (
+                  <div key={s.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', alignItems: 'center', padding: '8px 12px', borderBottom: '1px solid #F0F4FA', gap: 8 }}>
+                    <span style={{ fontSize: 12, color: '#1A365E', fontWeight: 700 }}>{s.fullName}</span>
+                    <select
+                      value={assignments[s.id] ?? ''}
+                      onChange={e => setAssignments(p => ({ ...p, [s.id]: e.target.value ? Number(e.target.value) : null }))}
+                      style={selectStyle}
+                    >
+                      <option value="">— Unassigned —</option>
+                      {roleModule.roles.map(r => <option key={r.number} value={r.number}>{r.number}. {r.label}</option>)}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6 }}>
+              <button onClick={onClose} style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+              <button onClick={() => void saveAll()} disabled={saving || loadingExisting} style={{ padding: '9px 20px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', opacity: saving ? .7 : 1 }}>{saving ? 'Saving…' : '💾 Save All'}</button>
+            </div>
           </div>
         </div>
       </div>
@@ -5053,8 +5245,9 @@ export function LMSPage() {
     return (
       <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 400, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto', backdropFilter: 'blur(4px)' }} onClick={e => { if (e.target === e.currentTarget) setShowCaseStudyModal(false) }}>
         <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 560, maxHeight: '94vh', overflowY: 'auto', boxShadow: '0 24px 60px rgba(0,0,0,.3)', margin: 'auto' }}>
-          <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '18px 24px', borderRadius: '18px 18px 0 0' }}>
+          <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '18px 24px', borderRadius: '18px 18px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>📚 {isNew ? 'New Case Study' : 'Edit Case Study'}</div>
+            <button onClick={() => setShowCaseStudyModal(false)} title="Close" style={modalCloseBtnOnDark}>✕</button>
           </div>
           <div style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div><label style={labelStyle}>Case Study Title</label><input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Case Study Launch" style={inputStyle} /></div>
@@ -5124,6 +5317,13 @@ export function LMSPage() {
       {showCaseStudyModal && <CaseStudyModal />}
       {sectionModal && <SectionModal type={sectionModal.type} contentId={sectionModal.contentId} onClose={() => setSectionModal(null)} />}
       {discussionBoardContentId && <DiscussionBoardModal contentId={discussionBoardContentId} onClose={() => setDiscussionBoardContentId(null)} />}
+      {assignRolesContentId && (
+        <AssignRolesModal
+          contentId={assignRolesContentId}
+          onClose={() => setAssignRolesContentId(null)}
+          onCloseAll={() => { setAssignRolesContentId(null); setSectionModal(null) }}
+        />
+      )}
       {sectionPicker && <SectionPickerModal state={sectionPicker} onPick={contentId => setSectionModal({ type: sectionPicker.type, contentId })} onClose={() => setSectionPicker(null)} />}
       {modulePicker && (
         <ModulePickerModal
@@ -5230,6 +5430,8 @@ export function LMSPage() {
   )
 }
 
+interface McqQuestion { q: string; type?: 'mcq' | 'short'; opts: string[]; ans: number }
+
 interface CaseStudyGradingData {
   studentId: string
   studentName: string
@@ -5239,6 +5441,7 @@ interface CaseStudyGradingData {
   caseStudyUrl?: string
   omrFormUrl?: string
   omrWeight?: number
+  omrQuizJson?: string
   socraticDate?: string
   socraticBrief?: string
   presentationBrief?: string
@@ -5289,6 +5492,7 @@ function CaseStudyGradingPanel({ data, onClose, onFinalGradeChange }: {
   // Discussion Post is parked pending future exploration — see the commented block below.
   const [notesSub, setNotesSub] = useState<{ note: string; linkUrl: string; submittedAt: string } | null>(null)
   const [presentationSub, setPresentationSub] = useState<{ note: string; linkUrl: string; submittedAt: string } | null>(null)
+  const [omrSub, setOmrSub] = useState<{ answers: Record<string, unknown>; attempt: number } | null>(null)
   const [appeals, setAppeals] = useState<AppealRow[]>([])
   const [saving, setSaving] = useState<ScoreComponentType | null>(null)
 
@@ -5321,6 +5525,16 @@ function CaseStudyGradingPanel({ data, onClose, onFinalGradeChange }: {
 
     const presRow = subRows.find(isPresentationSubmission)
     setPresentationSub(presRow ? { note: (presRow.note as string) ?? '', linkUrl: (presRow.link_url as string) ?? '', submittedAt: (presRow.submitted_at as string) ?? '' } : null)
+
+    const omrRow = subRows.find(r => r.kind === 'omr_quiz')
+    if (omrRow) {
+      try {
+        const meta = JSON.parse((omrRow.note as string) ?? '{}') as { answers?: Record<string, unknown>; attempt?: number }
+        setOmrSub({ answers: meta.answers ?? {}, attempt: meta.attempt ?? 1 })
+      } catch { setOmrSub(null) }
+    } else {
+      setOmrSub(null)
+    }
 
     setAppeals((apRes.data ?? []).map((a: Record<string, unknown>) => ({
       id: a.id as string, componentType: a.component_type as ScoreComponentType, message: a.message as string,
@@ -5384,9 +5598,12 @@ function CaseStudyGradingPanel({ data, onClose, onFinalGradeChange }: {
   return (
     <div onClick={e => { if (e.target === e.currentTarget) onClose() }} style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 500, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto' }}>
       <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 640, margin: '0 auto', boxShadow: '0 24px 60px rgba(0,0,0,.3)', overflow: 'hidden' }}>
-        <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '16px 20px', position: 'sticky', top: 0, zIndex: 10 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>📚 Grade Case Study — {data.studentName}</div>
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,.75)', marginTop: 2 }}>{data.lessonTitle}</div>
+        <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '16px 20px', position: 'sticky', top: 0, zIndex: 10, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>📚 Grade Case Study — {data.studentName}</div>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,.75)', marginTop: 2 }}>{data.lessonTitle}</div>
+          </div>
+          <button onClick={onClose} title="Close" style={modalCloseBtnOnDark}>✕</button>
         </div>
         <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
           {loading ? (
@@ -5445,13 +5662,35 @@ function CaseStudyGradingPanel({ data, onClose, onFinalGradeChange }: {
                 </div>
                 {scores.omr.status === 'scored' ? (
                   <div style={{ fontSize: 11, color: '#3D5475' }}>
-                    Auto-graded — {scores.omr.criteriaScores.correct ?? 0}/{scores.omr.criteriaScores.total ?? 0} correct
+                    Auto-graded (MCQ) — {scores.omr.criteriaScores.correct ?? 0}/{scores.omr.criteriaScores.total ?? 0} correct
                     {scores.omr.criteriaScores.attempts != null && <> · attempt {scores.omr.criteriaScores.attempts}</>}
                     {scores.omr.criteriaScores.passed != null && <> · {scores.omr.criteriaScores.passed ? 'passed' : 'below mastery'}</>}
                   </div>
                 ) : (
                   <div style={{ fontSize: 11, color: '#94A3B8' }}>Student hasn't taken the OMR test yet.</div>
                 )}
+                {(() => {
+                  let omrQuestions: McqQuestion[] = []
+                  try { omrQuestions = JSON.parse(data.omrQuizJson || '[]') } catch { /* empty */ }
+                  const shortQs = omrQuestions.map((q, qi) => ({ q, qi })).filter(x => (x.q.type ?? 'mcq') === 'short')
+                  if (!shortQs.length) return null
+                  return (
+                    <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #E4EAF2', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <div style={{ fontSize: 10, fontWeight: 800, color: '#1A365E' }}>✏️ Short-answer responses{omrSub ? ` (attempt ${omrSub.attempt})` : ''}</div>
+                      {omrSub ? shortQs.map(({ q, qi }) => {
+                        const answer = omrSub.answers[qi]
+                        return (
+                          <div key={qi} style={{ background: '#fff', border: '1px solid #E4EAF2', borderRadius: 7, padding: '8px 10px' }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: '#1A365E', marginBottom: 4 }}>Q{qi + 1}. {q.q}</div>
+                            <div style={{ fontSize: 11, color: '#3D5475', whiteSpace: 'pre-wrap' }}>{answer != null && String(answer).trim() ? String(answer) : <em style={{ color: '#94A3B8' }}>No answer</em>}</div>
+                          </div>
+                        )
+                      }) : (
+                        <div style={{ fontSize: 11, color: '#94A3B8' }}>Student hasn't submitted the OMR test yet, so no short-answer responses to review.</div>
+                      )}
+                    </div>
+                  )
+                })()}
                 <CategoryEditorAppealNote appeal={appealFor('omr')} onResolved={reply => setAppeals(prev => prev.map(a => a.componentType === 'omr' ? { ...a, status: 'resolved', adminReply: reply } : a))} />
               </div>
 
@@ -5829,12 +6068,13 @@ function LessonPreviewModal({ item, onClose }: { item: LMSContent; onClose: () =
           {renderRubricPreview('debate')}
         </>)}
         {caseStudySectionShell('🔢', 'Prove it — OMR Test', item.omrWeight ?? CASE_STUDY_RUBRIC.omr.weight, (() => {
-          let omrQuestions: Array<{ q: string; opts: string[]; ans: number }> = []
+          let omrQuestions: McqQuestion[] = []
           try { omrQuestions = JSON.parse(item.omrQuizJson || '[]') } catch { /* empty */ }
+          const shortCount = omrQuestions.filter(q => (q.type ?? 'mcq') === 'short').length
           return (
             <div style={{ fontSize: 11, color: '#5A7290' }}>
               {omrQuestions.length > 0
-                ? <>In-app auto-graded MCQ test — {omrQuestions.length} question{omrQuestions.length !== 1 ? 's' : ''}, pass mark {item.omrPassMark ?? 80}%{item.omrRetakes != null ? `, ${item.omrRetakes} retake${item.omrRetakes !== 1 ? 's' : ''}` : ''}{item.omrTimeLimit ? `, ${item.omrTimeLimit} min limit` : ''}.</>
+                ? <>In-app test — {omrQuestions.length} question{omrQuestions.length !== 1 ? 's' : ''}{shortCount ? ` (${shortCount} short-answer, manually graded)` : ' (auto-graded MCQ)'}, pass mark {item.omrPassMark ?? 80}%{item.omrRetakes != null ? `, ${item.omrRetakes} retake${item.omrRetakes !== 1 ? 's' : ''}` : ''}{item.omrTimeLimit ? `, ${item.omrTimeLimit} min limit` : ''}.</>
                 : 'No OMR questions have been added yet.'}
             </div>
           )

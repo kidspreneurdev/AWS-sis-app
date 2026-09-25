@@ -60,8 +60,9 @@ export function ParentPortalLayout() {
   const navigate = useNavigate()
   const location = useLocation()
   const isSpain = isSpainCampus(activeChild?.campus)
+  const SPAIN_HIDDEN_LABELS = ['Academic Calendar', 'Enrollment & Documents', 'Policy Documents']
   const ppGroups = isSpain
-    ? PP_GROUPS.map(group => ({ ...group, items: group.items.filter(item => item.label !== 'Academic Calendar') }))
+    ? PP_GROUPS.map(group => ({ ...group, items: group.items.filter(item => !SPAIN_HIDDEN_LABELS.includes(item.label)) }))
     : PP_GROUPS
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => {
     const initial = new Set(PP_GROUPS.filter((g) => g.defaultOpen).map((g) => g.id))
@@ -89,7 +90,8 @@ export function ParentPortalLayout() {
 
   if (!session) return <Navigate to="/parent/login" replace />
 
-  if (isSpain && location.pathname.startsWith('/parent/academic-calendar')) {
+  const SPAIN_BLOCKED_PATHS = ['/parent/academic-calendar', '/parent/documents-hub', '/parent/policy-documents']
+  if (isSpain && SPAIN_BLOCKED_PATHS.some(p => location.pathname.startsWith(p))) {
     return <Navigate to="/parent/dashboard" replace />
   }
 

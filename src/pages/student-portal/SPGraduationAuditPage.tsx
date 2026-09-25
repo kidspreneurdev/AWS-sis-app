@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, GraduationCap, BarChart3, BookOpen, AlertTriangle, CheckCircle2,
   PartyPopper, Trophy, Medal, Landmark, Hourglass, Printer, Star, ArrowRight, Circle, X,
@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
+import { isSpainCampus } from '@/lib/campus'
 import {
   card, emptyState, SP_NAVY, SP_RED, SP_GREEN, SP_GOLD, SP_PURPLE, portalPrefix,
   calcGPA, calcWeightedGPA, gpaColor, estimateCollegeCreditsFromHsCredits, creditProgress,
@@ -317,6 +318,7 @@ export function SPGraduationAuditPage() {
   })() : null
 
   if (!session) return null
+  if (isSpainCampus(studentCampus)) return <Navigate to={`${prefix}/grades`} replace />
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>

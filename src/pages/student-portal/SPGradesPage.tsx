@@ -2,6 +2,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { BarChart3, GraduationCap, BookOpen, ArrowRight, type LucideIcon } from 'lucide-react'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { toLegacyStudentGradeValue } from '@/types/student'
+import { isSpainCampus } from '@/lib/campus'
 import { K5GradesPage } from '@/pages/student-portal/K5GradesPage'
 import { SPCourseGradesSection } from '@/pages/student-portal/SPCourseGradesSection'
 import { card, SP_NAVY, portalPrefix } from './gradesShared'
@@ -22,7 +23,7 @@ export function SPGradesPage() {
     { key: 'audit', label: 'Graduation Audit', icon: GraduationCap, color: '#1A365E', path: `${prefix}/grades/audit` },
     { key: 'courses', label: 'Course Records', icon: BookOpen, color: '#0A6B64', path: `${prefix}/grades/courses` },
     // Report Card — temporarily disabled, not currently offered to students.
-  ]
+  ].filter(btn => btn.key !== 'audit' || !isSpainCampus(session.campus))
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>

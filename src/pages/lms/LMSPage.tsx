@@ -930,6 +930,8 @@ export function LMSPage() {
   // Show It / Prove It / Master It each get their own focused popup instead of being
   // crammed into the case-study modal — all three still patch the same content record.
   const [sectionModal, setSectionModal] = useState<{ type: 'socratic' | 'omr' | 'presentation'; contentId: string } | null>(null)
+  // Master It — Discussion Board moderation view, opened from its own curriculum row.
+  const [discussionBoardContentId, setDiscussionBoardContentId] = useState<string | null>(null)
   // "+ Show It / + Prove It / + Master It" toolbar buttons need to know WHICH module's
   // case study to open SectionModal for — if there's more than one candidate, ask first.
   const [sectionPicker, setSectionPicker] = useState<{ type: 'socratic' | 'omr' | 'presentation'; options: { unitTitle: string; contentId: string }[] } | null>(null)
@@ -2255,7 +2257,7 @@ export function LMSPage() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
           <div>
             <div style={{ fontSize: 16, fontWeight: 900, color: '#1A365E' }}>📊 Gradebook</div>
-            {course && <div style={{ fontSize: 11, color: '#7A92B0', marginTop: 2 }}>{course.title} · {course.subject}{course.gradeLevel ? ' · ' + course.gradeLevel : ''} · Pass: {course.passMark || 80}%</div>}
+            {course && <div style={{ fontSize: 11, color: '#7A92B0', marginTop: 2 }}>{course.title} · {course.subject}{course.gradeLevel ? ' · ' + course.gradeLevel : ''} · Mastery - {course.passMark || 80}%</div>}
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             {subjects.length > 1 && (
@@ -3028,6 +3030,21 @@ export function LMSPage() {
       )
     }
 
+    // Master It's Discussion Board — opens the moderation view instead of SectionModal,
+    // since it's a live thread to read/moderate, not settings to edit.
+    function renderDiscussionLinkRow(depth: number, carrierItem: LMSContent, key: string) {
+      return (
+        <tr key={key} style={{ borderBottom: '1px solid #F0F4FA' }}>
+          <td style={{ padding: '6px 10px', paddingLeft: 12 + (depth + 1) * 26 }} colSpan={6}>
+            <button onClick={() => { setDiscussionBoardContentId(carrierItem.id); setCurriculumMenuOpenId(null) }} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>
+              <span style={{ fontSize: 14 }}>💬</span>
+              <span style={{ fontSize: 11, color: '#5A7290' }}>{carrierItem.title}: Discussion Board</span>
+            </button>
+          </td>
+        </tr>
+      )
+    }
+
     // Renders one module's body as the "it" tree: Learn It (the case study) → Do It (every
     // lesson) → Show It / Prove It / Master It (the case study's remaining fixed sections).
     // depth is the case-study/lesson row depth; section labels sit one level shallower.
@@ -3056,6 +3073,7 @@ export function LMSPage() {
 
               {renderSectionLabelRow('🏆', 'Master It', depth - 1, `${dragScope}-master`)}
               {renderCarrierLinkRow('Presentation', depth - 1, carrierItem, `${dragScope}-presentation`, 'presentation')}
+              {renderDiscussionLinkRow(depth - 1, carrierItem, `${dragScope}-discussion`)}
             </>
           )}
         </>
@@ -4235,7 +4253,7 @@ export function LMSPage() {
                 {hasMastery && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                      <div><label style={labelStyle}>Pass Mark (%)</label><input value={masteryPassMark} onChange={e => setMasteryPassMark(e.target.value)} type="number" min={1} max={100} style={inputStyle} /></div>
+                      <div><label style={labelStyle}>Mastery (%)</label><input value={masteryPassMark} onChange={e => setMasteryPassMark(e.target.value)} type="number" min={1} max={100} style={inputStyle} /></div>
                       <div><label style={labelStyle}>Max Retakes</label><input value={masteryRetakes} onChange={e => setMasteryRetakes(e.target.value)} type="number" min={1} max={10} style={inputStyle} /></div>
                     </div>
                     <div><label style={labelStyle}>📋 Assessment Brief <span style={{ fontWeight: 400, color: '#94A3B8' }}>(optional — shown to student before the test)</span></label><textarea value={masteryBrief} onChange={e => setMasteryBrief(e.target.value)} rows={3} placeholder="Explain what this assessment is testing, what the student should focus on, or any instructions before they begin..." style={{ ...taStyle, fontSize: 11 }} /></div>
@@ -4468,6 +4486,12 @@ export function LMSPage() {
     const [socraticBrief, setSocraticBrief] = useState(item?.socraticBrief ?? '')
     const [socraticDate, setSocraticDate] = useState(item?.socraticDate ?? '')
     const [presentationBrief, setPresentationBrief] = useState(item?.presentationBrief ?? '')
+    const [presentationBriefUrl, setPresentationBriefUrl] = useState(item?.presentationBriefUrl ?? '')
+    const [presentationBriefFileName, setPresentationBriefFileName] = useState(item?.presentationBriefFileName ?? '')
+    const [presentationBriefFile, setPresentationBriefFile] = useState<File | null>(null)
+    const [presentationVideoUrl, setPresentationVideoUrl] = useState(item?.presentationVideoUrl ?? '')
+    const [presentationVideoFileName, setPresentationVideoFileName] = useState(item?.presentationVideoFileName ?? '')
+    const [presentationVideoFile, setPresentationVideoFile] = useState<File | null>(null)
     const [rubric, setRubric] = useState<RubricCategory>(getEffectiveRubric(item?.rubricOverrides, meta.rubricType))
     const [omrQuestions, setOmrQuestions] = useState<McqQuestion[]>(() => {
       try { return JSON.parse(item?.omrQuizJson || '[]') } catch { return [] }
@@ -4479,10 +4503,28 @@ export function LMSPage() {
 
     if (!item) return null
 
-    function save() {
+    async function save() {
       if (type === 'socratic' && !socraticBrief.trim()) { alert('Add a Socratic Seminar activity description'); return }
       if (type === 'omr' && omrQuestions.length === 0) { alert('Add at least one OMR question'); return }
       if (type !== 'omr' && !rubric.criteria.length) { alert('Add at least one rubric criterion'); return }
+      let finalBriefUrl = presentationBriefUrl.trim()
+      let finalBriefFileName = presentationBriefFileName
+      let finalVideoUrl = presentationVideoUrl.trim()
+      let finalVideoFileName = presentationVideoFileName
+      if (type === 'presentation') {
+        if (presentationBriefFile) {
+          try {
+            finalBriefUrl = await uploadFile(`lms-presentation-brief/${Date.now()}_${presentationBriefFile.name}`, presentationBriefFile)
+            finalBriefFileName = presentationBriefFile.name
+          } catch { alert('Assignment brief upload failed. Please try again.'); return }
+        }
+        if (presentationVideoFile) {
+          try {
+            finalVideoUrl = await uploadFile(`lms-presentation-video/${Date.now()}_${presentationVideoFile.name}`, presentationVideoFile)
+            finalVideoFileName = presentationVideoFile.name
+          } catch { alert('Explainer video upload failed. Please try again.'); return }
+        }
+      }
       const fieldPatch: Partial<LMSContent> =
         type === 'socratic' ? { socraticBrief: socraticBrief.trim(), socraticDate: socraticDate || undefined } :
         type === 'omr' ? {
@@ -4492,7 +4534,13 @@ export function LMSPage() {
           omrTimeLimit: parseInt(omrTimeLimit) || undefined,
           omrWeight: parseInt(omrWeight) || CASE_STUDY_RUBRIC.omr.weight,
         } :
-        { presentationBrief: presentationBrief.trim() || undefined }
+        {
+          presentationBrief: presentationBrief.trim() || undefined,
+          presentationBriefUrl: finalBriefUrl || undefined,
+          presentationBriefFileName: finalBriefFileName || undefined,
+          presentationVideoUrl: finalVideoUrl || undefined,
+          presentationVideoFileName: finalVideoFileName || undefined,
+        }
       // OMR is auto-graded from its questions now, not a rubric admins score by hand —
       // don't write a rubricOverrides entry for it (leave any old one untouched).
       const patch: Partial<LMSContent> = type === 'omr' ? fieldPatch : { ...fieldPatch, rubricOverrides: { ...item?.rubricOverrides, [meta.rubricType]: rubric } }
@@ -4530,7 +4578,7 @@ export function LMSPage() {
                   Students take this as an in-app multiple-choice test — auto-graded on submit, same as a lesson's Mastery Test.
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                  <div><label style={labelStyle}>Pass Mark (%)</label><input type="number" min={0} max={100} value={omrPassMark} onChange={e => setOmrPassMark(e.target.value)} style={inputStyle} /></div>
+                  <div><label style={labelStyle}>Mastery (%)</label><input type="number" min={0} max={100} value={omrPassMark} onChange={e => setOmrPassMark(e.target.value)} style={inputStyle} /></div>
                   <div><label style={labelStyle}>Retakes</label><input type="number" min={0} value={omrRetakes} onChange={e => setOmrRetakes(e.target.value)} style={inputStyle} /></div>
                   <div><label style={labelStyle}>Time Limit (min)</label><input type="number" min={1} placeholder="None" value={omrTimeLimit} onChange={e => setOmrTimeLimit(e.target.value)} style={inputStyle} /></div>
                 </div>
@@ -4544,8 +4592,36 @@ export function LMSPage() {
             {type === 'presentation' && (
               <>
                 <div>
-                  <label style={labelStyle}>Activity Description</label>
-                  <textarea value={presentationBrief} onChange={e => setPresentationBrief(e.target.value)} rows={4} placeholder="What students should prepare and submit for the final presentation — shown to students on the Master It page." style={taStyle} />
+                  <label style={labelStyle}>Instructions</label>
+                  <textarea value={presentationBrief} onChange={e => setPresentationBrief(e.target.value)} rows={3} placeholder="What students should prepare and submit for the final presentation — shown to students on the Master It page." style={taStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Assignment Brief — Presentation (URL or uploaded file)</label>
+                  <input value={presentationBriefUrl} onChange={e => { setPresentationBriefUrl(e.target.value); if (e.target.value) { setPresentationBriefFile(null); setPresentationBriefFileName('') } }} placeholder="Google Slides, PDF or PPT link..." style={inputStyle} />
+                  <div style={{ marginTop: 8 }}>
+                    <label style={{ ...labelStyle, marginBottom: 4 }}>— Or upload a file —</label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 8, border: `2px dashed ${presentationBriefFile ? '#059669' : '#CBD5E0'}`, background: presentationBriefFile ? '#F0FDF4' : '#F8FAFC', cursor: 'pointer', fontSize: 12, color: presentationBriefFile ? '#059669' : '#7A92B0', fontWeight: presentationBriefFile ? 700 : 400 }}>
+                      <input type="file" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) { setPresentationBriefFile(f); setPresentationBriefUrl('') } }} />
+                      {presentationBriefFile ? `✅ ${presentationBriefFile.name}` : presentationBriefFileName ? `📎 ${presentationBriefFileName} (uploaded — choose a new file to replace)` : '+ Choose file'}
+                    </label>
+                  </div>
+                </div>
+                <div style={{ padding: 12, background: '#F0F4FA', borderRadius: 10, border: '1px solid #D7E0EA', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <label style={{ ...labelStyle, marginBottom: 0 }}>🎬 Video Explaining What's Due</label>
+                  <input
+                    value={presentationVideoUrl}
+                    onChange={e => { setPresentationVideoUrl(e.target.value); if (e.target.value) { setPresentationVideoFile(null); setPresentationVideoFileName('') } }}
+                    placeholder="YouTube link..."
+                    disabled={!!presentationVideoFile || !!presentationVideoFileName}
+                    style={{ ...inputStyle, opacity: (presentationVideoFile || presentationVideoFileName) ? 0.5 : 1 }}
+                  />
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 8, border: `2px dashed ${presentationVideoFile ? '#059669' : '#CBD5E0'}`, background: presentationVideoFile ? '#F0FDF4' : '#fff', cursor: 'pointer', fontSize: 12, color: presentationVideoFile ? '#059669' : '#7A92B0', fontWeight: presentationVideoFile ? 700 : 400 }}>
+                    <input type="file" accept="video/*" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) { setPresentationVideoFile(f); setPresentationVideoUrl('') } }} />
+                    {presentationVideoFile ? `✅ ${presentationVideoFile.name}` : presentationVideoFileName ? `📎 ${presentationVideoFileName} (uploaded — choose a new file to replace)` : '+ Or upload a video file'}
+                  </label>
+                  {(presentationVideoFile || presentationVideoFileName || presentationVideoUrl) && (
+                    <button type="button" onClick={() => { setPresentationVideoFile(null); setPresentationVideoFileName(''); setPresentationVideoUrl('') }} style={{ alignSelf: 'flex-start', padding: '4px 10px', background: '#FFF0F1', color: '#D61F31', border: '1px solid #F5C2C7', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Remove video</button>
+                  )}
                 </div>
                 <div>
                   <label style={{ ...labelStyle, marginBottom: 4 }}>Rubric — {CASE_STUDY_RUBRIC[meta.rubricType].label}</label>
@@ -4557,6 +4633,248 @@ export function LMSPage() {
               <button onClick={onClose} style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
               <button onClick={save} style={{ padding: '9px 20px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>💾 Save</button>
             </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Master It — Discussion Board moderation view. Reads/writes lms_discussion_posts
+  // directly via the Supabase client (staff are real Supabase Auth users, so RLS's
+  // staff-role write policy covers this — no student-portal API broker needed here,
+  // matching how every other admin LMS write in this file already works).
+  interface AdminDiscussionPost {
+    id: string
+    studentId: string | null
+    authorName: string
+    isStaff: boolean
+    isAnnouncement: boolean
+    isPinned: boolean
+    isLocked: boolean
+    title: string | null
+    body: string | null
+    deletedAt: string | null
+    parentPostId: string | null
+    createdAt: string
+    attachmentUrl: string | null
+    attachmentFileName: string | null
+    reactionCount: number
+  }
+
+  function fmtPostTime(iso: string) {
+    return new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+  }
+
+  function DiscussionBoardModal({ contentId, onClose }: { contentId: string; onClose: () => void }) {
+    const profile = useAuthStore(s => s.profile)
+    const item = store.content.find(c => c.id === contentId)
+    const [loading, setLoading] = useState(true)
+    const [posts, setPosts] = useState<AdminDiscussionPost[]>([])
+    const [expandedTopicId, setExpandedTopicId] = useState<string | null>(null)
+    const [busy, setBusy] = useState(false)
+    const [replyDraft, setReplyDraft] = useState<Record<string, string>>({})
+    const [composerOpen, setComposerOpen] = useState(false)
+    const [newTitle, setNewTitle] = useState('')
+    const [newBody, setNewBody] = useState('')
+    const [newIsAnnouncement, setNewIsAnnouncement] = useState(false)
+
+    async function load() {
+      setLoading(true)
+      const { data } = await supabase
+        .from('lms_discussion_posts')
+        .select('id,student_id,parent_post_id,title,body,created_at,author_staff_name,is_announcement,is_pinned,is_locked,deleted_at,attachment_url,attachment_file_name')
+        .eq('content_id', contentId).eq('phase', 'master').order('created_at', { ascending: true })
+      const rows = (data ?? []) as Record<string, unknown>[]
+      const studentIds = [...new Set(rows.map(r => r.student_id as string | null).filter((v): v is string => !!v))]
+      const { data: studentRows } = studentIds.length
+        ? await supabase.from('students').select('id,first_name,last_name').in('id', studentIds)
+        : { data: [] as { id: string; first_name: string; last_name: string }[] }
+      const postIds = rows.map(r => r.id as string)
+      const { data: reactionRows } = postIds.length
+        ? await supabase.from('lms_discussion_reactions').select('post_id').in('post_id', postIds)
+        : { data: [] as { post_id: string }[] }
+      const reactionCounts: Record<string, number> = {}
+      for (const r of reactionRows ?? []) reactionCounts[r.post_id] = (reactionCounts[r.post_id] ?? 0) + 1
+      setPosts(rows.map(r => {
+        const studentRow = studentRows?.find(s => s.id === r.student_id)
+        return {
+          id: r.id as string,
+          studentId: r.student_id as string | null,
+          authorName: (r.author_staff_name as string) || (studentRow ? `${studentRow.first_name ?? ''} ${studentRow.last_name ?? ''}`.trim() : 'Student'),
+          isStaff: !!r.author_staff_name,
+          isAnnouncement: r.is_announcement === true,
+          isPinned: r.is_pinned === true,
+          isLocked: r.is_locked === true,
+          title: r.title as string | null,
+          body: r.body as string | null,
+          deletedAt: r.deleted_at as string | null,
+          parentPostId: r.parent_post_id as string | null,
+          createdAt: r.created_at as string,
+          attachmentUrl: r.attachment_url as string | null,
+          attachmentFileName: r.attachment_file_name as string | null,
+          reactionCount: reactionCounts[r.id as string] ?? 0,
+        }
+      }))
+      setLoading(false)
+    }
+
+    useEffect(() => { void load() }, [contentId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+    if (!item) return null
+
+    const topics = posts.filter(p => !p.parentPostId)
+    const repliesOf = (topicId: string) => posts.filter(p => p.parentPostId === topicId)
+    const lastActivityOf = (topic: AdminDiscussionPost) => {
+      const replies = repliesOf(topic.id)
+      return replies.length ? replies[replies.length - 1].createdAt : topic.createdAt
+    }
+    const sortedTopics = [...topics].sort((a, b) => (a.isPinned !== b.isPinned) ? (a.isPinned ? -1 : 1) : lastActivityOf(b).localeCompare(lastActivityOf(a)))
+
+    async function postAsStaff(parentPostId: string | null, title: string | null, body: string, announce: boolean) {
+      if (!body.trim()) return
+      setBusy(true)
+      await supabase.from('lms_discussion_posts').insert({
+        content_id: contentId, phase: 'master', parent_post_id: parentPostId,
+        title: parentPostId ? null : (title?.trim() || null),
+        body: body.trim(),
+        author_staff_name: profile?.full_name || profile?.email || 'Instructor',
+        is_announcement: announce,
+        is_pinned: announce,
+      })
+      setBusy(false)
+      await load()
+    }
+
+    async function togglePin(post: AdminDiscussionPost) {
+      await supabase.from('lms_discussion_posts').update({ is_pinned: !post.isPinned }).eq('id', post.id)
+      await load()
+    }
+    async function toggleLock(post: AdminDiscussionPost) {
+      await supabase.from('lms_discussion_posts').update({ is_locked: !post.isLocked }).eq('id', post.id)
+      await load()
+    }
+    async function deletePost(post: AdminDiscussionPost) {
+      await supabase.from('lms_discussion_posts').update({ deleted_at: new Date().toISOString() }).eq('id', post.id)
+      await load()
+    }
+
+    function moderationButtons(post: AdminDiscussionPost, isTopic: boolean) {
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+          {isTopic && (
+            <>
+              <button onClick={() => void togglePin(post)} title={post.isPinned ? 'Unpin' : 'Pin'} style={{ padding: '3px 7px', background: post.isPinned ? '#FEF3C7' : '#F0F4FA', color: post.isPinned ? '#92400E' : '#5A7290', border: 'none', borderRadius: 5, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>📌 {post.isPinned ? 'Unpin' : 'Pin'}</button>
+              <button onClick={() => void toggleLock(post)} title={post.isLocked ? 'Unlock' : 'Lock'} style={{ padding: '3px 7px', background: post.isLocked ? '#FEE2E2' : '#F0F4FA', color: post.isLocked ? '#B91C1C' : '#5A7290', border: 'none', borderRadius: 5, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>🔒 {post.isLocked ? 'Unlock' : 'Lock'}</button>
+            </>
+          )}
+          {!post.deletedAt && (
+            <button
+              onClick={() => setConfirmDialog({ title: 'Delete Post', message: 'Delete this post? This cannot be undone.', danger: true, confirmLabel: 'Delete', onConfirm: () => deletePost(post) })}
+              title="Delete" style={{ padding: '3px 7px', background: '#FFF0F1', color: '#D61F31', border: '1px solid #F5C2C7', borderRadius: 5, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+            >Delete</button>
+          )}
+        </div>
+      )
+    }
+
+    return (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 450, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto', backdropFilter: 'blur(4px)' }} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+        <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 640, maxHeight: '94vh', overflowY: 'auto', boxShadow: '0 24px 60px rgba(0,0,0,.3)', margin: 'auto' }}>
+          <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '18px 24px', borderRadius: '18px 18px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>💬 Master It — Discussion Board</div>
+              <div style={{ fontSize: 10, color: 'rgba(255,255,255,.65)', marginTop: 2 }}>{item.title}</div>
+            </div>
+            <button onClick={onClose} style={{ padding: '6px 10px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Close</button>
+          </div>
+
+          <div style={{ padding: '18px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {!composerOpen ? (
+              <button onClick={() => setComposerOpen(true)} style={{ alignSelf: 'flex-start', padding: '8px 14px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>+ New Post</button>
+            ) : (
+              <div style={{ border: '1px solid #E4EAF2', borderRadius: 10, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="Title" style={inputStyle} />
+                <textarea rows={3} value={newBody} onChange={e => setNewBody(e.target.value)} placeholder="Write a post..." style={taStyle} />
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#5A7290', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={newIsAnnouncement} onChange={e => setNewIsAnnouncement(e.target.checked)} /> Post as Instructor Announcement (pins it)
+                  </label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={() => { setComposerOpen(false); setNewTitle(''); setNewBody(''); setNewIsAnnouncement(false) }} style={{ padding: '7px 14px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+                    <button
+                      onClick={() => void postAsStaff(null, newTitle, newBody, newIsAnnouncement).then(() => { setComposerOpen(false); setNewTitle(''); setNewBody(''); setNewIsAnnouncement(false) })}
+                      disabled={busy || !newTitle.trim() || !newBody.trim()}
+                      style={{ padding: '7px 14px', background: newTitle.trim() && newBody.trim() ? '#1A365E' : '#E4EAF2', color: newTitle.trim() && newBody.trim() ? '#fff' : '#94A3B8', border: 'none', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+                    >Post</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {loading ? (
+              <div style={{ fontSize: 12, color: '#94A3B8', padding: '12px 0' }}>Loading…</div>
+            ) : sortedTopics.length === 0 ? (
+              <div style={{ fontSize: 12, color: '#94A3B8', padding: '12px 0' }}>No discussions yet.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {sortedTopics.map(topic => {
+                  const replies = repliesOf(topic.id)
+                  const expanded = expandedTopicId === topic.id
+                  return (
+                    <div key={topic.id} style={{ border: '1px solid #E4EAF2', borderRadius: 10, overflow: 'hidden' }}>
+                      <div style={{ padding: '10px 12px', background: topic.isAnnouncement ? '#F0F4FA' : '#fff', cursor: 'pointer' }} onClick={() => setExpandedTopicId(expanded ? null : topic.id)}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+                              {topic.isPinned && <span title="Pinned" style={{ fontSize: 11 }}>📌</span>}
+                              {topic.isLocked && <span title="Locked" style={{ fontSize: 11 }}>🔒</span>}
+                              <span style={{ fontSize: 12, fontWeight: 800, color: '#1A365E' }}>{topic.deletedAt ? '[deleted]' : topic.title}</span>
+                            </div>
+                            <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>{topic.isStaff ? topic.authorName : `Started by ${topic.authorName}`} · {fmtPostTime(topic.createdAt)} · {replies.length} repl{replies.length === 1 ? 'y' : 'ies'} · 👍 {topic.reactionCount}</div>
+                          </div>
+                          <div onClick={e => e.stopPropagation()}>{moderationButtons(topic, true)}</div>
+                        </div>
+                      </div>
+                      {expanded && (
+                        <div style={{ borderTop: '1px solid #E4EAF2', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {!topic.deletedAt && <div style={{ fontSize: 12, color: '#3D5475', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{topic.body}</div>}
+                          {topic.attachmentUrl && (
+                            <a href={topic.attachmentUrl} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#1A365E', fontWeight: 700 }}>📎 {topic.attachmentFileName || 'Attachment'}</a>
+                          )}
+                          {replies.map(reply => (
+                            <div key={reply.id} style={{ background: '#F8FAFC', border: '1px solid #E4EAF2', borderRadius: 8, padding: '8px 10px', marginLeft: 12 }}>
+                              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                                <div style={{ fontSize: 11, fontWeight: 800, color: '#1A365E' }}>{reply.authorName} <span style={{ fontWeight: 400, color: '#94A3B8' }}>· {fmtPostTime(reply.createdAt)}</span></div>
+                                {moderationButtons(reply, false)}
+                              </div>
+                              <div style={{ fontSize: 12, color: '#3D5475', marginTop: 4, whiteSpace: 'pre-wrap' }}>{reply.deletedAt ? '[deleted]' : reply.body}</div>
+                              {reply.attachmentUrl && !reply.deletedAt && (
+                                <a href={reply.attachmentUrl} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#1A365E', fontWeight: 700 }}>📎 {reply.attachmentFileName || 'Attachment'}</a>
+                              )}
+                            </div>
+                          ))}
+                          {!topic.deletedAt && (
+                            <div style={{ display: 'flex', gap: 8, marginLeft: 12 }}>
+                              <input
+                                value={replyDraft[topic.id] ?? ''}
+                                onChange={e => setReplyDraft(p => ({ ...p, [topic.id]: e.target.value }))}
+                                placeholder="Reply as instructor..."
+                                style={{ ...inputStyle, flex: 1 }}
+                              />
+                              <button
+                                onClick={() => void postAsStaff(topic.id, null, replyDraft[topic.id] ?? '', false).then(() => setReplyDraft(p => ({ ...p, [topic.id]: '' })))}
+                                disabled={busy || !(replyDraft[topic.id] ?? '').trim()}
+                                style={{ padding: '7px 14px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}
+                              >Reply</button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -4707,6 +5025,7 @@ export function LMSPage() {
       {showLessonModal && <LessonModal />}
       {showCaseStudyModal && <CaseStudyModal />}
       {sectionModal && <SectionModal type={sectionModal.type} contentId={sectionModal.contentId} onClose={() => setSectionModal(null)} />}
+      {discussionBoardContentId && <DiscussionBoardModal contentId={discussionBoardContentId} onClose={() => setDiscussionBoardContentId(null)} />}
       {sectionPicker && <SectionPickerModal state={sectionPicker} onPick={contentId => setSectionModal({ type: sectionPicker.type, contentId })} onClose={() => setSectionPicker(null)} />}
       {modulePicker && (
         <ModulePickerModal
@@ -4974,7 +5293,7 @@ function CaseStudyGradingPanel({ data, onClose, onFinalGradeChange }: {
                   <div style={{ fontSize: 11, color: '#3D5475' }}>
                     Auto-graded — {scores.omr.criteriaScores.correct ?? 0}/{scores.omr.criteriaScores.total ?? 0} correct
                     {scores.omr.criteriaScores.attempts != null && <> · attempt {scores.omr.criteriaScores.attempts}</>}
-                    {scores.omr.criteriaScores.passed != null && <> · {scores.omr.criteriaScores.passed ? 'passed' : 'below pass mark'}</>}
+                    {scores.omr.criteriaScores.passed != null && <> · {scores.omr.criteriaScores.passed ? 'passed' : 'below mastery'}</>}
                   </div>
                 ) : (
                   <div style={{ fontSize: 11, color: '#94A3B8' }}>Student hasn't taken the OMR test yet.</div>

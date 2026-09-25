@@ -7,6 +7,7 @@ import {
   FolderOpen, PartyPopper, Frown, RefreshCw, X, Play, Video,
   ChevronDown, ChevronRight, Search,
   ArrowLeft, ArrowRight, Star, Lock, AlertTriangle, ExternalLink, Info,
+  MessageSquare, Pin, ThumbsUp, Trash2, Pencil,
   type LucideIcon,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -42,6 +43,17 @@ function formatRemaining(ms: number) {
   const mins = Math.floor(totalSeconds / 60)
   const secs = totalSeconds % 60
   return `${mins}:${String(secs).padStart(2, '0')}`
+}
+
+function formatRelativeTime(iso: string): string {
+  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days}d ago`
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
 function paceMeta(progressPct: number, enrolment?: LMSEnrolment | null) {
@@ -348,7 +360,14 @@ function getCaseStudyEmbedUrl(url: string): string {
 }
 
 interface CSScoreData { componentType: string; criteriaScores: Record<string, number>; subtotal: number | null; feedback: string | null; status: 'not_scored' | 'scored' }
-interface CSPostData { id: string; studentId: string; authorName: string; isMine: boolean; body: string; parentPostId: string | null; createdAt: string }
+interface CSPostData {
+  id: string; studentId: string | null; authorName: string; isStaff: boolean; isMine: boolean
+  isAnnouncement: boolean; isPinned: boolean; isLocked: boolean
+  title: string | null; body: string | null; deletedAt: string | null; edited: boolean
+  parentPostId: string | null; createdAt: string
+  attachmentUrl: string | null; attachmentFileName: string | null
+  reactionCount: number; reactedByMe: boolean
+}
 interface CSAppealData { id: string; componentType: string; message: string; status: 'open' | 'resolved'; adminReply: string | null }
 interface CaseStudyBundle {
   lesson: { id: string; title: string; caseStudyUrl: string | null; moduleDescription: string | null; omrFormUrl: string | null; socraticDate: string | null; socraticBrief: string | null; presentationBrief: string | null }
@@ -364,8 +383,8 @@ interface MySubmission { contentId: string; kind: string; note: string | null; l
 // each lesson (Do It), and the module's Show It / Prove It / Master It slots. The last
 // four of those all live on the single hasAssignment carrier row, so a contentId alone
 // can't tell them apart — activeGroupKind disambiguates which of the four is open.
-type PartKind = 'tutorial' | 'video' | 'mastery' | 'lessonNotes' | 'caseStudyView' | 'caseStudyNotes' | 'socratic' | 'omr' | 'presentation'
-type ActivityGroupKind = 'learn' | 'lesson' | 'show' | 'prove' | 'master'
+type PartKind = 'tutorial' | 'video' | 'mastery' | 'lessonNotes' | 'caseStudyView' | 'caseStudyNotes' | 'socratic' | 'omr' | 'presentation' | 'discussion'
+type ActivityGroupKind = 'learn' | 'lesson' | 'show' | 'prove' | 'master' | 'discussion'
 interface ActivityGroupRef { key: string; kind: ActivityGroupKind; contentId: string }
 
 /** Loads the fixed-flow score/appeal bundle for one module's case-study carrier item.
@@ -754,10 +773,38 @@ function PresentationPanel({ carrierItem, studentId }: { carrierItem: LMSContent
   const subtotalsByType = Object.fromEntries(ACTIVE_SCORE_COMPONENT_TYPES.map((t) => [t, scoreByType[t]?.status === 'scored' ? scoreByType[t]!.subtotal : null])) as Partial<Record<ScoreComponentType, number | null>>
   const overallFinalGrade = finalGrade(subtotalsByType)
 
+  const videoYtMatch = carrierItem.presentationVideoUrl && !carrierItem.presentationVideoFileName
+    ? carrierItem.presentationVideoUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/))([A-Za-z0-9_-]{11})/)
+    : null
+
   return (
     <>
       {carrierItem.presentationBrief && (
         <div style={{ ...card, padding: '14px 16px', fontSize: 16, color: '#3D5475', lineHeight: 1.6 }}>{carrierItem.presentationBrief}</div>
+      )}
+      {carrierItem.presentationBriefUrl && (
+        <a href={carrierItem.presentationBriefUrl} target="_blank" rel="noreferrer" style={{ ...card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
+          <FileText size={18} color="#1A365E" />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E' }}>Assignment Brief</div>
+            <div style={{ fontSize: 13, color: '#7A92B0' }}>{carrierItem.presentationBriefFileName || 'View the presentation brief'}</div>
+          </div>
+          <ExternalLink size={14} color="#7A92B0" />
+        </a>
+      )}
+      {carrierItem.presentationVideoUrl && (
+        <div style={{ ...card, padding: '14px 16px' }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}><Video size={13} /> Video Explaining What's Due</div>
+          {carrierItem.presentationVideoFileName ? (
+            <video controls src={carrierItem.presentationVideoUrl} style={{ width: '100%', borderRadius: 10, background: '#000', display: 'block' }} />
+          ) : videoYtMatch ? (
+            <div style={{ position: 'relative', paddingBottom: '56.25%', height: 0, overflow: 'hidden', borderRadius: 10 }}>
+              <iframe src={`https://www.youtube.com/embed/${videoYtMatch[1]}?rel=0&modestbranding=1`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }} title="Video explaining what's due" loading="lazy" allowFullScreen />
+            </div>
+          ) : (
+            <iframe src={carrierItem.presentationVideoUrl} style={{ width: '100%', height: 400, border: '1.5px solid #E4EAF2', borderRadius: 10 }} title="Video explaining what's due" loading="lazy" allowFullScreen />
+          )}
+        </div>
       )}
       <div style={{ ...card, padding: '14px 16px' }}>
         <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}><Upload size={13} /> Submit Final Presentation</div>
@@ -788,6 +835,332 @@ function PresentationPanel({ carrierItem, studentId }: { carrierItem: LMSContent
         <span style={{ fontSize: 18, fontWeight: 900, color: overallFinalGrade !== null ? (overallFinalGrade >= 70 ? '#059669' : SP_RED) : '#94A3B8' }}>{overallFinalGrade !== null ? `${overallFinalGrade}/100` : '—'}</span>
       </div>
     </>
+  )
+}
+
+/** A single post or reply row — shared by the topic header and each reply in the thread. */
+function DiscussionPostRow({ post, isTopic, readOnly, onReact, onStartEdit, onDelete, onCancelDelete, confirmingDelete }: {
+  post: CSPostData
+  isTopic: boolean
+  readOnly: boolean
+  onReact: () => void
+  onStartEdit: () => void
+  onDelete: () => void
+  onCancelDelete: () => void
+  confirmingDelete: boolean
+}) {
+  const isDeleted = !!post.deletedAt
+  return (
+    <div style={{ padding: isTopic ? '14px 16px' : '10px 12px', background: post.isAnnouncement ? '#F0F4FA' : isTopic ? 'transparent' : '#F8FAFC', borderRadius: isTopic ? 0 : 10, border: isTopic ? undefined : '1px solid #E4EAF2' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 14, fontWeight: 800, color: '#1A365E' }}>{post.isMine ? 'You' : post.authorName}</span>
+          {post.isAnnouncement && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 800, color: '#1A365E', background: '#E4EAF2', padding: '2px 7px', borderRadius: 20 }}><Megaphone size={9} /> Instructor</span>
+          )}
+          <span style={{ fontSize: 12, color: '#94A3B8' }}>· {formatRelativeTime(post.createdAt)}{post.edited && !isDeleted ? ' · edited' : ''}</span>
+        </div>
+        {!isDeleted && post.isMine && !readOnly && (
+          confirmingDelete ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+              <span style={{ fontSize: 11, color: SP_RED, fontWeight: 700 }}>Delete?</span>
+              <button onClick={onDelete} style={{ padding: '3px 8px', background: SP_RED, color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Yes</button>
+              <button onClick={onCancelDelete} style={{ padding: '3px 8px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>No</button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+              <button onClick={onStartEdit} title="Edit" style={{ padding: 5, background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', display: 'flex' }}><Pencil size={13} /></button>
+              <button onClick={onDelete} title="Delete" style={{ padding: 5, background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', display: 'flex' }}><Trash2 size={13} /></button>
+            </div>
+          )
+        )}
+      </div>
+      {isDeleted ? (
+        <div style={{ fontSize: 14, color: '#94A3B8', fontStyle: 'italic', marginTop: 6 }}>[deleted]</div>
+      ) : (
+        <>
+          <div style={{ fontSize: 15, color: '#3D5475', lineHeight: 1.6, marginTop: 6, whiteSpace: 'pre-wrap' }}>{post.body}</div>
+          {post.attachmentUrl && (
+            <a href={post.attachmentUrl} target="_blank" rel="noreferrer" style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', background: '#fff', border: '1px solid #E4EAF2', borderRadius: 8, textDecoration: 'none', maxWidth: 320 }}>
+              <FileText size={14} color="#1A365E" style={{ flexShrink: 0 }} />
+              <span style={{ fontSize: 13, color: '#1A365E', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{post.attachmentFileName || 'Attachment'}</span>
+              <ExternalLink size={11} color="#94A3B8" style={{ flexShrink: 0, marginLeft: 'auto' }} />
+            </a>
+          )}
+          <button onClick={onReact} disabled={readOnly} style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', background: post.reactedByMe ? '#EFF6FF' : 'transparent', border: `1px solid ${post.reactedByMe ? '#BFDBFE' : '#E4EAF2'}`, borderRadius: 20, fontSize: 12, fontWeight: 700, color: post.reactedByMe ? '#1A365E' : '#7A92B0', cursor: readOnly ? 'not-allowed' : 'pointer' }}>
+            <ThumbsUp size={11} fill={post.reactedByMe ? '#1A365E' : 'none'} /> {post.reactionCount > 0 ? post.reactionCount : 'Like'}
+          </button>
+        </>
+      )}
+    </div>
+  )
+}
+
+/** Master It — Discussion Board. Top-level posts are discussion topics; replies hang one
+ *  level deep off a topic (matching the schema — no deeper nesting in this pass). Staff
+ *  post/pin/lock/moderate from the admin LMS page; students get create/reply/edit/delete
+ *  own/like here. */
+function DiscussionBoardPanel({ carrierItem, studentId }: { carrierItem: LMSContent; studentId: string }) {
+  const { readOnly } = usePortalReadOnly()
+  const { getToken } = useStudentPortal()
+  const { loading, bundle, refresh } = useCaseStudyBundle(carrierItem.id)
+  const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null)
+  const [composerOpen, setComposerOpen] = useState(false)
+  const [newTitle, setNewTitle] = useState('')
+  const [newBody, setNewBody] = useState('')
+  const [newFile, setNewFile] = useState<File | null>(null)
+  const [replyBody, setReplyBody] = useState('')
+  const [replyFile, setReplyFile] = useState<File | null>(null)
+  const [editingPostId, setEditingPostId] = useState<string | null>(null)
+  const [editBody, setEditBody] = useState('')
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  if (loading) return <div style={{ ...card, ...emptyState }}>Loading…</div>
+  if (!bundle) return <div style={{ ...card, ...emptyState }}>Couldn't load this. Try refreshing.</div>
+
+  const posts = bundle.discussion.posts
+  const topics = posts.filter((p) => !p.parentPostId)
+  const repliesOf = (topicId: string) => posts.filter((p) => p.parentPostId === topicId).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+  const lastActivityOf = (topic: CSPostData) => {
+    const replies = repliesOf(topic.id)
+    return replies.length ? replies[replies.length - 1].createdAt : topic.createdAt
+  }
+  const sortedTopics = [...topics].sort((a, b) => {
+    if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1
+    return lastActivityOf(b).localeCompare(lastActivityOf(a))
+  })
+  const selectedTopic = selectedTopicId ? posts.find((p) => p.id === selectedTopicId) ?? null : null
+
+  async function uploadAttachment(file: File) {
+    const path = `lms-discussion/${studentId}/${carrierItem.id}/${Date.now()}_${file.name}`
+    const url = await uploadFile(path, file)
+    return { url, name: file.name }
+  }
+
+  async function postTopic() {
+    if (!newTitle.trim() || !newBody.trim()) return
+    setBusy(true)
+    try {
+      const attachment = newFile ? await uploadAttachment(newFile) : null
+      await studentPortalFetch(getToken(), '/api/student-portal/lms-submit-discussion-post', {
+        method: 'POST',
+        body: JSON.stringify({ contentId: carrierItem.id, title: newTitle.trim(), body: newBody.trim(), attachmentUrl: attachment?.url, attachmentFileName: attachment?.name }),
+      })
+      setNewTitle(''); setNewBody(''); setNewFile(null); setComposerOpen(false)
+      await refresh()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to post. Please try again.')
+    }
+    setBusy(false)
+  }
+
+  async function postReply(topicId: string) {
+    if (!replyBody.trim()) return
+    setBusy(true)
+    try {
+      const attachment = replyFile ? await uploadAttachment(replyFile) : null
+      await studentPortalFetch(getToken(), '/api/student-portal/lms-submit-discussion-post', {
+        method: 'POST',
+        body: JSON.stringify({ contentId: carrierItem.id, parentPostId: topicId, body: replyBody.trim(), attachmentUrl: attachment?.url, attachmentFileName: attachment?.name }),
+      })
+      setReplyBody(''); setReplyFile(null)
+      await refresh()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to reply. Please try again.')
+    }
+    setBusy(false)
+  }
+
+  async function saveEdit(post: CSPostData) {
+    if (!editBody.trim()) return
+    setBusy(true)
+    try {
+      await studentPortalFetch(getToken(), '/api/student-portal/lms-edit-discussion-post', {
+        method: 'POST', body: JSON.stringify({ postId: post.id, body: editBody.trim() }),
+      })
+      setEditingPostId(null)
+      await refresh()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to save changes.')
+    }
+    setBusy(false)
+  }
+
+  async function deletePost(postId: string) {
+    setBusy(true)
+    try {
+      await studentPortalFetch(getToken(), '/api/student-portal/lms-delete-discussion-post', {
+        method: 'POST', body: JSON.stringify({ postId }),
+      })
+      setConfirmDeleteId(null)
+      await refresh()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete post.')
+    }
+    setBusy(false)
+  }
+
+  async function toggleReaction(postId: string) {
+    try {
+      await studentPortalFetch(getToken(), '/api/student-portal/lms-react-discussion-post', { method: 'POST', body: JSON.stringify({ postId }) })
+      await refresh()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to react.')
+    }
+  }
+
+  // ─── Thread view ──────────────────────────────────────────────────────────
+  if (selectedTopic) {
+    const replies = repliesOf(selectedTopic.id)
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <button onClick={() => setSelectedTopicId(null)} style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 4px', background: 'none', border: 'none', color: '#5A7290', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+          <ArrowLeft size={13} /> Back to Discussions
+        </button>
+        <div style={{ ...card, overflow: 'hidden' }}>
+          <div style={{ padding: '14px 16px 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
+              {selectedTopic.isPinned && <Pin size={13} color="#D97706" />}
+              {selectedTopic.isLocked && <Lock size={13} color="#94A3B8" />}
+              <div style={{ fontSize: 18, fontWeight: 800, color: '#1A365E' }}>{selectedTopic.deletedAt ? '[deleted]' : selectedTopic.title}</div>
+            </div>
+          </div>
+          {editingPostId === selectedTopic.id ? (
+            <div style={{ padding: '0 16px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <textarea rows={4} value={editBody} onChange={(e) => setEditBody(e.target.value)} style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 15, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button onClick={() => setEditingPostId(null)} style={{ padding: '7px 14px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+                <button onClick={() => void saveEdit(selectedTopic)} disabled={busy} style={{ padding: '7px 14px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Save</button>
+              </div>
+            </div>
+          ) : (
+            <DiscussionPostRow
+              post={selectedTopic}
+              isTopic
+              readOnly={readOnly}
+              onReact={() => void toggleReaction(selectedTopic.id)}
+              onStartEdit={() => { setEditingPostId(selectedTopic.id); setEditBody(selectedTopic.body ?? '') }}
+              onDelete={() => confirmDeleteId === selectedTopic.id ? void deletePost(selectedTopic.id) : setConfirmDeleteId(selectedTopic.id)}
+              onCancelDelete={() => setConfirmDeleteId(null)}
+              confirmingDelete={confirmDeleteId === selectedTopic.id}
+            />
+          )}
+        </div>
+
+        <div style={{ fontSize: 13, fontWeight: 800, color: '#5A7290', textTransform: 'uppercase', letterSpacing: '.4px', marginTop: 4 }}>
+          Replies {replies.length > 0 && `(${replies.length})`}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {replies.length === 0 && <div style={{ ...emptyState, fontSize: 14 }}>No replies yet.</div>}
+          {replies.map((reply) => (
+            editingPostId === reply.id ? (
+              <div key={reply.id} style={{ padding: '10px 12px', background: '#F8FAFC', border: '1px solid #E4EAF2', borderRadius: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <textarea rows={3} value={editBody} onChange={(e) => setEditBody(e.target.value)} style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 15, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <button onClick={() => setEditingPostId(null)} style={{ padding: '6px 12px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+                  <button onClick={() => void saveEdit(reply)} disabled={busy} style={{ padding: '6px 12px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Save</button>
+                </div>
+              </div>
+            ) : (
+              <DiscussionPostRow
+                key={reply.id}
+                post={reply}
+                isTopic={false}
+                readOnly={readOnly}
+                onReact={() => void toggleReaction(reply.id)}
+                onStartEdit={() => { setEditingPostId(reply.id); setEditBody(reply.body ?? '') }}
+                onDelete={() => confirmDeleteId === reply.id ? void deletePost(reply.id) : setConfirmDeleteId(reply.id)}
+                onCancelDelete={() => setConfirmDeleteId(null)}
+                confirmingDelete={confirmDeleteId === reply.id}
+              />
+            )
+          ))}
+        </div>
+
+        {selectedTopic.isLocked ? (
+          <div style={{ ...card, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 8, color: '#7A92B0', fontSize: 14 }}>
+            <Lock size={13} /> This discussion is locked. You can view the conversation but cannot add a reply.
+          </div>
+        ) : !selectedTopic.deletedAt && (
+          <div style={{ ...card, padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <textarea rows={2} value={replyBody} onChange={(e) => setReplyBody(e.target.value)} placeholder="Write a reply..." disabled={readOnly} style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 15, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: replyFile ? '#1DBD6A' : '#7A92B0', fontWeight: replyFile ? 700 : 400, cursor: 'pointer' }}>
+                <input type="file" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) setReplyFile(f) }} />
+                <Upload size={12} /> {replyFile ? replyFile.name : 'Attach'}
+              </label>
+              <button onClick={() => void postReply(selectedTopic.id)} disabled={readOnly || busy || !replyBody.trim()} style={{ padding: '8px 16px', background: replyBody.trim() && !readOnly ? '#1A365E' : '#E4EAF2', color: replyBody.trim() && !readOnly ? '#fff' : '#94A3B8', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: replyBody.trim() && !readOnly ? 'pointer' : 'not-allowed' }}>
+                Post Reply
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ─── Topic list view ──────────────────────────────────────────────────────
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ fontSize: 14, color: '#7A92B0' }}>Ask questions, share ideas, and discuss your presentation with classmates.</div>
+        {!composerOpen && (
+          <button onClick={() => setComposerOpen(true)} disabled={readOnly} style={{ flexShrink: 0, padding: '8px 14px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: readOnly ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <MessageSquare size={12} /> New Discussion
+          </button>
+        )}
+      </div>
+
+      {composerOpen && (
+        <div style={{ ...card, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Title" style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 15, fontFamily: 'inherit', boxSizing: 'border-box' }} />
+          <textarea rows={3} value={newBody} onChange={(e) => setNewBody(e.target.value)} placeholder="What's on your mind?" style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 15, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: newFile ? '#1DBD6A' : '#7A92B0', fontWeight: newFile ? 700 : 400, cursor: 'pointer' }}>
+              <input type="file" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) setNewFile(f) }} />
+              <Upload size={12} /> {newFile ? newFile.name : 'Attach'}
+            </label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => { setComposerOpen(false); setNewTitle(''); setNewBody(''); setNewFile(null) }} style={{ padding: '8px 14px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+              <button onClick={() => void postTopic()} disabled={busy || !newTitle.trim() || !newBody.trim()} style={{ padding: '8px 14px', background: newTitle.trim() && newBody.trim() ? '#1A365E' : '#E4EAF2', color: newTitle.trim() && newBody.trim() ? '#fff' : '#94A3B8', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: newTitle.trim() && newBody.trim() ? 'pointer' : 'not-allowed' }}>Post</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {sortedTopics.length === 0 ? (
+        <div style={{ ...card, ...emptyState, textAlign: 'center', padding: '32px 20px' }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: '#1A365E', marginBottom: 4 }}>No discussions yet</div>
+          <div>Start the first conversation for this presentation.</div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {sortedTopics.map((topic) => {
+            const replyCount = repliesOf(topic.id).length
+            return (
+              <button key={topic.id} onClick={() => setSelectedTopicId(topic.id)} style={{ ...card, padding: '14px 16px', textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  {topic.isPinned && <Pin size={12} color="#D97706" />}
+                  {topic.isLocked && <Lock size={12} color="#94A3B8" />}
+                  {topic.isAnnouncement && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 800, color: '#1A365E', background: '#E4EAF2', padding: '2px 7px', borderRadius: 20 }}><Megaphone size={9} /> Instructor</span>
+                  )}
+                  <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E' }}>{topic.deletedAt ? '[deleted]' : topic.title}</div>
+                </div>
+                {!topic.deletedAt && (
+                  <div style={{ fontSize: 14, color: '#7A92B0', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const }}>{topic.body}</div>
+                )}
+                <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 2 }}>
+                  {replyCount} repl{replyCount === 1 ? 'y' : 'ies'} · Last activity {formatRelativeTime(lastActivityOf(topic))} · Started by {topic.isMine ? 'you' : topic.authorName}
+                  {topic.reactionCount > 0 && ` · 👍 ${topic.reactionCount}`}
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -1074,7 +1447,7 @@ const contentRowStyle: React.CSSProperties = {
   cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
 }
 
-function ContentRow({ icon, kindLabel, title, targetDate, status, statusText, score, passMark, timeMins, locked, onClick, activeFilter }: {
+function ContentRow({ icon, kindLabel, title, targetDate, status, statusText, score, passMark, timeMins, locked, lockReason, onClick, activeFilter }: {
   icon: LucideIcon
   kindLabel: string
   title: string
@@ -1085,21 +1458,28 @@ function ContentRow({ icon, kindLabel, title, targetDate, status, statusText, sc
   passMark?: number
   timeMins?: number | null
   locked?: boolean
+  lockReason?: string
   onClick?: () => void
   activeFilter: ContentFilterId
 }) {
   const buckets = rowBuckets(status, targetDate)
   if (activeFilter !== 'all' && !buckets.includes(activeFilter)) return null
 
-  const meta = ROW_STATUS_META[status]
+  const meta = locked ? { bar: '#E4EAF2', textColor: '#94A3B8', icon: Lock } : ROW_STATUS_META[status]
   const dateInfo = targetDate ? formatShortDate(targetDate) : null
   const Icon = locked ? Lock : icon
   const StatusIcon = meta.icon
+  const clickable = !!onClick && !locked
 
   return (
-    <button onClick={onClick} disabled={!onClick} style={{ ...contentRowStyle, opacity: locked ? .6 : 1, cursor: onClick ? 'pointer' : 'default' }}>
+    <button
+      onClick={clickable ? onClick : undefined}
+      disabled={!clickable}
+      title={locked ? (lockReason || 'Complete the previous activity to unlock this.') : undefined}
+      style={{ ...contentRowStyle, opacity: locked ? .55 : 1, cursor: locked ? 'not-allowed' : clickable ? 'pointer' : 'default' }}
+    >
       <span style={{ alignSelf: 'stretch', minHeight: 28, borderRadius: 2, background: meta.bar }} />
-      <span style={{ fontSize: 14, fontWeight: 800, color: dateInfo?.overdue && status !== 'completed' ? SP_RED : '#94A3B8', textAlign: 'center', lineHeight: 1.3 }}>
+      <span style={{ fontSize: 14, fontWeight: 800, color: dateInfo?.overdue && status !== 'completed' && !locked ? SP_RED : '#94A3B8', textAlign: 'center', lineHeight: 1.3 }}>
         {dateInfo ? <>{dateInfo.dow}<br />{dateInfo.short}</> : 'No Target Date'}
       </span>
       <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, flexShrink: 0 }}>
@@ -1111,7 +1491,7 @@ function ContentRow({ icon, kindLabel, title, targetDate, status, statusText, sc
       <span style={{ minWidth: 0 }}>
         <div style={{ fontSize: 16, fontWeight: 700, color: locked ? '#94A3B8' : '#1A365E', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
         <div style={{ fontSize: 14, fontWeight: 600, color: meta.textColor, display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
-          <StatusIcon size={10} />{statusText}
+          <StatusIcon size={10} />{locked ? 'Locked' : statusText}
         </div>
       </span>
       <span style={{ display: 'flex', alignItems: 'center', gap: 8, justifySelf: 'end' }}>
@@ -1292,6 +1672,8 @@ export function SPMyLearningPage() {
       requiredHours: Number(r.required_hours ?? 0),
       status: (r.status as LMSCourse['status']) ?? 'Draft',
       announcement: (r.announcement as string) ?? '',
+      progressionMode: (r.progression_mode as string) ?? 'open',
+      startDate: (r.start_date as string) ?? null,
     }))
 
     const publishedCourses = mappedCourses.filter((course) => course.status?.toLowerCase() === 'published')
@@ -1334,6 +1716,12 @@ export function SPMyLearningPage() {
         socraticDate: (extra.socraticDate as string) ?? undefined,
         socraticBrief: (extra.socraticBrief as string) ?? undefined,
         presentationBrief: (extra.presentationBrief as string) ?? undefined,
+        presentationBriefUrl: (extra.presentationBriefUrl as string) ?? undefined,
+        presentationBriefFileName: (extra.presentationBriefFileName as string) ?? undefined,
+        presentationVideoUrl: (extra.presentationVideoUrl as string) ?? undefined,
+        presentationVideoFileName: (extra.presentationVideoFileName as string) ?? undefined,
+        targetDate: (extra.targetDate as string) ?? null,
+        locked: extra.locked === true,
       }
     })
 
@@ -1539,6 +1927,7 @@ export function SPMyLearningPage() {
           out.push({ key: `show:${carrierItem.id}`, kind: 'show', contentId: carrierItem.id })
           out.push({ key: `prove:${carrierItem.id}`, kind: 'prove', contentId: carrierItem.id })
           out.push({ key: `master:${carrierItem.id}`, kind: 'master', contentId: carrierItem.id })
+          out.push({ key: `discussion:${carrierItem.id}`, kind: 'discussion', contentId: carrierItem.id })
         }
       })
     })
@@ -1555,8 +1944,52 @@ export function SPMyLearningPage() {
       case 'show': return { title: 'Show It: Socratic Seminar', icon: Scale }
       case 'prove': return { title: 'Prove It: OMR Test', icon: Calculator }
       case 'master': return { title: 'Master It: Presentation', icon: Trophy }
+      case 'discussion': return { title: 'Discussion Board', icon: MessageSquare }
       default: return { title: item?.title || 'Lesson', icon: BookOpen }
     }
+  }
+
+  // Sequential Completion / Mastery Learning with Sequential Completion — set per
+  // course by an admin (Course Progression Settings). "Open" and plain "Mastery
+  // Learning" never lock navigation here; only the two sequential modes do.
+  const sequentialLock = selectedCourse?.progressionMode === 'sequential' || selectedCourse?.progressionMode === 'mastery_sequential'
+
+  // Show It / Prove It have no trackable completion signal yet (no submission or
+  // score is recorded for them), so they're treated as auto-complete for gating —
+  // otherwise they'd permanently block Master It with no way for a student to clear them.
+  function isGroupComplete(ref: ActivityGroupRef): boolean {
+    if (ref.kind === 'show' || ref.kind === 'prove' || ref.kind === 'discussion') return true
+    const item = courseItems.find((i) => i.id === ref.contentId)
+    if (!item) return false
+    if (ref.kind === 'learn') return hasSubmission(item.id, 'case_study_notes')
+    if (ref.kind === 'master') return hasSubmission(item.id, 'presentation')
+    const itemProgress = progress.find((entry) => entry.contentId === item.id && entry.studentId === session?.dbId)
+    const tutorialDone = itemProgress?.status === 'completed'
+    const hasMastery = item.hasMastery === true || item.hasMastery === 'TRUE'
+    const masteryPassed = itemProgress?.masteryPassed === true || itemProgress?.masteryPassed === 'TRUE'
+    const notesDone = hasSubmission(item.id, 'lesson_notes')
+    return tutorialDone && notesDone && (!hasMastery || masteryPassed)
+  }
+
+  // A group is locked if either (a) an admin locked its content row directly —
+  // the same 🔒 toggle already in Curriculum, which works anytime regardless of
+  // progression mode or student progress — or (b) sequential progression is on
+  // and the activity immediately before it (course-wide, across unit boundaries)
+  // isn't complete yet. Learn It / Show It / Prove It / Master It all share one
+  // content row (the module's carrier item), so an admin lock on that row locks
+  // all four together — there's no per-slot lock for those four independently yet.
+  function isGroupLocked(ref: ActivityGroupRef): boolean {
+    const item = courseItems.find((i) => i.id === ref.contentId)
+    if (item?.locked) return true
+    if (!sequentialLock) return false
+    const idx = allGroups.findIndex((g) => g.key === ref.key)
+    if (idx <= 0) return false
+    return !isGroupComplete(allGroups[idx - 1])
+  }
+
+  function groupLockReason(ref: ActivityGroupRef): string {
+    const item = courseItems.find((i) => i.id === ref.contentId)
+    return item?.locked ? 'This activity has been locked by your teacher.' : 'Complete the previous activity to unlock this.'
   }
 
   if (loading) {
@@ -1726,7 +2159,7 @@ export function SPMyLearningPage() {
               <div style={{ flex: 1, minWidth: 160 }}>
                 <div style={{ fontSize: 18, fontWeight: 800, color: '#1A365E' }}>{selectedCourse.title}</div>
                 <div style={{ fontSize: 15, color: '#7A92B0' }}>
-                  {selectedCourse.subject || 'No subject'} · Pass: {selectedCourse.passMark || 80}%
+                  {selectedCourse.subject || 'No subject'} · Mastery - {selectedCourse.passMark || 80}%
                   {selectedEnrolment?.dueDate && <> · Due {selectedEnrolment.dueDate}{daysRemaining !== null && daysRemaining >= 0 ? ` (${daysRemaining} days remaining)` : ''}</>}
                 </div>
               </div>
@@ -1839,6 +2272,8 @@ export function SPMyLearningPage() {
                               icon={FileText} kindLabel="Learn It" title={`Learn It · ${carrierItem.title || 'Case Study'}`} targetDate={carrierItem.targetDate}
                               status={hasSubmission(carrierItem.id, 'case_study_notes') ? 'completed' : 'not_started'}
                               statusText={hasSubmission(carrierItem.id, 'case_study_notes') ? 'Notes submitted' : 'Not started'}
+                              locked={isGroupLocked({ key: `learn:${carrierItem.id}`, kind: 'learn', contentId: carrierItem.id })}
+                              lockReason={groupLockReason({ key: `learn:${carrierItem.id}`, kind: 'learn', contentId: carrierItem.id })}
                               onClick={() => openGroup('learn', carrierItem.id)} activeFilter={contentFilter}
                             />
                           )}
@@ -1867,6 +2302,8 @@ export function SPMyLearningPage() {
                                 icon={BookOpen} kindLabel="Do It" title={`Do It · Lesson ${idx + 1}: ${item.title}`} targetDate={item.targetDate}
                                 status={status} statusText={statusText}
                                 score={itemHasMastery ? masteryScore : null} passMark={item.masteryPassMark ?? selectedCourse.passMark}
+                                locked={isGroupLocked({ key: `lesson:${item.id}`, kind: 'lesson', contentId: item.id })}
+                                lockReason={groupLockReason({ key: `lesson:${item.id}`, kind: 'lesson', contentId: item.id })}
                                 onClick={() => openGroup('lesson', item.id)} activeFilter={contentFilter}
                               />
                             )
@@ -1877,18 +2314,31 @@ export function SPMyLearningPage() {
                               <ContentRow
                                 icon={Scale} kindLabel="Show It" title="Show It · Socratic Seminar" targetDate={carrierItem.socraticDate || carrierItem.targetDate}
                                 status="not_started" statusText="Not started"
+                                locked={isGroupLocked({ key: `show:${carrierItem.id}`, kind: 'show', contentId: carrierItem.id })}
+                                lockReason={groupLockReason({ key: `show:${carrierItem.id}`, kind: 'show', contentId: carrierItem.id })}
                                 onClick={() => openGroup('show', carrierItem.id)} activeFilter={contentFilter}
                               />
                               <ContentRow
                                 icon={Calculator} kindLabel="Prove It" title="Prove It · OMR Test" targetDate={carrierItem.targetDate}
                                 status="not_started" statusText="Not started"
+                                locked={isGroupLocked({ key: `prove:${carrierItem.id}`, kind: 'prove', contentId: carrierItem.id })}
+                                lockReason={groupLockReason({ key: `prove:${carrierItem.id}`, kind: 'prove', contentId: carrierItem.id })}
                                 onClick={() => openGroup('prove', carrierItem.id)} activeFilter={contentFilter}
                               />
                               <ContentRow
                                 icon={Trophy} kindLabel="Master It" title="Master It · Presentation" targetDate={carrierItem.targetDate}
                                 status={hasSubmission(carrierItem.id, 'presentation') ? 'completed' : 'not_started'}
                                 statusText={hasSubmission(carrierItem.id, 'presentation') ? 'Submitted' : 'Not started'}
+                                locked={isGroupLocked({ key: `master:${carrierItem.id}`, kind: 'master', contentId: carrierItem.id })}
+                                lockReason={groupLockReason({ key: `master:${carrierItem.id}`, kind: 'master', contentId: carrierItem.id })}
                                 onClick={() => openGroup('master', carrierItem.id)} activeFilter={contentFilter}
+                              />
+                              <ContentRow
+                                icon={MessageSquare} kindLabel="Discussion Board" title="Master It · Discussion Board" targetDate={carrierItem.targetDate}
+                                status="not_started" statusText="Join the conversation"
+                                locked={isGroupLocked({ key: `discussion:${carrierItem.id}`, kind: 'discussion', contentId: carrierItem.id })}
+                                lockReason={groupLockReason({ key: `discussion:${carrierItem.id}`, kind: 'discussion', contentId: carrierItem.id })}
+                                onClick={() => openGroup('discussion', carrierItem.id)} activeFilter={contentFilter}
                               />
                             </>
                           )}
@@ -1924,7 +2374,7 @@ export function SPMyLearningPage() {
                     ['Grade level', selectedCourse.gradeLevel || '—'],
                     ['Credit hours', selectedCourse.creditHours ? String(selectedCourse.creditHours) : '—'],
                     ['Required hours', selectedCourse.requiredHours > 0 ? `${selectedCourse.requiredHours} hrs` : 'Not set'],
-                    ['Pass mark', `${selectedCourse.passMark || 80}%`],
+                    ['Mastery', `${selectedCourse.passMark || 80}%`],
                     ['Pacing', selectedEnrolment?.paceType ? `${selectedEnrolment.paceType}${selectedEnrolment.paceDaysPerLesson ? ` · ${selectedEnrolment.paceDaysPerLesson} days/lesson` : ''}` : 'Not set'],
                     ['Start date', selectedCourse.startDate || 'Not set'],
                     ['Due date', selectedEnrolment?.dueDate || 'Not set'],
@@ -1944,11 +2394,12 @@ export function SPMyLearningPage() {
 
       {selectedCourse && activeLesson && activeGroupKind && !activePart && (() => {
         const kind = activeGroupKind
-        const GroupIcon: LucideIcon = kind === 'learn' ? FileText : kind === 'show' ? Scale : kind === 'prove' ? Calculator : kind === 'master' ? Trophy : BookOpen
+        const GroupIcon: LucideIcon = kind === 'learn' ? FileText : kind === 'show' ? Scale : kind === 'prove' ? Calculator : kind === 'master' ? Trophy : kind === 'discussion' ? MessageSquare : BookOpen
         const groupTitle = kind === 'learn' ? (activeLesson.title || 'Case Study')
           : kind === 'show' ? 'Socratic Seminar'
           : kind === 'prove' ? 'OMR Test'
           : kind === 'master' ? 'Presentation'
+          : kind === 'discussion' ? 'Discussion Board'
           : activeLesson.title
         const groupTargetDate = kind === 'show' ? (activeLesson.socraticDate || activeLesson.targetDate) : activeLesson.targetDate
 
@@ -1978,10 +2429,14 @@ export function SPMyLearningPage() {
           parts = [{ key: 'socratic', title: 'Socratic Seminar', status: 'not_started', statusText: 'Not started' }]
         } else if (kind === 'prove') {
           parts = [{ key: 'omr', title: 'OMR Test', status: 'not_started', statusText: 'Not started' }]
+        } else if (kind === 'discussion') {
+          parts = [{ key: 'discussion', title: 'Discussion Board', status: 'not_started', statusText: 'Join the conversation' }]
         } else {
           const submitted = hasSubmission(activeLesson.id, 'presentation')
           parts = [{ key: 'presentation', title: 'Presentation', status: submitted ? 'completed' : 'not_started', statusText: submitted ? 'Submitted' : 'Not started' }]
         }
+
+        const nextLocked = !!nextGroup && isGroupLocked(nextGroup)
 
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -1999,18 +2454,30 @@ export function SPMyLearningPage() {
                 </button>
               ) : <span />}
               {nextGroup ? (
-                <button onClick={() => openGroup(nextGroup.kind, nextGroup.contentId)} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'right', maxWidth: '38%' }}>
+                <button
+                  onClick={() => !nextLocked && openGroup(nextGroup.kind, nextGroup.contentId)}
+                  disabled={nextLocked}
+                  title={nextLocked ? groupLockReason(nextGroup) : undefined}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: nextLocked ? 'not-allowed' : 'pointer', fontFamily: 'inherit', textAlign: 'right', maxWidth: '38%', opacity: nextLocked ? .5 : 1 }}
+                >
                   <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                     <span style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 14, fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '.5px' }}>Next Activity</div>
                       <div style={{ fontSize: 16, fontWeight: 700, color: '#1A365E', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{groupDisplay(nextGroup).title}</div>
                     </span>
-                    {(() => { const D = groupDisplay(nextGroup); const Icon = D.icon; return <span style={{ width: 30, height: 30, borderRadius: 8, background: '#F0F4FA', color: '#5A7290', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Icon size={14} /></span> })()}
+                    {nextLocked
+                      ? <span style={{ width: 30, height: 30, borderRadius: 8, background: '#F0F4FA', color: '#5A7290', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lock size={14} /></span>
+                      : (() => { const D = groupDisplay(nextGroup); const Icon = D.icon; return <span style={{ width: 30, height: 30, borderRadius: 8, background: '#F0F4FA', color: '#5A7290', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Icon size={14} /></span> })()}
                   </span>
                   <ArrowRight size={16} color="#94A3B8" style={{ flexShrink: 0 }} />
                 </button>
               ) : <span />}
             </div>
+            {nextLocked && (
+              <div style={{ textAlign: 'center', fontSize: 13, color: '#94A3B8', marginTop: -12 }}>
+                {groupLockReason(nextGroup!)}
+              </div>
+            )}
 
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, textAlign: 'center' }}>
               <span style={{ width: 56, height: 56, borderRadius: 14, background: '#F0F4FA', color: SP_NAVY, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -2199,6 +2666,18 @@ export function SPMyLearningPage() {
             </div>
           </div>
           <PresentationPanel carrierItem={activeLesson} studentId={session?.dbId ?? ''} />
+        </div>
+      )}
+
+      {selectedCourse && activeLesson && activePart === 'discussion' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', borderRadius: 11, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back</button>
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><MessageSquare size={15} /> Master it · Discussion Board</div>
+            </div>
+          </div>
+          <DiscussionBoardPanel carrierItem={activeLesson} studentId={session?.dbId ?? ''} />
         </div>
       )}
     </div>

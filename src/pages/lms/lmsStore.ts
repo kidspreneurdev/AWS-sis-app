@@ -106,6 +106,12 @@ export interface LMSContent {
   socraticDate?: string
   socraticBrief?: string
   presentationBrief?: string
+  // Master It — the presentation assignment brief (a slide deck/PDF, URL or uploaded file)
+  // and a short video explaining what's due, shown to students alongside the rubric.
+  presentationBriefUrl?: string
+  presentationBriefFileName?: string
+  presentationVideoUrl?: string
+  presentationVideoFileName?: string
   rubricOverrides?: RubricOverrides
   targetDate?: string | null
   locked?: boolean
@@ -241,6 +247,10 @@ function rowToLMSContent(r: Record<string, unknown>): LMSContent {
     socraticDate: extra.socraticDate as string | undefined,
     socraticBrief: extra.socraticBrief as string | undefined,
     presentationBrief: extra.presentationBrief as string | undefined,
+    presentationBriefUrl: extra.presentationBriefUrl as string | undefined,
+    presentationBriefFileName: extra.presentationBriefFileName as string | undefined,
+    presentationVideoUrl: extra.presentationVideoUrl as string | undefined,
+    presentationVideoFileName: extra.presentationVideoFileName as string | undefined,
     rubricOverrides: extra.rubricOverrides as RubricOverrides | undefined,
     targetDate: (extra.targetDate as string) ?? null,
     locked: extra.locked === true,
@@ -412,6 +422,8 @@ export async function saveLMS(store: LMSStore): Promise<string | null> {
           omrQuizJson: c.omrQuizJson, omrPassMark: c.omrPassMark, omrRetakes: c.omrRetakes,
           omrTimeLimit: c.omrTimeLimit, omrWeight: c.omrWeight,
           socraticBrief: c.socraticBrief, presentationBrief: c.presentationBrief,
+          presentationBriefUrl: c.presentationBriefUrl, presentationBriefFileName: c.presentationBriefFileName,
+          presentationVideoUrl: c.presentationVideoUrl, presentationVideoFileName: c.presentationVideoFileName,
           rubricOverrides: c.rubricOverrides,
           targetDate: c.targetDate, locked: c.locked, hidden: c.hidden, excludedFromGrade: c.excludedFromGrade,
         },

@@ -1217,6 +1217,24 @@ const ROW_STATUS_META: Record<RowStatus, { bar: string; textColor: string; icon:
   not_started: { bar: '#E4EAF2', textColor: '#94A3B8', icon: Circle },
 }
 
+// One color identity per stage of the Learn It → Discussion Board journey, so a
+// student can tell what kind of activity a row is before reading it. Every value
+// here is either a color already used elsewhere for that exact meaning in this
+// file (e.g. '#DCFCE7'/'#059669' is the same pass-state tint used by CSScoreBlock,
+// '#FEF3C7'/'#92400E' the same pair already used for the "needs attention" banner
+// below) or a low-opacity tint of a hue that already exists in the design system
+// (Show It / Discussion reuse the English-Arts and World-Language subject colors
+// from SUBJECT_COLORS) — nothing here is a newly invented hue.
+type StageKey = 'learn' | 'do' | 'show' | 'prove' | 'master' | 'discussion'
+const STAGE_META: Record<StageKey, { label: string; icon: LucideIcon; text: string; bg: string }> = {
+  learn: { label: 'Learn It', icon: FileText, text: '#059669', bg: '#DCFCE7' },
+  do: { label: 'Do It', icon: BookOpen, text: '#2563EB', bg: '#DBEAFE' },
+  show: { label: 'Show It', icon: Scale, text: '#8B5CF6', bg: 'rgba(139,92,246,.13)' },
+  prove: { label: 'Prove It', icon: Calculator, text: SP_RED, bg: '#FEE2E2' },
+  master: { label: 'Master It', icon: Trophy, text: '#92400E', bg: '#FEF3C7' },
+  discussion: { label: 'Discuss', icon: MessageSquare, text: '#0891B2', bg: 'rgba(8,145,178,.12)' },
+}
+
 function rowBuckets(status: RowStatus, targetDate?: string | null): ContentFilterId[] {
   const buckets: ContentFilterId[] = ['all', status]
   if (targetDate && status !== 'completed') {
@@ -1238,14 +1256,13 @@ function formatShortDate(targetDate: string) {
 }
 
 const contentRowStyle: React.CSSProperties = {
-  display: 'grid', gridTemplateColumns: '4px 54px 62px 1fr auto', gap: 10, alignItems: 'center',
-  width: '100%', padding: '10px 18px 10px 10px', background: 'none', border: 'none',
-  cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+  display: 'grid', gridTemplateColumns: '4px 50px 42px 1fr auto auto 14px', gap: 12, alignItems: 'center',
+  width: '100%', padding: '11px 14px 11px 10px', background: '#fff', border: '1px solid #E4EAF2', borderRadius: 10,
+  cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', transition: 'background .15s ease, border-color .15s ease',
 }
 
-function ContentRow({ icon, kindLabel, title, targetDate, status, statusText, score, passMark, timeMins, locked, lockReason, onClick, activeFilter }: {
-  icon: LucideIcon
-  kindLabel: string
+function ContentRow({ stage, title, targetDate, status, statusText, score, passMark, timeMins, locked, lockReason, onClick, activeFilter }: {
+  stage: StageKey
   title: string
   targetDate?: string | null
   status: RowStatus
@@ -1261,9 +1278,10 @@ function ContentRow({ icon, kindLabel, title, targetDate, status, statusText, sc
   const buckets = rowBuckets(status, targetDate)
   if (activeFilter !== 'all' && !buckets.includes(activeFilter)) return null
 
+  const stageMeta = STAGE_META[stage]
   const meta = locked ? { bar: '#E4EAF2', textColor: '#94A3B8', icon: Lock } : ROW_STATUS_META[status]
   const dateInfo = targetDate ? formatShortDate(targetDate) : null
-  const Icon = locked ? Lock : icon
+  const Icon = locked ? Lock : stageMeta.icon
   const StatusIcon = meta.icon
   const clickable = !!onClick && !locked
 
@@ -1273,34 +1291,37 @@ function ContentRow({ icon, kindLabel, title, targetDate, status, statusText, sc
       disabled={!clickable}
       title={locked ? (lockReason || 'Complete the previous activity to unlock this.') : undefined}
       style={{ ...contentRowStyle, opacity: locked ? .55 : 1, cursor: locked ? 'not-allowed' : clickable ? 'pointer' : 'default' }}
+      onMouseEnter={(e) => { if (!locked) e.currentTarget.style.background = '#F8FAFC' }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = '#fff' }}
     >
       <span style={{ alignSelf: 'stretch', minHeight: 28, borderRadius: 2, background: meta.bar }} />
-      <span style={{ fontSize: 14, fontWeight: 800, color: dateInfo?.overdue && status !== 'completed' && !locked ? SP_RED : '#94A3B8', textAlign: 'center', lineHeight: 1.3 }}>
-        {dateInfo ? <>{dateInfo.dow}<br />{dateInfo.short}</> : 'No Target Date'}
+      <span style={{ fontSize: 12, fontWeight: 800, color: dateInfo?.overdue && status !== 'completed' && !locked ? SP_RED : '#94A3B8', textAlign: 'center', lineHeight: 1.3 }}>
+        {dateInfo ? <>{dateInfo.dow}<br />{dateInfo.short}</> : 'No date'}
       </span>
-      <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, flexShrink: 0 }}>
-        <span style={{ width: 44, height: 44, borderRadius: 11, background: '#F0F4FA', color: '#5A7290', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Icon size={22} />
-        </span>
-        <span style={{ fontSize: 9, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '.3px', textAlign: 'center', lineHeight: 1.1 }}>{kindLabel}</span>
+      <span style={{ width: 40, height: 40, borderRadius: 11, background: locked ? '#F0F4FA' : stageMeta.bg, color: locked ? '#94A3B8' : stageMeta.text, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <Icon size={18} />
       </span>
       <span style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: locked ? '#94A3B8' : '#1A365E', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
-        <div style={{ fontSize: 14, fontWeight: 600, color: meta.textColor, display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: locked ? '#94A3B8' : '#1A365E', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: meta.textColor, display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
           <StatusIcon size={10} />{locked ? 'Locked' : statusText}
         </div>
       </span>
+      <span style={{ fontSize: 11, fontWeight: 800, padding: '4px 10px', borderRadius: 100, background: locked ? '#F0F4FA' : stageMeta.bg, color: locked ? '#94A3B8' : stageMeta.text, whiteSpace: 'nowrap', justifySelf: 'end' }}>
+        {stageMeta.label}
+      </span>
       <span style={{ display: 'flex', alignItems: 'center', gap: 8, justifySelf: 'end' }}>
-        {typeof score === 'number' && <span style={{ fontSize: 16, fontWeight: 800, color: score >= (passMark ?? 80) ? SP_GREEN : SP_RED }}>{score}%</span>}
-        {!!timeMins && <span style={{ fontSize: 14, color: '#94A3B8' }}>{timeMins}m</span>}
+        {typeof score === 'number' && <span style={{ fontSize: 15, fontWeight: 800, color: score >= (passMark ?? 80) ? SP_GREEN : SP_RED }}>{score}%</span>}
+        {!!timeMins && <span style={{ fontSize: 13, color: '#94A3B8' }}>{timeMins}m</span>}
         <span
           title="Bookmarking isn't available yet — needs a new field"
           onClick={(e) => e.stopPropagation()}
-          style={{ width: 20, height: 20, borderRadius: 6, border: '1px dashed #D7E0EA', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#D7E0EA', cursor: 'not-allowed', flexShrink: 0 }}
+          style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#D7E0EA', cursor: 'not-allowed', flexShrink: 0 }}
         >
-          <Star size={11} />
+          <Star size={12} />
         </span>
       </span>
+      <ChevronRight size={14} color="#94A3B8" style={{ flexShrink: 0 }} />
     </button>
   )
 }
@@ -1553,6 +1574,18 @@ export function SPMyLearningPage() {
   }
 
   const hasSubmission = (contentId: string, kind: string) => mySubmissions.some((s) => s.contentId === contentId && s.kind === kind)
+
+  // Same "is this Do It lesson actually done" rule the row itself uses (tutorial +
+  // notes, plus mastery if the lesson has it) — mirrored here so the unit's Do It
+  // step count in the journey stepper always agrees with what the rows below show.
+  function lessonIsComplete(item: LMSContent): boolean {
+    const itemProgress = progress.find((entry) => entry.contentId === item.id && entry.studentId === session?.dbId)
+    const tutorialDone = itemProgress?.status === 'completed'
+    const itemHasMastery = item.hasMastery === true || item.hasMastery === 'TRUE'
+    const masteryPassed = itemProgress?.masteryPassed === true || itemProgress?.masteryPassed === 'TRUE'
+    const notesDone = hasSubmission(item.id, 'lesson_notes')
+    return tutorialDone && notesDone && (!itemHasMastery || masteryPassed)
+  }
 
   function toggleLessonExpanded(itemId: string) {
     setCollapsedLessonIds((prev) => {
@@ -1876,58 +1909,64 @@ export function SPMyLearningPage() {
             <div style={{ ...card, ...emptyState }}>No course announcement has been posted for this course yet.</div>
           )}
 
-          <div style={{ ...card, overflow: 'hidden' }}>
-            <div style={{ height: 6, background: SUBJECT_COLORS[selectedCourse.subject] || SP_NAVY }} />
-            <div style={{ padding: '14px 18px 10px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-              <button onClick={() => setActiveCourse(null)} style={{ padding: '6px 12px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back</button>
-              <div style={{ flex: 1, minWidth: 160 }}>
-                <div style={{ fontSize: 18, fontWeight: 800, color: '#1A365E' }}>{selectedCourse.title}</div>
-                <div style={{ fontSize: 15, color: '#7A92B0' }}>
-                  {selectedCourse.subject || 'No subject'} · Mastery - {selectedCourse.passMark || 80}%
-                  {selectedEnrolment?.dueDate && <> · Due {selectedEnrolment.dueDate}{daysRemaining !== null && daysRemaining >= 0 ? ` (${daysRemaining} days remaining)` : ''}</>}
+          <div style={{ ...card, padding: '16px 20px' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+              <div style={{ minWidth: 200 }}>
+                <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 8 }}>
+                  <button onClick={() => setActiveCourse(null)} style={{ padding: '4px 11px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 100, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back</button>
+                  <span style={{ padding: '4px 11px', borderRadius: 100, fontSize: 12, fontWeight: 700, background: `${SUBJECT_COLORS[selectedCourse.subject] || SP_NAVY}1F`, color: SUBJECT_COLORS[selectedCourse.subject] || SP_NAVY }}>{selectedCourse.subject || 'No subject'}</span>
+                  {selectedCourse.gradeLevel && <span style={{ padding: '4px 11px', borderRadius: 100, fontSize: 12, fontWeight: 700, background: '#F0F4FA', color: '#5A7290' }}>Grade {selectedCourse.gradeLevel}</span>}
+                  <span style={{ padding: '4px 11px', borderRadius: 100, fontSize: 12, fontWeight: 700, background: '#F0F4FA', color: '#5A7290' }}>Mastery {selectedCourse.passMark || 80}%</span>
                 </div>
+                <div style={{ fontSize: 21, fontWeight: 800, color: '#1A365E' }}>{selectedCourse.title}</div>
+                {selectedEnrolment?.dueDate && (
+                  <div style={{ fontSize: 13, color: '#94A3B8', fontWeight: 600, marginTop: 3 }}>
+                    Due {selectedEnrolment.dueDate}{daysRemaining !== null && daysRemaining >= 0 ? ` · ${daysRemaining} days remaining` : ''}
+                  </div>
+                )}
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => setSectionDetailsOpen(true)} style={{ padding: '7px 12px', background: '#F0F4FA', color: '#1A365E', border: '1px solid #E4EAF2', borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                <button onClick={() => setSectionDetailsOpen(true)} style={{ padding: '8px 13px', background: '#F0F4FA', color: '#1A365E', border: '1px solid #E4EAF2', borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
                   <Info size={12} /> Section Details
                 </button>
-                <button onClick={() => navigate(`${portalPrefix(location.pathname)}/grades`)} style={{ padding: '7px 12px', background: SP_NAVY, color: '#fff', border: `1px solid ${SP_NAVY}`, borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                <button onClick={() => navigate(`${portalPrefix(location.pathname)}/grades`)} style={{ padding: '8px 13px', background: SP_NAVY, color: '#fff', border: `1px solid ${SP_NAVY}`, borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
                   <ExternalLink size={12} /> View Gradebook
                 </button>
               </div>
             </div>
           </div>
 
-          <div style={{ ...card, padding: '12px 16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 10, flexWrap: 'wrap' }}>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#1A365E' }}>
-                {doneCount} / {courseItems.length} lessons completed
+          <div style={{ ...card, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: 220 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 7 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#5A7290' }}>Course Progress</span>
+                <span style={{ fontSize: 20, fontWeight: 800, color: '#1A365E', fontVariantNumeric: 'tabular-nums' }}>{courseProgress(selectedCourse)}%</span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 14, fontWeight: 800, color: paceInfo.color, background: paceInfo.bg, padding: '4px 10px', borderRadius: 20, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <paceInfo.icon size={11} /> {paceInfo.label}
-                </span>
-                <span style={{ fontSize: 16, fontWeight: 900, color: courseProgress(selectedCourse) === 100 ? SP_GREEN : courseProgress(selectedCourse) >= 50 ? '#D97706' : SP_NAVY }}>{courseProgress(selectedCourse)}%</span>
+              <div style={{ height: 9, background: '#F0F4FA', borderRadius: 100, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${courseProgress(selectedCourse)}%`, background: courseProgress(selectedCourse) === 100 ? SP_GREEN : courseProgress(selectedCourse) >= 50 ? '#D97706' : SP_NAVY, borderRadius: 100, transition: 'width .5s' }} />
               </div>
+              <div style={{ fontSize: 12, color: '#94A3B8', fontWeight: 600, marginTop: 7 }}>{doneCount} of {courseItems.length} lessons completed</div>
             </div>
-            <div style={{ height: 8, background: '#F0F4FA', borderRadius: 4, overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `${courseProgress(selectedCourse)}%`, background: courseProgress(selectedCourse) === 100 ? SP_GREEN : courseProgress(selectedCourse) >= 50 ? '#D97706' : SP_NAVY, borderRadius: 4 }} />
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginTop: 12 }}>
-              <div style={{ ...emptyState, padding: '10px 12px' }}>
-                <strong style={{ color: '#1A365E' }}>Average mastery</strong><br />
-                {(() => {
-                  const mastery = progress.filter((entry) => entry.courseId === (selectedCourse.groupId ?? selectedCourse.id) && entry.studentId === session?.dbId && entry.masteryScore != null)
-                  return mastery.length ? `${Math.round(mastery.reduce((sum, entry) => sum + Number(entry.masteryScore ?? 0), 0) / mastery.length)}%` : 'No mastery data available'
-                })()}
+            <span style={{ fontSize: 12, fontWeight: 800, color: paceInfo.color, background: paceInfo.bg, padding: '5px 12px', borderRadius: 100, display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+              <paceInfo.icon size={12} /> {paceInfo.label}
+            </span>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <div style={{ background: '#F0F4FA', borderRadius: 10, padding: '8px 13px', minWidth: 120 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#1A365E' }}>
+                  {(() => {
+                    const mastery = progress.filter((entry) => entry.courseId === (selectedCourse.groupId ?? selectedCourse.id) && entry.studentId === session?.dbId && entry.masteryScore != null)
+                    return mastery.length ? `${Math.round(mastery.reduce((sum, entry) => sum + Number(entry.masteryScore ?? 0), 0) / mastery.length)}%` : '—'
+                  })()}
+                </div>
+                <div style={{ fontSize: 11, color: '#94A3B8', fontWeight: 600 }}>Avg. mastery</div>
               </div>
-              <div style={{ ...emptyState, padding: '10px 12px' }}>
-                <strong style={{ color: '#1A365E' }}>Time requirement</strong><br />
-                {selectedCourse.requiredHours > 0 ? `${selectedCourse.requiredHours} hrs required` : 'No time requirement set'}
+              <div style={{ background: '#F0F4FA', borderRadius: 10, padding: '8px 13px', minWidth: 120 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#1A365E' }}>{totalTimeMins > 0 ? `${Math.floor(totalTimeMins / 60)}h ${totalTimeMins % 60}m` : '—'}</div>
+                <div style={{ fontSize: 11, color: '#94A3B8', fontWeight: 600 }}>Time on task</div>
               </div>
-              <div style={{ ...emptyState, padding: '10px 12px' }}>
-                <strong style={{ color: '#1A365E' }}>Time on task</strong><br />
-                {totalTimeMins > 0 ? `${Math.floor(totalTimeMins / 60)}h ${totalTimeMins % 60}m` : 'Not tracked yet'}
+              <div style={{ background: '#F0F4FA', borderRadius: 10, padding: '8px 13px', minWidth: 120 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#1A365E' }}>{selectedCourse.requiredHours > 0 ? `${selectedCourse.requiredHours} hrs` : '—'}</div>
+                <div style={{ fontSize: 11, color: '#94A3B8', fontWeight: 600 }}>Required</div>
               </div>
             </div>
           </div>
@@ -1939,7 +1978,7 @@ export function SPMyLearningPage() {
           )}
 
           {courseItems.length > 0 && (
-            <div style={{ position: 'sticky', top: 0, zIndex: 2, background: '#F7F9FC', margin: '0 -4px', padding: '6px 4px', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {CONTENT_FILTERS.map((f) => {
                 const active = contentFilter === f.id
                 return (
@@ -1975,25 +2014,94 @@ export function SPMyLearningPage() {
                   const lessonItems = items.filter((i) => i !== carrierItem)
                   const moduleKey = `unit:${unit}`
                   const moduleExpanded = !collapsedLessonIds.has(moduleKey)
+
+                  // Same done/total per stage the rows below compute — reused here to
+                  // drive the Learn It → Discussion Board journey stepper and the
+                  // unit header's summary, so the two never disagree.
+                  const stageCounts: Record<StageKey, { done: number; total: number }> = {
+                    learn: { done: carrierItem && hasSubmission(carrierItem.id, 'case_study_notes') ? 1 : 0, total: carrierItem ? 1 : 0 },
+                    do: { done: lessonItems.filter(lessonIsComplete).length, total: lessonItems.length },
+                    show: { done: 0, total: carrierItem ? 1 : 0 },
+                    prove: { done: 0, total: carrierItem ? 1 : 0 },
+                    master: { done: carrierItem && hasSubmission(carrierItem.id, 'presentation') ? 1 : 0, total: carrierItem ? 1 : 0 },
+                    discussion: { done: 0, total: carrierItem ? 1 : 0 },
+                  }
+                  const unitDone = Object.values(stageCounts).reduce((sum, s) => sum + s.done, 0)
+                  const unitTotal = Object.values(stageCounts).reduce((sum, s) => sum + s.total, 0)
+                  const unitDates = [carrierItem?.targetDate, carrierItem?.socraticDate, carrierItem?.omrTargetDate, carrierItem?.presentationTargetDate, ...lessonItems.map((i) => i.targetDate)]
+                    .filter((d): d is string => !!d).sort()
+                  const badgeState = unitTotal === 0 ? 'empty' : unitDone === unitTotal ? 'done' : unitDone > 0 ? 'active' : 'todo'
+
                   return (
                     <div key={unit} style={{ ...card, overflow: 'hidden' }}>
                       <button
                         onClick={() => toggleLessonExpanded(moduleKey)}
-                        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '14px 18px', background: '#F7F9FC', border: 'none', borderBottom: moduleExpanded ? '1px solid #E4EAF2' : 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '14px 18px', background: 'none', border: 'none', borderBottom: moduleExpanded ? '1px solid #F7F9FC' : 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}
                       >
-                        <span style={{ width: 20, height: 20, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #E4EAF2', borderRadius: 4, background: '#fff', color: '#5A7290' }}>{moduleExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</span>
-                        <FolderOpen size={13} style={{ flexShrink: 0, color: '#5A7290' }} />
-                        <span style={{ fontSize: 16, fontWeight: 800, color: '#1A365E', flex: 1, minWidth: 0 }}>{unit}</span>
+                        <span style={{
+                          width: 30, height: 30, borderRadius: 9, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800,
+                          background: badgeState === 'done' ? '#DCFCE7' : badgeState === 'active' ? '#DBEAFE' : '#F0F4FA',
+                          color: badgeState === 'done' ? '#059669' : badgeState === 'active' ? '#2563EB' : '#94A3B8',
+                        }}>
+                          {badgeState === 'done' ? <CheckCircle2 size={15} /> : <FolderOpen size={14} />}
+                        </span>
+                        <span style={{ fontSize: 15, fontWeight: 700, color: '#1A365E', flex: 1, minWidth: 0 }}>{unit}</span>
+                        {unitTotal > 0 && (
+                          <span style={{ fontSize: 12, fontWeight: 700, color: badgeState === 'done' ? '#059669' : badgeState === 'active' ? '#2563EB' : '#94A3B8', whiteSpace: 'nowrap' }}>
+                            {badgeState === 'done' ? 'Completed' : `${unitDone} of ${unitTotal} items completed`}
+                          </span>
+                        )}
+                        <ChevronDown size={15} color="#94A3B8" style={{ flexShrink: 0, transform: moduleExpanded ? 'rotate(180deg)' : 'none', transition: 'transform .18s ease' }} />
                       </button>
                       {moduleExpanded && (
-                        <div style={{ display: 'flex', flexDirection: 'column', paddingBottom: 6 }}>
-                          {carrierItem?.moduleDescription && (
-                            <div style={{ padding: '10px 18px', fontSize: 16, color: '#5A7290', lineHeight: 1.6, borderBottom: '1px solid #F0F4FA' }}>{carrierItem.moduleDescription}</div>
-                          )}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '0 18px 16px' }}>
+
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4, flexWrap: 'wrap' }}>
+                            {(['learn', 'do', 'show', 'prove', 'master', 'discussion'] as StageKey[]).map((key, i, arr) => {
+                              const meta = STAGE_META[key]
+                              const s = stageCounts[key]
+                              const stepDone = s.total > 0 && s.done === s.total
+                              return (
+                                <div key={key} style={{ display: 'flex', alignItems: 'flex-start' }}>
+                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: 58 }}>
+                                    <span style={{ position: 'relative' }}>
+                                      <span style={{ width: 34, height: 34, borderRadius: '50%', background: meta.bg, color: meta.text, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <meta.icon size={15} />
+                                      </span>
+                                      {stepDone && (
+                                        <span style={{ position: 'absolute', bottom: -2, right: -2, width: 13, height: 13, borderRadius: '50%', background: SP_GREEN, border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                          <Check size={7} color="#fff" strokeWidth={4} />
+                                        </span>
+                                      )}
+                                    </span>
+                                    <span style={{ fontSize: 10, fontWeight: 800, color: '#1A365E', textAlign: 'center', lineHeight: 1.15 }}>{meta.label}</span>
+                                    <span style={{ fontSize: 9.5, fontWeight: 700, color: '#94A3B8' }}>{s.done}/{s.total}</span>
+                                  </div>
+                                  {i < arr.length - 1 && <ChevronRight size={12} color="#D7E0EA" style={{ marginTop: 10, flexShrink: 0 }} />}
+                                </div>
+                              )
+                            })}
+                          </div>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: carrierItem?.moduleDescription ? '1fr 220px' : '220px', gap: 12 }}>
+                            {carrierItem?.moduleDescription && (
+                              <div style={{ background: '#F8FAFC', border: '1px solid #F0F4FA', borderRadius: 12, padding: '12px 14px', fontSize: 14, color: '#5A7290', lineHeight: 1.6 }}>
+                                <div style={{ fontSize: 12, fontWeight: 800, color: '#1A365E', marginBottom: 4 }}>About this unit</div>
+                                {carrierItem.moduleDescription}
+                              </div>
+                            )}
+                            <div style={{ background: '#F8FAFC', border: '1px solid #F0F4FA', borderRadius: 12, padding: '12px 14px' }}>
+                              <div style={{ fontSize: 12, fontWeight: 800, color: '#1A365E', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 5 }}><CalendarDays size={12} /> Unit dates</div>
+                              <div style={{ fontSize: 13.5, fontWeight: 700, color: '#1A365E' }}>
+                                {unitDates.length ? (unitDates.length > 1 ? `${unitDates[0]} – ${unitDates[unitDates.length - 1]}` : unitDates[0]) : 'No dates set'}
+                              </div>
+                              <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 2 }}>{unitTotal} item{unitTotal !== 1 ? 's' : ''}</div>
+                            </div>
+                          </div>
 
                           {carrierItem && (
                             <ContentRow
-                              icon={FileText} kindLabel="Learn It" title={`Learn It · ${carrierItem.title || 'Case Study'}`} targetDate={carrierItem.targetDate}
+                              stage="learn" title={`Learn It · ${carrierItem.title || 'Case Study'}`} targetDate={carrierItem.targetDate}
                               status={hasSubmission(carrierItem.id, 'case_study_notes') ? 'completed' : 'not_started'}
                               statusText={hasSubmission(carrierItem.id, 'case_study_notes') ? 'Notes submitted' : 'Not started'}
                               locked={isGroupLocked({ key: `learn:${carrierItem.id}`, kind: 'learn', contentId: carrierItem.id })}
@@ -2023,7 +2131,7 @@ export function SPMyLearningPage() {
                             return (
                               <ContentRow
                                 key={item.id}
-                                icon={BookOpen} kindLabel="Do It" title={`Do It · Lesson ${idx + 1}: ${item.title}`} targetDate={item.targetDate}
+                                stage="do" title={`Do It · Lesson ${idx + 1}: ${item.title}`} targetDate={item.targetDate}
                                 status={status} statusText={statusText}
                                 score={itemHasMastery ? masteryScore : null} passMark={item.masteryPassMark ?? selectedCourse.passMark}
                                 locked={isGroupLocked({ key: `lesson:${item.id}`, kind: 'lesson', contentId: item.id })}
@@ -2036,21 +2144,21 @@ export function SPMyLearningPage() {
                           {carrierItem && (
                             <>
                               <ContentRow
-                                icon={Scale} kindLabel="Show It" title="Show It · Socratic Seminar" targetDate={carrierItem.socraticDate || carrierItem.targetDate}
+                                stage="show" title="Show It · Socratic Seminar" targetDate={carrierItem.socraticDate || carrierItem.targetDate}
                                 status="not_started" statusText="Not started"
                                 locked={isGroupLocked({ key: `show:${carrierItem.id}`, kind: 'show', contentId: carrierItem.id })}
                                 lockReason={groupLockReason({ key: `show:${carrierItem.id}`, kind: 'show', contentId: carrierItem.id })}
                                 onClick={() => openGroup('show', carrierItem.id)} activeFilter={contentFilter}
                               />
                               <ContentRow
-                                icon={Calculator} kindLabel="Prove It" title="Prove It · OMR Test" targetDate={carrierItem.omrTargetDate}
+                                stage="prove" title="Prove It · OMR Test" targetDate={carrierItem.omrTargetDate}
                                 status="not_started" statusText="Not started"
                                 locked={isGroupLocked({ key: `prove:${carrierItem.id}`, kind: 'prove', contentId: carrierItem.id })}
                                 lockReason={groupLockReason({ key: `prove:${carrierItem.id}`, kind: 'prove', contentId: carrierItem.id })}
                                 onClick={() => openGroup('prove', carrierItem.id)} activeFilter={contentFilter}
                               />
                               <ContentRow
-                                icon={Trophy} kindLabel="Master It" title="Master It · Presentation" targetDate={carrierItem.presentationTargetDate}
+                                stage="master" title="Master It · Presentation" targetDate={carrierItem.presentationTargetDate}
                                 status={hasSubmission(carrierItem.id, 'presentation') ? 'completed' : 'not_started'}
                                 statusText={hasSubmission(carrierItem.id, 'presentation') ? 'Submitted' : 'Not started'}
                                 locked={isGroupLocked({ key: `master:${carrierItem.id}`, kind: 'master', contentId: carrierItem.id })}
@@ -2058,7 +2166,7 @@ export function SPMyLearningPage() {
                                 onClick={() => openGroup('master', carrierItem.id)} activeFilter={contentFilter}
                               />
                               <ContentRow
-                                icon={MessageSquare} kindLabel="Discussion Board" title="Master It · Discussion Board" targetDate={carrierItem.targetDate}
+                                stage="discussion" title="Master It · Discussion Board" targetDate={carrierItem.targetDate}
                                 status="not_started" statusText="Join the conversation"
                                 locked={isGroupLocked({ key: `discussion:${carrierItem.id}`, kind: 'discussion', contentId: carrierItem.id })}
                                 lockReason={groupLockReason({ key: `discussion:${carrierItem.id}`, kind: 'discussion', contentId: carrierItem.id })}

@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/auth.store'
+import { isSpainCampus } from '@/lib/campus'
 import { formatStudentGrade, normalizeStudentGrade } from '@/types/student'
 import {
   LayoutDashboard, TrendingUp, Users, ClipboardList,
@@ -426,6 +427,7 @@ export function AppLayout() {
   const isPartner = profile?.role === 'partner'
   // Partner accounts get the same restricted permissions as staff.
   const isStaff = profile?.role === 'staff' || isPartner
+  const isSpain = isSpainCampus(profile?.campus)
   const [academicYear, setAcademicYear] = useState('')
   const [openAccordions, setOpenAccordions] = useState<Set<string>>(() => {
     const open = new Set<string>()
@@ -463,9 +465,21 @@ export function AppLayout() {
   const PARTNER_HIDDEN_ACCORDIONS = ['tpms', 'at', 'pt', 'lms', 'mhs']
   const PARTNER_BLOCKED_PATHS = ['/tpms/', '/at/', '/pt/', '/lms/', '/mhs/']
 
+  // Spain campus users don't get the Academic Calendar or Exact Path modules.
+  const SPAIN_BLOCKED_PATHS = ['/academic/academic-calendar', '/at/exactpath']
+
   const visibleNav = (isStaff ? NAV.filter(group => group.label !== 'Settings') : NAV)
     .map(group => isPartner && group.accordion
       ? { ...group, accordion: group.accordion.filter(acc => !PARTNER_HIDDEN_ACCORDIONS.includes(acc.id)) }
+      : group)
+    .map(group => isSpain
+      ? {
+          ...group,
+          items: group.items?.filter(item => item.title !== 'Academic Calendar'),
+          accordion: group.accordion?.map(acc => acc.id === 'at'
+            ? { ...acc, items: acc.items.filter(item => item.title !== 'Exact Path') }
+            : acc),
+        }
       : group)
 
   if (isStaff && location.pathname.startsWith('/admin/')) {
@@ -473,6 +487,10 @@ export function AppLayout() {
   }
 
   if (isPartner && PARTNER_BLOCKED_PATHS.some(p => location.pathname.startsWith(p))) {
+    return <Navigate to="/dashboard" replace />
+  }
+
+  if (isSpain && SPAIN_BLOCKED_PATHS.some(p => location.pathname.startsWith(p))) {
     return <Navigate to="/dashboard" replace />
   }
 
@@ -585,7 +603,7 @@ export function AppLayout() {
                     {profile?.full_name ?? 'User'}
                   </div>
                   <div style={{ fontSize: 10, color: 'rgba(255,255,255,.4)', textTransform: 'capitalize' }}>
-                    {profile?.role ?? 'staff'}
+                    {isSpain && profile?.role === 'staff' ? 'admin' : (profile?.role ?? 'staff')}
                   </div>
                 </div>
                 <DropdownMenu>

@@ -489,7 +489,8 @@ function CourseModal({ draft, catalog, onChange, onSave, onClose }: {
         </div>
         <div style={{ borderTop:'1px solid #E4EAF2', padding:'12px 20px', display:'flex', justifyContent:'flex-end', gap:8, background:'#F7F9FC' }}>
           <button onClick={onClose} style={{ padding:'8px 18px', borderRadius:8, border:'1px solid #E4EAF2', background:'#fff', color:'#1A365E', fontWeight:600, fontSize:13, cursor:'pointer' }}>Cancel</button>
-          <button onClick={onSave} style={{ padding:'8px 24px', borderRadius:8, border:'none', background:'#D61F31', color:'#fff', fontWeight:700, fontSize:13, cursor:'pointer' }}>Save Course</button>
+          <button onClick={onSave} disabled={!draft.title.trim()}
+            style={{ padding:'8px 24px', borderRadius:8, border:'none', background: !draft.title.trim() ? '#E4EAF2' : '#D61F31', color: !draft.title.trim() ? '#7A92B0' : '#fff', fontWeight:700, fontSize:13, cursor: !draft.title.trim() ? 'not-allowed' : 'pointer', transition:'all 0.15s' }}>Save Course</button>
         </div>
       </div>
     </div>

@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
+import { useAuthStore } from '@/store/auth.store'
+import { getCampusGreeting, getCampusTimeZone } from '@/lib/campus'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { type Student, type StudentStatus, normalizeStudentGrade, STATUS_META, fullName } from '@/types/student'
 
@@ -31,11 +33,6 @@ function fromRow(row: Record<string, unknown>): Student {
     postSecondary: null, gradDistinction: null, alumniNotes: null,
     createdAt: row.created_at as string ?? '', updatedAt: row.updated_at as string ?? '',
   }
-}
-
-function getGreeting() {
-  const h = new Date().getHours()
-  return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'
 }
 
 function todayISO() {
@@ -296,6 +293,7 @@ function RecentApplications({ students }: { students: Student[] }) {
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 export function DashboardPage() {
   const cf = useCampusFilter()
+  const profile = useAuthStore(s => s.profile)
   const [students, setStudents] = useState<Student[]>([])
   const [attendance, setAttendance] = useState<Record<string, { status: string }>>({})
   const [overdueFees, setOverdueFees] = useState(0)
@@ -304,9 +302,10 @@ export function DashboardPage() {
   const [academicYear, setAcademicYear] = useState('')
   const [loading, setLoading] = useState(true)
 
+  const timeZone = getCampusTimeZone(profile?.campus)
   const today = new Date()
-  const dayName = today.toLocaleDateString('en-US', { weekday: 'long' })
-  const dateStr = today.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+  const dayName = today.toLocaleDateString('en-US', { weekday: 'long', timeZone })
+  const dateStr = today.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone })
   const iso = todayISO()
 
   useEffect(() => {
@@ -402,7 +401,7 @@ export function DashboardPage() {
               Student Information System · K–12
             </div>
             <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', lineHeight: 1.15, marginBottom: 4 }}>
-              {getGreeting()}, Admissions Team
+              {getCampusGreeting(profile?.campus)}, Admissions Team
             </div>
             <div style={{ fontSize: 12, color: 'rgba(255,255,255,.4)' }}>
               {dayName}, {dateStr}{academicYear ? ` · ${academicYear}` : ''}

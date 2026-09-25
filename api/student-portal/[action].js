@@ -809,19 +809,31 @@ async function lmsGetCaseStudy(req, res, adminClient) {
 
   const [scRes, dpRes, subRes, apRes] = await Promise.all([
     adminClient.from('lms_score_components').select('component_type,criteria_scores,subtotal,feedback,status').eq('content_id', contentId).eq('student_id', studentDbId),
-    adminClient.from('lms_discussion_posts').select('id,student_id,parent_post_id,body,created_at').eq('content_id', contentId).order('created_at', { ascending: true }),
+    adminClient.from('lms_discussion_posts')
+      .select('id,student_id,parent_post_id,title,body,created_at,updated_at,author_staff_name,is_announcement,is_pinned,is_locked,deleted_at,attachment_url,attachment_file_name')
+      .eq('content_id', contentId).eq('phase', 'master').order('created_at', { ascending: true }),
     adminClient.from('lms_submissions').select('kind,note,link_url,submitted_at').eq('content_id', contentId).eq('student_id', studentDbId).order('submitted_at', { ascending: false }),
     adminClient.from('lms_grade_appeals').select('id,component_type,message,status,admin_reply').eq('content_id', contentId).eq('student_id', studentDbId),
   ])
 
   const posts = dpRes.data ?? []
-  const posterIds = [...new Set(posts.map((p) => p.student_id))]
+  const posterIds = [...new Set(posts.map((p) => p.student_id).filter(Boolean))]
   const { data: posterRows } = posterIds.length
     ? await adminClient.from('students').select('id,first_name,last_name').in('id', posterIds)
     : { data: [] }
   const nameOf = (id) => {
     const s = posterRows?.find((r) => r.id === id)
     return s ? `${s.first_name ?? ''} ${s.last_name ?? ''}`.trim() : 'Classmate'
+  }
+
+  const postIds = posts.map((p) => p.id)
+  const { data: reactionRows } = postIds.length
+    ? await adminClient.from('lms_discussion_reactions').select('post_id,student_id').in('post_id', postIds)
+    : { data: [] }
+  const reactorIdsByPost = {}
+  for (const r of reactionRows ?? []) {
+    if (!reactorIdsByPost[r.post_id]) reactorIdsByPost[r.post_id] = []
+    reactorIdsByPost[r.post_id].push(r.student_id)
   }
 
   const presentationRow = (subRes.data ?? []).find(isLmsPresentationRow) ?? null
@@ -848,21 +860,38 @@ async function lmsGetCaseStudy(req, res, adminClient) {
     notes: notesRow ? { note: notesRow.note, linkUrl: notesRow.link_url, submittedAt: notesRow.submitted_at } : null,
     discussion: {
       myStudentId: studentDbId,
-      posts: posts.map((p) => ({
-        id: p.id,
-        studentId: p.student_id,
-        authorName: p.student_id === studentDbId ? 'You' : nameOf(p.student_id),
-        isMine: p.student_id === studentDbId,
-        body: p.body,
-        parentPostId: p.parent_post_id,
-        createdAt: p.created_at,
-      })),
+      posts: posts.map((p) => {
+        const reactorIds = reactorIdsByPost[p.id] ?? []
+        return {
+          id: p.id,
+          studentId: p.student_id,
+          authorName: p.author_staff_name || (p.student_id === studentDbId ? 'You' : nameOf(p.student_id)),
+          isStaff: !!p.author_staff_name,
+          isMine: p.student_id === studentDbId,
+          isAnnouncement: p.is_announcement === true,
+          isPinned: p.is_pinned === true,
+          isLocked: p.is_locked === true,
+          title: p.title,
+          body: p.deleted_at ? null : p.body,
+          deletedAt: p.deleted_at,
+          edited: !!p.updated_at && p.updated_at !== p.created_at,
+          parentPostId: p.parent_post_id,
+          createdAt: p.created_at,
+          attachmentUrl: p.deleted_at ? null : p.attachment_url,
+          attachmentFileName: p.deleted_at ? null : p.attachment_file_name,
+          reactionCount: reactorIds.length,
+          reactedByMe: reactorIds.includes(studentDbId),
+        }
+      }),
     },
     presentation: presentationRow ? { note: presentationRow.note, linkUrl: presentationRow.link_url, submittedAt: presentationRow.submitted_at } : null,
     appeals: (apRes.data ?? []).map((a) => ({ id: a.id, componentType: a.component_type, message: a.message, status: a.status, adminReply: a.admin_reply })),
   })
 }
 
+/** Master It — Discussion Board. Top-level posts (parentPostId absent) are discussion
+ *  topics and require a title; replies (parentPostId present) hang one level deep off a
+ *  topic and are blocked if that topic is locked. */
 async function lmsSubmitDiscussionPost(req, res, adminClient) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST')
@@ -872,7 +901,7 @@ async function lmsSubmitDiscussionPost(req, res, adminClient) {
   const studentDbId = requireStudentToken(req, res, json)
   if (!studentDbId) return
 
-  const { contentId, body, parentPostId } = req.body || {}
+  const { contentId, title, body, parentPostId, attachmentUrl, attachmentFileName } = req.body || {}
   if (typeof contentId !== 'string' || !contentId) return json(res, 400, { error: 'contentId is required.' })
   if (typeof body !== 'string' || !body.trim()) return json(res, 400, { error: 'Post body is required.' })
 
@@ -880,18 +909,110 @@ async function lmsSubmitDiscussionPost(req, res, adminClient) {
   if (contentError || !content) return json(res, 404, { error: 'Lesson not found.' })
 
   if (parentPostId) {
-    const { data: parent, error: parentError } = await adminClient.from('lms_discussion_posts').select('id').eq('id', parentPostId).eq('content_id', contentId).single()
+    const { data: parent, error: parentError } = await adminClient.from('lms_discussion_posts').select('id,is_locked,deleted_at').eq('id', parentPostId).eq('content_id', contentId).single()
     if (parentError || !parent) return json(res, 404, { error: 'Post being replied to was not found.' })
+    if (parent.deleted_at) return json(res, 404, { error: 'Post being replied to was deleted.' })
+    if (parent.is_locked) return json(res, 423, { error: 'This discussion is locked.' })
+  } else if (typeof title !== 'string' || !title.trim()) {
+    return json(res, 400, { error: 'A title is required to start a discussion.' })
   }
 
   const { data: post, error: insertError } = await adminClient
     .from('lms_discussion_posts')
-    .insert({ content_id: contentId, student_id: studentDbId, parent_post_id: parentPostId || null, body: body.trim() })
+    .insert({
+      content_id: contentId,
+      student_id: studentDbId,
+      parent_post_id: parentPostId || null,
+      phase: 'master',
+      title: parentPostId ? null : title.trim(),
+      body: body.trim(),
+      attachment_url: attachmentUrl || null,
+      attachment_file_name: attachmentFileName || null,
+    })
     .select('id,created_at')
     .single()
   if (insertError || !post) return json(res, 500, { error: 'Failed to submit post.' })
 
   return json(res, 200, { postId: post.id, createdAt: post.created_at })
+}
+
+async function lmsEditDiscussionPost(req, res, adminClient) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST')
+    return json(res, 405, { error: 'Method not allowed' })
+  }
+
+  const studentDbId = requireStudentToken(req, res, json)
+  if (!studentDbId) return
+
+  const { postId, title, body } = req.body || {}
+  if (typeof postId !== 'string' || !postId) return json(res, 400, { error: 'postId is required.' })
+  if (typeof body !== 'string' || !body.trim()) return json(res, 400, { error: 'Post body is required.' })
+
+  const { data: existing, error: fetchError } = await adminClient.from('lms_discussion_posts').select('id,student_id,parent_post_id,deleted_at').eq('id', postId).single()
+  if (fetchError || !existing) return json(res, 404, { error: 'Post not found.' })
+  if (existing.student_id !== studentDbId) return json(res, 403, { error: 'You can only edit your own posts.' })
+  if (existing.deleted_at) return json(res, 404, { error: 'This post was deleted.' })
+
+  const patch = { body: body.trim(), updated_at: new Date().toISOString() }
+  if (!existing.parent_post_id && typeof title === 'string' && title.trim()) patch.title = title.trim()
+
+  const { error: updateError } = await adminClient.from('lms_discussion_posts').update(patch).eq('id', postId)
+  if (updateError) return json(res, 500, { error: 'Failed to update post.' })
+
+  return json(res, 200, { ok: true })
+}
+
+async function lmsDeleteDiscussionPost(req, res, adminClient) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST')
+    return json(res, 405, { error: 'Method not allowed' })
+  }
+
+  const studentDbId = requireStudentToken(req, res, json)
+  if (!studentDbId) return
+
+  const { postId } = req.body || {}
+  if (typeof postId !== 'string' || !postId) return json(res, 400, { error: 'postId is required.' })
+
+  const { data: existing, error: fetchError } = await adminClient.from('lms_discussion_posts').select('id,student_id').eq('id', postId).single()
+  if (fetchError || !existing) return json(res, 404, { error: 'Post not found.' })
+  if (existing.student_id !== studentDbId) return json(res, 403, { error: 'You can only delete your own posts.' })
+
+  const { error: updateError } = await adminClient.from('lms_discussion_posts').update({ deleted_at: new Date().toISOString() }).eq('id', postId)
+  if (updateError) return json(res, 500, { error: 'Failed to delete post.' })
+
+  return json(res, 200, { ok: true })
+}
+
+/** Toggles the current student's like on a post — one reaction per (post, student), enforced
+ *  by the lms_discussion_reactions unique constraint. */
+async function lmsReactDiscussionPost(req, res, adminClient) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST')
+    return json(res, 405, { error: 'Method not allowed' })
+  }
+
+  const studentDbId = requireStudentToken(req, res, json)
+  if (!studentDbId) return
+
+  const { postId } = req.body || {}
+  if (typeof postId !== 'string' || !postId) return json(res, 400, { error: 'postId is required.' })
+
+  const { data: post, error: postError } = await adminClient.from('lms_discussion_posts').select('id,deleted_at').eq('id', postId).single()
+  if (postError || !post || post.deleted_at) return json(res, 404, { error: 'Post not found.' })
+
+  const { data: existing } = await adminClient.from('lms_discussion_reactions').select('id').eq('post_id', postId).eq('student_id', studentDbId).maybeSingle()
+
+  if (existing) {
+    await adminClient.from('lms_discussion_reactions').delete().eq('id', existing.id)
+  } else {
+    await adminClient.from('lms_discussion_reactions').insert({ post_id: postId, student_id: studentDbId })
+  }
+
+  const { count } = await adminClient.from('lms_discussion_reactions').select('id', { count: 'exact', head: true }).eq('post_id', postId)
+
+  return json(res, 200, { reacted: !existing, count: count ?? 0 })
 }
 
 async function lmsSubmitPresentation(req, res, adminClient) {
@@ -1577,6 +1698,9 @@ const ACTIONS = {
   'submit-quiz-attempt': submitQuizAttempt,
   'lms-get-case-study': lmsGetCaseStudy,
   'lms-submit-discussion-post': lmsSubmitDiscussionPost,
+  'lms-edit-discussion-post': lmsEditDiscussionPost,
+  'lms-delete-discussion-post': lmsDeleteDiscussionPost,
+  'lms-react-discussion-post': lmsReactDiscussionPost,
   'lms-submit-presentation': lmsSubmitPresentation,
   'lms-file-appeal': lmsFileAppeal,
   'lms-submit-notes': lmsSubmitNotes,

@@ -7,16 +7,21 @@ import {
   FolderOpen, PartyPopper, Frown, RefreshCw, X, Play, Video,
   ChevronDown, ChevronRight, Search,
   ArrowLeft, ArrowRight, Star, Lock, AlertTriangle, ExternalLink, Info,
+  MessageSquare, Eye,
   type LucideIcon,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { uploadFile } from '@/lib/uploadFile'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
-import { SUBJECT_COLORS, isActiveBool, type LMSCourse, type LMSContent, type LMSEnrolment, type LMSProgress, type LMSQuestion } from '@/pages/lms/lmsStore'
+import { DiscussionBoard, type DiscussionPost } from '@/components/lms/DiscussionBoard'
+import {
+  SUBJECT_COLORS, isActiveBool, rowToLMSCourse, rowToLMSContent, rowToLMSEnrolment, rowToLMSProgress,
+  type LMSCourse, type LMSContent, type LMSEnrolment, type LMSProgress, type LMSQuestion,
+} from '@/pages/lms/lmsStore'
 import { portalPrefix } from './gradesShared'
 
-import { ACTIVE_SCORE_COMPONENT_TYPES, getEffectiveRubric, finalGrade, type ScoreComponentType, type RubricOverrides } from '@/lib/lms/caseStudyRubric'
+import { ACTIVE_SCORE_COMPONENT_TYPES, getEffectiveRubric, finalGrade, DEFAULT_PRESENTATION_BRIEF, type ScoreComponentType, type RubricOverrides } from '@/lib/lms/caseStudyRubric'
 import { toLegacyStudentGradeValue } from '@/types/student'
 import { K5MyLearningPage } from '@/pages/student-portal/K5MyLearningPage'
 
@@ -348,7 +353,14 @@ function getCaseStudyEmbedUrl(url: string): string {
 }
 
 interface CSScoreData { componentType: string; criteriaScores: Record<string, number>; subtotal: number | null; feedback: string | null; status: 'not_scored' | 'scored' }
-interface CSPostData { id: string; studentId: string; authorName: string; isMine: boolean; body: string; parentPostId: string | null; createdAt: string }
+interface CSPostData {
+  id: string; studentId: string | null; authorName: string; isStaff: boolean; isMine: boolean
+  isAnnouncement: boolean; isPinned: boolean; isLocked: boolean
+  title: string | null; body: string | null; deletedAt: string | null; edited: boolean
+  parentPostId: string | null; createdAt: string
+  attachmentUrl: string | null; attachmentFileName: string | null
+  reactionCount: number; reactedByMe: boolean
+}
 interface CSAppealData { id: string; componentType: string; message: string; status: 'open' | 'resolved'; adminReply: string | null }
 interface CaseStudyBundle {
   lesson: { id: string; title: string; caseStudyUrl: string | null; moduleDescription: string | null; omrFormUrl: string | null; socraticDate: string | null; socraticBrief: string | null; presentationBrief: string | null }
@@ -364,8 +376,8 @@ interface MySubmission { contentId: string; kind: string; note: string | null; l
 // each lesson (Do It), and the module's Show It / Prove It / Master It slots. The last
 // four of those all live on the single hasAssignment carrier row, so a contentId alone
 // can't tell them apart — activeGroupKind disambiguates which of the four is open.
-type PartKind = 'tutorial' | 'video' | 'mastery' | 'lessonNotes' | 'caseStudyView' | 'caseStudyNotes' | 'socratic' | 'omr' | 'presentation'
-type ActivityGroupKind = 'learn' | 'lesson' | 'show' | 'prove' | 'master'
+type PartKind = 'tutorial' | 'video' | 'mastery' | 'lessonNotes' | 'caseStudyView' | 'caseStudyNotes' | 'socratic' | 'omr' | 'presentation' | 'discussion'
+type ActivityGroupKind = 'learn' | 'lesson' | 'show' | 'prove' | 'master' | 'discussion'
 interface ActivityGroupRef { key: string; kind: ActivityGroupKind; contentId: string }
 
 /** Loads the fixed-flow score/appeal bundle for one module's case-study carrier item.
@@ -727,7 +739,9 @@ function OmrPanel({ carrierItem }: { carrierItem: LMSContent }) {
 function PresentationPanel({ carrierItem, studentId }: { carrierItem: LMSContent; studentId: string }) {
   const { readOnly } = usePortalReadOnly()
   const { getToken } = useStudentPortal()
-  const { loading, bundle, refresh, scoreByType, renderAppealControl } = useModuleScoring(carrierItem)
+  // renderAppealControl is unused while the presentation rubric/score block below is
+  // commented out — re-destructure it when that block is restored.
+  const { loading, bundle, refresh, scoreByType } = useModuleScoring(carrierItem)
   const [presFile, setPresFile] = useState<File | null>(null)
   const [presNote, setPresNote] = useState('')
   const [presSubmitting, setPresSubmitting] = useState(false)
@@ -754,10 +768,36 @@ function PresentationPanel({ carrierItem, studentId }: { carrierItem: LMSContent
   const subtotalsByType = Object.fromEntries(ACTIVE_SCORE_COMPONENT_TYPES.map((t) => [t, scoreByType[t]?.status === 'scored' ? scoreByType[t]!.subtotal : null])) as Partial<Record<ScoreComponentType, number | null>>
   const overallFinalGrade = finalGrade(subtotalsByType)
 
+  const videoYtMatch = carrierItem.presentationVideoUrl && !carrierItem.presentationVideoFileName
+    ? carrierItem.presentationVideoUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/))([A-Za-z0-9_-]{11})/)
+    : null
+
   return (
     <>
-      {carrierItem.presentationBrief && (
-        <div style={{ ...card, padding: '14px 16px', fontSize: 16, color: '#3D5475', lineHeight: 1.6 }}>{carrierItem.presentationBrief}</div>
+      <div style={{ ...card, padding: '14px 16px', fontSize: 16, color: '#3D5475', lineHeight: 1.6 }}>{carrierItem.presentationBrief || DEFAULT_PRESENTATION_BRIEF}</div>
+      {carrierItem.presentationBriefUrl && (
+        <a href={carrierItem.presentationBriefUrl} target="_blank" rel="noreferrer" style={{ ...card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
+          <FileText size={18} color="#1A365E" />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E' }}>Assignment Brief</div>
+            <div style={{ fontSize: 13, color: '#7A92B0' }}>{carrierItem.presentationBriefFileName || 'View the presentation brief'}</div>
+          </div>
+          <ExternalLink size={14} color="#7A92B0" />
+        </a>
+      )}
+      {carrierItem.presentationVideoUrl && (
+        <div style={{ ...card, padding: '14px 16px' }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}><Video size={13} /> Video Explaining What's Due</div>
+          {carrierItem.presentationVideoFileName ? (
+            <video controls src={carrierItem.presentationVideoUrl} style={{ width: '100%', borderRadius: 10, background: '#000', display: 'block' }} />
+          ) : videoYtMatch ? (
+            <div style={{ position: 'relative', paddingBottom: '56.25%', height: 0, overflow: 'hidden', borderRadius: 10 }}>
+              <iframe src={`https://www.youtube.com/embed/${videoYtMatch[1]}?rel=0&modestbranding=1`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }} title="Video explaining what's due" loading="lazy" allowFullScreen />
+            </div>
+          ) : (
+            <iframe src={carrierItem.presentationVideoUrl} style={{ width: '100%', height: 400, border: '1.5px solid #E4EAF2', borderRadius: 10 }} title="Video explaining what's due" loading="lazy" allowFullScreen />
+          )}
+        </div>
       )}
       <div style={{ ...card, padding: '14px 16px' }}>
         <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}><Upload size={13} /> Submit Final Presentation</div>
@@ -781,13 +821,142 @@ function PresentationPanel({ carrierItem, studentId }: { carrierItem: LMSContent
         )}
       </div>
 
-      <CSScoreBlock type="presentation" overrides={carrierItem.rubricOverrides} icon={Trophy} title="Presentation Score" order={3} score={scoreByType.presentation} appealControl={renderAppealControl('presentation')} />
+      {/* Presentation rubric/score — temporarily disabled; grading happens on paper via the
+          Rubric PDF below until this is re-enabled. Restore by uncommenting this line. */}
+      {/* <CSScoreBlock type="presentation" overrides={carrierItem.rubricOverrides} icon={Trophy} title="Presentation Score" order={3} score={scoreByType.presentation} appealControl={renderAppealControl('presentation')} /> */}
+
+      <a href="/LMS/Presentation Content Guide.pdf" target="_blank" rel="noreferrer" style={{ ...card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
+        <FileText size={18} color="#1A365E" />
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E' }}>Presentation Content Guide</div>
+          <div style={{ fontSize: 13, color: '#7A92B0' }}>How to structure and prepare your presentation</div>
+        </div>
+        <ExternalLink size={14} color="#7A92B0" />
+      </a>
+      <a href="/LMS/Presentation Rubric.pdf" target="_blank" rel="noreferrer" style={{ ...card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
+        <Trophy size={18} color="#1A365E" />
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E' }}>Presentation Rubric</div>
+          <div style={{ fontSize: 13, color: '#7A92B0' }}>How your presentation will be graded</div>
+        </div>
+        <ExternalLink size={14} color="#7A92B0" />
+      </a>
 
       <div style={{ ...card, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={{ fontSize: 15, fontWeight: 700, color: '#5A7290' }}>Module Final Grade</span>
         <span style={{ fontSize: 18, fontWeight: 900, color: overallFinalGrade !== null ? (overallFinalGrade >= 70 ? '#059669' : SP_RED) : '#94A3B8' }}>{overallFinalGrade !== null ? `${overallFinalGrade}/100` : '—'}</span>
       </div>
     </>
+  )
+}
+
+/** Master It — Discussion Board. Top-level posts are discussion topics; replies hang one
+ *  level deep off a topic (matching the schema — no deeper nesting in this pass). Staff
+ *  post/pin/lock/moderate from the admin LMS page (LMSPage.tsx's DiscussionBoardModal);
+ *  students get create/reply/edit/delete own/like here. Both surfaces render the shared
+ *  <DiscussionBoard> component — this wrapper just adapts this page's data source
+ *  (useCaseStudyBundle + the student-portal API broker) to its props. */
+function DiscussionBoardPanel({ carrierItem, studentId }: { carrierItem: LMSContent; studentId: string }) {
+  const { readOnly } = usePortalReadOnly()
+  const { getToken } = useStudentPortal()
+  const { loading, bundle, refresh } = useCaseStudyBundle(carrierItem.id)
+  const [busy, setBusy] = useState(false)
+
+  if (loading) return <div style={{ ...card, ...emptyState }}>Loading…</div>
+  if (!bundle) return <div style={{ ...card, ...emptyState }}>Couldn't load this. Try refreshing.</div>
+
+  const posts: DiscussionPost[] = bundle.discussion.posts.map((p) => ({
+    id: p.id, authorName: p.authorName, isStaff: p.isStaff, isMine: p.isMine,
+    isAnnouncement: p.isAnnouncement, isPinned: p.isPinned, isLocked: p.isLocked,
+    title: p.title, body: p.body, deletedAt: p.deletedAt, edited: p.edited,
+    parentPostId: p.parentPostId, createdAt: p.createdAt,
+    attachmentUrl: p.attachmentUrl, attachmentFileName: p.attachmentFileName,
+    reactionCount: p.reactionCount, reactedByMe: p.reactedByMe,
+  }))
+
+  async function uploadAttachment(file: File) {
+    const path = `lms-discussion/${studentId}/${carrierItem.id}/${Date.now()}_${file.name}`
+    const url = await uploadFile(path, file)
+    return { url, name: file.name }
+  }
+
+  async function handleCreateTopic({ title, body, file }: { title: string; body: string; file: File | null }) {
+    setBusy(true)
+    try {
+      const attachment = file ? await uploadAttachment(file) : null
+      await studentPortalFetch(getToken(), '/api/student-portal/lms-submit-discussion-post', {
+        method: 'POST',
+        body: JSON.stringify({ contentId: carrierItem.id, title, body, attachmentUrl: attachment?.url, attachmentFileName: attachment?.name }),
+      })
+      await refresh()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to post. Please try again.')
+    }
+    setBusy(false)
+  }
+
+  async function handleCreateReply(topicId: string, { body, file }: { body: string; file: File | null }) {
+    setBusy(true)
+    try {
+      const attachment = file ? await uploadAttachment(file) : null
+      await studentPortalFetch(getToken(), '/api/student-portal/lms-submit-discussion-post', {
+        method: 'POST',
+        body: JSON.stringify({ contentId: carrierItem.id, parentPostId: topicId, body, attachmentUrl: attachment?.url, attachmentFileName: attachment?.name }),
+      })
+      await refresh()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to reply. Please try again.')
+    }
+    setBusy(false)
+  }
+
+  async function handleEdit(post: DiscussionPost, newBody: string) {
+    setBusy(true)
+    try {
+      await studentPortalFetch(getToken(), '/api/student-portal/lms-edit-discussion-post', {
+        method: 'POST', body: JSON.stringify({ postId: post.id, body: newBody }),
+      })
+      await refresh()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to save changes.')
+    }
+    setBusy(false)
+  }
+
+  async function handleDelete(post: DiscussionPost) {
+    setBusy(true)
+    try {
+      await studentPortalFetch(getToken(), '/api/student-portal/lms-delete-discussion-post', {
+        method: 'POST', body: JSON.stringify({ postId: post.id }),
+      })
+      await refresh()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete post.')
+    }
+    setBusy(false)
+  }
+
+  async function handleReact(post: DiscussionPost) {
+    try {
+      await studentPortalFetch(getToken(), '/api/student-portal/lms-react-discussion-post', { method: 'POST', body: JSON.stringify({ postId: post.id }) })
+      await refresh()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to react.')
+    }
+  }
+
+  return (
+    <DiscussionBoard
+      mode="student"
+      posts={posts}
+      busy={busy}
+      readOnly={readOnly}
+      onCreateTopic={({ title, body, file }) => handleCreateTopic({ title, body, file })}
+      onCreateReply={handleCreateReply}
+      onEditPost={handleEdit}
+      onDeletePost={handleDelete}
+      onReact={handleReact}
+    />
   )
 }
 
@@ -1074,7 +1243,7 @@ const contentRowStyle: React.CSSProperties = {
   cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
 }
 
-function ContentRow({ icon, kindLabel, title, targetDate, status, statusText, score, passMark, timeMins, locked, onClick, activeFilter }: {
+function ContentRow({ icon, kindLabel, title, targetDate, status, statusText, score, passMark, timeMins, locked, lockReason, onClick, activeFilter }: {
   icon: LucideIcon
   kindLabel: string
   title: string
@@ -1085,21 +1254,28 @@ function ContentRow({ icon, kindLabel, title, targetDate, status, statusText, sc
   passMark?: number
   timeMins?: number | null
   locked?: boolean
+  lockReason?: string
   onClick?: () => void
   activeFilter: ContentFilterId
 }) {
   const buckets = rowBuckets(status, targetDate)
   if (activeFilter !== 'all' && !buckets.includes(activeFilter)) return null
 
-  const meta = ROW_STATUS_META[status]
+  const meta = locked ? { bar: '#E4EAF2', textColor: '#94A3B8', icon: Lock } : ROW_STATUS_META[status]
   const dateInfo = targetDate ? formatShortDate(targetDate) : null
   const Icon = locked ? Lock : icon
   const StatusIcon = meta.icon
+  const clickable = !!onClick && !locked
 
   return (
-    <button onClick={onClick} disabled={!onClick} style={{ ...contentRowStyle, opacity: locked ? .6 : 1, cursor: onClick ? 'pointer' : 'default' }}>
+    <button
+      onClick={clickable ? onClick : undefined}
+      disabled={!clickable}
+      title={locked ? (lockReason || 'Complete the previous activity to unlock this.') : undefined}
+      style={{ ...contentRowStyle, opacity: locked ? .55 : 1, cursor: locked ? 'not-allowed' : clickable ? 'pointer' : 'default' }}
+    >
       <span style={{ alignSelf: 'stretch', minHeight: 28, borderRadius: 2, background: meta.bar }} />
-      <span style={{ fontSize: 14, fontWeight: 800, color: dateInfo?.overdue && status !== 'completed' ? SP_RED : '#94A3B8', textAlign: 'center', lineHeight: 1.3 }}>
+      <span style={{ fontSize: 14, fontWeight: 800, color: dateInfo?.overdue && status !== 'completed' && !locked ? SP_RED : '#94A3B8', textAlign: 'center', lineHeight: 1.3 }}>
         {dateInfo ? <>{dateInfo.dow}<br />{dateInfo.short}</> : 'No Target Date'}
       </span>
       <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, flexShrink: 0 }}>
@@ -1111,7 +1287,7 @@ function ContentRow({ icon, kindLabel, title, targetDate, status, statusText, sc
       <span style={{ minWidth: 0 }}>
         <div style={{ fontSize: 16, fontWeight: 700, color: locked ? '#94A3B8' : '#1A365E', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
         <div style={{ fontSize: 14, fontWeight: 600, color: meta.textColor, display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
-          <StatusIcon size={10} />{statusText}
+          <StatusIcon size={10} />{locked ? 'Locked' : statusText}
         </div>
       </span>
       <span style={{ display: 'flex', alignItems: 'center', gap: 8, justifySelf: 'end' }}>
@@ -1136,16 +1312,19 @@ function formatLongDate(targetDate: string) {
 }
 
 // One Play row inside an activity's overview (e.g. "Expressions: Tutorial").
-function OverviewPartRow({ title, status, statusText, score, passMark, onClick }: {
+function OverviewPartRow({ title, status, statusText, score, passMark, targetDate, isVideo, onClick }: {
   title: string
   status: RowStatus
   statusText: string
   score?: number | null
   passMark?: number
+  targetDate?: string | null
+  isVideo?: boolean
   onClick: () => void
 }) {
   const meta = ROW_STATUS_META[status]
   const StatusIcon = meta.icon
+  const dateInfo = targetDate ? formatShortDate(targetDate) : null
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px', border: '1px solid #E4EAF2', borderRadius: 12, background: '#fff' }}>
       <span style={{ width: 32, height: 32, borderRadius: '50%', background: meta.bar, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -1159,9 +1338,14 @@ function OverviewPartRow({ title, status, statusText, score, passMark, onClick }
         <div style={{ fontSize: 15, color: meta.textColor, marginTop: 2, fontWeight: 600 }}>
           {statusText}{typeof score === 'number' ? ` · ${score}%${passMark != null ? ` (pass ${passMark}%)` : ''}` : ''}
         </div>
+        {dateInfo && (
+          <div style={{ fontSize: 13, color: dateInfo.overdue && status !== 'completed' ? SP_RED : '#94A3B8', marginTop: 2, fontWeight: 600 }}>
+            Due {dateInfo.dow} {dateInfo.short}
+          </div>
+        )}
       </div>
       <button onClick={onClick} style={{ padding: '8px 18px', background: '#fff', color: SP_NAVY, border: `1.5px solid ${SP_NAVY}`, borderRadius: 20, fontSize: 16, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
-        <Play size={12} /> Play
+        {isVideo ? <><Play size={12} /> Play</> : <><Eye size={12} /> View</>}
       </button>
     </div>
   )
@@ -1238,16 +1422,7 @@ export function SPMyLearningPage() {
     const sessionCohortNorm = norm(session.cohort)
 
     const { data: enrolData } = await supabase.from('lms_enrolments').select('*')
-    const allEnrolments: LMSEnrolment[] = (enrolData ?? []).map((r: Record<string, unknown>) => ({
-      id: r.id as string,
-      courseId: r.course_id as string,
-      targetType: r.target_type as LMSEnrolment['targetType'],
-      targetValue: r.target_value as string,
-      assignedAt: (r.assigned_at as string) ?? '',
-      paceType: (r.pace_type as string) ?? '',
-      dueDate: (r.due_date as string) ?? '',
-      active: r.active as boolean,
-    }))
+    const allEnrolments: LMSEnrolment[] = (enrolData ?? []).map(rowToLMSEnrolment)
 
     const matched = allEnrolments.filter((entry) => {
       if (!isActiveBool(entry.active)) return false
@@ -1280,76 +1455,13 @@ export function SPMyLearningPage() {
     const { data: coData } = await supabase.from('lms_content').select('*')
       .in('course_id', groupIds).order('unit_order').order('module_order').order('order_idx')
 
-    const mappedCourses: LMSCourse[] = (cData ?? []).map((r: Record<string, unknown>) => ({
-      id: r.id as string,
-      groupId: (r.group_id as string) ?? null,
-      title: (r.title as string) ?? '',
-      subject: (r.subject as string) ?? '',
-      gradeLevel: (r.grade_level as string) ?? '',
-      description: (r.description as string) ?? '',
-      passMark: Number(r.pass_mark ?? 70),
-      creditHours: Number(r.credit_hours ?? 0),
-      requiredHours: Number(r.required_hours ?? 0),
-      status: (r.status as LMSCourse['status']) ?? 'Draft',
-      announcement: (r.announcement as string) ?? '',
-    }))
+    const mappedCourses: LMSCourse[] = (cData ?? []).map(rowToLMSCourse)
 
     const publishedCourses = mappedCourses.filter((course) => course.status?.toLowerCase() === 'published')
 
-    const mappedContent: LMSContent[] = (coData ?? []).map((r: Record<string, unknown>) => {
-      const extra = (() => {
-        try { return JSON.parse(((r.extra as string) || '{}')) as Record<string, unknown> } catch { return (r.extra as Record<string, unknown>) ?? {} }
-      })()
-      return {
-        id: r.id as string,
-        courseId: r.course_id as string,
-        title: (r.title as string) ?? '',
-        type: (r.type as LMSContent['type']) ?? 'article',
-        url: (extra.url as string) ?? '',
-        body: (extra.body as string) ?? '',
-        videoUrl: (extra.videoUrl as string) ?? undefined,
-        videoFileName: (extra.videoFileName as string) ?? undefined,
-        unitTitle: (r.unit_title as string) ?? '',
-        unitOrder: r.unit_order == null ? undefined : Number(r.unit_order),
-        order: Number(r.order_idx ?? 0),
-        estimatedMins: Number(extra.estimatedMins ?? 0) || undefined,
-        moduleTitle: (r.module_title as string) ?? '',
-        moduleOrder: Number(r.module_order ?? 0) || undefined,
-        hasMastery: extra.hasMastery as boolean | 'TRUE' | undefined,
-        masteryPassMark: Number(extra.masteryPassMark ?? 0) || undefined,
-        masteryRetakes: extra.masteryRetakes !== undefined ? Number(extra.masteryRetakes) : undefined,
-        masteryTimeLimit: Number(extra.masteryTimeLimit ?? 0) || undefined,
-        masteryWeight: Number(extra.masteryWeight ?? 0) || undefined,
-        masteryQuizJson: (extra.masteryQuizJson as string) ?? undefined,
-        quizJson: (extra.quizJson as string) ?? undefined,
-        hasAssignment: extra.hasAssignment as boolean | 'TRUE' | undefined,
-        assignInstructions: (extra.assignInstructions as string) ?? undefined,
-        assignMaxScore: Number(extra.assignMaxScore ?? 0) || undefined,
-        assignWeight: Number(extra.assignWeight ?? 0) || undefined,
-        assignRubric: (extra.assignRubric as string) ?? undefined,
-        caseStudyUrl: (extra.caseStudyUrl as string) ?? undefined,
-        caseStudyFileName: (extra.caseStudyFileName as string) ?? undefined,
-        moduleDescription: (extra.moduleDescription as string) ?? undefined,
-        omrFormUrl: (extra.omrFormUrl as string) ?? undefined,
-        socraticDate: (extra.socraticDate as string) ?? undefined,
-        socraticBrief: (extra.socraticBrief as string) ?? undefined,
-        presentationBrief: (extra.presentationBrief as string) ?? undefined,
-      }
-    })
+    const mappedContent: LMSContent[] = (coData ?? []).map(rowToLMSContent)
 
-    const mappedProgress: LMSProgress[] = (prData ?? []).map((r: Record<string, unknown>) => ({
-      id: r.id as string,
-      studentId: r.student_id as string,
-      courseId: r.course_id as string,
-      contentId: r.content_id as string,
-      status: (r.status as LMSProgress['status']) ?? 'not_started',
-      masteryScore: r.mastery_score as number | null,
-      masteryPassed: r.mastery_passed === true,
-      assignScore: r.assign_score as number | null,
-      assignStatus: (r.assign_status as string) ?? undefined,
-      masteryAttempts: Number(r.mastery_attempts ?? 0),
-      timeSpentMins: Number(r.time_spent_mins ?? 0),
-    }))
+    const mappedProgress: LMSProgress[] = (prData ?? []).map(rowToLMSProgress)
 
     // A content row (e.g. a case study) can be saved without unitOrder, which would
     // otherwise coerce to 0 and tie it with the first module, scrambling module order.
@@ -1539,6 +1651,7 @@ export function SPMyLearningPage() {
           out.push({ key: `show:${carrierItem.id}`, kind: 'show', contentId: carrierItem.id })
           out.push({ key: `prove:${carrierItem.id}`, kind: 'prove', contentId: carrierItem.id })
           out.push({ key: `master:${carrierItem.id}`, kind: 'master', contentId: carrierItem.id })
+          out.push({ key: `discussion:${carrierItem.id}`, kind: 'discussion', contentId: carrierItem.id })
         }
       })
     })
@@ -1555,8 +1668,52 @@ export function SPMyLearningPage() {
       case 'show': return { title: 'Show It: Socratic Seminar', icon: Scale }
       case 'prove': return { title: 'Prove It: OMR Test', icon: Calculator }
       case 'master': return { title: 'Master It: Presentation', icon: Trophy }
+      case 'discussion': return { title: 'Discussion Board', icon: MessageSquare }
       default: return { title: item?.title || 'Lesson', icon: BookOpen }
     }
+  }
+
+  // Sequential Completion / Mastery Learning with Sequential Completion — set per
+  // course by an admin (Course Progression Settings). "Open" and plain "Mastery
+  // Learning" never lock navigation here; only the two sequential modes do.
+  const sequentialLock = selectedCourse?.progressionMode === 'sequential' || selectedCourse?.progressionMode === 'mastery_sequential'
+
+  // Show It / Prove It have no trackable completion signal yet (no submission or
+  // score is recorded for them), so they're treated as auto-complete for gating —
+  // otherwise they'd permanently block Master It with no way for a student to clear them.
+  function isGroupComplete(ref: ActivityGroupRef): boolean {
+    if (ref.kind === 'show' || ref.kind === 'prove' || ref.kind === 'discussion') return true
+    const item = courseItems.find((i) => i.id === ref.contentId)
+    if (!item) return false
+    if (ref.kind === 'learn') return hasSubmission(item.id, 'case_study_notes')
+    if (ref.kind === 'master') return hasSubmission(item.id, 'presentation')
+    const itemProgress = progress.find((entry) => entry.contentId === item.id && entry.studentId === session?.dbId)
+    const tutorialDone = itemProgress?.status === 'completed'
+    const hasMastery = item.hasMastery === true || item.hasMastery === 'TRUE'
+    const masteryPassed = itemProgress?.masteryPassed === true || itemProgress?.masteryPassed === 'TRUE'
+    const notesDone = hasSubmission(item.id, 'lesson_notes')
+    return tutorialDone && notesDone && (!hasMastery || masteryPassed)
+  }
+
+  // A group is locked if either (a) an admin locked its content row directly —
+  // the same 🔒 toggle already in Curriculum, which works anytime regardless of
+  // progression mode or student progress — or (b) sequential progression is on
+  // and the activity immediately before it (course-wide, across unit boundaries)
+  // isn't complete yet. Learn It / Show It / Prove It / Master It all share one
+  // content row (the module's carrier item), so an admin lock on that row locks
+  // all four together — there's no per-slot lock for those four independently yet.
+  function isGroupLocked(ref: ActivityGroupRef): boolean {
+    const item = courseItems.find((i) => i.id === ref.contentId)
+    if (item?.locked) return true
+    if (!sequentialLock) return false
+    const idx = allGroups.findIndex((g) => g.key === ref.key)
+    if (idx <= 0) return false
+    return !isGroupComplete(allGroups[idx - 1])
+  }
+
+  function groupLockReason(ref: ActivityGroupRef): string {
+    const item = courseItems.find((i) => i.id === ref.contentId)
+    return item?.locked ? 'This activity has been locked by your teacher.' : 'Complete the previous activity to unlock this.'
   }
 
   if (loading) {
@@ -1726,7 +1883,7 @@ export function SPMyLearningPage() {
               <div style={{ flex: 1, minWidth: 160 }}>
                 <div style={{ fontSize: 18, fontWeight: 800, color: '#1A365E' }}>{selectedCourse.title}</div>
                 <div style={{ fontSize: 15, color: '#7A92B0' }}>
-                  {selectedCourse.subject || 'No subject'} · Pass: {selectedCourse.passMark || 80}%
+                  {selectedCourse.subject || 'No subject'} · Mastery - {selectedCourse.passMark || 80}%
                   {selectedEnrolment?.dueDate && <> · Due {selectedEnrolment.dueDate}{daysRemaining !== null && daysRemaining >= 0 ? ` (${daysRemaining} days remaining)` : ''}</>}
                 </div>
               </div>
@@ -1839,6 +1996,8 @@ export function SPMyLearningPage() {
                               icon={FileText} kindLabel="Learn It" title={`Learn It · ${carrierItem.title || 'Case Study'}`} targetDate={carrierItem.targetDate}
                               status={hasSubmission(carrierItem.id, 'case_study_notes') ? 'completed' : 'not_started'}
                               statusText={hasSubmission(carrierItem.id, 'case_study_notes') ? 'Notes submitted' : 'Not started'}
+                              locked={isGroupLocked({ key: `learn:${carrierItem.id}`, kind: 'learn', contentId: carrierItem.id })}
+                              lockReason={groupLockReason({ key: `learn:${carrierItem.id}`, kind: 'learn', contentId: carrierItem.id })}
                               onClick={() => openGroup('learn', carrierItem.id)} activeFilter={contentFilter}
                             />
                           )}
@@ -1867,6 +2026,8 @@ export function SPMyLearningPage() {
                                 icon={BookOpen} kindLabel="Do It" title={`Do It · Lesson ${idx + 1}: ${item.title}`} targetDate={item.targetDate}
                                 status={status} statusText={statusText}
                                 score={itemHasMastery ? masteryScore : null} passMark={item.masteryPassMark ?? selectedCourse.passMark}
+                                locked={isGroupLocked({ key: `lesson:${item.id}`, kind: 'lesson', contentId: item.id })}
+                                lockReason={groupLockReason({ key: `lesson:${item.id}`, kind: 'lesson', contentId: item.id })}
                                 onClick={() => openGroup('lesson', item.id)} activeFilter={contentFilter}
                               />
                             )
@@ -1877,18 +2038,31 @@ export function SPMyLearningPage() {
                               <ContentRow
                                 icon={Scale} kindLabel="Show It" title="Show It · Socratic Seminar" targetDate={carrierItem.socraticDate || carrierItem.targetDate}
                                 status="not_started" statusText="Not started"
+                                locked={isGroupLocked({ key: `show:${carrierItem.id}`, kind: 'show', contentId: carrierItem.id })}
+                                lockReason={groupLockReason({ key: `show:${carrierItem.id}`, kind: 'show', contentId: carrierItem.id })}
                                 onClick={() => openGroup('show', carrierItem.id)} activeFilter={contentFilter}
                               />
                               <ContentRow
-                                icon={Calculator} kindLabel="Prove It" title="Prove It · OMR Test" targetDate={carrierItem.targetDate}
+                                icon={Calculator} kindLabel="Prove It" title="Prove It · OMR Test" targetDate={carrierItem.omrTargetDate}
                                 status="not_started" statusText="Not started"
+                                locked={isGroupLocked({ key: `prove:${carrierItem.id}`, kind: 'prove', contentId: carrierItem.id })}
+                                lockReason={groupLockReason({ key: `prove:${carrierItem.id}`, kind: 'prove', contentId: carrierItem.id })}
                                 onClick={() => openGroup('prove', carrierItem.id)} activeFilter={contentFilter}
                               />
                               <ContentRow
-                                icon={Trophy} kindLabel="Master It" title="Master It · Presentation" targetDate={carrierItem.targetDate}
+                                icon={Trophy} kindLabel="Master It" title="Master It · Presentation" targetDate={carrierItem.presentationTargetDate}
                                 status={hasSubmission(carrierItem.id, 'presentation') ? 'completed' : 'not_started'}
                                 statusText={hasSubmission(carrierItem.id, 'presentation') ? 'Submitted' : 'Not started'}
+                                locked={isGroupLocked({ key: `master:${carrierItem.id}`, kind: 'master', contentId: carrierItem.id })}
+                                lockReason={groupLockReason({ key: `master:${carrierItem.id}`, kind: 'master', contentId: carrierItem.id })}
                                 onClick={() => openGroup('master', carrierItem.id)} activeFilter={contentFilter}
+                              />
+                              <ContentRow
+                                icon={MessageSquare} kindLabel="Discussion Board" title="Master It · Discussion Board" targetDate={carrierItem.targetDate}
+                                status="not_started" statusText="Join the conversation"
+                                locked={isGroupLocked({ key: `discussion:${carrierItem.id}`, kind: 'discussion', contentId: carrierItem.id })}
+                                lockReason={groupLockReason({ key: `discussion:${carrierItem.id}`, kind: 'discussion', contentId: carrierItem.id })}
+                                onClick={() => openGroup('discussion', carrierItem.id)} activeFilter={contentFilter}
                               />
                             </>
                           )}
@@ -1924,7 +2098,7 @@ export function SPMyLearningPage() {
                     ['Grade level', selectedCourse.gradeLevel || '—'],
                     ['Credit hours', selectedCourse.creditHours ? String(selectedCourse.creditHours) : '—'],
                     ['Required hours', selectedCourse.requiredHours > 0 ? `${selectedCourse.requiredHours} hrs` : 'Not set'],
-                    ['Pass mark', `${selectedCourse.passMark || 80}%`],
+                    ['Mastery', `${selectedCourse.passMark || 80}%`],
                     ['Pacing', selectedEnrolment?.paceType ? `${selectedEnrolment.paceType}${selectedEnrolment.paceDaysPerLesson ? ` · ${selectedEnrolment.paceDaysPerLesson} days/lesson` : ''}` : 'Not set'],
                     ['Start date', selectedCourse.startDate || 'Not set'],
                     ['Due date', selectedEnrolment?.dueDate || 'Not set'],
@@ -1944,21 +2118,25 @@ export function SPMyLearningPage() {
 
       {selectedCourse && activeLesson && activeGroupKind && !activePart && (() => {
         const kind = activeGroupKind
-        const GroupIcon: LucideIcon = kind === 'learn' ? FileText : kind === 'show' ? Scale : kind === 'prove' ? Calculator : kind === 'master' ? Trophy : BookOpen
+        const GroupIcon: LucideIcon = kind === 'learn' ? FileText : kind === 'show' ? Scale : kind === 'prove' ? Calculator : kind === 'master' ? Trophy : kind === 'discussion' ? MessageSquare : BookOpen
         const groupTitle = kind === 'learn' ? (activeLesson.title || 'Case Study')
           : kind === 'show' ? 'Socratic Seminar'
           : kind === 'prove' ? 'OMR Test'
           : kind === 'master' ? 'Presentation'
+          : kind === 'discussion' ? 'Discussion Board'
           : activeLesson.title
-        const groupTargetDate = kind === 'show' ? (activeLesson.socraticDate || activeLesson.targetDate) : activeLesson.targetDate
+        const groupTargetDate = kind === 'show' ? (activeLesson.socraticDate || activeLesson.targetDate)
+          : kind === 'prove' ? activeLesson.omrTargetDate
+          : kind === 'master' ? activeLesson.presentationTargetDate
+          : activeLesson.targetDate
 
-        type PartRow = { key: PartKind; title: string; status: RowStatus; statusText: string; score?: number | null; passMark?: number }
+        type PartRow = { key: PartKind; title: string; status: RowStatus; statusText: string; score?: number | null; passMark?: number; targetDate?: string | null; isVideo?: boolean }
         let parts: PartRow[] = []
         if (kind === 'learn') {
           const notesDone = hasSubmission(activeLesson.id, 'case_study_notes')
           parts = [
-            { key: 'caseStudyView', title: `${groupTitle}: View Case Study`, status: 'not_started', statusText: 'Not started' },
-            { key: 'caseStudyNotes', title: `${groupTitle}: Notes Upload`, status: notesDone ? 'completed' : 'not_started', statusText: notesDone ? 'Done' : 'Not started' },
+            { key: 'caseStudyView', title: `${groupTitle}: View Case Study`, status: 'not_started', statusText: 'Not started', targetDate: activeLesson.targetDate },
+            { key: 'caseStudyNotes', title: `${groupTitle}: Notes Upload`, status: notesDone ? 'completed' : 'not_started', statusText: notesDone ? 'Done' : 'Not started', targetDate: activeLesson.targetDate },
           ]
         } else if (kind === 'lesson') {
           const itemProgress = progress.find((entry) => entry.contentId === activeLesson.id && entry.studentId === session?.dbId)
@@ -1969,19 +2147,23 @@ export function SPMyLearningPage() {
           const masteryAttempted = (itemProgress?.masteryAttempts ?? 0) > 0 || masteryScore !== null
           const notesDone = hasSubmission(activeLesson.id, 'lesson_notes')
           parts = [
-            { key: 'tutorial', title: `${groupTitle}: Tutorial`, status: tutorialDone ? 'completed' : itemProgress?.status === 'in_progress' ? 'in_progress' : 'not_started', statusText: tutorialDone ? 'Completed' : itemProgress?.status === 'in_progress' ? 'In Progress' : 'Not started' },
-            ...(activeLesson.videoUrl ? [{ key: 'video' as PartKind, title: `${groupTitle}: Video`, status: 'not_started' as RowStatus, statusText: 'Not started' }] : []),
-            { key: 'lessonNotes', title: `${groupTitle}: Notes Upload`, status: notesDone ? 'completed' : 'not_started', statusText: notesDone ? 'Done' : 'Not started' },
-            ...(itemHasMastery ? [{ key: 'mastery' as PartKind, title: `${groupTitle}: Mastery Test`, status: (masteryPassed ? 'completed' : masteryAttempted ? 'not_mastered' : 'not_started') as RowStatus, statusText: masteryPassed ? 'Passed' : masteryAttempted ? 'Not mastered · retake available' : 'Not started', score: masteryScore, passMark: activeLesson.masteryPassMark ?? selectedCourse.passMark }] : []),
+            { key: 'tutorial', title: `${groupTitle}: Tutorial`, status: tutorialDone ? 'completed' : itemProgress?.status === 'in_progress' ? 'in_progress' : 'not_started', statusText: tutorialDone ? 'Completed' : itemProgress?.status === 'in_progress' ? 'In Progress' : 'Not started', targetDate: activeLesson.targetDate, isVideo: activeLesson.type === 'video' },
+            ...(activeLesson.videoUrl ? [{ key: 'video' as PartKind, title: `${groupTitle}: Video`, status: 'not_started' as RowStatus, statusText: 'Not started', targetDate: activeLesson.targetDate, isVideo: true }] : []),
+            { key: 'lessonNotes', title: `${groupTitle}: Notes Upload`, status: notesDone ? 'completed' : 'not_started', statusText: notesDone ? 'Done' : 'Not started', targetDate: activeLesson.notesTargetDate || activeLesson.targetDate },
+            ...(itemHasMastery ? [{ key: 'mastery' as PartKind, title: `${groupTitle}: Mastery Test`, status: (masteryPassed ? 'completed' : masteryAttempted ? 'not_mastered' : 'not_started') as RowStatus, statusText: masteryPassed ? 'Passed' : masteryAttempted ? 'Not mastered · retake available' : 'Not started', score: masteryScore, passMark: activeLesson.masteryPassMark ?? selectedCourse.passMark, targetDate: activeLesson.masteryTargetDate || activeLesson.targetDate }] : []),
           ]
         } else if (kind === 'show') {
-          parts = [{ key: 'socratic', title: 'Socratic Seminar', status: 'not_started', statusText: 'Not started' }]
+          parts = [{ key: 'socratic', title: 'Socratic Seminar', status: 'not_started', statusText: 'Not started', targetDate: activeLesson.socraticDate || activeLesson.targetDate }]
         } else if (kind === 'prove') {
-          parts = [{ key: 'omr', title: 'OMR Test', status: 'not_started', statusText: 'Not started' }]
+          parts = [{ key: 'omr', title: 'OMR Test', status: 'not_started', statusText: 'Not started', targetDate: activeLesson.omrTargetDate }]
+        } else if (kind === 'discussion') {
+          parts = [{ key: 'discussion', title: 'Discussion Board', status: 'not_started', statusText: 'Join the conversation' }]
         } else {
           const submitted = hasSubmission(activeLesson.id, 'presentation')
-          parts = [{ key: 'presentation', title: 'Presentation', status: submitted ? 'completed' : 'not_started', statusText: submitted ? 'Submitted' : 'Not started' }]
+          parts = [{ key: 'presentation', title: 'Presentation', status: submitted ? 'completed' : 'not_started', statusText: submitted ? 'Submitted' : 'Not started', targetDate: activeLesson.presentationTargetDate }]
         }
+
+        const nextLocked = !!nextGroup && isGroupLocked(nextGroup)
 
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -1999,18 +2181,30 @@ export function SPMyLearningPage() {
                 </button>
               ) : <span />}
               {nextGroup ? (
-                <button onClick={() => openGroup(nextGroup.kind, nextGroup.contentId)} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'right', maxWidth: '38%' }}>
+                <button
+                  onClick={() => !nextLocked && openGroup(nextGroup.kind, nextGroup.contentId)}
+                  disabled={nextLocked}
+                  title={nextLocked ? groupLockReason(nextGroup) : undefined}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: nextLocked ? 'not-allowed' : 'pointer', fontFamily: 'inherit', textAlign: 'right', maxWidth: '38%', opacity: nextLocked ? .5 : 1 }}
+                >
                   <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                     <span style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 14, fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '.5px' }}>Next Activity</div>
                       <div style={{ fontSize: 16, fontWeight: 700, color: '#1A365E', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{groupDisplay(nextGroup).title}</div>
                     </span>
-                    {(() => { const D = groupDisplay(nextGroup); const Icon = D.icon; return <span style={{ width: 30, height: 30, borderRadius: 8, background: '#F0F4FA', color: '#5A7290', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Icon size={14} /></span> })()}
+                    {nextLocked
+                      ? <span style={{ width: 30, height: 30, borderRadius: 8, background: '#F0F4FA', color: '#5A7290', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lock size={14} /></span>
+                      : (() => { const D = groupDisplay(nextGroup); const Icon = D.icon; return <span style={{ width: 30, height: 30, borderRadius: 8, background: '#F0F4FA', color: '#5A7290', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Icon size={14} /></span> })()}
                   </span>
                   <ArrowRight size={16} color="#94A3B8" style={{ flexShrink: 0 }} />
                 </button>
               ) : <span />}
             </div>
+            {nextLocked && (
+              <div style={{ textAlign: 'center', fontSize: 13, color: '#94A3B8', marginTop: -12 }}>
+                {groupLockReason(nextGroup!)}
+              </div>
+            )}
 
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, textAlign: 'center' }}>
               <span style={{ width: 56, height: 56, borderRadius: 14, background: '#F0F4FA', color: SP_NAVY, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -2023,14 +2217,19 @@ export function SPMyLearningPage() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 640, width: '100%', margin: '0 auto' }}>
-              {parts.map((part) => (
-                <OverviewPartRow
-                  key={part.key}
-                  title={part.title} status={part.status} statusText={part.statusText}
-                  score={part.score} passMark={part.passMark}
-                  onClick={() => openPart(activeLesson, part.key)}
-                />
-              ))}
+              {parts.map((part) => {
+                // Only surface a row's own date when it's actually an override the
+                // teacher set — otherwise it just duplicates the header above.
+                const rowDate = part.targetDate && part.targetDate !== groupTargetDate ? part.targetDate : null
+                return (
+                  <OverviewPartRow
+                    key={part.key}
+                    title={part.title} status={part.status} statusText={part.statusText}
+                    score={part.score} passMark={part.passMark} targetDate={rowDate} isVideo={part.isVideo}
+                    onClick={() => openPart(activeLesson, part.key)}
+                  />
+                )
+              })}
             </div>
 
             <button onClick={closeActivity} style={{ alignSelf: 'center', padding: '10px 32px', background: '#fff', color: '#1A365E', border: '1.5px solid #E4EAF2', borderRadius: 24, fontSize: 16, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -2160,6 +2359,14 @@ export function SPMyLearningPage() {
               <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Upload size={15} /> Learn it · Show it: Notes</div>
             </div>
           </div>
+          <a href="/LMS/Case Study Note-Taking Guide.pdf" target="_blank" rel="noreferrer" style={{ ...card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
+            <FileText size={18} color="#1A365E" />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E' }}>Case Study Note-Taking Guide</div>
+              <div style={{ fontSize: 13, color: '#7A92B0' }}>How to organize and score your notebook — worth 15% of your grade</div>
+            </div>
+            <ExternalLink size={14} color="#7A92B0" />
+          </a>
           <div style={{ ...card, padding: '14px 16px' }}>
             <NotesUploadRow contentId={activeLesson.id} kind="case_study_notes" studentId={session?.dbId ?? ''} submission={mySubmissions.find((s) => s.contentId === activeLesson.id && s.kind === 'case_study_notes')} onSubmitted={onSubmissionAdded} />
           </div>
@@ -2199,6 +2406,18 @@ export function SPMyLearningPage() {
             </div>
           </div>
           <PresentationPanel carrierItem={activeLesson} studentId={session?.dbId ?? ''} />
+        </div>
+      )}
+
+      {selectedCourse && activeLesson && activePart === 'discussion' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', borderRadius: 11, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back</button>
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><MessageSquare size={15} /> Master it · Discussion Board</div>
+            </div>
+          </div>
+          <DiscussionBoardPanel carrierItem={activeLesson} studentId={session?.dbId ?? ''} />
         </div>
       )}
     </div>

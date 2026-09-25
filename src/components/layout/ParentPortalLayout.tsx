@@ -3,6 +3,7 @@ import { Outlet, NavLink, Navigate, useLocation, useNavigate } from 'react-route
 import { useParentPortal } from '@/contexts/ParentPortalContext'
 import { StudentPortalContext } from '@/contexts/StudentPortalContext'
 import { PortalReadOnlyContext } from '@/contexts/PortalReadOnlyContext'
+import { isSpainCampus } from '@/lib/campus'
 import {
   Home, GraduationCap, UserCheck, CalendarRange, ClipboardList,
   BookOpen, FolderArchive, FileCheck, CalendarDays,
@@ -58,6 +59,10 @@ export function ParentPortalLayout() {
   const { session, loading, activeChild, setActiveChildIndex, logout } = useParentPortal()
   const navigate = useNavigate()
   const location = useLocation()
+  const isSpain = isSpainCampus(activeChild?.campus)
+  const ppGroups = isSpain
+    ? PP_GROUPS.map(group => ({ ...group, items: group.items.filter(item => item.label !== 'Academic Calendar') }))
+    : PP_GROUPS
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => {
     const initial = new Set(PP_GROUPS.filter((g) => g.defaultOpen).map((g) => g.id))
     const activeGroup = PP_GROUPS.find((g) => g.items.some((item) => location.pathname === item.to || location.pathname.startsWith(`${item.to}/`)))
@@ -83,6 +88,10 @@ export function ParentPortalLayout() {
   }
 
   if (!session) return <Navigate to="/parent/login" replace />
+
+  if (isSpain && location.pathname.startsWith('/parent/academic-calendar')) {
+    return <Navigate to="/parent/dashboard" replace />
+  }
 
   async function handleLogout() {
     await logout()
@@ -176,7 +185,7 @@ export function ParentPortalLayout() {
 
             {/* Nav */}
             <nav style={{ flex: 1, padding: '4px 0 58px', overflowY: 'auto' }}>
-              {PP_GROUPS.map((group) => (
+              {ppGroups.map((group) => (
                 <div key={group.id}>
                   <button
                     onClick={() => toggleGroup(group.id)}

@@ -62,6 +62,11 @@ export const CASE_STUDY_RUBRIC: Record<ScoreComponentType, RubricCategory> = {
   },
 }
 
+// Master It's assignment brief instructions — the same for every module by default, but
+// each module's SectionModal can override it (stored on that module's presentationBrief
+// field; the student page falls back to this text whenever that field is empty).
+export const DEFAULT_PRESENTATION_BRIEF = 'Each student is assigned one question/perspective below. Working independently, read this module’s case study, research your assigned problem using evidence from the case, and prepare an individual presentation proposing a solution (see the companion Presentation Content Guide for structure). Every recommendation must be supported by specific evidence — section numbers, data points, or direct references to stakeholder memos —from the case study document'
+
 export const SCORE_COMPONENT_TYPES = Object.keys(CASE_STUDY_RUBRIC) as ScoreComponentType[]
 
 // Discussion Post is parked pending future exploration — its rubric definition stays

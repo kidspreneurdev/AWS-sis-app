@@ -7,16 +7,12 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
+import { getCampusGreeting } from '@/lib/campus'
 
 const NAVY = '#1A365E'
 const RED = '#D61F31'
 const GOLD = '#FAC600'
 const GREEN = '#16A34A'
-
-function getGreeting() {
-  const h = new Date().getHours()
-  return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'
-}
 
 function todayDay() {
   return new Date().toLocaleDateString('en-US', { weekday: 'long' })
@@ -94,7 +90,7 @@ export function K5DashboardPage() {
             K–5 Student Portal · 2025–26
           </div>
           <div style={{ fontSize: 24, fontWeight: 800, color: '#fff', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
-            {getGreeting()}, {firstName}! <Sparkles size={20} color={GOLD} />
+            {getCampusGreeting(session?.campus)}, {firstName}! <Sparkles size={20} color={GOLD} />
           </div>
           <div style={{ fontSize: 16, color: 'rgba(255,255,255,.5)' }}>
             Grade {session?.grade}{session?.campus ? ` · ${session.campus}` : ''} · Student ID: {session?.studentId || '—'}

@@ -177,7 +177,7 @@ export interface LMSStore {
 }
 
 // ─── Row mappers ──────────────────────────────────────────────────────────────
-function rowToLMSCourse(r: Record<string, unknown>): LMSCourse {
+export function rowToLMSCourse(r: Record<string, unknown>): LMSCourse {
   return {
     id: r.id as string,
     title: (r.title as string) ?? '',
@@ -212,7 +212,7 @@ function rowToLMSCourse(r: Record<string, unknown>): LMSCourse {
   }
 }
 
-function rowToLMSCourseGroup(r: Record<string, unknown>): LMSCourseGroup {
+export function rowToLMSCourseGroup(r: Record<string, unknown>): LMSCourseGroup {
   return {
     id: r.id as string,
     title: (r.title as string) ?? '',
@@ -232,7 +232,7 @@ function rowToLMSCourseGroup(r: Record<string, unknown>): LMSCourseGroup {
   }
 }
 
-function rowToLMSContent(r: Record<string, unknown>): LMSContent {
+export function rowToLMSContent(r: Record<string, unknown>): LMSContent {
   const extra = (r.extra as Record<string, unknown>) ?? {}
   return {
     id: r.id as string,
@@ -296,7 +296,7 @@ function rowToLMSContent(r: Record<string, unknown>): LMSContent {
   }
 }
 
-function rowToLMSEnrolment(r: Record<string, unknown>): LMSEnrolment {
+export function rowToLMSEnrolment(r: Record<string, unknown>): LMSEnrolment {
   return {
     id: r.id as string,
     courseId: r.course_id as string,
@@ -312,7 +312,7 @@ function rowToLMSEnrolment(r: Record<string, unknown>): LMSEnrolment {
   }
 }
 
-function rowToLMSProgress(r: Record<string, unknown>): LMSProgress {
+export function rowToLMSProgress(r: Record<string, unknown>): LMSProgress {
   return {
     id: r.id as string,
     studentId: r.student_id as string,

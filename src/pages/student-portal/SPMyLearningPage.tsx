@@ -15,7 +15,10 @@ import { uploadFile } from '@/lib/uploadFile'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
 import { DiscussionBoard, type DiscussionPost } from '@/components/lms/DiscussionBoard'
-import { SUBJECT_COLORS, isActiveBool, type LMSCourse, type LMSContent, type LMSEnrolment, type LMSProgress, type LMSQuestion } from '@/pages/lms/lmsStore'
+import {
+  SUBJECT_COLORS, isActiveBool, rowToLMSCourse, rowToLMSContent, rowToLMSEnrolment, rowToLMSProgress,
+  type LMSCourse, type LMSContent, type LMSEnrolment, type LMSProgress, type LMSQuestion,
+} from '@/pages/lms/lmsStore'
 import { portalPrefix } from './gradesShared'
 
 import { ACTIVE_SCORE_COMPONENT_TYPES, getEffectiveRubric, finalGrade, DEFAULT_PRESENTATION_BRIEF, type ScoreComponentType, type RubricOverrides } from '@/lib/lms/caseStudyRubric'
@@ -1419,16 +1422,7 @@ export function SPMyLearningPage() {
     const sessionCohortNorm = norm(session.cohort)
 
     const { data: enrolData } = await supabase.from('lms_enrolments').select('*')
-    const allEnrolments: LMSEnrolment[] = (enrolData ?? []).map((r: Record<string, unknown>) => ({
-      id: r.id as string,
-      courseId: r.course_id as string,
-      targetType: r.target_type as LMSEnrolment['targetType'],
-      targetValue: r.target_value as string,
-      assignedAt: (r.assigned_at as string) ?? '',
-      paceType: (r.pace_type as string) ?? '',
-      dueDate: (r.due_date as string) ?? '',
-      active: r.active as boolean,
-    }))
+    const allEnrolments: LMSEnrolment[] = (enrolData ?? []).map(rowToLMSEnrolment)
 
     const matched = allEnrolments.filter((entry) => {
       if (!isActiveBool(entry.active)) return false
@@ -1461,88 +1455,13 @@ export function SPMyLearningPage() {
     const { data: coData } = await supabase.from('lms_content').select('*')
       .in('course_id', groupIds).order('unit_order').order('module_order').order('order_idx')
 
-    const mappedCourses: LMSCourse[] = (cData ?? []).map((r: Record<string, unknown>) => ({
-      id: r.id as string,
-      groupId: (r.group_id as string) ?? null,
-      title: (r.title as string) ?? '',
-      subject: (r.subject as string) ?? '',
-      gradeLevel: (r.grade_level as string) ?? '',
-      description: (r.description as string) ?? '',
-      passMark: Number(r.pass_mark ?? 70),
-      creditHours: Number(r.credit_hours ?? 0),
-      requiredHours: Number(r.required_hours ?? 0),
-      status: (r.status as LMSCourse['status']) ?? 'Draft',
-      announcement: (r.announcement as string) ?? '',
-      progressionMode: (r.progression_mode as string) ?? 'open',
-      startDate: (r.start_date as string) ?? null,
-    }))
+    const mappedCourses: LMSCourse[] = (cData ?? []).map(rowToLMSCourse)
 
     const publishedCourses = mappedCourses.filter((course) => course.status?.toLowerCase() === 'published')
 
-    const mappedContent: LMSContent[] = (coData ?? []).map((r: Record<string, unknown>) => {
-      const extra = (() => {
-        try { return JSON.parse(((r.extra as string) || '{}')) as Record<string, unknown> } catch { return (r.extra as Record<string, unknown>) ?? {} }
-      })()
-      return {
-        id: r.id as string,
-        courseId: r.course_id as string,
-        title: (r.title as string) ?? '',
-        type: (r.type as LMSContent['type']) ?? 'article',
-        url: (extra.url as string) ?? '',
-        body: (extra.body as string) ?? '',
-        videoUrl: (extra.videoUrl as string) ?? undefined,
-        videoFileName: (extra.videoFileName as string) ?? undefined,
-        unitTitle: (r.unit_title as string) ?? '',
-        unitOrder: r.unit_order == null ? undefined : Number(r.unit_order),
-        order: Number(r.order_idx ?? 0),
-        estimatedMins: Number(extra.estimatedMins ?? 0) || undefined,
-        moduleTitle: (r.module_title as string) ?? '',
-        moduleOrder: Number(r.module_order ?? 0) || undefined,
-        hasMastery: extra.hasMastery as boolean | 'TRUE' | undefined,
-        masteryPassMark: Number(extra.masteryPassMark ?? 0) || undefined,
-        masteryRetakes: extra.masteryRetakes !== undefined ? Number(extra.masteryRetakes) : undefined,
-        masteryTimeLimit: Number(extra.masteryTimeLimit ?? 0) || undefined,
-        masteryWeight: Number(extra.masteryWeight ?? 0) || undefined,
-        masteryQuizJson: (extra.masteryQuizJson as string) ?? undefined,
-        quizJson: (extra.quizJson as string) ?? undefined,
-        hasAssignment: extra.hasAssignment as boolean | 'TRUE' | undefined,
-        assignInstructions: (extra.assignInstructions as string) ?? undefined,
-        assignMaxScore: Number(extra.assignMaxScore ?? 0) || undefined,
-        assignWeight: Number(extra.assignWeight ?? 0) || undefined,
-        assignRubric: (extra.assignRubric as string) ?? undefined,
-        caseStudyUrl: (extra.caseStudyUrl as string) ?? undefined,
-        caseStudyFileName: (extra.caseStudyFileName as string) ?? undefined,
-        moduleDescription: (extra.moduleDescription as string) ?? undefined,
-        omrFormUrl: (extra.omrFormUrl as string) ?? undefined,
-        omrTargetDate: (extra.omrTargetDate as string) ?? null,
-        socraticDate: (extra.socraticDate as string) ?? undefined,
-        socraticBrief: (extra.socraticBrief as string) ?? undefined,
-        presentationBrief: (extra.presentationBrief as string) ?? undefined,
-        presentationBriefUrl: (extra.presentationBriefUrl as string) ?? undefined,
-        presentationBriefFileName: (extra.presentationBriefFileName as string) ?? undefined,
-        presentationVideoUrl: (extra.presentationVideoUrl as string) ?? undefined,
-        presentationVideoFileName: (extra.presentationVideoFileName as string) ?? undefined,
-        presentationTargetDate: (extra.presentationTargetDate as string) ?? null,
-        targetDate: (extra.targetDate as string) ?? null,
-        notesTargetDate: (extra.notesTargetDate as string) ?? null,
-        masteryTargetDate: (extra.masteryTargetDate as string) ?? null,
-        locked: extra.locked === true,
-      }
-    })
+    const mappedContent: LMSContent[] = (coData ?? []).map(rowToLMSContent)
 
-    const mappedProgress: LMSProgress[] = (prData ?? []).map((r: Record<string, unknown>) => ({
-      id: r.id as string,
-      studentId: r.student_id as string,
-      courseId: r.course_id as string,
-      contentId: r.content_id as string,
-      status: (r.status as LMSProgress['status']) ?? 'not_started',
-      masteryScore: r.mastery_score as number | null,
-      masteryPassed: r.mastery_passed === true,
-      assignScore: r.assign_score as number | null,
-      assignStatus: (r.assign_status as string) ?? undefined,
-      masteryAttempts: Number(r.mastery_attempts ?? 0),
-      timeSpentMins: Number(r.time_spent_mins ?? 0),
-    }))
+    const mappedProgress: LMSProgress[] = (prData ?? []).map(rowToLMSProgress)
 
     // A content row (e.g. a case study) can be saved without unitOrder, which would
     // otherwise coerce to 0 and tie it with the first module, scrambling module order.

@@ -141,8 +141,13 @@ export interface LMSContent {
   notesTargetDate?: string | null
   masteryTargetDate?: string | null
   locked?: boolean
-  hidden?: boolean
-  excludedFromGrade?: boolean
+  // Show It / Prove It / Master It / Discussion Board share this one content row with
+  // Learn It, so each needs its own lock rather than all four toggling together off
+  // Learn It's `locked` above.
+  socraticLocked?: boolean
+  omrLocked?: boolean
+  presentationLocked?: boolean
+  discussionLocked?: boolean
 }
 
 export interface LMSEnrolment {
@@ -299,8 +304,10 @@ export function rowToLMSContent(r: Record<string, unknown>): LMSContent {
     notesTargetDate: (extra.notesTargetDate as string) ?? null,
     masteryTargetDate: (extra.masteryTargetDate as string) ?? null,
     locked: extra.locked === true,
-    hidden: extra.hidden === true,
-    excludedFromGrade: extra.excludedFromGrade === true,
+    socraticLocked: extra.socraticLocked === true,
+    omrLocked: extra.omrLocked === true,
+    presentationLocked: extra.presentationLocked === true,
+    discussionLocked: extra.discussionLocked === true,
   }
 }
 
@@ -483,7 +490,9 @@ export async function saveLMS(store: LMSStore): Promise<string | null> {
           discussionBrief: c.discussionBrief, discussionBriefUrl: c.discussionBriefUrl, discussionBriefFileName: c.discussionBriefFileName,
           rubricOverrides: c.rubricOverrides,
           targetDate: c.targetDate, notesTargetDate: c.notesTargetDate, masteryTargetDate: c.masteryTargetDate,
-          locked: c.locked, hidden: c.hidden, excludedFromGrade: c.excludedFromGrade,
+          locked: c.locked,
+          socraticLocked: c.socraticLocked, omrLocked: c.omrLocked,
+          presentationLocked: c.presentationLocked, discussionLocked: c.discussionLocked,
         },
       })),
       { onConflict: 'id' }

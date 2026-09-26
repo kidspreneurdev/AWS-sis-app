@@ -1790,12 +1790,18 @@ export function SPMyLearningPage() {
   // the same 🔒 toggle already in Curriculum, which works anytime regardless of
   // progression mode or student progress — or (b) sequential progression is on
   // and the activity immediately before it (course-wide, across unit boundaries)
-  // isn't complete yet. Learn It / Show It / Prove It / Master It all share one
-  // content row (the module's carrier item), so an admin lock on that row locks
-  // all four together — there's no per-slot lock for those four independently yet.
+  // isn't complete yet. Learn It / Show It / Prove It / Master It / Discussion Board
+  // share one content row (the module's carrier item), but each has its own lock
+  // field so an admin can lock/unlock them independently.
   function isGroupLocked(ref: ActivityGroupRef): boolean {
     const item = courseItems.find((i) => i.id === ref.contentId)
-    if (item?.locked) return true
+    if (!item) return false
+    const adminLocked = ref.kind === 'show' ? item.socraticLocked
+      : ref.kind === 'prove' ? item.omrLocked
+      : ref.kind === 'master' ? item.presentationLocked
+      : ref.kind === 'discussion' ? item.discussionLocked
+      : item.locked
+    if (adminLocked) return true
     if (!sequentialLock) return false
     const idx = allGroups.findIndex((g) => g.key === ref.key)
     if (idx <= 0) return false
@@ -1804,7 +1810,12 @@ export function SPMyLearningPage() {
 
   function groupLockReason(ref: ActivityGroupRef): string {
     const item = courseItems.find((i) => i.id === ref.contentId)
-    return item?.locked ? 'This activity has been locked by your teacher.' : 'Complete the previous activity to unlock this.'
+    const adminLocked = ref.kind === 'show' ? item?.socraticLocked
+      : ref.kind === 'prove' ? item?.omrLocked
+      : ref.kind === 'master' ? item?.presentationLocked
+      : ref.kind === 'discussion' ? item?.discussionLocked
+      : item?.locked
+    return adminLocked ? 'This activity has been locked by your teacher.' : 'Complete the previous activity to unlock this.'
   }
 
   if (loading) {

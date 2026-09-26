@@ -6,6 +6,7 @@ import { useHeaderActions } from '@/contexts/PageHeaderContext'
 import { useCohorts } from '@/hooks/useCohorts'
 import { RubricBuilder, rubricParse, rubricMaxPoints, rubricComputeScore, rubricScale, type Rubric } from '@/components/shared/RubricBuilder'
 import { StudentMultiCombobox } from '@/components/shared/StudentMultiCombobox'
+import { atAssignmentIsTargeted } from '@/lib/atTargeting'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 20 }
 
@@ -38,6 +39,7 @@ const EMPTY_FORM = {
   gradingScale: 'Points', maxScore: '',
   dateAssigned: new Date().toISOString().slice(0, 10), dueDate: '', dueTime: '',
   instructions: '', rubric: '', studentIds: [] as string[],
+  divisionActive: false, cohortActive: false, studentsActive: false,
 }
 
 // ── RubricScoringModal ────────────────────────────────────────────────────────
@@ -117,7 +119,7 @@ interface Assignment {
   instructions: string; rubric: string; studentIds: string[]
 }
 interface Submission { id: string; assignment_id: string; student_id: string; status: string; score: number | null; teacher_note: string; file_url: string; link_url: string; student_note: string; submitted_date: string }
-interface Student { id: string; fullName: string; grade: string }
+interface Student { id: string; fullName: string; grade: string; cohort: string }
 
 // ── AssignModal ───────────────────────────────────────────────────────────────
 function AssignModal({ item, cohorts, students, onClose, onSave }: {
@@ -133,9 +135,13 @@ function AssignModal({ item, cohorts, students, onClose, onSave }: {
     maxScore: item.maxScore ? String(item.maxScore) : '',
     dateAssigned: item.dateAssigned, dueDate: item.dueDate, dueTime: item.dueTime ?? '',
     instructions: item.instructions, rubric: item.rubric ?? '', studentIds: item.studentIds ?? [],
+    divisionActive: !!(item.division && item.division !== 'All'),
+    cohortActive: !!item.cohort,
+    studentsActive: (item.studentIds ?? []).length > 0,
   } : { ...EMPTY_FORM })
   const [saving, setSaving] = useState(false)
   const set = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }))
+  const setBool = (k: string, v: boolean) => setForm(p => ({ ...p, [k]: v }))
   const setStudentIds = (ids: string[]) => setForm(p => ({ ...p, studentIds: ids }))
   const inp: React.CSSProperties = { width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #E4EAF2', fontSize: 13, color: '#1A365E', background: '#fff', boxSizing: 'border-box', fontFamily: 'inherit' }
   const lbl: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: '#7A92B0', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }
@@ -162,33 +168,48 @@ function AssignModal({ item, cohorts, students, onClose, onSave }: {
             <div><label style={lbl}>Subject</label><select value={form.subject} onChange={e => set('subject', e.target.value)} style={inp}>{AT_SUBJECTS.map(s => <option key={s}>{s}</option>)}</select></div>
           </div>
 
-          {/* Row 3: Division + Cohort */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <div><label style={lbl}>Division</label><select value={form.division} onChange={e => set('division', e.target.value)} style={inp}>{AT_DIVISIONS.map(d => <option key={d}>{d}</option>)}</select></div>
-            <div>
-              <label style={lbl}>Cohort</label>
-              <select value={form.cohort} onChange={e => set('cohort', e.target.value)} style={inp}>
-                <option value="">All Cohorts</option>
-                {cohorts.map(c => <option key={c}>{c}</option>)}
-              </select>
-            </div>
-          </div>
-
-          {/* Row 3b: Specific Students (overrides Division/Cohort targeting above) */}
+          {/* Row 3: Assign To — tick whichever criteria should apply; matches are combined (union) */}
           <div>
-            <label style={lbl}>Assign to Specific Students (optional)</label>
-            <StudentMultiCombobox
-              students={students}
-              values={form.studentIds}
-              onChange={setStudentIds}
-              getLabel={s => s.fullName}
-              getMeta={s => s.grade ? `Grade ${s.grade}` : undefined}
-              placeholder="Leave empty to assign by Division/Cohort above…"
-            />
-            {form.studentIds.length > 0 && (
-              <div style={{ fontSize: 10, color: '#7A92B0', marginTop: 4 }}>
-                Only the {form.studentIds.length} selected student{form.studentIds.length !== 1 ? 's' : ''} will receive this assignment, regardless of Division/Cohort.
+            <label style={lbl}>Assign To</label>
+            <div style={{ fontSize: 11, color: '#7A92B0', marginBottom: 8 }}>
+              Tick one or more. A student receives this assignment if they match ANY ticked option below. Leave everything unticked to assign to every enrolled student.
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: 10, alignItems: 'center' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#1A365E', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={form.divisionActive} onChange={e => setBool('divisionActive', e.target.checked)} /> Division
+                </label>
+                <select value={form.division} onChange={e => set('division', e.target.value)} disabled={!form.divisionActive} style={{ ...inp, opacity: form.divisionActive ? 1 : 0.5 }}>
+                  {AT_DIVISIONS.map(d => <option key={d}>{d}</option>)}
+                </select>
               </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: 10, alignItems: 'center' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#1A365E', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={form.cohortActive} onChange={e => setBool('cohortActive', e.target.checked)} /> Cohort
+                </label>
+                <select value={form.cohort} onChange={e => set('cohort', e.target.value)} disabled={!form.cohortActive} style={{ ...inp, opacity: form.cohortActive ? 1 : 0.5 }}>
+                  <option value="">Select a cohort…</option>
+                  {cohorts.map(c => <option key={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#1A365E', cursor: 'pointer', marginBottom: form.studentsActive ? 6 : 0 }}>
+                  <input type="checkbox" checked={form.studentsActive} onChange={e => setBool('studentsActive', e.target.checked)} /> Specific Students
+                </label>
+                {form.studentsActive && (
+                  <StudentMultiCombobox
+                    students={students}
+                    values={form.studentIds}
+                    onChange={setStudentIds}
+                    getLabel={s => s.fullName}
+                    getMeta={s => s.grade ? `Grade ${s.grade}` : undefined}
+                    placeholder="Search students…"
+                  />
+                )}
+              </div>
+            </div>
+            {!form.divisionActive && !form.cohortActive && !form.studentsActive && (
+              <div style={{ fontSize: 10, color: '#D97706', marginTop: 6 }}>⚠ Nothing ticked — this assignment will go to every enrolled student.</div>
             )}
           </div>
 
@@ -241,7 +262,7 @@ export function ATAssignmentsPage() {
   const [rubricModal, setRubricModal] = useState<{ assignId: string; studentId: string; studentName: string; rubric: Rubric; assignMax: number; existingScores: Record<string, number> } | null>(null)
 
   const load = useCallback(async () => {
-    let sQuery = supabase.from('students').select('id,first_name,last_name,grade').eq('status', 'Enrolled').order('last_name')
+    let sQuery = supabase.from('students').select('id,first_name,last_name,grade,cohort').eq('status', 'Enrolled').order('last_name')
     if (cf) sQuery = sQuery.eq('campus', cf)
     const [{ data: a }, { data: sub }, { data: st }] = await Promise.all([
       supabase.from('at_assignments').select('*').order('due_date'),
@@ -280,6 +301,7 @@ export function ATAssignmentsPage() {
       id: r.id as string,
       fullName: `${(r.first_name as string) ?? ''} ${(r.last_name as string) ?? ''}`.trim(),
       grade: String(r.grade ?? ''),
+      cohort: (r.cohort as string) ?? '',
     })))
   }, [cf])
 
@@ -292,7 +314,10 @@ export function ATAssignmentsPage() {
   }, [submissions])
 
   const targetStudents = useCallback((a: Assignment) => (
-    a.studentIds.length ? students.filter(s => a.studentIds.includes(s.id)) : students
+    students.filter(s => atAssignmentIsTargeted(
+      { division: a.division && a.division !== 'All' ? a.division : null, cohort: a.cohort || null, studentIds: a.studentIds.length ? a.studentIds : null },
+      s,
+    ))
   ), [students])
 
   const filtered = useMemo(() => assignments.filter(a => {
@@ -304,8 +329,9 @@ export function ATAssignmentsPage() {
 
   async function saveAssignment(form: typeof EMPTY_FORM, id?: string) {
     const payload: Record<string, unknown> = {
-      title: form.title, type: form.type, subject: form.subject, division: form.division,
-      cohort: form.cohort || null,
+      title: form.title, type: form.type, subject: form.subject,
+      division: form.divisionActive ? form.division : 'All',
+      cohort: form.cohortActive && form.cohort ? form.cohort : null,
       grading_scale: form.gradingScale,
       max_score: form.maxScore ? parseFloat(form.maxScore) : null,
       date_assigned: form.dateAssigned || null,
@@ -313,7 +339,7 @@ export function ATAssignmentsPage() {
       due_time: form.dueTime || null,
       instructions: form.instructions,
       rubric: form.rubric || null,
-      student_ids: form.studentIds.length ? form.studentIds : null,
+      student_ids: form.studentsActive && form.studentIds.length ? form.studentIds : null,
     }
     if (id) await supabase.from('at_assignments').update(payload).eq('id', id)
     else {
@@ -453,13 +479,11 @@ export function ATAssignmentsPage() {
                   </div>
                   <div style={{ display: 'flex', gap: 14, fontSize: 11, color: '#7A92B0', flexWrap: 'wrap' }}>
                     <span>📚 {a.subject}</span>
-                    {a.studentIds.length > 0 ? (
-                      <span>🎯 {a.studentIds.length} student{a.studentIds.length !== 1 ? 's' : ''}</span>
-                    ) : (
-                      <>
-                        <span>🏫 {a.division}</span>
-                        {a.cohort && <span>👥 {a.cohort}</span>}
-                      </>
+                    {a.division && a.division !== 'All' && <span>🏫 {a.division}</span>}
+                    {a.cohort && <span>👥 {a.cohort}</span>}
+                    {a.studentIds.length > 0 && <span>🎯 {a.studentIds.length} student{a.studentIds.length !== 1 ? 's' : ''}</span>}
+                    {(!a.division || a.division === 'All') && !a.cohort && a.studentIds.length === 0 && (
+                      <span>🌐 All students</span>
                     )}
                     {a.dateAssigned && <span>📅 Assigned: {a.dateAssigned}</span>}
                     <span>⏰ Due: {a.dueDate}{a.dueTime ? ` at ${a.dueTime}` : ''}</span>

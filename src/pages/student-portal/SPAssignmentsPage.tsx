@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase'
 import { uploadFile, downloadUrl } from '@/lib/uploadFile'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
+import { atAssignmentIsTargeted } from '@/lib/atTargeting'
 
 const card: React.CSSProperties = {
   background: '#fff',
@@ -40,6 +41,8 @@ interface AssignmentRow {
   subject: string
   dueDate: string
   description: string
+  instructions: string
+  division: string
   cohort: string
   maxScore: number | null
   studentIds: string[]
@@ -89,6 +92,7 @@ export function SPAssignmentsPage() {
 
   const studentDbId = session?.dbId ?? ''
   const studentCohort = session?.cohort ?? ''
+  const studentGrade = session?.grade ?? ''
 
   useEffect(() => {
     if (!session) return
@@ -97,7 +101,7 @@ export function SPAssignmentsPage() {
     async function loadAssignments() {
       const { data, error } = await supabase
         .from('at_assignments')
-        .select('id,title,type,subject,due_date,description,cohort,max_score,student_ids')
+        .select('id,title,type,subject,due_date,description,instructions,division,cohort,max_score,student_ids')
         .order('due_date')
       if (error) { console.error('AT assignments load error:', error); return }
       if (!data) return
@@ -108,14 +112,17 @@ export function SPAssignmentsPage() {
         subject: (row.subject as string) ?? '',
         dueDate: (row.due_date as string) ?? '',
         description: (row.description as string) ?? '',
+        instructions: (row.instructions as string) ?? '',
+        division: (row.division as string) ?? '',
         cohort: (row.cohort as string) ?? '',
         maxScore: row.max_score == null ? null : Number(row.max_score),
         studentIds: (row.student_ids as string[] | null) ?? [],
       }))
-      // Specific-student assignments only show for the targeted students.
-      // Otherwise, show assignments matching student's cohort, or with no cohort (global).
-      setAssignments(mapped.filter(r => (
-        r.studentIds.length > 0 ? r.studentIds.includes(studentDbId) : (!r.cohort || r.cohort === studentCohort)
+      // A student sees an assignment if they match ANY of its active targeting
+      // criteria (division band / cohort / specific students) — see atTargeting.ts.
+      setAssignments(mapped.filter(r => atAssignmentIsTargeted(
+        { division: r.division && r.division !== 'All' ? r.division : null, cohort: r.cohort || null, studentIds: r.studentIds.length ? r.studentIds : null },
+        { id: studentDbId, grade: studentGrade, cohort: studentCohort },
       )))
     }
 
@@ -309,9 +316,9 @@ export function SPAssignmentsPage() {
                   </span>
                 )}
               </div>
-              {assignment.description && (
+              {(assignment.instructions || assignment.description) && (
                 <div style={{ marginTop: 8, fontSize: 16, color: '#3D5475', lineHeight: 1.6, background: '#F7F9FC', padding: '8px 12px', borderRadius: 7 }}>
-                  {assignment.description}
+                  {assignment.instructions || assignment.description}
                 </div>
               )}
             </div>

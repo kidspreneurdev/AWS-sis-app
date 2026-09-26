@@ -92,6 +92,7 @@ export function SPAssignmentsPage() {
 
   const studentDbId = session?.dbId ?? ''
   const studentCohort = session?.cohort ?? ''
+  const studentGrade = session?.grade ?? ''
 
   useEffect(() => {
     if (!session) return
@@ -121,7 +122,7 @@ export function SPAssignmentsPage() {
       // criteria (division band / cohort / specific students) — see atTargeting.ts.
       setAssignments(mapped.filter(r => atAssignmentIsTargeted(
         { division: r.division && r.division !== 'All' ? r.division : null, cohort: r.cohort || null, studentIds: r.studentIds.length ? r.studentIds : null },
-        { id: studentDbId, grade: session.grade, cohort: studentCohort },
+        { id: studentDbId, grade: studentGrade, cohort: studentCohort },
       )))
     }
 

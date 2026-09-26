@@ -71,40 +71,24 @@ const pageStyles = `
   .awsc-brand-caption {
     max-width: 100%;
     font-family: 'Poppins', sans-serif;
-    font-size: clamp(0.65rem, 2.4cqw, 0.8rem);
+    font-size: clamp(0.95rem, 3.2cqw, 1.15rem);
     font-weight: 500;
-    letter-spacing: 0.32em;
+    letter-spacing: 0.08em;
     color: rgba(255,255,255,0.62);
-    text-transform: uppercase;
   }
 
-  .awsc-brand-bullets {
-    list-style: none;
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 10px 28px;
+  .awsc-brand-tagline {
     margin: 40px 0 0;
-    padding: 0;
-  }
-
-  .awsc-brand-bullets li {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 12.5px;
-    font-weight: 500;
+    font-family: 'Poppins', sans-serif;
+    font-size: clamp(0.95rem, 2.6cqw, 1.2rem);
+    font-weight: 700;
+    letter-spacing: -0.01em;
     color: rgba(255,255,255,0.78);
+    text-align: center;
   }
 
-  .awsc-brand-bullets li::before {
-    content: '';
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: #D61F31;
-    box-shadow: 0 0 0 3px rgba(214,31,49,0.25);
-    flex-shrink: 0;
+  .awsc-brand-dot {
+    color: #D61F31;
   }
 
   .awsc-login-panel {
@@ -157,13 +141,7 @@ const pageStyles = `
     letter-spacing: -0.01em;
     line-height: 1.2;
     color: #10233F;
-    margin: 0 0 6px;
-  }
-
-  .awsc-card-subtitle {
-    font-size: 12.5px;
-    color: #7A92B0;
-    margin-bottom: 26px;
+    margin: 0 0 26px;
   }
 
   .awsc-tabs {
@@ -431,12 +409,10 @@ export function LoginPage({ initialTab = 'staff' }: { initialTab?: LoginTab }) {
         <div className="awsc-brand-content">
           <img src="/Logo_w_trim.png" alt="American World School" className="awsc-brand-logo" />
           <div className="awsc-brand-rule" />
-          <div className="awsc-brand-caption">Student Information System</div>
-          <ul className="awsc-brand-bullets">
-            <li>Secure Student Records</li>
-            <li>Real-Time Enrollment Tracking</li>
-            <li>Built for K&ndash;12 Excellence</li>
-          </ul>
+          <div className="awsc-brand-caption">Asia’s First Entrepreneurial School.</div>
+          <div className="awsc-brand-tagline">
+            Be Seen<span className="awsc-brand-dot">.</span> Be Heard<span className="awsc-brand-dot">.</span> Be Known<span className="awsc-brand-dot">.</span> Belong<span className="awsc-brand-dot">.</span>
+          </div>
         </div>
       </div>
 
@@ -453,11 +429,10 @@ export function LoginPage({ initialTab = 'staff' }: { initialTab?: LoginTab }) {
           <img src="/Logo_a.png" alt="" className="awsc-card-icon" aria-hidden="true" />
           <div className="awsc-card-eyebrow">Welcome to <strong>American World School</strong></div>
           <h1 className="awsc-card-title">Sign in to your account</h1>
-          <div className="awsc-card-subtitle">K-12 Admissions &amp; Enrollment Portal</div>
 
           <div className="awsc-tabs">
             {([
-              { key: 'staff',  label: 'Staff',  activeColor: '#1A365E' },
+              { key: 'staff',  label: 'Staff',  activeColor: '#D61F31' },
               { key: 'student',label: 'Student', activeColor: '#1A365E' },
               { key: 'parent', label: 'Parent', activeColor: '#6B21A8' },
             ] as const).map(t => (
@@ -639,7 +614,7 @@ export function LoginPage({ initialTab = 'staff' }: { initialTab?: LoginTab }) {
             {studentError && <div style={errorStyle} className="awsc-error">{studentError}</div>}
 
             <div style={{ fontSize: 11, color: '#7A92B0', textAlign: 'center', marginTop: 10 }}>
-              Don&apos;t have a password? Ask your school admin to set one for you.
+              Don&apos;t have an account? Contact your school admin to set one up.
             </div>
           </form>
         )}

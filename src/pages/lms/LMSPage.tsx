@@ -563,9 +563,6 @@ function EditCourseModal({
   const [creditHours, setCreditHours] = useState(String(initialCreditHours ?? 1))
   const [requiredHours, setRequiredHours] = useState(String(initialRequiredHours ?? 0))
   const [passMark, setPassMark] = useState(String(initialPassMark ?? 80))
-  const [descDocUrl, setDescDocUrl] = useState(initialDescriptionDocUrl)
-  const [descDocFileName, setDescDocFileName] = useState(initialDescriptionDocFileName)
-  const [descDocFile, setDescDocFile] = useState<File | null>(null)
   const [syllabusUrl, setSyllabusUrl] = useState(initialSyllabusUrl)
   const [syllabusFileName, setSyllabusFileName] = useState(initialSyllabusFileName)
   const [syllabusFile, setSyllabusFile] = useState<File | null>(null)
@@ -577,14 +574,6 @@ function EditCourseModal({
   async function save() {
     if (!title.trim()) { alert('Course title is required'); return }
     setSaving(true)
-    let finalDescDocUrl = descDocUrl
-    let finalDescDocFileName = descDocFileName
-    if (descDocFile) {
-      try {
-        finalDescDocUrl = await uploadFile(`lms-course-description/${Date.now()}_${descDocFile.name}`, descDocFile)
-        finalDescDocFileName = descDocFile.name
-      } catch { alert('Course description upload failed. Please try again.'); setSaving(false); return }
-    }
     let finalSyllabusUrl = syllabusUrl
     let finalSyllabusFileName = syllabusFileName
     if (syllabusFile) {
@@ -606,7 +595,7 @@ function EditCourseModal({
       creditHours: parseFloat(creditHours) || 1,
       requiredHours: parseFloat(requiredHours) || 0,
       passMark: parseInt(passMark) || 80,
-      descriptionDocUrl: finalDescDocUrl, descriptionDocFileName: finalDescDocFileName,
+      descriptionDocUrl: initialDescriptionDocUrl, descriptionDocFileName: initialDescriptionDocFileName,
       syllabusUrl: finalSyllabusUrl, syllabusFileName: finalSyllabusFileName,
       studentOrientationUrl: finalOrientationUrl, studentOrientationFileName: finalOrientationFileName,
     })
@@ -645,12 +634,6 @@ function EditCourseModal({
           </div>
           {isGrouped && <div style={{ fontSize: 10, color: '#94A3B8' }}>Subject, grade level, credit hours, required hours and pass mark update every section in this course. Section names stay as-is — edit those from each section's ⋯ menu.</div>}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <CourseDocField
-              label="Course Description"
-              url={descDocUrl} fileName={descDocFileName} file={descDocFile}
-              onPick={f => setDescDocFile(f)}
-              onRemove={() => { setDescDocUrl(''); setDescDocFileName(''); setDescDocFile(null) }}
-            />
             <CourseDocField
               label="Course Syllabus"
               url={syllabusUrl} fileName={syllabusFileName} file={syllabusFile}
@@ -2175,9 +2158,23 @@ export function LMSPage() {
       units.forEach(u => { next['unit:' + u.title] = false })
       setCurriculumExpanded(next)
     }
+    function resetMasteryAttempts(item: LMSContent) {
+      setConfirmDialog({
+        title: 'Reset Mastery Attempts',
+        message: `Give ${student!.fullName} a fresh set of attempts on "${item.title || 'this lesson'}"? Their attempt count resets to 0 so they can retake the Mastery Test — their last score stays on record.`,
+        confirmLabel: 'Reset Attempts',
+        onConfirm: async () => {
+          await supabase.from('lms_progress').update({ mastery_attempts: 0 }).eq('student_id', sid).eq('content_id', item.id)
+          setStore(prev => ({
+            ...prev,
+            progress: prev.progress.map(p => (p.studentId === sid && p.contentId === item.id) ? { ...p, masteryAttempts: 0 } : p),
+          }))
+        },
+      })
+    }
 
     const thStyle: React.CSSProperties = { fontSize: 9, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '.05em', padding: '8px 8px', textAlign: 'center' }
-    const statusIconStyle = (active?: boolean): React.CSSProperties => ({ width: 22, height: 22, borderRadius: 5, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, background: active ? '#1A365E' : '#F0F4FA', color: active ? '#fff' : '#C4D0DE' })
+    const statusIconStyle = (active?: boolean): React.CSSProperties => ({ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, opacity: active ? 1 : 0.5 })
 
     function renderResultRow(item: LMSContent, depth: number) {
       const prog = myProg.find(p => p.contentId === item.id)
@@ -2188,6 +2185,9 @@ export function LMSPage() {
       const reviewKey = 'review:' + item.id
       const reviewOpen = !!curriculumExpanded[reviewKey]
       const hasResult = prog?.masteryScore != null || prog?.assignScore != null
+      const masteryPassed = prog?.masteryPassed === true || prog?.masteryPassed === 'TRUE'
+      const maxRetakes = item.masteryRetakes ?? 999
+      const isLockedOut = hasMasteryBool(item.hasMastery) && !masteryPassed && attempts >= maxRetakes
       return (
         <Fragment key={item.id}>
           <tr style={{ borderBottom: '1px solid #F0F4FA' }}>
@@ -2198,10 +2198,19 @@ export function LMSPage() {
               </div>
             </td>
             <td style={{ padding: '8px 8px', textAlign: 'center', fontSize: 11, color: '#5A7290' }}>{item.targetDate ? item.targetDate.slice(0, 10) : '—'}</td>
-            <td style={{ padding: '8px 4px', textAlign: 'center' }}><span style={statusIconStyle(item.locked)} title="Locked">🔒</span></td>
-            <td style={{ padding: '8px 4px', textAlign: 'center' }}><span style={statusIconStyle(item.hidden)} title="Hidden">🚫</span></td>
-            <td style={{ padding: '8px 4px', textAlign: 'center' }}><span style={statusIconStyle(item.excludedFromGrade)} title="Excluded from grade">📄</span></td>
-            <td style={{ padding: '8px 8px', textAlign: 'center', fontSize: 12, color: '#1A365E' }}>{attempts || '—'}</td>
+            <td style={{ padding: '8px 4px', textAlign: 'center' }}><span style={statusIconStyle(item.locked)} title="Locked">{item.locked ? '🔒' : '🔓'}</span></td>
+            <td style={{ padding: '8px 8px', textAlign: 'center', fontSize: 12, color: '#1A365E' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <span>{attempts || '—'}</span>
+                {isLockedOut && (
+                  <button
+                    onClick={() => resetMasteryAttempts(item)}
+                    title="Reset this student's attempt count so they can retake the Mastery Test"
+                    style={{ padding: '2px 7px', background: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A', borderRadius: 6, fontSize: 10, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+                  >🔓 Reset</button>
+                )}
+              </div>
+            </td>
             <td style={{ padding: '8px 8px', textAlign: 'center', fontSize: 12, color: '#1A365E' }}>{timeMins ? fmtTime(timeMins) : '—'}</td>
             <td style={{ padding: '8px 8px', textAlign: 'center', fontSize: 12, fontWeight: 700, color: scoreCol }}>{compositeScore !== null ? `${compositeScore}%` : '—'}</td>
             <td style={{ padding: '8px 8px', textAlign: 'center' }}>
@@ -2212,7 +2221,7 @@ export function LMSPage() {
           </tr>
           {reviewOpen && hasResult && (
             <tr style={{ borderBottom: '1px solid #F0F4FA', background: '#FAFBFF' }}>
-              <td colSpan={9} style={{ padding: '8px 10px 10px', paddingLeft: 12 + depth * 26 + 24 }}>
+              <td colSpan={7} style={{ padding: '8px 10px 10px', paddingLeft: 12 + depth * 26 + 24 }}>
                 <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 11, color: '#3D5475' }}>
                   <span>Status: <strong>{prog?.status}</strong></span>
                   {prog?.masteryScore != null && <span>Mastery Score: <strong>{prog.masteryScore}%</strong>{prog.masteryPassed !== undefined && <> ({isActiveBool(prog.masteryPassed) ? 'Passed' : 'Not Passed'})</>}</span>}
@@ -2292,13 +2301,10 @@ export function LMSPage() {
                   <tr style={{ borderBottom: '1px solid #E4EAF2', background: '#F7F9FC' }}>
                     <th rowSpan={2} style={{ ...thStyle, textAlign: 'left' }} />
                     <th rowSpan={2} style={thStyle}>Target Date</th>
-                    <th colSpan={3} style={{ ...thStyle, borderBottom: '1px solid #E4EAF2' }}>Statuses</th>
+                    <th rowSpan={2} style={thStyle} title="Locked until prerequisite met">🔒</th>
                     <th colSpan={4} style={{ ...thStyle, borderBottom: '1px solid #E4EAF2' }}>Results</th>
                   </tr>
                   <tr style={{ borderBottom: '1px solid #E4EAF2', background: '#F7F9FC' }}>
-                    <th style={thStyle} title="Locked until prerequisite met">🔒</th>
-                    <th style={thStyle} title="Hidden from students">🚫</th>
-                    <th style={thStyle} title="Excluded from grade">📄</th>
                     <th style={thStyle}>Attempts</th>
                     <th style={thStyle}>Time</th>
                     <th style={thStyle}>Score</th>
@@ -2316,7 +2322,7 @@ export function LMSPage() {
                     <td colSpan={8} />
                   </tr>
                   {!content.length ? (
-                    <tr><td colSpan={9} style={{ textAlign: 'center', padding: 40, color: '#94A3B8', fontSize: 13 }}>No curriculum content in this section yet.</td></tr>
+                    <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40, color: '#94A3B8', fontSize: 13 }}>No curriculum content in this section yet.</td></tr>
                   ) : (
                     <>
                       {topLevel.map(item => renderResultRow(item, 0))}
@@ -3125,7 +3131,7 @@ export function LMSPage() {
     const menuItemStyle: React.CSSProperties = { display: 'block', width: '100%', textAlign: 'left', padding: '9px 14px', background: 'none', border: 'none', fontSize: 11, fontWeight: 700, color: '#1A365E', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }
     const thStyle: React.CSSProperties = { fontSize: 9, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '.05em', padding: '8px 10px' }
     function statusBtnStyle(active?: boolean): React.CSSProperties {
-      return { width: 26, height: 26, borderRadius: 6, border: `1px solid ${active ? '#1A365E' : '#E4EAF2'}`, background: active ? '#1A365E' : '#fff', color: active ? '#fff' : '#B7C3D6', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }
+      return { width: 30, height: 30, background: 'none', border: 'none', cursor: 'pointer', fontSize: 19, fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0, opacity: active ? 1 : 0.5 }
     }
 
     function renderContentRow(item: LMSContent, depth: number, orderField: 'order' | 'moduleOrder', dragScope = '') {
@@ -3182,9 +3188,8 @@ export function LMSPage() {
               <input type="date" value={item.targetDate ? item.targetDate.slice(0, 10) : ''} onChange={e => patchContent(item.id, { targetDate: e.target.value || null })}
                 style={{ border: '1px solid #E4EAF2', borderRadius: 6, fontSize: 11, padding: '3px 5px', color: '#1A365E', fontFamily: 'inherit', width: 118 }} />
             </td>
-            <td style={{ padding: '8px 6px', textAlign: 'center' }}><button onClick={() => patchContent(item.id, { locked: !item.locked })} title="Locked" style={statusBtnStyle(item.locked)}>🔒</button></td>
-            <td style={{ padding: '8px 6px', textAlign: 'center' }}><button onClick={() => patchContent(item.id, { hidden: !item.hidden })} title="Hidden from students" style={statusBtnStyle(item.hidden)}>🚫</button></td>
-            <td style={{ padding: '8px 6px', textAlign: 'center' }}><button onClick={() => patchContent(item.id, { excludedFromGrade: !item.excludedFromGrade })} title="Excluded from grade" style={statusBtnStyle(item.excludedFromGrade)}>📄</button></td>
+            <td style={{ padding: '8px 6px', textAlign: 'center' }}><button onClick={() => patchContent(item.id, { locked: !item.locked })} title="Locked" style={statusBtnStyle(item.locked)}>{item.locked ? '🔒' : '🔓'}</button></td>
+            <td />
             <td style={{ padding: '8px 10px', textAlign: 'right', position: 'relative' }}>
               <button onClick={() => setCurriculumMenuOpenId(prev => prev === item.id ? null : item.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#5A7290', fontFamily: 'inherit' }}>⋯</button>
               {curriculumMenuOpenId === item.id && (
@@ -3222,7 +3227,8 @@ export function LMSPage() {
                     />
                   )}
                 </td>
-                <td colSpan={3} />
+                <td />
+                <td />
                 <td />
               </tr>
             )
@@ -3236,7 +3242,7 @@ export function LMSPage() {
     function renderSectionLabelRow(icon: string, label: string, depth: number, key: string) {
       return (
         <tr key={key}>
-          <td colSpan={6} style={{ padding: '10px 10px 2px', paddingLeft: 12 + depth * 26 }}>
+          <td colSpan={5} style={{ padding: '10px 10px 2px', paddingLeft: 12 + depth * 26 }}>
             <span style={{ fontSize: 9, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '.08em', display: 'inline-flex', alignItems: 'center', gap: 4 }}>{icon} {label}</span>
           </td>
         </tr>
@@ -3246,15 +3252,23 @@ export function LMSPage() {
     // Show It / Prove It / Master It point at the same case-study record as Learn It (one
     // content row covers the whole fixed rubric), but each opens its own focused popup —
     // not the case-study modal — so its fields don't get lost among every other section's.
+    // Each still gets its own lock toggle (socraticLocked/omrLocked/presentationLocked)
+    // rather than sharing Learn It's `locked` field.
     function renderCarrierLinkRow(label: string, depth: number, carrierItem: LMSContent, key: string, sectionType: 'socratic' | 'omr' | 'presentation') {
+      const lockField = sectionType === 'socratic' ? 'socraticLocked' : sectionType === 'omr' ? 'omrLocked' : 'presentationLocked'
+      const isLocked = !!carrierItem[lockField]
       return (
         <tr key={key} style={{ borderBottom: '1px solid #F0F4FA' }}>
-          <td style={{ padding: '6px 10px', paddingLeft: 12 + (depth + 1) * 26 }} colSpan={6}>
+          <td style={{ padding: '6px 10px', paddingLeft: 12 + (depth + 1) * 26 }}>
             <button onClick={() => { setSectionModal({ type: sectionType, contentId: carrierItem.id }); setCurriculumMenuOpenId(null) }} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>
               <span style={{ fontSize: 14 }}>📋</span>
               <span style={{ fontSize: 11, color: '#5A7290' }}>{carrierItem.title}: {label}</span>
             </button>
           </td>
+          <td />
+          <td style={{ padding: '6px', textAlign: 'center' }}><button onClick={() => patchContent(carrierItem.id, { [lockField]: !isLocked })} title="Locked" style={statusBtnStyle(isLocked)}>{isLocked ? '🔒' : '🔓'}</button></td>
+          <td />
+          <td />
         </tr>
       )
     }
@@ -3262,14 +3276,19 @@ export function LMSPage() {
     // Master It's Discussion Board — opens the moderation view instead of SectionModal,
     // since it's a live thread to read/moderate, not settings to edit.
     function renderDiscussionLinkRow(depth: number, carrierItem: LMSContent, key: string) {
+      const isLocked = !!carrierItem.discussionLocked
       return (
         <tr key={key} style={{ borderBottom: '1px solid #F0F4FA' }}>
-          <td style={{ padding: '6px 10px', paddingLeft: 12 + (depth + 1) * 26 }} colSpan={6}>
+          <td style={{ padding: '6px 10px', paddingLeft: 12 + (depth + 1) * 26 }}>
             <button onClick={() => { setDiscussionBoardContentId(carrierItem.id); setCurriculumMenuOpenId(null) }} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>
               <span style={{ fontSize: 14 }}>💬</span>
               <span style={{ fontSize: 11, color: '#5A7290' }}>{carrierItem.title}: Discussion Board</span>
             </button>
           </td>
+          <td />
+          <td style={{ padding: '6px', textAlign: 'center' }}><button onClick={() => patchContent(carrierItem.id, { discussionLocked: !isLocked })} title="Locked" style={statusBtnStyle(isLocked)}>{isLocked ? '🔒' : '🔓'}</button></td>
+          <td />
+          <td />
         </tr>
       )
     }
@@ -3287,7 +3306,7 @@ export function LMSPage() {
 
           {renderSectionLabelRow('✅', 'Do It', depth - 1, `${dragScope}-do`)}
           {lessonItems.length === 0 ? (
-            <tr key={`${dragScope}-do-empty`}><td colSpan={6} style={{ padding: '4px 10px 8px', paddingLeft: 12 + depth * 26, fontSize: 11, color: '#94A3B8' }}>No lessons yet.</td></tr>
+            <tr key={`${dragScope}-do-empty`}><td colSpan={5} style={{ padding: '4px 10px 8px', paddingLeft: 12 + depth * 26, fontSize: 11, color: '#94A3B8' }}>No lessons yet.</td></tr>
           ) : (
             lessonItems.map(item => renderContentRow(item, depth, orderField, dragScope))
           )}
@@ -3340,7 +3359,7 @@ export function LMSPage() {
               <span style={{ fontSize: 12, fontWeight: 800, color: '#1A365E' }}>{u.title}</span>
             </div>
           </td>
-          <td colSpan={4} />
+          <td colSpan={3} />
           <td style={{ padding: '8px 10px', textAlign: 'right', position: 'relative' }}>
             <button onClick={() => setCurriculumMenuOpenId(prev => prev === menuKey ? null : menuKey)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#5A7290', fontFamily: 'inherit' }}>⋯</button>
             {curriculumMenuOpenId === menuKey && (
@@ -3410,15 +3429,11 @@ export function LMSPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid #E4EAF2', background: '#F7F9FC' }}>
-                <th rowSpan={2} style={{ ...thStyle, textAlign: 'left' }} />
-                <th rowSpan={2} style={{ ...thStyle, textAlign: 'center' }}>Target Date</th>
-                <th colSpan={3} style={{ ...thStyle, textAlign: 'center', borderBottom: '1px solid #E4EAF2' }}>Statuses</th>
-                <th rowSpan={2} style={thStyle} />
-              </tr>
-              <tr style={{ borderBottom: '1px solid #E4EAF2', background: '#F7F9FC' }}>
+                <th style={{ ...thStyle, textAlign: 'left' }} />
+                <th style={{ ...thStyle, textAlign: 'center' }}>Target Date</th>
                 <th style={{ ...thStyle, textAlign: 'center' }} title="Locked until prerequisite met">🔒</th>
-                <th style={{ ...thStyle, textAlign: 'center' }} title="Hidden from students">🚫</th>
-                <th style={{ ...thStyle, textAlign: 'center' }} title="Excluded from grade">📄</th>
+                <th style={thStyle} />
+                <th style={thStyle} />
               </tr>
             </thead>
             <tbody>
@@ -3429,7 +3444,7 @@ export function LMSPage() {
                     <span style={{ fontSize: 13, fontWeight: 900, color: '#1A365E' }}>{course.title}</span>
                   </div>
                 </td>
-                <td colSpan={4} />
+                <td colSpan={3} />
                 <td style={{ padding: '8px 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                   <button onClick={openAddUnit} title="Add Module" style={{ padding: '5px 9px', background: '#EEF3FF', color: '#1A365E', border: '1px solid #DDE6F0', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginRight: 6 }}>+ Module</button>
                   <button onClick={() => { setActiveCourseId(groupKey(course)); setModulePicker({ purpose: 'lesson', units: units.map(u => u.title) }) }} title="Do It — Add Lesson" style={{ padding: '5px 9px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginRight: 6 }}>✅ + Do It</button>
@@ -3440,7 +3455,7 @@ export function LMSPage() {
                 </td>
               </tr>
               {!content.length ? (
-                <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40, color: '#94A3B8', fontSize: 13 }}>No curriculum content yet. Add a module or item above.</td></tr>
+                <tr><td colSpan={5} style={{ textAlign: 'center', padding: 40, color: '#94A3B8', fontSize: 13 }}>No curriculum content yet. Add a module or item above.</td></tr>
               ) : (
                 <>
                   {topLevel.map(item => renderContentRow(item, 0, 'order'))}
@@ -5380,18 +5395,18 @@ export function LMSPage() {
                 return {
                   ...c,
                   title: groupId ? c.title : fields.title,
-                  description: groupId ? c.description : fields.description,
+                  description: fields.description,
                   subject: fields.subject,
                   gradeLevel: fields.gradeLevel,
                   creditHours: fields.creditHours,
                   requiredHours: fields.requiredHours,
                   passMark: fields.passMark,
-                  descriptionDocUrl: groupId ? c.descriptionDocUrl : fields.descriptionDocUrl,
-                  descriptionDocFileName: groupId ? c.descriptionDocFileName : fields.descriptionDocFileName,
-                  syllabusUrl: groupId ? c.syllabusUrl : fields.syllabusUrl,
-                  syllabusFileName: groupId ? c.syllabusFileName : fields.syllabusFileName,
-                  studentOrientationUrl: groupId ? c.studentOrientationUrl : fields.studentOrientationUrl,
-                  studentOrientationFileName: groupId ? c.studentOrientationFileName : fields.studentOrientationFileName,
+                  descriptionDocUrl: fields.descriptionDocUrl,
+                  descriptionDocFileName: fields.descriptionDocFileName,
+                  syllabusUrl: fields.syllabusUrl,
+                  syllabusFileName: fields.syllabusFileName,
+                  studentOrientationUrl: fields.studentOrientationUrl,
+                  studentOrientationFileName: fields.studentOrientationFileName,
                   updatedAt: new Date().toISOString(),
                 }
               })

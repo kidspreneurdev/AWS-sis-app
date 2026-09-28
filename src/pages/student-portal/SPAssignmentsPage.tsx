@@ -46,6 +46,7 @@ interface AssignmentRow {
   cohort: string
   maxScore: number | null
   studentIds: string[]
+  attachments: { name: string; url: string }[]
 }
 
 interface SubmissionRow {
@@ -101,7 +102,7 @@ export function SPAssignmentsPage() {
     async function loadAssignments() {
       const { data, error } = await supabase
         .from('at_assignments')
-        .select('id,title,type,subject,due_date,description,instructions,division,cohort,max_score,student_ids')
+        .select('id,title,type,subject,due_date,description,instructions,division,cohort,max_score,student_ids,attachments')
         .order('due_date')
       if (error) { console.error('AT assignments load error:', error); return }
       if (!data) return
@@ -117,6 +118,7 @@ export function SPAssignmentsPage() {
         cohort: (row.cohort as string) ?? '',
         maxScore: row.max_score == null ? null : Number(row.max_score),
         studentIds: (row.student_ids as string[] | null) ?? [],
+        attachments: (row.attachments as { name: string; url: string }[] | null) ?? [],
       }))
       // A student sees an assignment if they match ANY of its active targeting
       // criteria (division band / cohort / specific students) — see atTargeting.ts.
@@ -319,6 +321,15 @@ export function SPAssignmentsPage() {
               {(assignment.instructions || assignment.description) && (
                 <div style={{ marginTop: 8, fontSize: 16, color: '#3D5475', lineHeight: 1.6, background: '#F7F9FC', padding: '8px 12px', borderRadius: 7 }}>
                   {assignment.instructions || assignment.description}
+                </div>
+              )}
+              {assignment.attachments.length > 0 && (
+                <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {assignment.attachments.map(a => (
+                    <button key={a.url} onClick={() => void downloadUrl(a.url, a.name)} style={{ fontSize: 14, fontWeight: 700, color: '#1A365E', background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 7, cursor: 'pointer', padding: '6px 10px', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <Paperclip size={12} /> {a.name} <Download size={12} color="#059669" />
+                    </button>
+                  ))}
                 </div>
               )}
             </div>

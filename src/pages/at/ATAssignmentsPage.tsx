@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { supabase } from '@/lib/supabase'
-import { downloadUrl } from '@/lib/uploadFile'
+import { uploadFile, downloadUrl } from '@/lib/uploadFile'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
 import { useCohorts } from '@/hooks/useCohorts'
 import { RubricBuilder, rubricParse, rubricMaxPoints, rubricComputeScore, rubricScale, type Rubric } from '@/components/shared/RubricBuilder'
@@ -39,8 +39,11 @@ const EMPTY_FORM = {
   gradingScale: 'Points', maxScore: '',
   dateAssigned: new Date().toISOString().slice(0, 10), dueDate: '', dueTime: '',
   instructions: '', rubric: '', studentIds: [] as string[],
+  attachments: [] as Attachment[],
   divisionActive: false, cohortActive: false, studentsActive: false,
 }
+
+interface Attachment { name: string; url: string }
 
 // ── RubricScoringModal ────────────────────────────────────────────────────────
 function RubricScoringModal({ rubric, assignMax, studentName, existingScores, onClose, onSave }: {
@@ -116,7 +119,7 @@ function RubricScoringModal({ rubric, assignMax, studentName, existingScores, on
 interface Assignment {
   id: string; title: string; type: string; subject: string; division: string; cohort: string
   gradingScale: string; maxScore: number | null; dateAssigned: string; dueDate: string; dueTime: string
-  instructions: string; rubric: string; studentIds: string[]
+  instructions: string; rubric: string; studentIds: string[]; attachments: Attachment[]
 }
 interface Submission { id: string; assignment_id: string; student_id: string; status: string; score: number | null; teacher_note: string; file_url: string; link_url: string; student_note: string; submitted_date: string }
 interface Student { id: string; fullName: string; grade: string; cohort: string }
@@ -135,6 +138,7 @@ function AssignModal({ item, cohorts, students, onClose, onSave }: {
     maxScore: item.maxScore ? String(item.maxScore) : '',
     dateAssigned: item.dateAssigned, dueDate: item.dueDate, dueTime: item.dueTime ?? '',
     instructions: item.instructions, rubric: item.rubric ?? '', studentIds: item.studentIds ?? [],
+    attachments: item.attachments ?? [],
     divisionActive: !!(item.division && item.division !== 'All'),
     cohortActive: !!item.cohort,
     studentsActive: (item.studentIds ?? []).length > 0,
@@ -143,11 +147,33 @@ function AssignModal({ item, cohorts, students, onClose, onSave }: {
   const set = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }))
   const setBool = (k: string, v: boolean) => setForm(p => ({ ...p, [k]: v }))
   const setStudentIds = (ids: string[]) => setForm(p => ({ ...p, studentIds: ids }))
+  const [uploading, setUploading] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
+
+  async function addFiles(files: FileList | null) {
+    if (!files?.length) return
+    setUploading(true)
+    try {
+      const added: Attachment[] = []
+      for (const f of Array.from(files)) {
+        const url = await uploadFile(`at-assignments/${Date.now()}_${f.name}`, f)
+        added.push({ name: f.name, url })
+      }
+      setForm(p => ({ ...p, attachments: [...p.attachments, ...added] }))
+    } catch (e) {
+      console.error('Attachment upload error:', e)
+      alert('Upload failed. Please try again.')
+    } finally {
+      setUploading(false)
+    }
+  }
+  const removeAttachment = (i: number) => setForm(p => ({ ...p, attachments: p.attachments.filter((_, j) => j !== i) }))
   const inp: React.CSSProperties = { width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #E4EAF2', fontSize: 13, color: '#1A365E', background: '#fff', boxSizing: 'border-box', fontFamily: 'inherit' }
   const lbl: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: '#7A92B0', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }
 
   async function handleSave() {
     if (!form.title || !form.dueDate) { alert('Title and due date are required'); return }
+    if (uploading) { alert('Please wait for the file upload to finish'); return }
     setSaving(true); await onSave(form, item?.id); setSaving(false); onClose()
   }
 
@@ -227,7 +253,28 @@ function AssignModal({ item, cohorts, students, onClose, onSave }: {
           </div>
 
           {/* Row 6: Instructions */}
-          <div><label style={lbl}>Instructions / Notes</label><textarea value={form.instructions} onChange={e => set('instructions', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} placeholder="Full task description..." /></div>
+          <div><label style={lbl}>Instructions / Notes</label><textarea value={form.instructions} onChange={e => set('instructions', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} placeholder="Full task description..." />
+            <label
+              onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={e => { e.preventDefault(); setDragOver(false); void addFiles(e.dataTransfer.files) }}
+              style={{ marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 14px', borderRadius: 8, border: `1.5px dashed ${dragOver ? '#1A365E' : '#C9D5E5'}`, background: dragOver ? '#EEF3FA' : '#F7F9FC', color: '#3D5475', fontSize: 12, fontWeight: 600, cursor: uploading ? 'progress' : 'pointer', transition: 'background-color 150ms ease, border-color 150ms ease' }}
+            >
+              <input type="file" multiple disabled={uploading} onChange={e => { void addFiles(e.target.files); e.target.value = '' }} style={{ display: 'none' }} />
+              {uploading ? '⏳ Uploading…' : <>📎 Attach files <span style={{ fontWeight: 500, color: '#7A92B0' }}>— click or drag &amp; drop</span></>}
+            </label>
+            {form.attachments.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+                {form.attachments.map((a, i) => (
+                  <div key={a.url} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', border: '1px solid #E4EAF2', borderRadius: 8, fontSize: 12, color: '#1A365E' }}>
+                    <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📄 {a.name}</span>
+                    <button type="button" onClick={() => void downloadUrl(a.url, a.name)} style={{ fontSize: 11, fontWeight: 700, color: '#059669', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>⬇ Download</button>
+                    <button type="button" onClick={() => removeAttachment(i)} aria-label={`Remove ${a.name}`} style={{ fontSize: 11, fontWeight: 700, color: '#D61F31', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Row 7: Rubric Builder */}
           <div>
@@ -284,6 +331,7 @@ export function ATAssignmentsPage() {
       instructions: (r.instructions as string) ?? (r.description as string) ?? '',
       rubric: (r.rubric as string) ?? '',
       studentIds: (r.student_ids as string[] | null) ?? [],
+      attachments: (r.attachments as Attachment[] | null) ?? [],
     })))
     if (sub) setSubmissions(sub.map((r: Record<string, unknown>) => ({
       id: r.id as string,
@@ -340,6 +388,7 @@ export function ATAssignmentsPage() {
       instructions: form.instructions,
       rubric: form.rubric || null,
       student_ids: form.studentsActive && form.studentIds.length ? form.studentIds : null,
+      attachments: form.attachments,
     }
     if (id) await supabase.from('at_assignments').update(payload).eq('id', id)
     else {

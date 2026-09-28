@@ -305,6 +305,7 @@ export function BlocksPage() {
   const [students, setStudents] = useState<RosterStudent[]>([])
   const [modal, setModal] = useState<{ open: boolean; block: TpmsBlock | null }>({ open: false, block: null })
   const [filterCoachId, setFilterCoachId] = useState('')
+  const [filterCohort, setFilterCohort] = useState('')
 
   const studentName = useMemo(() => Object.fromEntries(students.map(s => [s.id, s.name])), [students])
   const coachName = useMemo(() => Object.fromEntries(coaches.map(c => [c.id, c.name])), [coaches])
@@ -358,11 +359,20 @@ export function BlocksPage() {
   const cohortSet = useMemo(() => new Set(blocks.map(b => b.cohort).filter(Boolean)), [blocks])
   const coachSet = useMemo(() => new Set(blocks.flatMap(b => b.coachIds).filter(Boolean)), [blocks])
 
-  // Filter by success coach — narrows the grid and cards below to one coach's blocks.
+  // Filter by success coach and/or cohort — narrows the grid and cards below.
+  // A cohort match includes individual-student blocks where any assigned student is in that cohort.
+  const studentCohort = useMemo(() => Object.fromEntries(students.map(s => [s.id, s.cohort])), [students])
   const filteredBlocks = useMemo(
-    () => (filterCoachId ? blocks.filter(b => b.coachIds.includes(filterCoachId)) : blocks),
-    [blocks, filterCoachId],
+    () => blocks.filter(b =>
+      (!filterCoachId || b.coachIds.includes(filterCoachId)) &&
+      (!filterCohort || (b.assignmentType === 'student'
+        ? b.studentIds.some(id => studentCohort[id] === filterCohort)
+        : b.cohort === filterCohort)),
+    ),
+    [blocks, filterCoachId, filterCohort, studentCohort],
   )
+  const filterLabel = [filterCohort, filterCoachId ? coachName[filterCoachId] ?? '' : ''].filter(Boolean).join(' · ')
+  const isFiltered = !!(filterCoachId || filterCohort)
 
   // Group by assignment target for cards (cohort name, or individual students)
   const groupLabel = (b: TpmsBlock) => {
@@ -389,6 +399,13 @@ export function BlocksPage() {
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <div>
+            <label style={{ ...lbl, marginBottom: 2 }}>👥 Filter by Cohort</label>
+            <select value={filterCohort} onChange={e => setFilterCohort(e.target.value)} style={{ ...inp, minWidth: 170 }}>
+              <option value="">— All Cohorts —</option>
+              {cohorts.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div>
             <label style={{ ...lbl, marginBottom: 2 }}>🟢 Filter by Coach</label>
             <select value={filterCoachId} onChange={e => setFilterCoachId(e.target.value)} style={{ ...inp, minWidth: 190 }}>
               <option value="">— All Coaches —</option>
@@ -413,7 +430,7 @@ export function BlocksPage() {
       {filteredBlocks.length > 0 && (
         <div style={card}>
           <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '12px 16px' }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: '#fff' }}>📅 Weekly Block Overview{filterCoachId ? ` · ${coachName[filterCoachId] ?? ''}` : ''}</div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: '#fff' }}>📅 Weekly Block Overview{filterLabel ? ` · ${filterLabel}` : ''}</div>
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, minWidth: 620 }}>
@@ -455,8 +472,8 @@ export function BlocksPage() {
       {filteredBlocks.length === 0 ? (
         <div style={{ ...card, padding: 48, textAlign: 'center', color: '#7A92B0' }}>
           <div style={{ fontSize: 52, marginBottom: 14 }}>🟦</div>
-          <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E', marginBottom: 8 }}>{filterCoachId ? 'No blocks for this coach' : 'No blocks configured yet'}</div>
-          <div style={{ fontSize: 12, maxWidth: 360, margin: '0 auto' }}>{filterCoachId ? 'This coach isn\'t assigned to any blocks yet.' : 'Create blocks for each cohort and assign success coaches and subjects. The timetable grid will appear here.'}</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E', marginBottom: 8 }}>{isFiltered ? 'No matching blocks' : 'No blocks configured yet'}</div>
+          <div style={{ fontSize: 12, maxWidth: 360, margin: '0 auto' }}>{isFiltered ? 'No blocks match the selected cohort / coach filters.' : 'Create blocks for each cohort and assign success coaches and subjects. The timetable grid will appear here.'}</div>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

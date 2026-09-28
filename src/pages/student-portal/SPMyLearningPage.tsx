@@ -1508,10 +1508,18 @@ export function SPMyLearningPage() {
 
     // Curriculum belongs to the Course (group), shared by every section — load content by group_id.
     const groupIds = [...new Set((cData ?? []).map((r: Record<string, unknown>) => (r.group_id as string) ?? (r.id as string)).filter(Boolean))]
-    const { data: coData } = await supabase.from('lms_content').select('*')
-      .in('course_id', groupIds).order('unit_order').order('order_idx')
+    const [{ data: coData }, { data: grData }] = await Promise.all([
+      supabase.from('lms_content').select('*')
+        .in('course_id', groupIds).order('unit_order').order('order_idx'),
+      supabase.from('lms_course_groups').select('id, title').in('id', groupIds),
+    ])
 
-    const mappedCourses: LMSCourse[] = (cData ?? []).map(rowToLMSCourse)
+    // Students should see the Course name, not the section name — swap in the group title.
+    const groupTitleById = new Map<string, string>((grData ?? []).map((g: { id: string; title: string | null }) => [g.id, g.title ?? '']))
+    const mappedCourses: LMSCourse[] = (cData ?? []).map(rowToLMSCourse).map((course) => {
+      const groupTitle = course.groupId ? groupTitleById.get(course.groupId) : undefined
+      return groupTitle ? { ...course, title: groupTitle } : course
+    })
 
     const publishedCourses = mappedCourses.filter((course) => course.status?.toLowerCase() === 'published')
 

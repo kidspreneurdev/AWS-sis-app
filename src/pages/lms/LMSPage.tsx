@@ -4294,6 +4294,10 @@ export function LMSPage() {
     const [moduleTitle] = useState(item?.moduleTitle ?? '')
     const [slideCount, setSlideCount] = useState(String(item?.slideCount ?? ''))
     const [step, setStep] = useState<1 | 2>(1)
+    // Non-null while save() is running — uploads can take a while (videos especially), so the
+    // footer shows what's happening and the buttons are locked against double-submits.
+    const [savingStatus, setSavingStatus] = useState<string | null>(null)
+    const closeModal = () => { if (!savingStatus) setShowLessonModal(false) }
 
     // Mastery questions state
     interface MasteryQuestion { q: string; type: 'mcq' | 'short'; opts: string[]; ans: number }
@@ -4315,7 +4319,12 @@ export function LMSPage() {
     }
 
     const save = async () => {
+      if (savingStatus) return
       if (!title.trim()) { alert('Title is required'); return }
+      setSavingStatus('Saving…')
+      try { await doSave() } finally { setSavingStatus(null) }
+    }
+    const doSave = async () => {
       let finalUnit = unitTitle
       if (unitTitle === '__new__') {
         if (!newUnitTitle.trim()) { alert('Enter a module title'); return }
@@ -4323,23 +4332,25 @@ export function LMSPage() {
       }
       let finalUrl = url.trim()
       if (contentFile) {
+        setSavingStatus(`Uploading ${contentFile.name}…`)
         try {
           const path = `lms-content/${Date.now()}_${contentFile.name}`
           finalUrl = await uploadFile(path, contentFile)
-        } catch {
-          alert('File upload failed. Please try again.')
+        } catch (e) {
+          alert('File upload failed: ' + (e instanceof Error ? e.message : String(e)))
           return
         }
       }
       let finalVideoUrl = item?.videoUrl
       let finalVideoFileName = videoFileName
       if (videoFile) {
+        setSavingStatus(`Uploading video (${(videoFile.size / 1048576).toFixed(0)} MB) — keep this open…`)
         try {
           const path = `lms-content-video/${Date.now()}_${videoFile.name}`
           finalVideoUrl = await uploadFile(path, videoFile)
           finalVideoFileName = videoFile.name
-        } catch {
-          alert('Video upload failed. Please try again.')
+        } catch (e) {
+          alert('Video upload failed: ' + (e instanceof Error ? e.message : String(e)))
           return
         }
       } else if (!videoFileName) {
@@ -4392,19 +4403,20 @@ export function LMSPage() {
       const orderMap = new Map(siblings.map((c, i) => [c.id, i]))
       const renumbered = content.map(c => orderMap.has(c.id) ? { ...c, [field]: orderMap.get(c.id) as number } : c)
 
-      persist({ ...store, content: renumbered })
+      setSavingStatus('Saving lesson…')
+      await persist({ ...store, content: renumbered })
       setShowLessonModal(false)
     }
     const STEP_LABELS: Record<1 | 2, string> = { 1: 'Tutorial', 2: 'Mastery Test' }
     const canLeaveStep1 = title.trim().length > 0
 
     return (
-      <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 400, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto', backdropFilter: 'blur(4px)' }} onClick={e => { if (e.target === e.currentTarget) setShowLessonModal(false) }}>
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 400, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto', backdropFilter: 'blur(4px)' }} onClick={e => { if (e.target === e.currentTarget) closeModal() }}>
         <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 680, maxHeight: '94vh', overflowY: 'auto', boxShadow: '0 24px 60px rgba(0,0,0,.3)', margin: 'auto' }}>
           <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '18px 24px', borderRadius: '18px 18px 0 0', position: 'sticky', top: 0, zIndex: 10 }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
               <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>📄 {isNew ? 'New Lesson' : 'Edit Lesson'}</div>
-              <button onClick={() => setShowLessonModal(false)} title="Close" style={modalCloseBtnOnDark}>✕</button>
+              <button onClick={closeModal} disabled={!!savingStatus} title="Close" style={modalCloseBtnOnDark}>✕</button>
             </div>
             <div style={{ display: 'flex', gap: 6 }}>
               {([1, 2] as const).map(s => (
@@ -4585,8 +4597,9 @@ export function LMSPage() {
               <div>
                 {step > 1 && <button onClick={() => setStep(prev => (prev - 1) as 1 | 2)} style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>← Back</button>}
               </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => setShowLessonModal(false)} style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {savingStatus && <span role="status" style={{ fontSize: 11, color: '#7A92B0', fontWeight: 600 }}>{savingStatus}</span>}
+                <button onClick={closeModal} disabled={!!savingStatus} style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: savingStatus ? 'not-allowed' : 'pointer', opacity: savingStatus ? 0.5 : 1, fontFamily: 'inherit' }}>Cancel</button>
                 {step < 2 ? (
                   <button
                     onClick={() => { if (step === 1 && !canLeaveStep1) { alert('Title is required'); return } setStep(prev => (prev + 1) as 1 | 2) }}
@@ -4595,7 +4608,7 @@ export function LMSPage() {
                     Next →
                   </button>
                 ) : (
-                  <button onClick={save} style={{ padding: '9px 20px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>💾 Save Lesson</button>
+                  <button onClick={save} disabled={!!savingStatus} style={{ padding: '9px 20px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: savingStatus ? 'wait' : 'pointer', opacity: savingStatus ? 0.7 : 1, fontFamily: 'inherit' }}>{savingStatus ? '⏳ Saving…' : '💾 Save Lesson'}</button>
                 )}
               </div>
             </div>

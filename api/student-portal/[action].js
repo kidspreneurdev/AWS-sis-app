@@ -1309,6 +1309,103 @@ async function lmsSubmitOmrQuiz(req, res, adminClient) {
   return json(res, 200, { score: pct, correct, total, passed, attempts, maxAttempts, subtotal: bestSubtotal, weight })
 }
 
+/** Midterm Review — one block (Text Box / OMR Test / File Upload) of an admin-built
+ *  review between two modules. Each submit is its own lms_submissions row (kind
+ *  'midterm_review'); `note` is JSON carrying the blockId so a review's many blocks
+ *  can be told apart. Text Box and File Upload accept one submission; OMR Test is
+ *  auto-graded like Prove It and allows retakes up to the block's limit. */
+async function lmsSubmitMidtermBlock(req, res, adminClient) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST')
+    return json(res, 405, { error: 'Method not allowed' })
+  }
+
+  const studentDbId = requireStudentToken(req, res, json)
+  if (!studentDbId) return
+
+  const { contentId, blockId, text, fileUrl, fileName, answers } = req.body || {}
+  if (typeof contentId !== 'string' || !contentId) return json(res, 400, { error: 'contentId is required.' })
+  if (typeof blockId !== 'string' || !blockId) return json(res, 400, { error: 'blockId is required.' })
+
+  const { data: content, error: contentError } = await adminClient
+    .from('lms_content')
+    .select('id,course_id,extra')
+    .eq('id', contentId)
+    .single()
+  if (contentError || !content) return json(res, 404, { error: 'Midterm Review not found.' })
+
+  const extra = content.extra || {}
+  if (extra.isMidtermReview !== true) return json(res, 400, { error: 'This item is not a Midterm Review.' })
+  if (extra.locked === true) return json(res, 403, { error: 'This Midterm Review has been locked by your teacher.' })
+  let sections = []
+  try { sections = JSON.parse(extra.midtermSectionsJson || '[]') } catch { sections = [] }
+  const block = sections.flatMap((s) => (Array.isArray(s.blocks) ? s.blocks : [])).find((b) => b.id === blockId)
+  if (!block) return json(res, 404, { error: 'This part of the review no longer exists. Please refresh.' })
+
+  const { data: prior, error: priorError } = await adminClient
+    .from('lms_submissions')
+    .select('note')
+    .eq('student_id', studentDbId)
+    .eq('content_id', contentId)
+    .eq('kind', 'midterm_review')
+  if (priorError) return json(res, 500, { error: priorError.message })
+  const priorForBlock = (prior ?? []).filter((r) => {
+    try { return JSON.parse(r.note || '{}').blockId === blockId } catch { return false }
+  })
+
+  let note
+  let linkUrl = null
+  let result = {}
+  if (block.kind === 'text') {
+    if (priorForBlock.length) return json(res, 409, { error: 'You have already submitted this response.' })
+    if (typeof text !== 'string' || !text.trim()) return json(res, 400, { error: 'Write a response before submitting.' })
+    note = { blockId, blockKind: 'text', text: text.trim() }
+  } else if (block.kind === 'file') {
+    if (priorForBlock.length) return json(res, 409, { error: 'You have already uploaded a file for this item.' })
+    if (typeof fileUrl !== 'string' || !fileUrl.trim()) return json(res, 400, { error: 'fileUrl is required.' })
+    note = { blockId, blockKind: 'file', fileName: typeof fileName === 'string' ? fileName : null }
+    linkUrl = fileUrl.trim()
+  } else if (block.kind === 'omr') {
+    if (!answers || typeof answers !== 'object') return json(res, 400, { error: 'answers is required.' })
+    const questions = Array.isArray(block.questions) ? block.questions : []
+    if (!questions.length) return json(res, 400, { error: 'No questions have been configured for this test yet.' })
+    const maxAttempts = Number(block.retakes ?? 3)
+    if (priorForBlock.length >= maxAttempts) return json(res, 409, { error: 'No attempts remaining.' })
+    const passMark = Number(block.passMark ?? 80)
+    const mcq = questions.filter((q) => (q.type ?? 'mcq') !== 'short')
+    let correct = 0
+    mcq.forEach((q) => { if (answers[questions.indexOf(q)] === q.ans) correct++ })
+    const total = mcq.length
+    const score = total > 0 ? Math.round((correct / total) * 100) : 100
+    const passed = score >= passMark
+    const attempt = priorForBlock.length + 1
+    note = { blockId, blockKind: 'omr', score, correct, total, passed, attempt, answers }
+    result = { score, correct, total, passed, attempts: attempt, maxAttempts }
+  } else {
+    return json(res, 400, { error: 'Unknown block type.' })
+  }
+
+  const { data: submission, error: insertError } = await adminClient
+    .from('lms_submissions')
+    .insert({
+      student_id: studentDbId,
+      course_id: content.course_id,
+      content_id: contentId,
+      kind: 'midterm_review',
+      note: JSON.stringify(note),
+      link_url: linkUrl,
+      submitted_at: new Date().toISOString(),
+    })
+    .select('id,submitted_at,note,link_url')
+    .single()
+  if (insertError || !submission) return json(res, 500, { error: 'Failed to submit. Please try again.' })
+
+  return json(res, 200, {
+    ...result,
+    submission: { contentId, kind: 'midterm_review', note: submission.note, linkUrl: submission.link_url, submittedAt: submission.submitted_at },
+  })
+}
+
 async function listMyRecords(req, res, adminClient) {
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET')
@@ -1745,6 +1842,7 @@ const ACTIONS = {
   'lms-get-my-submissions': lmsGetMySubmissions,
   'lms-submit-omr-quiz': lmsSubmitOmrQuiz,
   'lms-get-my-progression-status': lmsGetMyProgressionStatus,
+  'lms-submit-midterm-block': lmsSubmitMidtermBlock,
 }
 
 export default async function handler(req, res) {

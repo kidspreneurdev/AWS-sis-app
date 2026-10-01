@@ -13,7 +13,8 @@ import {
   loadLMS, saveLMS, loadLMSFromDB, deleteLMSCourse, deleteLMSCourseGroup, deleteLMSContent, deleteLMSEnrolment,
   lmsId, fmtTime, hasMasteryBool, hasAssignBool, isActiveBool,
   lmsCompositeScore, lmsCourseComposite, gradeLabel,
-  SUBJECT_COLORS, SUBJECTS, GRADE_LEVELS, TYPE_ICONS,
+  SUBJECT_COLORS, SUBJECTS, GRADE_LEVELS, TYPE_ICONS, isMidtermReview, parseMidtermSections,
+  type MidtermSection, type MidtermBlock,
   type LMSCourse, type LMSContent, type LMSEnrolment, type LMSProgress, type LMSStore, type LMSCourseGroup
 } from './lmsStore'
 import { CASE_STUDY_RUBRIC, SCORE_COMPONENT_TYPES, categorySubtotalOf, getEffectiveRubric, finalGrade, DEFAULT_PRESENTATION_BRIEF, type ScoreComponentType, type RubricCategory, type RubricOverrides } from '@/lib/lms/caseStudyRubric'
@@ -1126,6 +1127,10 @@ export function LMSPage() {
   // / Master It buttons — units is captured at click time (see openSectionPicker) since
   // this state is top-level and doesn't have the per-course `units` list in scope.
   const [modulePicker, setModulePicker] = useState<{ purpose: 'lesson' | 'caseStudy'; units: string[] } | null>(null)
+  // Midterm Review builder — contentId null = creating a new one; afterUnit preselects
+  // which module it's placed after (from a module's "⋯" menu).
+  const [midtermModal, setMidtermModal] = useState<{ courseId: string; contentId: string | null; afterUnit?: string } | null>(null)
+  const [midtermResponsesId, setMidtermResponsesId] = useState<string | null>(null)
   const [showEnrolModal, setShowEnrolModal] = useState(false)
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null)
   const [promptDialog, setPromptDialog] = useState<PromptDialogState | null>(null)
@@ -1315,7 +1320,7 @@ export function LMSPage() {
     bucket: 'active' | 'completed' | 'dropped'
   }
   function calcStudentCourseStats(sid: string, course: LMSCourse, enrol: LMSEnrolment | undefined): StuCourseStat {
-    const content = store.content.filter(x => x.courseId === groupKey(course))
+    const content = store.content.filter(x => x.courseId === groupKey(course) && !isMidtermReview(x))
     const myProg = store.progress.filter(p => p.courseId === groupKey(course) && p.studentId === sid)
     const comp = myProg.filter(p => p.status === 'completed').length
     const pct = content.length ? Math.round(comp / content.length * 100) : 0
@@ -1489,7 +1494,7 @@ export function LMSPage() {
             {Object.values(grouped).map(g => {
               const course = store.courseGroups.find(x => x.id === g.courseId)
               const stu = students.find(s => s.id === g.studentId)
-              const total = store.content.filter(x => x.courseId === g.courseId).length
+              const total = store.content.filter(x => x.courseId === g.courseId && !isMidtermReview(x)).length
               const completed = g.items.filter(p => p.status === 'completed').length
               const pct = total ? Math.round(completed / total * 100) : 0
               const pCol = pct >= 80 ? '#059669' : pct >= 40 ? '#D97706' : '#D61F31'
@@ -1534,7 +1539,7 @@ export function LMSPage() {
       totalEnrollments += enrolledIds.size
       const courseProg = store.progress.filter(p => p.courseId === groupKey(co))
       const timeMins = courseProg.reduce((s, p) => s + (p.timeSpentMins || 0), 0)
-      const content = store.content.filter(x => x.courseId === groupKey(co))
+      const content = store.content.filter(x => x.courseId === groupKey(co) && !isMidtermReview(x))
       const creditsEarned = [...enrolledIds].reduce((sum, sid) => {
         const myProg = courseProg.filter(p => p.studentId === sid)
         const comp = myProg.filter(p => p.status === 'completed').length
@@ -1688,7 +1693,7 @@ export function LMSPage() {
       const enrollCount = enrolledIds.size
       const courseProg = store.progress.filter(p => p.courseId === groupKey(co))
       const timeMins = courseProg.reduce((s, p) => s + (p.timeSpentMins || 0), 0)
-      const content = store.content.filter(x => x.courseId === groupKey(co))
+      const content = store.content.filter(x => x.courseId === groupKey(co) && !isMidtermReview(x))
       const creditsEarned = [...enrolledIds].reduce((sum, sid) => {
         const myProg = courseProg.filter(p => p.studentId === sid)
         const comp = myProg.filter(p => p.status === 'completed').length
@@ -2137,7 +2142,7 @@ export function LMSPage() {
     ))
     const stat = calcStudentCourseStats(sid, course, enrol)
     const passMark = course.passMark || 80
-    const content = store.content.filter(x => x.courseId === groupKey(course))
+    const content = store.content.filter(x => x.courseId === groupKey(course) && !isMidtermReview(x))
     const myProg = store.progress.filter(p => p.courseId === groupKey(course) && p.studentId === sid)
     const topLevel = content.filter(x => !x.unitTitle).sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
     const unitTitles = [...new Set(content.filter(x => x.unitTitle).map(x => x.unitTitle as string))]
@@ -2366,7 +2371,7 @@ export function LMSPage() {
         <div style={{ textAlign: 'center', padding: 60, color: '#94A3B8' }}>No courses yet.</div>
       </div>
     )
-    const content = store.content.filter(x => x.courseId === groupKey(course))
+    const content = store.content.filter(x => x.courseId === groupKey(course) && !isMidtermReview(x))
       .sort((a, b) => ((a.unitOrder ?? 0) - (b.unitOrder ?? 0)) || ((a.order ?? 0) - (b.order ?? 0)))
     const enrolments = store.enrolments.filter(en => en.courseId === course.id && isActiveBool(en.active))
     const enrolledIds = new Set<string>()
@@ -2975,6 +2980,9 @@ export function LMSPage() {
       const items = content.filter(x => x.unitTitle === t).sort((a, b) => (a.moduleOrder ?? 0) - (b.moduleOrder ?? 0) || (a.order ?? 0) - (b.order ?? 0))
       return { title: t, unitOrder: items[0]?.unitOrder ?? 0, items }
     }).sort((a, b) => a.unitOrder - b.unitOrder)
+    // A Midterm Review is its own "unit" (so it orders/drags among modules), but it's
+    // not a module — keep it out of anything that asks "which module?".
+    const moduleUnits = units.filter(u => !u.items.some(isMidtermReview))
 
     function isExpanded(key: string) { return curriculumExpanded[key] !== false }
     function toggleExpanded(key: string) { setCurriculumExpanded(prev => ({ ...prev, [key]: !isExpanded(key) })) }
@@ -3367,11 +3375,107 @@ export function LMSPage() {
                 <button onClick={() => { openAddItem(u.title); setCurriculumMenuOpenId(null) }} style={menuItemStyle}>+ Add Topic</button>
                 <button onClick={() => { renameUnit(u.title); setCurriculumMenuOpenId(null) }} style={menuItemStyle}>✏️ Rename Module</button>
                 <button onClick={() => { setModuleOrder(u.title); setCurriculumMenuOpenId(null) }} style={menuItemStyle}>🔢 Module Order</button>
+                <button onClick={() => { setMidtermModal({ courseId: groupKey(course), contentId: null, afterUnit: u.title }); setCurriculumMenuOpenId(null) }} style={menuItemStyle}>📝 Add Midterm Review After</button>
                 <button onClick={() => { deleteUnit(u.title, u.items); setCurriculumMenuOpenId(null) }} style={{ ...menuItemStyle, color: '#D61F31', borderTop: '1px solid #F0F4FA' }}>🗑 Delete Module</button>
               </div>
             )}
           </td>
         </tr>
+      )
+    }
+
+    // Midterm Review — sits at module level between two modules. One row for the review
+    // itself (draggable among modules, same as a module folder), then a read-only outline
+    // of its sections and their blocks; any outline row opens the builder.
+    const MIDTERM_BLOCK_META: Record<MidtermBlock['kind'], { icon: string; label: string }> = {
+      text: { icon: '📝', label: 'Text Box' },
+      omr: { icon: '🔢', label: 'OMR Test' },
+      file: { icon: '📎', label: 'File Upload' },
+    }
+    function renderMidtermRows(u: { title: string; items: LMSContent[] }, item: LMSContent) {
+      const key = 'unit:' + u.title
+      const expanded = isExpanded(key)
+      const menuKey = 'midterm:' + item.id
+      const isDragging = curriculumDrag?.kind === 'unit' && curriculumDrag.id === u.title
+      const isDropTarget = curriculumDropTarget === u.title && curriculumDrag?.kind === 'unit' && curriculumDrag.id !== u.title
+      const sections = parseMidtermSections(item.midtermSectionsJson)
+      const openBuilder = () => { setMidtermModal({ courseId: groupKey(course), contentId: item.id }); setCurriculumMenuOpenId(null) }
+      return (
+        <>
+          <tr
+            onDragOver={(e: React.DragEvent) => {
+              if (curriculumDrag?.kind === 'unit') { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (curriculumDropTarget !== u.title) setCurriculumDropTarget(u.title) }
+            }}
+            onDrop={(e: React.DragEvent) => { e.preventDefault(); handleCurriculumDrop('unit', u.title, '') }}
+            style={{ background: '#FAF8FF', borderBottom: isDropTarget ? '2px solid #2563EB' : '1px solid #F0F4FA', opacity: isDragging ? 0.4 : 1 }}>
+            <td style={{ padding: '8px 10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span
+                  draggable
+                  onDragStart={(e: React.DragEvent) => {
+                    setCurriculumDrag({ kind: 'unit', id: u.title, scope: '' })
+                    e.dataTransfer.effectAllowed = 'move'
+                    const row = (e.currentTarget as HTMLElement).closest('tr')
+                    if (row) e.dataTransfer.setDragImage(row, 12, 12)
+                  }}
+                  onDragEnd={() => { setCurriculumDrag(null); setCurriculumDropTarget(null) }}
+                  title="Drag to reorder"
+                  style={{ color: '#B7C3D6', fontSize: 12, cursor: 'grab', userSelect: 'none' }}>⣿</span>
+                <button onClick={() => toggleExpanded(key)} style={{ width: 18, height: 18, border: '1px solid #E4EAF2', borderRadius: 4, background: '#fff', cursor: 'pointer', fontSize: 11, color: '#5A7290', padding: 0, lineHeight: 1 }}>{expanded ? '−' : '+'}</button>
+                <span style={{ fontSize: 15 }}>📝</span>
+                <button onClick={openBuilder} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 800, color: '#1A365E' }}>{item.title || 'Midterm Review'}</button>
+                <span style={{ fontSize: 9, fontWeight: 800, color: '#5B21B6', background: '#EDE9FE', borderRadius: 999, padding: '2px 7px', letterSpacing: '.05em', textTransform: 'uppercase' }}>Midterm Review</span>
+              </div>
+            </td>
+            <td style={{ padding: '8px 10px', textAlign: 'center' }}>
+              <input type="date" value={item.targetDate ? item.targetDate.slice(0, 10) : ''} onChange={e => patchContent(item.id, { targetDate: e.target.value || null })}
+                style={{ border: '1px solid #E4EAF2', borderRadius: 6, fontSize: 11, padding: '3px 5px', color: '#1A365E', fontFamily: 'inherit', width: 118 }} />
+            </td>
+            <td style={{ padding: '8px 6px', textAlign: 'center' }}><button onClick={() => patchContent(item.id, { locked: !item.locked })} title="Locked" style={statusBtnStyle(item.locked)}>{item.locked ? '🔒' : '🔓'}</button></td>
+            <td />
+            <td style={{ padding: '8px 10px', textAlign: 'right', position: 'relative' }}>
+              <button onClick={() => setCurriculumMenuOpenId(prev => prev === menuKey ? null : menuKey)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#5A7290', fontFamily: 'inherit' }}>⋯</button>
+              {curriculumMenuOpenId === menuKey && (
+                <div ref={curriculumMenuRef} style={{ position: 'absolute', right: 10, top: '100%', background: '#fff', border: '1px solid #E4EAF2', borderRadius: 10, boxShadow: '0 8px 24px rgba(26,54,94,.14)', minWidth: 160, zIndex: 30, overflow: 'hidden' }}>
+                  <button onClick={openBuilder} style={menuItemStyle}>✏️ Edit Review</button>
+                  <button onClick={() => { setMidtermResponsesId(item.id); setCurriculumMenuOpenId(null) }} style={menuItemStyle}>📥 View Responses</button>
+                  <button onClick={() => { setModuleOrder(u.title); setCurriculumMenuOpenId(null) }} style={menuItemStyle}>🔢 Position</button>
+                  <button onClick={() => deleteItem(item)} style={{ ...menuItemStyle, color: '#D61F31', borderTop: '1px solid #F0F4FA' }}>🗑 Delete Review</button>
+                </div>
+              )}
+            </td>
+          </tr>
+          {expanded && sections.length === 0 && (
+            <tr><td colSpan={5} style={{ padding: '6px 10px 8px', paddingLeft: 12 + 2 * 26, fontSize: 11, color: '#94A3B8' }}>No sections yet. <button onClick={openBuilder} style={{ background: 'none', border: 'none', padding: 0, color: '#2563EB', fontWeight: 700, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>Build this review</button></td></tr>
+          )}
+          {expanded && sections.map((sec, si) => (
+            <Fragment key={sec.id}>
+              {renderSectionLabelRow('§', `Section ${si + 1}`, 1, `${item.id}-sec-${sec.id}`)}
+              <tr style={{ borderBottom: '1px solid #F0F4FA' }}>
+                <td colSpan={5} style={{ padding: '6px 10px', paddingLeft: 12 + 2 * 26 }}>
+                  <button onClick={openBuilder} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0, textAlign: 'left' }}>
+                    <span style={{ fontSize: 14 }}>📋</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#1A365E' }}>{sec.title || 'Untitled section'}</span>
+                  </button>
+                </td>
+              </tr>
+              {sec.blocks.map(b => {
+                const meta = MIDTERM_BLOCK_META[b.kind]
+                const detail = b.kind === 'omr' ? `${b.questions.length} question${b.questions.length !== 1 ? 's' : ''}` : b.prompt
+                return (
+                  <tr key={b.id} style={{ borderBottom: '1px solid #F0F4FA' }}>
+                    <td colSpan={5} style={{ padding: '6px 10px', paddingLeft: 12 + 3 * 26 }}>
+                      <button onClick={openBuilder} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0, textAlign: 'left', maxWidth: '100%' }}>
+                        <span style={{ fontSize: 14 }}>{meta.icon}</span>
+                        <span style={{ fontSize: 11, color: '#5A7290', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{meta.label}{detail ? `: ${detail}` : ''}</span>
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
+            </Fragment>
+          ))}
+        </>
       )
     }
 
@@ -3447,8 +3551,9 @@ export function LMSPage() {
                 <td colSpan={3} />
                 <td style={{ padding: '8px 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                   <button onClick={openAddUnit} title="Add Module" style={{ padding: '5px 9px', background: '#EEF3FF', color: '#1A365E', border: '1px solid #DDE6F0', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginRight: 6 }}>+ Module</button>
-                  <button onClick={() => { setActiveCourseId(groupKey(course)); setModulePicker({ purpose: 'lesson', units: units.map(u => u.title) }) }} title="Do It — Add Lesson" style={{ padding: '5px 9px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginRight: 6 }}>✅ + Do It</button>
-                  <button onClick={() => { setActiveCourseId(groupKey(course)); setModulePicker({ purpose: 'caseStudy', units: units.map(u => u.title) }) }} title="Learn It — Add Case Study" style={{ padding: '5px 9px', background: '#FFF3D6', color: '#92400E', border: '1px solid #FDE68A', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginRight: 6 }}>🔎 + Learn It</button>
+                  <button onClick={() => setMidtermModal({ courseId: groupKey(course), contentId: null })} title="Add a Midterm Review between modules" style={{ padding: '5px 9px', background: '#F5F3FF', color: '#5B21B6', border: '1px solid #DDD6FE', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginRight: 6 }}>📝 + Midterm Review</button>
+                  <button onClick={() => { setActiveCourseId(groupKey(course)); setModulePicker({ purpose: 'lesson', units: moduleUnits.map(u => u.title) }) }} title="Do It — Add Lesson" style={{ padding: '5px 9px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginRight: 6 }}>✅ + Do It</button>
+                  <button onClick={() => { setActiveCourseId(groupKey(course)); setModulePicker({ purpose: 'caseStudy', units: moduleUnits.map(u => u.title) }) }} title="Learn It — Add Case Study" style={{ padding: '5px 9px', background: '#FFF3D6', color: '#92400E', border: '1px solid #FDE68A', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginRight: 6 }}>🔎 + Learn It</button>
                   <button onClick={() => openSectionPicker('socratic')} title="Show It — Socratic Seminar" style={{ padding: '5px 9px', background: '#F0F4FA', color: '#1A365E', border: '1px solid #DDE6F0', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginRight: 6 }}>⚖️ + Show It</button>
                   <button onClick={() => openSectionPicker('omr')} title="Prove It — OMR Test" style={{ padding: '5px 9px', background: '#F0F4FA', color: '#1A365E', border: '1px solid #DDE6F0', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginRight: 6 }}>🔢 + Prove It</button>
                   <button onClick={() => openSectionPicker('presentation')} title="Master It — Presentation" style={{ padding: '5px 9px', background: '#F0F4FA', color: '#1A365E', border: '1px solid #DDE6F0', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>🏆 + Master It</button>
@@ -3459,12 +3564,19 @@ export function LMSPage() {
               ) : (
                 <>
                   {topLevel.map(item => renderContentRow(item, 0, 'order'))}
-                  {units.map(u => (
-                    <Fragment key={u.title}>
-                      {renderUnitRow(u)}
-                      {isExpanded('unit:' + u.title) && renderModuleBody(u.items, 2, 'moduleOrder', u.title)}
-                    </Fragment>
-                  ))}
+                  {units.map(u => {
+                    const midterm = u.items.find(isMidtermReview)
+                    return (
+                      <Fragment key={u.title}>
+                        {midterm ? renderMidtermRows(u, midterm) : (
+                          <>
+                            {renderUnitRow(u)}
+                            {isExpanded('unit:' + u.title) && renderModuleBody(u.items, 2, 'moduleOrder', u.title)}
+                          </>
+                        )}
+                      </Fragment>
+                    )
+                  })}
                 </>
               )}
             </tbody>
@@ -3486,7 +3598,7 @@ export function LMSPage() {
     )
     const cid = sectionCourseId || courses[0].id
     const course = courses.find(co => co.id === cid) || courses[0]
-    const content = store.content.filter(x => x.courseId === groupKey(course))
+    const content = store.content.filter(x => x.courseId === groupKey(course) && !isMidtermReview(x))
     const allProg = store.progress
     const enrolRows = store.enrolments.filter(en => en.courseId === course.id && isActiveBool(en.active))
     const enrolledIds = new Set<string>()
@@ -4266,7 +4378,7 @@ export function LMSPage() {
     const courseId = activeCourseId || (store.courses[0] ? groupKey(store.courses[0]) : '')
     const item = editLessonIdx !== null ? store.content[editLessonIdx] : undefined
     const isNew = editLessonIdx === null
-    const existingUnits = [...new Set(store.content.filter(x => x.courseId === courseId).map(x => x.unitTitle).filter(Boolean))] as string[]
+    const existingUnits = [...new Set(store.content.filter(x => x.courseId === courseId && !isMidtermReview(x)).map(x => x.unitTitle).filter(Boolean))] as string[]
     if (prefillUnit && !existingUnits.includes(prefillUnit)) existingUnits.push(prefillUnit)
     const [title, setTitle] = useState(item?.title ?? '')
     const [unitTitle, setUnitTitle] = useState(item?.unitTitle ?? prefillUnit ?? '')
@@ -4663,7 +4775,7 @@ export function LMSPage() {
   // the short-answer (free-text) option type. Short-answer questions are excluded from
   // OMR's auto-grading and are reviewed by the teacher in the Grade Case Study panel.
   // Used for Prove It — OMR.
-  function McqQuestionEditor({ questions, onChange }: { questions: McqQuestion[]; onChange: (next: McqQuestion[]) => void }) {
+  function McqQuestionEditor({ questions, onChange, radioGroup = 'omr' }: { questions: McqQuestion[]; onChange: (next: McqQuestion[]) => void; radioGroup?: string }) {
     function update(qi: number, patch: Partial<McqQuestion>) {
       onChange(questions.map((q, i) => i === qi ? { ...q, ...patch } : q))
     }
@@ -4714,7 +4826,7 @@ export function LMSPage() {
                     <div key={oi} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <input
                         type="radio"
-                        name={`omr_ans_${qi}`}
+                        name={`${radioGroup}_ans_${qi}`}
                         checked={q.ans === oi}
                         onChange={() => update(qi, { ans: oi })}
                         title="Mark as correct answer"
@@ -4933,6 +5045,343 @@ export function LMSPage() {
               <button onClick={onClose} style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
               <button onClick={save} style={{ padding: '9px 20px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>💾 Save</button>
             </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ─── MIDTERM REVIEW BUILDER ─────────────────────────────────────────────────
+  // A Midterm Review has no fixed fields: the admin adds any number of sections (title +
+  // instructions), and each section holds any mix of Text Box / OMR Test / File Upload
+  // blocks in any order. Saved as one content row whose unitTitle places it among the
+  // modules (see renderMidtermRows); the section tree lives in midtermSectionsJson.
+  function MidtermReviewModal({ courseId, contentId, afterUnit, onClose }: {
+    courseId: string
+    contentId: string | null
+    afterUnit?: string
+    onClose: () => void
+  }) {
+    const existing = contentId ? store.content.find(c => c.id === contentId) ?? null : null
+    const courseContent = store.content.filter(c => c.courseId === courseId)
+    // Current module/review order for this course, minus the review being edited.
+    const orderedUnits = [...new Set(courseContent.filter(c => c.unitTitle).map(c => c.unitTitle as string))]
+      .map(t => ({ t, o: courseContent.find(c => c.unitTitle === t)?.unitOrder ?? 0 }))
+      .sort((a, b) => a.o - b.o)
+      .map(x => x.t)
+    const otherUnits = orderedUnits.filter(t => t !== existing?.unitTitle)
+    const moduleTitles = otherUnits.filter(t => !courseContent.some(c => c.unitTitle === t && isMidtermReview(c)))
+
+    function defaultAfter(): string {
+      if (existing) {
+        const idx = orderedUnits.indexOf(existing.unitTitle ?? '')
+        return idx > 0 ? orderedUnits[idx - 1] : ''
+      }
+      if (afterUnit) return afterUnit
+      // "Midterm" — default to the middle of the course.
+      return moduleTitles.length ? moduleTitles[Math.max(0, Math.ceil(moduleTitles.length / 2) - 1)] : ''
+    }
+    function defaultTitle(): string {
+      if (existing) return existing.title
+      let n = 1
+      let t = 'Midterm Review'
+      while (orderedUnits.includes(t)) t = `Midterm Review ${++n}`
+      return t
+    }
+
+    const [title, setTitle] = useState(defaultTitle)
+    const [placeAfter, setPlaceAfter] = useState(defaultAfter)
+    const [sections, setSections] = useState<MidtermSection[]>(() => {
+      const parsed = parseMidtermSections(existing?.midtermSectionsJson)
+      return parsed.length ? parsed : [{ id: lmsId(), title: '', instructions: '', blocks: [] }]
+    })
+
+    function patchSection(sid: string, patch: Partial<MidtermSection>) {
+      setSections(prev => prev.map(s => s.id === sid ? { ...s, ...patch } : s))
+    }
+    function moveSection(idx: number, dir: -1 | 1) {
+      setSections(prev => {
+        const to = idx + dir
+        if (to < 0 || to >= prev.length) return prev
+        const next = [...prev]
+        ;[next[idx], next[to]] = [next[to], next[idx]]
+        return next
+      })
+    }
+    function removeSection(sid: string) {
+      setSections(prev => prev.filter(s => s.id !== sid))
+    }
+    function addSection() {
+      setSections(prev => [...prev, { id: lmsId(), title: '', instructions: '', blocks: [] }])
+    }
+    function addBlock(sid: string, kind: MidtermBlock['kind']) {
+      const block: MidtermBlock =
+        kind === 'omr' ? { id: lmsId(), kind, questions: [], passMark: 80, retakes: 3 } :
+        { id: lmsId(), kind, prompt: '' }
+      setSections(prev => prev.map(s => s.id === sid ? { ...s, blocks: [...s.blocks, block] } : s))
+    }
+    function patchBlock(sid: string, bid: string, patch: Partial<MidtermBlock>) {
+      setSections(prev => prev.map(s => s.id === sid ? { ...s, blocks: s.blocks.map(b => b.id === bid ? { ...b, ...patch } as MidtermBlock : b) } : s))
+    }
+    function moveBlock(sid: string, idx: number, dir: -1 | 1) {
+      setSections(prev => prev.map(s => {
+        if (s.id !== sid) return s
+        const to = idx + dir
+        if (to < 0 || to >= s.blocks.length) return s
+        const blocks = [...s.blocks]
+        ;[blocks[idx], blocks[to]] = [blocks[to], blocks[idx]]
+        return { ...s, blocks }
+      }))
+    }
+    function removeBlock(sid: string, bid: string) {
+      setSections(prev => prev.map(s => s.id === sid ? { ...s, blocks: s.blocks.filter(b => b.id !== bid) } : s))
+    }
+
+    function save() {
+      const finalTitle = title.trim()
+      if (!finalTitle) { alert('Enter a title for the Midterm Review'); return }
+      if (otherUnits.includes(finalTitle)) { alert(`"${finalTitle}" is already used by another module or review in this course — pick a different title.`); return }
+      const untitled = sections.findIndex(s => !s.title.trim())
+      if (untitled >= 0) { alert(`Section ${untitled + 1} needs a title`); return }
+      for (const [si, s] of sections.entries()) {
+        if (s.blocks.some(b => b.kind === 'omr' && b.questions.length === 0)) { alert(`Section ${si + 1} has an OMR Test with no questions`); return }
+      }
+      const cleaned = sections.map(s => ({ ...s, title: s.title.trim(), instructions: s.instructions.trim() }))
+
+      const row: LMSContent = {
+        ...(existing ?? { id: lmsId(), courseId, type: 'article' as const, order: 0, moduleOrder: 0, locked: false }),
+        title: finalTitle,
+        unitTitle: finalTitle,
+        isMidtermReview: true,
+        midtermSectionsJson: JSON.stringify(cleaned),
+      }
+      // Slot the review in after `placeAfter` and renumber unitOrder across the course.
+      const order = [...otherUnits]
+      const insertAt = placeAfter ? order.indexOf(placeAfter) + 1 : 0
+      order.splice(insertAt > 0 || !placeAfter ? insertAt : order.length, 0, finalTitle)
+      const orderMap = new Map(order.map((t, i) => [t, i]))
+      const withRow = existing ? store.content.map(c => c.id === existing.id ? row : c) : [...store.content, row]
+      persist({
+        ...store,
+        content: withRow.map(c => c.courseId === courseId && c.unitTitle && orderMap.has(c.unitTitle) ? { ...c, unitOrder: orderMap.get(c.unitTitle) as number } : c),
+      })
+      onClose()
+    }
+
+    const smallBtn: React.CSSProperties = { width: 24, height: 24, padding: 0, background: '#fff', color: '#5A7290', border: '1px solid #E4EAF2', borderRadius: 5, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }
+    const removeBtn: React.CSSProperties = { ...smallBtn, background: '#FFF0F1', color: '#D61F31', border: '1px solid #F5C2C7' }
+    const addBlockBtn: React.CSSProperties = { padding: '5px 10px', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }
+    const blockMeta: Record<MidtermBlock['kind'], { icon: string; label: string; hint: string }> = {
+      text: { icon: '📝', label: 'Text Box', hint: 'Students type a written response.' },
+      omr: { icon: '🔢', label: 'OMR Test', hint: 'In-app test — MCQs auto-grade on submit; short answers are reviewed manually.' },
+      file: { icon: '📎', label: 'File Upload', hint: 'Students upload a file (PDF, doc, image, etc.).' },
+    }
+
+    return (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 450, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto', backdropFilter: 'blur(4px)' }} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+        <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 640, maxHeight: '94vh', overflowY: 'auto', boxShadow: '0 24px 60px rgba(0,0,0,.3)', margin: 'auto' }}>
+          <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '18px 24px', borderRadius: '18px 18px 0 0', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>📝 {existing ? 'Edit Midterm Review' : 'New Midterm Review'}</div>
+              <div style={{ fontSize: 10, color: 'rgba(255,255,255,.65)', marginTop: 2 }}>Build it from sections — each with its own instructions, text boxes, OMR tests and file uploads.</div>
+            </div>
+            <button onClick={onClose} title="Close" style={modalCloseBtnOnDark}>✕</button>
+          </div>
+          <div style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
+              <div>
+                <label style={labelStyle}>Title *</label>
+                <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Midterm Review" style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Place After</label>
+                <select value={placeAfter} onChange={e => setPlaceAfter(e.target.value)} style={selectStyle}>
+                  <option value="">At the start of the course</option>
+                  {otherUnits.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {sections.length === 0 && (
+              <div style={{ fontSize: 11, color: '#94A3B8', padding: '14px 12px', textAlign: 'center', border: '1.5px dashed #E4EAF2', borderRadius: 10 }}>No sections yet. Add a section to start building this review.</div>
+            )}
+
+            {sections.map((sec, si) => (
+              <div key={sec.id} style={{ border: '1px solid #E4EAF2', borderRadius: 10, overflow: 'hidden' }}>
+                <div style={{ background: '#F7F9FC', padding: '8px 12px', borderBottom: '1px solid #E4EAF2', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: '#1A365E', flex: 1 }}>Section {si + 1} <span style={{ fontWeight: 400, color: '#7A92B0' }}>({sec.blocks.length} item{sec.blocks.length !== 1 ? 's' : ''})</span></span>
+                  <button type="button" onClick={() => moveSection(si, -1)} disabled={si === 0} title="Move up" style={{ ...smallBtn, opacity: si === 0 ? 0.4 : 1 }}>↑</button>
+                  <button type="button" onClick={() => moveSection(si, 1)} disabled={si === sections.length - 1} title="Move down" style={{ ...smallBtn, opacity: si === sections.length - 1 ? 0.4 : 1 }}>↓</button>
+                  <button type="button" onClick={() => removeSection(sec.id)} title="Remove section" style={removeBtn}>✕</button>
+                </div>
+                <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div>
+                    <label style={labelStyle}>Section Title *</label>
+                    <input value={sec.title} onChange={e => patchSection(sec.id, { title: e.target.value })} placeholder="e.g. Part A — Reading Comprehension" style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Instructions</label>
+                    <textarea value={sec.instructions} onChange={e => patchSection(sec.id, { instructions: e.target.value })} rows={3} placeholder="What students should do in this section." style={taStyle} />
+                  </div>
+
+                  {sec.blocks.map((b, bi) => {
+                    const meta = blockMeta[b.kind]
+                    return (
+                      <div key={b.id} style={{ background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 8, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 13 }}>{meta.icon}</span>
+                          <span style={{ fontSize: 11, fontWeight: 800, color: '#1A365E', flex: 1 }}>{meta.label}</span>
+                          <button type="button" onClick={() => moveBlock(sec.id, bi, -1)} disabled={bi === 0} title="Move up" style={{ ...smallBtn, opacity: bi === 0 ? 0.4 : 1 }}>↑</button>
+                          <button type="button" onClick={() => moveBlock(sec.id, bi, 1)} disabled={bi === sec.blocks.length - 1} title="Move down" style={{ ...smallBtn, opacity: bi === sec.blocks.length - 1 ? 0.4 : 1 }}>↓</button>
+                          <button type="button" onClick={() => removeBlock(sec.id, b.id)} title={`Remove ${meta.label}`} style={removeBtn}>✕</button>
+                        </div>
+                        <div style={{ fontSize: 10, color: '#7A92B0' }}>{meta.hint}</div>
+                        {b.kind === 'omr' ? (
+                          <>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                              <div><label style={labelStyle}>Mastery (%)</label><input type="number" min={0} max={100} value={b.passMark ?? ''} onChange={e => patchBlock(sec.id, b.id, { passMark: e.target.value === '' ? undefined : parseInt(e.target.value) })} style={{ ...inputStyle, background: '#fff' }} /></div>
+                              <div><label style={labelStyle}>Attempts</label><input type="number" min={1} value={b.retakes ?? 3} onChange={e => patchBlock(sec.id, b.id, { retakes: Math.max(1, parseInt(e.target.value) || 1) })} style={{ ...inputStyle, background: '#fff' }} /></div>
+                              <div><label style={labelStyle}>Time Limit (min)</label><input type="number" min={1} placeholder="None" value={b.timeLimit ?? ''} onChange={e => patchBlock(sec.id, b.id, { timeLimit: parseInt(e.target.value) || undefined })} style={{ ...inputStyle, background: '#fff' }} /></div>
+                            </div>
+                            <div style={{ background: '#fff', borderRadius: 10 }}>
+                              <McqQuestionEditor questions={b.questions} onChange={questions => patchBlock(sec.id, b.id, { questions })} radioGroup={`mt_${b.id}`} />
+                            </div>
+                          </>
+                        ) : (
+                          <textarea
+                            value={b.prompt}
+                            onChange={e => patchBlock(sec.id, b.id, { prompt: e.target.value })}
+                            rows={2}
+                            placeholder={b.kind === 'text' ? 'Question or prompt students respond to…' : 'What students should upload…'}
+                            style={{ ...taStyle, background: '#fff' }}
+                          />
+                        )}
+                      </div>
+                    )
+                  })}
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 9, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '.08em', marginRight: 2 }}>Add</span>
+                    <button type="button" onClick={() => addBlock(sec.id, 'text')} style={{ ...addBlockBtn, background: '#F0F4FA', color: '#1A365E', border: '1px solid #DDE6F0' }}>📝 + Text Box</button>
+                    <button type="button" onClick={() => addBlock(sec.id, 'omr')} style={{ ...addBlockBtn, background: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A' }}>🔢 + OMR Test</button>
+                    <button type="button" onClick={() => addBlock(sec.id, 'file')} style={{ ...addBlockBtn, background: '#EEF3FF', color: '#1A365E', border: '1px solid #DDE6F0' }}>📎 + File Upload</button>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            <button type="button" onClick={addSection} style={{ padding: '9px 14px', background: '#F5F3FF', color: '#5B21B6', border: '1.5px dashed #DDD6FE', borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', width: '100%' }}>+ Add Section</button>
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6 }}>
+              <button onClick={onClose} style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+              <button onClick={save} style={{ padding: '9px 20px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>💾 Save</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Midterm Review — read-only view of what students submitted, one card per student,
+  // each block showing the latest response (OMR shows best score + attempts used).
+  function MidtermResponsesModal({ contentId, onClose }: { contentId: string; onClose: () => void }) {
+    const item = store.content.find(c => c.id === contentId)
+    const [rows, setRows] = useState<LMSSubmissionRow[] | null>(null)
+    const [openStudent, setOpenStudent] = useState<string | null>(null)
+
+    useEffect(() => {
+      let alive = true
+      supabase.from('lms_submissions').select('*').eq('content_id', contentId).eq('kind', 'midterm_review').order('submitted_at', { ascending: false }).then(({ data, error }) => {
+        if (!alive) return
+        if (error) console.error('midterm responses load error:', error)
+        setRows((data ?? []) as LMSSubmissionRow[])
+      })
+      return () => { alive = false }
+    }, [contentId])
+
+    if (!item) return null
+    const sections = parseMidtermSections(item.midtermSectionsJson)
+    const blockCount = sections.reduce((n, s) => n + s.blocks.length, 0)
+
+    type Resp = { note: Record<string, unknown>; linkUrl: string | null; submittedAt: string }
+    const byStudent = new Map<string, Map<string, Resp[]>>()
+    ;(rows ?? []).forEach(r => {
+      let note: Record<string, unknown> = {}
+      try { note = JSON.parse((r.note as string) || '{}') } catch { /* skip */ }
+      const blockId = note.blockId as string | undefined
+      if (!blockId) return
+      const sid = r.student_id as string
+      if (!byStudent.has(sid)) byStudent.set(sid, new Map())
+      const m = byStudent.get(sid)!
+      if (!m.has(blockId)) m.set(blockId, [])
+      m.get(blockId)!.push({ note, linkUrl: (r.link_url as string) ?? null, submittedAt: (r.submitted_at as string) ?? '' })
+    })
+    const studentName = (sid: string) => students.find(s => s.id === sid)?.fullName ?? 'Unknown student'
+    const studentIds = [...byStudent.keys()].sort((a, b) => studentName(a).localeCompare(studentName(b)))
+
+    function renderResponse(b: MidtermBlock, resps: Resp[] | undefined) {
+      if (!resps?.length) return <span style={{ fontSize: 11, color: '#94A3B8' }}>No submission</span>
+      const latest = resps[0]
+      if (b.kind === 'text') return <div style={{ fontSize: 12, color: '#1A365E', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{latest.note.text as string}</div>
+      if (b.kind === 'file') return latest.linkUrl
+        ? <a href={latest.linkUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: '#2563EB', fontWeight: 700 }}>📎 {(latest.note.fileName as string) || 'Open file'}</a>
+        : <span style={{ fontSize: 11, color: '#94A3B8' }}>File missing</span>
+      const best = resps.reduce((m, r) => Math.max(m, Number(r.note.score ?? 0)), 0)
+      const passed = resps.some(r => r.note.passed === true)
+      return (
+        <span style={{ fontSize: 12, fontWeight: 700, color: passed ? '#059669' : '#D61F31' }}>
+          Best {best}% · {passed ? 'Passed' : 'Not passed'} <span style={{ fontWeight: 400, color: '#7A92B0' }}>({resps.length} attempt{resps.length !== 1 ? 's' : ''}; latest {String(latest.note.correct ?? 0)}/{String(latest.note.total ?? 0)})</span>
+        </span>
+      )
+    }
+
+    return (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 450, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto', backdropFilter: 'blur(4px)' }} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+        <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 720, maxHeight: '94vh', overflowY: 'auto', boxShadow: '0 24px 60px rgba(0,0,0,.3)', margin: 'auto' }}>
+          <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '18px 24px', borderRadius: '18px 18px 0 0', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>📥 Midterm Review Responses</div>
+              <div style={{ fontSize: 10, color: 'rgba(255,255,255,.65)', marginTop: 2 }}>{item.title} · {rows ? `${studentIds.length} student${studentIds.length !== 1 ? 's' : ''} responded` : 'Loading…'}</div>
+            </div>
+            <button onClick={onClose} title="Close" style={modalCloseBtnOnDark}>✕</button>
+          </div>
+          <div style={{ padding: '18px 24px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {rows === null ? (
+              <div style={{ textAlign: 'center', padding: 30, color: '#94A3B8', fontSize: 12 }}>Loading responses…</div>
+            ) : studentIds.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 30, color: '#94A3B8', fontSize: 12 }}>No student has submitted anything yet.</div>
+            ) : studentIds.map(sid => {
+              const m = byStudent.get(sid)!
+              const done = sections.flatMap(s => s.blocks).filter(b => m.has(b.id)).length
+              const open = openStudent === sid
+              return (
+                <div key={sid} style={{ border: '1px solid #E4EAF2', borderRadius: 10, overflow: 'hidden' }}>
+                  <button onClick={() => setOpenStudent(open ? null : sid)} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 12px', background: open ? '#F7F9FC' : '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: '#1A365E', flex: 1 }}>{studentName(sid)}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: done === blockCount ? '#059669' : '#D97706' }}>{done}/{blockCount} submitted</span>
+                    <span style={{ fontSize: 11, color: '#5A7290' }}>{open ? '▲' : '▼'}</span>
+                  </button>
+                  {open && (
+                    <div style={{ padding: '4px 12px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {sections.map((sec, si) => (
+                        <div key={sec.id}>
+                          <div style={{ fontSize: 9, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '.08em', margin: '6px 0 4px' }}>Section {si + 1} · {sec.title}</div>
+                          {sec.blocks.map(b => (
+                            <div key={b.id} style={{ display: 'flex', gap: 10, padding: '6px 0', borderTop: '1px solid #F0F4FA' }}>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: '#5A7290', width: 170, flexShrink: 0 }}>
+                                {b.kind === 'text' ? '📝 Text Box' : b.kind === 'omr' ? '🔢 OMR Test' : '📎 File Upload'}
+                                {b.kind !== 'omr' && b.prompt && <span style={{ display: 'block', fontWeight: 400, color: '#94A3B8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.prompt}</span>}
+                              </span>
+                              <div style={{ flex: 1, minWidth: 0 }}>{renderResponse(b, m.get(b.id))}</div>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         </div>
       </div>
@@ -5203,7 +5652,7 @@ export function LMSPage() {
     const courseId = activeCourseId || (store.courses[0] ? groupKey(store.courses[0]) : '')
     const item = editCaseStudyIdx !== null ? store.content[editCaseStudyIdx] : undefined
     const isNew = editCaseStudyIdx === null
-    const existingUnits = [...new Set(store.content.filter(x => x.courseId === courseId).map(x => x.unitTitle).filter(Boolean))] as string[]
+    const existingUnits = [...new Set(store.content.filter(x => x.courseId === courseId && !isMidtermReview(x)).map(x => x.unitTitle).filter(Boolean))] as string[]
     if (prefillUnit && !existingUnits.includes(prefillUnit)) existingUnits.push(prefillUnit)
     const [title, setTitle] = useState(item?.title ?? 'Case Study Launch')
     const [unitTitle, setUnitTitle] = useState(item?.unitTitle ?? prefillUnit ?? '')
@@ -5343,6 +5792,8 @@ export function LMSPage() {
       {showNewSectionFlow && <NewSectionFlow />}
       {showLessonModal && <LessonModal />}
       {showCaseStudyModal && <CaseStudyModal />}
+      {midtermResponsesId && <MidtermResponsesModal contentId={midtermResponsesId} onClose={() => setMidtermResponsesId(null)} />}
+      {midtermModal && <MidtermReviewModal courseId={midtermModal.courseId} contentId={midtermModal.contentId} afterUnit={midtermModal.afterUnit} onClose={() => setMidtermModal(null)} />}
       {sectionModal && <SectionModal type={sectionModal.type} contentId={sectionModal.contentId} onClose={() => setSectionModal(null)} />}
       {discussionBoardContentId && <DiscussionBoardModal contentId={discussionBoardContentId} onClose={() => setDiscussionBoardContentId(null)} />}
       {assignRolesContentId && (

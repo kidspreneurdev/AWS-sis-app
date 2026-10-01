@@ -7,7 +7,7 @@ import {
   FolderOpen, PartyPopper, Frown, RefreshCw, X, Play, Video,
   ChevronDown, ChevronRight, Search,
   ArrowLeft, ArrowRight, Star, Lock, AlertTriangle, ExternalLink, Info,
-  MessageSquare, Eye,
+  MessageSquare, Eye, ClipboardCheck,
   type LucideIcon,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -16,8 +16,8 @@ import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
 import { DiscussionBoard, type DiscussionPost } from '@/components/lms/DiscussionBoard'
 import {
-  SUBJECT_COLORS, isActiveBool, rowToLMSCourse, rowToLMSContent, rowToLMSEnrolment, rowToLMSProgress,
-  type LMSCourse, type LMSContent, type LMSEnrolment, type LMSProgress, type LMSQuestion,
+  SUBJECT_COLORS, isActiveBool, isMidtermReview, parseMidtermSections, rowToLMSCourse, rowToLMSContent, rowToLMSEnrolment, rowToLMSProgress,
+  type MidtermBlock, type LMSCourse, type LMSContent, type LMSEnrolment, type LMSProgress, type LMSQuestion,
 } from '@/pages/lms/lmsStore'
 import { portalPrefix } from './gradesShared'
 
@@ -30,6 +30,12 @@ const emptyState: React.CSSProperties = { padding: '16px 18px', borderRadius: 10
 const SP_NAVY = '#1A365E'
 const SP_RED = '#D61F31'
 const SP_GREEN = '#1DBD6A'
+
+// The portal layout scrolls inside <main>, not the window — so opening an activity from
+// far down the course list would otherwise keep that scroll offset and land mid-page.
+function scrollPortalToTop() {
+  requestAnimationFrame(() => { document.querySelector('main')?.scrollTo({ top: 0 }) })
+}
 
 function getLessonTimerKey(studentId: string, lessonId: string) {
   return `sp_learning_started_${studentId}_${lessonId}`
@@ -377,7 +383,7 @@ interface MySubmission { contentId: string; kind: string; note: string | null; l
 // four of those all live on the single hasAssignment carrier row, so a contentId alone
 // can't tell them apart — activeGroupKind disambiguates which of the four is open.
 type PartKind = 'tutorial' | 'video' | 'mastery' | 'lessonNotes' | 'caseStudyView' | 'caseStudyNotes' | 'socratic' | 'omr' | 'presentation' | 'discussion'
-type ActivityGroupKind = 'learn' | 'lesson' | 'show' | 'prove' | 'master' | 'discussion'
+type ActivityGroupKind = 'learn' | 'lesson' | 'show' | 'prove' | 'master' | 'discussion' | 'midterm'
 interface ActivityGroupRef { key: string; kind: ActivityGroupKind; contentId: string }
 
 /** Loads the fixed-flow score/appeal bundle for one module's case-study carrier item.
@@ -386,6 +392,7 @@ function useCaseStudyBundle(contentId: string | null) {
   const { getToken } = useStudentPortal()
   const [loading, setLoading] = useState(true)
   const [bundle, setBundle] = useState<CaseStudyBundle | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   async function load() {
     if (!contentId) { setLoading(false); return }
@@ -393,15 +400,38 @@ function useCaseStudyBundle(contentId: string | null) {
     try {
       const data = await studentPortalFetch(getToken(), `/api/student-portal/lms-get-case-study?contentId=${contentId}`)
       setBundle(data as CaseStudyBundle)
-    } catch {
+      setError(null)
+    } catch (err) {
       setBundle(null)
+      setError(err instanceof Error ? err.message : 'Request failed.')
     }
     setLoading(false)
   }
 
   useEffect(() => { void load() }, [contentId]) // eslint-disable-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
 
-  return { loading, bundle, refresh: load }
+  return { loading, bundle, error, refresh: load }
+}
+
+/** Shown when lms-get-case-study fails. The signed portal token expires after 8h while the
+ *  cached session keeps the student "signed in", so token errors get a sign-in prompt
+ *  instead of a dead-end "try refreshing" (refreshing reuses the same expired token). */
+function BundleLoadError({ error, onRetry }: { error: string | null; onRetry: () => void }) {
+  const { logout } = useStudentPortal()
+  const navigate = useNavigate()
+  const { pathname } = useLocation()
+  const sessionExpired = !!error && /token|session/i.test(error)
+  const btn: React.CSSProperties = { marginTop: 10, padding: '6px 14px', borderRadius: 8, border: '1px solid #D7E0EA', background: '#fff', color: '#1A365E', fontSize: 14, fontWeight: 700, cursor: 'pointer' }
+  return (
+    <div style={{ ...card, ...emptyState }}>
+      <div>{sessionExpired ? 'Your session has expired. Please sign in again.' : `Couldn't load this${error ? `: ${error}` : '.'}`}</div>
+      {sessionExpired ? (
+        <button type="button" style={btn} onClick={async () => { await logout(); navigate(`${portalPrefix(pathname)}/login`) }}>Sign in again</button>
+      ) : (
+        <button type="button" style={btn} onClick={onRetry}>Retry</button>
+      )}
+    </div>
+  )
 }
 
 /** Show it: Notes — a real student upload, used both for the module's case-study notes
@@ -488,7 +518,7 @@ function CaseStudyDocPanel({ carrierItem }: { carrierItem: LMSContent }) {
 function useModuleScoring(carrierItem: LMSContent) {
   const { readOnly } = usePortalReadOnly()
   const { getToken } = useStudentPortal()
-  const { loading, bundle, refresh } = useCaseStudyBundle(carrierItem.id)
+  const { loading, bundle, error, refresh } = useCaseStudyBundle(carrierItem.id)
   const [appealOpenFor, setAppealOpenFor] = useState<string | null>(null)
   const [appealText, setAppealText] = useState<Record<string, string>>({})
   const [filingAppeal, setFilingAppeal] = useState<string | null>(null)
@@ -530,7 +560,7 @@ function useModuleScoring(carrierItem: LMSContent) {
     )
   }
 
-  return { loading, bundle, refresh, scoreByType, renderAppealControl }
+  return { loading, bundle, error, refresh, scoreByType, renderAppealControl }
 }
 
 /** Simple read-only rubric viewer — shows the fixed criteria/points for one score
@@ -552,9 +582,9 @@ function RubricViewer({ type, overrides }: { type: ScoreComponentType; overrides
 
 /** Show It — Socratic Seminar: activity brief, rubric, and score. */
 function SocraticPanel({ carrierItem }: { carrierItem: LMSContent }) {
-  const { loading, bundle, scoreByType, renderAppealControl } = useModuleScoring(carrierItem)
+  const { loading, bundle, error, refresh, scoreByType, renderAppealControl } = useModuleScoring(carrierItem)
   if (loading) return <div style={{ ...card, ...emptyState }}>Loading…</div>
-  if (!bundle) return <div style={{ ...card, ...emptyState }}>Couldn't load this. Try refreshing.</div>
+  if (!bundle) return <BundleLoadError error={error} onRetry={() => { void refresh() }} />
   return (
     <>
       {carrierItem.socraticBrief ? (
@@ -571,37 +601,31 @@ function SocraticPanel({ carrierItem }: { carrierItem: LMSContent }) {
   )
 }
 
-/** Prove It — OMR Test: an in-app auto-graded MCQ quiz, same shape/UX as a lesson's
- *  Mastery Test — but the score is read from/written to the case study's 'omr' rubric
- *  component (lms_score_components) instead of lms_progress, since it's one of the
- *  categories that feeds the module's overall grade. */
-function OmrQuiz({ carrierItem, score, onSubmitted }: {
-  carrierItem: LMSContent
-  score: CSScoreData | undefined
-  onSubmitted: () => void
+type OmrQuestion = { q: string; type?: 'mcq' | 'short'; opts: string[]; ans: number }
+interface OmrQuizResult { score: number; passed: boolean; correct: number; total: number }
+
+/** The in-app OMR quiz UI (one question at a time, optional timer, pass/fail result with
+ *  retry) — shared by Prove It and Midterm Review OMR blocks. The caller owns where the
+ *  attempt is recorded via onSubmit. */
+function OmrQuizRunner({ questions, passMark, maxAttempts, timeLimitMins, initialResult, initialAttempts, emptyText, onSubmit }: {
+  questions: OmrQuestion[]
+  passMark: number
+  maxAttempts: number
+  timeLimitMins?: number
+  initialResult: OmrQuizResult | null
+  initialAttempts: number
+  emptyText: string
+  onSubmit: (answers: Record<number, number | string>) => Promise<{ result: OmrQuizResult; attempts: number }>
 }) {
   const { readOnly } = usePortalReadOnly()
-  const { getToken } = useStudentPortal()
-  const passMark = carrierItem.omrPassMark ?? 80
-  const maxAttempts = carrierItem.omrRetakes ?? 3
-  const timeLimitSecs = (carrierItem.omrTimeLimit ?? 0) * 60
+  const timeLimitSecs = (timeLimitMins ?? 0) * 60
+  const [radioGroup] = useState(() => Math.random().toString(36).slice(2))
 
-  let questions: Array<{ q: string; type?: 'mcq' | 'short'; opts: string[]; ans: number }> = []
-  try { questions = JSON.parse(carrierItem.omrQuizJson ?? '[]') } catch { /* empty */ }
-
-  const priorCorrect = score?.criteriaScores?.correct
-  const priorTotal = score?.criteriaScores?.total
-  const priorAttempts = score?.criteriaScores?.attempts ?? 0
-  const priorPassed = score?.criteriaScores?.passed === 1
-  const alreadyScored = score?.status === 'scored' && priorCorrect != null && priorTotal != null
-
-  const [phase, setPhase] = useState<'quiz' | 'result'>(alreadyScored ? 'result' : 'quiz')
+  const [phase, setPhase] = useState<'quiz' | 'result'>(initialResult ? 'result' : 'quiz')
   const [qIdx, setQIdx] = useState(0)
   const [answers, setAnswers] = useState<Record<number, number | string>>({})
-  const [attemptsUsed, setAttemptsUsed] = useState(priorAttempts)
-  const [result, setResult] = useState<{ score: number; passed: boolean; correct: number; total: number } | null>(
-    alreadyScored ? { score: Math.round((priorCorrect! / priorTotal!) * 100), passed: priorPassed, correct: priorCorrect!, total: priorTotal! } : null,
-  )
+  const [attemptsUsed, setAttemptsUsed] = useState(initialAttempts)
+  const [result, setResult] = useState<OmrQuizResult | null>(initialResult)
   const [timeLeft, setTimeLeft] = useState(timeLimitSecs)
   const [saving, setSaving] = useState(false)
 
@@ -615,7 +639,7 @@ function OmrQuiz({ carrierItem, score, onSubmitted }: {
   if (!questions.length) {
     return (
       <div style={{ padding: '14px 16px', background: '#F7F9FC', borderRadius: 10, border: '1px solid #E4EAF2', fontSize: 15, color: '#94A3B8', display: 'flex', alignItems: 'center', gap: 6 }}>
-        <Calculator size={12} /> No OMR questions have been configured for this module yet.
+        <Calculator size={12} /> {emptyText}
       </div>
     )
   }
@@ -623,13 +647,10 @@ function OmrQuiz({ carrierItem, score, onSubmitted }: {
   async function submitQuiz(ans: Record<number, number | string>) {
     setSaving(true)
     try {
-      const data = await studentPortalFetch(getToken(), '/api/student-portal/lms-submit-omr-quiz', {
-        method: 'POST', body: JSON.stringify({ contentId: carrierItem.id, answers: ans }),
-      }) as { score: number; correct: number; total: number; passed: boolean; attempts: number }
-      setResult({ score: data.score, passed: data.passed, correct: data.correct, total: data.total })
+      const data = await onSubmit(ans)
+      setResult(data.result)
       setAttemptsUsed(data.attempts)
       setPhase('result')
-      onSubmitted()
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to submit. Please try again.')
     }
@@ -720,7 +741,7 @@ function OmrQuiz({ carrierItem, score, onSubmitted }: {
                 style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 9, cursor: 'pointer', fontSize: 16, color: selected ? '#1A365E' : '#3D5475', marginBottom: 6, background: selected ? '#EEF3FF' : '#fff', border: `1.5px solid ${selected ? '#1A365E' : '#E4EAF2'}`, transition: 'all .15s' }}
                 onClick={() => setAnswers((p) => ({ ...p, [qIdx]: oi }))}
               >
-                <input type="radio" name={`omr_q_${qIdx}`} value={oi} checked={selected} onChange={() => setAnswers((p) => ({ ...p, [qIdx]: oi }))} style={{ flexShrink: 0, accentColor: '#1A365E' }} readOnly />
+                <input type="radio" name={`omr_q_${radioGroup}_${qIdx}`} value={oi} checked={selected} onChange={() => setAnswers((p) => ({ ...p, [qIdx]: oi }))} style={{ flexShrink: 0, accentColor: '#1A365E' }} readOnly />
                 <span style={{ fontSize: 14, fontWeight: 800, color: '#7A92B0', background: '#F0F4FA', padding: '2px 7px', borderRadius: 4, flexShrink: 0 }}>{String.fromCharCode(65 + oi)}</span>
                 <span>{opt}</span>
               </label>
@@ -740,12 +761,300 @@ function OmrQuiz({ carrierItem, score, onSubmitted }: {
   )
 }
 
+/** Prove It — OMR Test: an in-app auto-graded MCQ quiz, same shape/UX as a lesson's
+ *  Mastery Test — but the score is read from/written to the case study's 'omr' rubric
+ *  component (lms_score_components) instead of lms_progress, since it's one of the
+ *  categories that feeds the module's overall grade. */
+function OmrQuiz({ carrierItem, score, onSubmitted }: {
+  carrierItem: LMSContent
+  score: CSScoreData | undefined
+  onSubmitted: () => void
+}) {
+  const { getToken } = useStudentPortal()
+  let questions: OmrQuestion[] = []
+  try { questions = JSON.parse(carrierItem.omrQuizJson ?? '[]') } catch { /* empty */ }
+
+  const priorCorrect = score?.criteriaScores?.correct
+  const priorTotal = score?.criteriaScores?.total
+  const alreadyScored = score?.status === 'scored' && priorCorrect != null && priorTotal != null
+
+  return (
+    <OmrQuizRunner
+      questions={questions}
+      passMark={carrierItem.omrPassMark ?? 80}
+      maxAttempts={carrierItem.omrRetakes ?? 3}
+      timeLimitMins={carrierItem.omrTimeLimit}
+      initialAttempts={score?.criteriaScores?.attempts ?? 0}
+      initialResult={alreadyScored ? { score: Math.round((priorCorrect! / priorTotal!) * 100), passed: score?.criteriaScores?.passed === 1, correct: priorCorrect!, total: priorTotal! } : null}
+      emptyText="No OMR questions have been configured for this module yet."
+      onSubmit={async (ans) => {
+        const data = await studentPortalFetch(getToken(), '/api/student-portal/lms-submit-omr-quiz', {
+          method: 'POST', body: JSON.stringify({ contentId: carrierItem.id, answers: ans }),
+        }) as { score: number; correct: number; total: number; passed: boolean; attempts: number }
+        onSubmitted()
+        return { result: { score: data.score, passed: data.passed, correct: data.correct, total: data.total }, attempts: data.attempts }
+      }}
+    />
+  )
+}
+
 /** Prove It — OMR Test. */
 function OmrPanel({ carrierItem }: { carrierItem: LMSContent }) {
-  const { loading, bundle, refresh, scoreByType } = useModuleScoring(carrierItem)
+  const { loading, bundle, error, refresh, scoreByType } = useModuleScoring(carrierItem)
   if (loading) return <div style={{ ...card, ...emptyState }}>Loading…</div>
-  if (!bundle) return <div style={{ ...card, ...emptyState }}>Couldn't load this. Try refreshing.</div>
+  if (!bundle) return <BundleLoadError error={error} onRetry={() => { void refresh() }} />
   return <OmrQuiz carrierItem={carrierItem} score={scoreByType.omr} onSubmitted={() => void refresh()} />
+}
+
+// ─── Midterm Review ────────────────────────────────────────────────────────────
+// An admin-built checkpoint between two modules: sections (title + instructions), each
+// holding any mix of Text Box / OMR Test / File Upload blocks. Every block submits on its
+// own via lms-submit-midterm-block as a 'midterm_review' submission whose note carries
+// the blockId — so one review has many submissions, told apart by blockId.
+interface MidtermSubNote {
+  blockId: string
+  blockKind: 'text' | 'file' | 'omr'
+  text?: string
+  fileName?: string | null
+  score?: number
+  correct?: number
+  total?: number
+  passed?: boolean
+}
+
+function parseMidtermNote(sub: MySubmission): MidtermSubNote | null {
+  try {
+    const parsed = JSON.parse(sub.note || '{}') as MidtermSubNote
+    return parsed.blockId ? parsed : null
+  } catch { return null }
+}
+
+/** Newest-first submissions for each block of one Midterm Review. */
+function midtermSubsByBlock(contentId: string, submissions: MySubmission[]): Map<string, { sub: MySubmission; note: MidtermSubNote }[]> {
+  const out = new Map<string, { sub: MySubmission; note: MidtermSubNote }[]>()
+  submissions
+    .filter((s) => s.contentId === contentId && s.kind === 'midterm_review')
+    .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt))
+    .forEach((sub) => {
+      const note = parseMidtermNote(sub)
+      if (!note) return
+      if (!out.has(note.blockId)) out.set(note.blockId, [])
+      out.get(note.blockId)!.push({ sub, note })
+    })
+  return out
+}
+
+/** Done/total blocks for a Midterm Review — a block counts once it has any submission. */
+function midtermProgress(item: LMSContent, submissions: MySubmission[]): { done: number; total: number } {
+  const blocks = parseMidtermSections(item.midtermSectionsJson).flatMap((s) => s.blocks)
+  const subs = midtermSubsByBlock(item.id, submissions)
+  return { done: blocks.filter((b) => (subs.get(b.id)?.length ?? 0) > 0).length, total: blocks.length }
+}
+
+const MIDTERM_BLOCK_UI: Record<MidtermBlock['kind'], { icon: LucideIcon; label: string }> = {
+  text: { icon: FileText, label: 'Written Response' },
+  omr: { icon: Calculator, label: 'OMR Test' },
+  file: { icon: Upload, label: 'File Upload' },
+}
+
+async function submitMidtermBlock(token: string | null, payload: Record<string, unknown>) {
+  return await studentPortalFetch(token, '/api/student-portal/lms-submit-midterm-block', {
+    method: 'POST', body: JSON.stringify(payload),
+  }) as { submission: MySubmission; score?: number; correct?: number; total?: number; passed?: boolean; attempts?: number }
+}
+
+function MidtermSubmittedNote({ submittedAt, children }: { submittedAt: string; children?: React.ReactNode }) {
+  return (
+    <div style={{ background: '#F0FDF4', borderRadius: 8, padding: '10px 12px', border: '1px solid #BBF7D0' }}>
+      <div style={{ fontSize: 15, color: '#059669', fontWeight: 700, marginBottom: children ? 4 : 0, display: 'flex', alignItems: 'center', gap: 4 }}><CheckCircle2 size={11} /> Submitted {new Date(submittedAt).toLocaleDateString()}</div>
+      {children}
+    </div>
+  )
+}
+
+function MidtermTextBlock({ contentId, blockId, latest, onSubmitted }: {
+  contentId: string
+  blockId: string
+  latest: { sub: MySubmission; note: MidtermSubNote } | undefined
+  onSubmitted: (s: MySubmission) => void
+}) {
+  const { readOnly } = usePortalReadOnly()
+  const { getToken } = useStudentPortal()
+  const [text, setText] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  if (latest) {
+    return (
+      <MidtermSubmittedNote submittedAt={latest.sub.submittedAt}>
+        <div style={{ fontSize: 15, color: '#3D5475', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{latest.note.text}</div>
+      </MidtermSubmittedNote>
+    )
+  }
+
+  async function submit() {
+    if (!text.trim()) return
+    setSubmitting(true)
+    try {
+      const data = await submitMidtermBlock(getToken(), { contentId, blockId, text: text.trim() })
+      onSubmitted(data.submission)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to submit. Please try again.')
+    }
+    setSubmitting(false)
+  }
+
+  const canSubmit = !readOnly && !submitting && !!text.trim()
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <textarea rows={5} value={text} onChange={(e) => setText(e.target.value)} placeholder="Type your response here..." disabled={readOnly} style={{ width: '100%', padding: 10, border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 16, fontFamily: 'Poppins,sans-serif', resize: 'vertical', boxSizing: 'border-box' }} />
+      <button onClick={() => void submit()} disabled={!canSubmit} title={readOnly ? 'View-only access' : undefined} style={{ padding: '9px 16px', background: canSubmit ? '#1A365E' : '#E4EAF2', color: canSubmit ? '#fff' : '#94A3B8', border: 'none', borderRadius: 8, fontSize: 16, fontWeight: 700, cursor: canSubmit ? 'pointer' : 'not-allowed', alignSelf: 'flex-end', fontFamily: 'inherit' }}>
+        {submitting ? 'Submitting…' : 'Submit Response'}
+      </button>
+    </div>
+  )
+}
+
+function MidtermFileBlock({ contentId, blockId, studentId, latest, onSubmitted }: {
+  contentId: string
+  blockId: string
+  studentId: string
+  latest: { sub: MySubmission; note: MidtermSubNote } | undefined
+  onSubmitted: (s: MySubmission) => void
+}) {
+  const { readOnly } = usePortalReadOnly()
+  const { getToken } = useStudentPortal()
+  const [file, setFile] = useState<File | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+
+  if (latest) {
+    return (
+      <MidtermSubmittedNote submittedAt={latest.sub.submittedAt}>
+        {latest.sub.linkUrl && <a href={latest.sub.linkUrl} target="_blank" rel="noreferrer" style={{ fontSize: 15, color: '#1A365E', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Link2 size={11} /> {latest.note.fileName || 'View your file'}</a>}
+      </MidtermSubmittedNote>
+    )
+  }
+
+  async function submit() {
+    if (!file) return
+    setSubmitting(true)
+    try {
+      const fileUrl = await uploadFile(`lms/${studentId}/${contentId}/midterm/${Date.now()}_${file.name}`, file)
+      const data = await submitMidtermBlock(getToken(), { contentId, blockId, fileUrl, fileName: file.name })
+      onSubmitted(data.submission)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Upload failed. Please try again.')
+    }
+    setSubmitting(false)
+  }
+
+  const canSubmit = !readOnly && !submitting && !!file
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, border: `2px dashed ${file ? '#1DBD6A' : '#CBD5E0'}`, background: file ? '#F0FDF4' : '#F8FAFC', cursor: readOnly ? 'not-allowed' : 'pointer', fontSize: 15, color: file ? '#1DBD6A' : '#7A92B0', fontWeight: file ? 700 : 400 }}>
+        <input type="file" disabled={readOnly} style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) setFile(f) }} />
+        {file ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><CheckCircle2 size={12} /> {file.name}</span> : '+ Choose file (PDF, doc, image…)'}
+      </label>
+      <button onClick={() => void submit()} disabled={!canSubmit} title={readOnly ? 'View-only access' : undefined} style={{ padding: '9px 16px', background: canSubmit ? '#1A365E' : '#E4EAF2', color: canSubmit ? '#fff' : '#94A3B8', border: 'none', borderRadius: 8, fontSize: 16, fontWeight: 700, cursor: canSubmit ? 'pointer' : 'not-allowed', alignSelf: 'flex-end', fontFamily: 'inherit' }}>
+        {submitting ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Hourglass size={12} /> Uploading…</span> : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Upload size={12} /> Submit File</span>}
+      </button>
+    </div>
+  )
+}
+
+function MidtermOmrBlock({ contentId, block, history, onSubmitted }: {
+  contentId: string
+  block: Extract<MidtermBlock, { kind: 'omr' }>
+  history: { sub: MySubmission; note: MidtermSubNote }[]
+  onSubmitted: (s: MySubmission) => void
+}) {
+  const { getToken } = useStudentPortal()
+  const latest = history[0]?.note
+  const initialResult = latest && latest.score != null && latest.correct != null && latest.total != null
+    ? { score: latest.score, passed: !!latest.passed, correct: latest.correct, total: latest.total }
+    : null
+  return (
+    <OmrQuizRunner
+      questions={block.questions}
+      passMark={block.passMark ?? 80}
+      maxAttempts={block.retakes ?? 3}
+      timeLimitMins={block.timeLimit}
+      initialAttempts={history.length}
+      initialResult={initialResult}
+      emptyText="No questions have been added to this test yet."
+      onSubmit={async (answers) => {
+        const data = await submitMidtermBlock(getToken(), { contentId, blockId: block.id, answers })
+        onSubmitted(data.submission)
+        return {
+          result: { score: data.score ?? 0, passed: !!data.passed, correct: data.correct ?? 0, total: data.total ?? 0 },
+          attempts: data.attempts ?? history.length + 1,
+        }
+      }}
+    />
+  )
+}
+
+function MidtermReviewPanel({ item, studentId, submissions, onSubmitted }: {
+  item: LMSContent
+  studentId: string
+  submissions: MySubmission[]
+  onSubmitted: (s: MySubmission) => void
+}) {
+  const sections = parseMidtermSections(item.midtermSectionsJson)
+  const subsByBlock = midtermSubsByBlock(item.id, submissions)
+  const { done, total } = midtermProgress(item, submissions)
+  const pct = total ? Math.round((done / total) * 100) : 0
+
+  if (!sections.length) {
+    return <div style={{ ...card, ...emptyState }}>Your teacher hasn't added anything to this review yet.</div>
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {total > 0 && (
+        <div style={{ ...card, padding: '14px 18px' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 7 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#5A7290' }}>Review Progress</span>
+            <span style={{ fontSize: 15, fontWeight: 800, color: done === total ? SP_GREEN : '#1A365E', fontVariantNumeric: 'tabular-nums' }}>{done} of {total} submitted</span>
+          </div>
+          <div style={{ height: 8, background: '#F0F4FA', borderRadius: 100, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${pct}%`, background: done === total ? SP_GREEN : SP_NAVY, borderRadius: 100, transition: 'width .3s ease-out' }} />
+          </div>
+        </div>
+      )}
+
+      {sections.map((sec, si) => (
+        <div key={sec.id} style={{ ...card, overflow: 'hidden' }}>
+          <div style={{ padding: '14px 18px', borderBottom: '1px solid #F0F4FA' }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '.5px' }}>Section {si + 1} of {sections.length}</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: '#1A365E', marginTop: 2 }}>{sec.title}</div>
+            {sec.instructions && <div style={{ fontSize: 15, color: '#3D5475', lineHeight: 1.6, marginTop: 6, whiteSpace: 'pre-wrap' }}>{sec.instructions}</div>}
+          </div>
+          <div style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {sec.blocks.length === 0 && <div style={{ fontSize: 15, color: '#94A3B8' }}>Nothing to submit in this section — just read the instructions above.</div>}
+            {sec.blocks.map((b, bi) => {
+              const ui = MIDTERM_BLOCK_UI[b.kind]
+              const history = subsByBlock.get(b.id) ?? []
+              const submitted = history.length > 0
+              const Icon = ui.icon
+              return (
+                <div key={b.id} style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: bi > 0 ? 14 : 0, borderTop: bi > 0 ? '1px solid #F0F4FA' : 'none' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ width: 28, height: 28, borderRadius: 8, background: '#F0F4FA', color: SP_NAVY, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Icon size={14} /></span>
+                    <span style={{ fontSize: 15, fontWeight: 800, color: '#1A365E', flex: 1 }}>{ui.label}</span>
+                    <span style={{ fontSize: 12, fontWeight: 800, padding: '3px 9px', borderRadius: 100, background: submitted ? '#DCFCE7' : '#F1F5F9', color: submitted ? '#059669' : '#64748B' }}>{submitted ? 'Submitted' : 'Not started'}</span>
+                  </div>
+                  {b.kind !== 'omr' && b.prompt && <div style={{ fontSize: 15, color: '#3D5475', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{b.prompt}</div>}
+                  {b.kind === 'text' && <MidtermTextBlock contentId={item.id} blockId={b.id} latest={history[0]} onSubmitted={onSubmitted} />}
+                  {b.kind === 'file' && <MidtermFileBlock contentId={item.id} blockId={b.id} studentId={studentId} latest={history[0]} onSubmitted={onSubmitted} />}
+                  {b.kind === 'omr' && <MidtermOmrBlock contentId={item.id} block={b} history={history} onSubmitted={onSubmitted} />}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 /** Master It — final presentation upload + score, plus the module's overall grade
@@ -755,7 +1064,7 @@ function PresentationPanel({ carrierItem, studentId }: { carrierItem: LMSContent
   const { getToken } = useStudentPortal()
   // renderAppealControl is unused while the presentation rubric/score block below is
   // commented out — re-destructure it when that block is restored.
-  const { loading, bundle, refresh, scoreByType } = useModuleScoring(carrierItem)
+  const { loading, bundle, error, refresh, scoreByType } = useModuleScoring(carrierItem)
   const [presFile, setPresFile] = useState<File | null>(null)
   const [presNote, setPresNote] = useState('')
   const [presSubmitting, setPresSubmitting] = useState(false)
@@ -777,7 +1086,7 @@ function PresentationPanel({ carrierItem, studentId }: { carrierItem: LMSContent
   }
 
   if (loading) return <div style={{ ...card, ...emptyState }}>Loading…</div>
-  if (!bundle) return <div style={{ ...card, ...emptyState }}>Couldn't load this. Try refreshing.</div>
+  if (!bundle) return <BundleLoadError error={error} onRetry={() => { void refresh() }} />
 
   const subtotalsByType = Object.fromEntries(ACTIVE_SCORE_COMPONENT_TYPES.map((t) => [t, scoreByType[t]?.status === 'scored' ? scoreByType[t]!.subtotal : null])) as Partial<Record<ScoreComponentType, number | null>>
   const overallFinalGrade = finalGrade(subtotalsByType)
@@ -880,11 +1189,11 @@ function PresentationPanel({ carrierItem, studentId }: { carrierItem: LMSContent
 function DiscussionBoardPanel({ carrierItem, studentId }: { carrierItem: LMSContent; studentId: string }) {
   const { readOnly } = usePortalReadOnly()
   const { getToken } = useStudentPortal()
-  const { loading, bundle, refresh } = useCaseStudyBundle(carrierItem.id)
+  const { loading, bundle, error, refresh } = useCaseStudyBundle(carrierItem.id)
   const [busy, setBusy] = useState(false)
 
   if (loading) return <div style={{ ...card, ...emptyState }}>Loading…</div>
-  if (!bundle) return <div style={{ ...card, ...emptyState }}>Couldn't load this. Try refreshing.</div>
+  if (!bundle) return <BundleLoadError error={error} onRetry={() => { void refresh() }} />
 
   const posts: DiscussionPost[] = bundle.discussion.posts.map((p) => ({
     id: p.id, authorName: p.authorName, isStaff: p.isStaff, isMine: p.isMine,
@@ -1560,6 +1869,8 @@ export function SPMyLearningPage() {
   }
 
   function onSubmissionAdded(sub: MySubmission) {
+    // A Midterm Review has many blocks under one contentId/kind — keep every attempt.
+    if (sub.kind === 'midterm_review') { setMySubmissions((prev) => [sub, ...prev]); return }
     setMySubmissions((prev) => [sub, ...prev.filter((s) => !(s.contentId === sub.contentId && s.kind === sub.kind))])
   }
 
@@ -1600,6 +1911,7 @@ export function SPMyLearningPage() {
     }
     setActiveLessonId(item.id)
     setActivePart(part)
+    scrollPortalToTop()
   }
 
   // Opens an activity's overview (the Tutorial/Notes/Mastery-style checklist) —
@@ -1608,6 +1920,7 @@ export function SPMyLearningPage() {
     setActiveGroupKind(kind)
     setActiveLessonId(contentId)
     setActivePart(null)
+    scrollPortalToTop()
   }
 
   // From inside a part (Tutorial, Mastery Test, ...), "Back" returns to that
@@ -1663,7 +1976,7 @@ export function SPMyLearningPage() {
   }, [courses])
 
   const courseProgress = (course: LMSCourse) => {
-    const items = content.filter((item) => item.courseId === (course.groupId ?? course.id))
+    const items = content.filter((item) => item.courseId === (course.groupId ?? course.id) && !isMidtermReview(item))
     if (!items.length || !session) return 0
     const done = items.filter((item) => progress.find((entry) => entry.contentId === item.id && entry.studentId === session.dbId && entry.status === 'completed')).length
     return Math.round((done / items.length) * 100)
@@ -1741,6 +2054,8 @@ export function SPMyLearningPage() {
     const out: ActivityGroupRef[] = []
     groupedModules.forEach((module) => {
       module.units.forEach((items) => {
+        const midtermItem = items.find(isMidtermReview)
+        if (midtermItem) { out.push({ key: `midterm:${midtermItem.id}`, kind: 'midterm', contentId: midtermItem.id }); return }
         const carrierItem = items.find((i) => i.hasAssignment === true || i.hasAssignment === 'TRUE') ?? null
         const lessonItems = items.filter((i) => i !== carrierItem)
         if (carrierItem) out.push({ key: `learn:${carrierItem.id}`, kind: 'learn', contentId: carrierItem.id })
@@ -1767,6 +2082,7 @@ export function SPMyLearningPage() {
       case 'prove': return { title: 'Prove It: OMR Test', icon: Calculator }
       case 'master': return { title: 'Master It: Presentation', icon: Trophy }
       case 'discussion': return { title: 'Discussion Board', icon: MessageSquare }
+      case 'midterm': return { title: item?.title || 'Midterm Review', icon: ClipboardCheck }
       default: return { title: item?.title || 'Lesson', icon: BookOpen }
     }
   }
@@ -1786,6 +2102,7 @@ export function SPMyLearningPage() {
     if (ref.kind === 'prove') return progressionStatus.scores[item.id]?.omr === 'scored'
     if (ref.kind === 'master') return hasSubmission(item.id, 'presentation')
     if (ref.kind === 'discussion') return (progressionStatus.discussionCounts[item.id] ?? 0) > 0
+    if (ref.kind === 'midterm') { const p = midtermProgress(item, mySubmissions); return p.total > 0 && p.done === p.total }
     const itemProgress = progress.find((entry) => entry.contentId === item.id && entry.studentId === session?.dbId)
     const tutorialDone = itemProgress?.status === 'completed'
     const hasMastery = item.hasMastery === true || item.hasMastery === 'TRUE'
@@ -1900,7 +2217,7 @@ export function SPMyLearningPage() {
                 const enrolment = enrolments.find((entry) => entry.courseId === course.id) ?? null
                 const pace = paceMeta(pct, enrolment)
                 const subjectCol = SUBJECT_COLORS[course.subject] || '#1A365E'
-                const courseContent = content.filter((item) => item.courseId === (course.groupId ?? course.id))
+                const courseContent = content.filter((item) => item.courseId === (course.groupId ?? course.id) && !isMidtermReview(item))
                 const doneCount = courseContent.filter((item) => progress.find((entry) => entry.contentId === item.id && entry.studentId === session?.dbId && entry.status === 'completed')).length
                 const pendingAssignments = courseContent.filter((item) => {
                   const hasAssignment = item.hasAssignment === true || item.hasAssignment === 'TRUE'
@@ -1968,7 +2285,8 @@ export function SPMyLearningPage() {
         const daysRemaining = selectedEnrolment?.dueDate
           ? Math.ceil((new Date(`${selectedEnrolment.dueDate}T00:00:00`).getTime() - Date.now()) / 86400000)
           : null
-        const doneCount = courseItems.filter((item) => progress.find((entry) => entry.contentId === item.id && entry.studentId === session?.dbId && entry.status === 'completed')).length
+        const lessonCount = courseItems.filter((item) => !isMidtermReview(item)).length
+        const doneCount = courseItems.filter((item) => !isMidtermReview(item) && progress.find((entry) => entry.contentId === item.id && entry.studentId === session?.dbId && entry.status === 'completed')).length
 
         return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -2018,7 +2336,7 @@ export function SPMyLearningPage() {
               <div style={{ height: 9, background: '#F0F4FA', borderRadius: 100, overflow: 'hidden' }}>
                 <div style={{ height: '100%', width: `${courseProgress(selectedCourse)}%`, background: courseProgress(selectedCourse) === 100 ? SP_GREEN : courseProgress(selectedCourse) >= 50 ? '#D97706' : SP_NAVY, borderRadius: 100, transition: 'width .5s' }} />
               </div>
-              <div style={{ fontSize: 12, color: '#94A3B8', fontWeight: 600, marginTop: 7 }}>{doneCount} of {courseItems.length} lessons completed</div>
+              <div style={{ fontSize: 12, color: '#94A3B8', fontWeight: 600, marginTop: 7 }}>{doneCount} of {lessonCount} lessons completed</div>
             </div>
             <span style={{ fontSize: 12, fontWeight: 800, color: paceInfo.color, background: paceInfo.bg, padding: '5px 12px', borderRadius: 100, display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
               <paceInfo.icon size={12} /> {paceInfo.label}
@@ -2083,6 +2401,40 @@ export function SPMyLearningPage() {
               <div key={`${module.label || 'default'}-${moduleIdx}`} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {module.label ? <div style={{ fontSize: 14, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 4 }}><FolderKanban size={11} /> {module.label}</div> : null}
                 {[...module.units.entries()].map(([unit, items]) => {
+                  const midtermItem = items.find(isMidtermReview)
+                  if (midtermItem) {
+                    const ref: ActivityGroupRef = { key: `midterm:${midtermItem.id}`, kind: 'midterm', contentId: midtermItem.id }
+                    const locked = isGroupLocked(ref)
+                    const mp = midtermProgress(midtermItem, mySubmissions)
+                    const sectionCount = parseMidtermSections(midtermItem.midtermSectionsJson).length
+                    const state = mp.total > 0 && mp.done === mp.total ? 'done' : mp.done > 0 ? 'active' : 'todo'
+                    return (
+                      <button
+                        key={unit}
+                        onClick={() => !locked && openGroup('midterm', midtermItem.id)}
+                        disabled={locked}
+                        title={locked ? groupLockReason(ref) : undefined}
+                        style={{ ...card, display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '14px 18px', background: '#FAF8FF', border: '1px solid #DDD6FE', cursor: locked ? 'not-allowed' : 'pointer', fontFamily: 'inherit', textAlign: 'left', opacity: locked ? 0.6 : 1 }}
+                      >
+                        <span style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: state === 'done' ? '#DCFCE7' : '#EDE9FE', color: state === 'done' ? '#059669' : '#5B21B6' }}>
+                          {locked ? <Lock size={16} /> : state === 'done' ? <CheckCircle2 size={17} /> : <ClipboardCheck size={17} />}
+                        </span>
+                        <span style={{ flex: 1, minWidth: 0 }}>
+                          <span style={{ display: 'block', fontSize: 11, fontWeight: 800, color: '#5B21B6', textTransform: 'uppercase', letterSpacing: '.5px' }}>Midterm Review</span>
+                          <span style={{ display: 'block', fontSize: 15, fontWeight: 700, color: '#1A365E' }}>{midtermItem.title || unit}</span>
+                          <span style={{ display: 'block', fontSize: 12, color: '#94A3B8', fontWeight: 600, marginTop: 2 }}>
+                            {sectionCount} section{sectionCount !== 1 ? 's' : ''}{midtermItem.targetDate ? ` · Due ${formatLongDate(midtermItem.targetDate) || midtermItem.targetDate}` : ''}{locked ? ` · ${groupLockReason(ref)}` : ''}
+                          </span>
+                        </span>
+                        {mp.total > 0 && (
+                          <span style={{ fontSize: 12, fontWeight: 700, color: state === 'done' ? '#059669' : state === 'active' ? '#2563EB' : '#94A3B8', whiteSpace: 'nowrap' }}>
+                            {state === 'done' ? 'Completed' : `${mp.done} of ${mp.total} submitted`}
+                          </span>
+                        )}
+                        <ChevronRight size={15} color="#94A3B8" style={{ flexShrink: 0 }} />
+                      </button>
+                    )
+                  }
                   const carrierItem = items.find((i) => i.hasAssignment === true || i.hasAssignment === 'TRUE') ?? null
                   const lessonItems = items.filter((i) => i !== carrierItem)
                   const moduleKey = `unit:${unit}`
@@ -2301,7 +2653,7 @@ export function SPMyLearningPage() {
 
       {selectedCourse && activeLesson && activeGroupKind && !activePart && (() => {
         const kind = activeGroupKind
-        const GroupIcon: LucideIcon = kind === 'learn' ? FileText : kind === 'show' ? Scale : kind === 'prove' ? Calculator : kind === 'master' ? Trophy : kind === 'discussion' ? MessageSquare : BookOpen
+        const GroupIcon: LucideIcon = kind === 'midterm' ? ClipboardCheck : kind === 'learn' ? FileText : kind === 'show' ? Scale : kind === 'prove' ? Calculator : kind === 'master' ? Trophy : kind === 'discussion' ? MessageSquare : BookOpen
         const groupTitle = kind === 'learn' ? (activeLesson.title || 'Case Study')
           : kind === 'show' ? 'Socratic Seminar'
           : kind === 'prove' ? 'OMR Test'
@@ -2341,6 +2693,8 @@ export function SPMyLearningPage() {
           parts = [{ key: 'omr', title: 'OMR Test', status: 'not_started', statusText: 'Not started', targetDate: activeLesson.omrTargetDate }]
         } else if (kind === 'discussion') {
           parts = [{ key: 'discussion', title: 'Discussion Board', status: 'not_started', statusText: 'Join the conversation' }]
+        } else if (kind === 'midterm') {
+          parts = [] // rendered inline below — every section/block lives on this one page
         } else {
           const submitted = hasSubmission(activeLesson.id, 'presentation')
           parts = [{ key: 'presentation', title: 'Presentation', status: submitted ? 'completed' : 'not_started', statusText: submitted ? 'Submitted' : 'Not started', targetDate: activeLesson.presentationTargetDate }]
@@ -2398,6 +2752,12 @@ export function SPMyLearningPage() {
                 <div style={{ fontSize: 16, color: '#5A7290' }}><strong style={{ color: '#1A365E' }}>Target Date:</strong> {formatLongDate(groupTargetDate) || groupTargetDate}</div>
               )}
             </div>
+
+            {kind === 'midterm' && (
+              <div style={{ maxWidth: 760, width: '100%', margin: '0 auto' }}>
+                <MidtermReviewPanel item={activeLesson} studentId={session?.dbId ?? ''} submissions={mySubmissions} onSubmitted={onSubmissionAdded} />
+              </div>
+            )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 640, width: '100%', margin: '0 auto' }}>
               {parts.map((part) => {

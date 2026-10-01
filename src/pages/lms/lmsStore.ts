@@ -148,6 +148,31 @@ export interface LMSContent {
   omrLocked?: boolean
   presentationLocked?: boolean
   discussionLocked?: boolean
+  // Midterm Review — a standalone checkpoint that sits between two modules. It's one
+  // content row with its own unitTitle, so it orders/drags alongside the modules via
+  // unitOrder. Its body is fully admin-built: midtermSectionsJson holds MidtermSection[].
+  isMidtermReview?: boolean
+  midtermSectionsJson?: string
+}
+
+// ─── Midterm Review builder shapes ────────────────────────────────────────────
+// Each section has a title + instructions, then any mix of blocks in any order.
+export interface MidtermMcqQuestion { q: string; type?: 'mcq' | 'short'; opts: string[]; ans: number }
+export type MidtermBlock =
+  | { id: string; kind: 'text'; prompt: string }
+  | { id: string; kind: 'omr'; questions: MidtermMcqQuestion[]; passMark?: number; retakes?: number; timeLimit?: number }
+  | { id: string; kind: 'file'; prompt: string }
+export interface MidtermSection { id: string; title: string; instructions: string; blocks: MidtermBlock[] }
+
+export function isMidtermReview(c: Pick<LMSContent, 'isMidtermReview'>): boolean {
+  return c.isMidtermReview === true
+}
+
+export function parseMidtermSections(json: string | undefined): MidtermSection[] {
+  try {
+    const parsed = JSON.parse(json || '[]')
+    return Array.isArray(parsed) ? parsed : []
+  } catch { return [] }
 }
 
 export interface LMSEnrolment {
@@ -308,6 +333,8 @@ export function rowToLMSContent(r: Record<string, unknown>): LMSContent {
     omrLocked: extra.omrLocked === true,
     presentationLocked: extra.presentationLocked === true,
     discussionLocked: extra.discussionLocked === true,
+    isMidtermReview: extra.isMidtermReview === true,
+    midtermSectionsJson: extra.midtermSectionsJson as string | undefined,
   }
 }
 
@@ -493,6 +520,7 @@ export async function saveLMS(store: LMSStore): Promise<string | null> {
           locked: c.locked,
           socraticLocked: c.socraticLocked, omrLocked: c.omrLocked,
           presentationLocked: c.presentationLocked, discussionLocked: c.discussionLocked,
+          isMidtermReview: c.isMidtermReview, midtermSectionsJson: c.midtermSectionsJson,
         },
       })),
       { onConflict: 'id' }

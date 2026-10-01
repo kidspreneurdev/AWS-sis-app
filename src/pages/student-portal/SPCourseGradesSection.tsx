@@ -251,8 +251,9 @@ export function SPCourseGradesSection() {
         caseStudyUrl: (extra.caseStudyUrl as string) ?? undefined,
         socraticDate: (extra.socraticDate as string) ?? undefined,
         rubricOverrides: extra.rubricOverrides as LMSContent['rubricOverrides'],
+        isMidtermReview: extra.isMidtermReview === true,
       }
-    })
+    }).filter((c) => !c.isMidtermReview) // Midterm Reviews aren't graded lessons (no student view yet)
 
     const unitOrderByKey = new Map<string, number>()
     mappedContent.forEach((c) => { if (c.unitOrder !== undefined) unitOrderByKey.set(`${c.courseId}::${c.unitTitle}`, c.unitOrder) })

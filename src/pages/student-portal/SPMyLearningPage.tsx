@@ -993,6 +993,38 @@ function MidtermOmrBlock({ contentId, block, history, onSubmitted }: {
   )
 }
 
+/** Instruction images for one Midterm Review section — shown at a readable size (whole
+ *  image, never cropped) and tappable to view full screen. */
+function MidtermSectionImages({ images }: { images: { url: string; name: string }[] }) {
+  const [viewing, setViewing] = useState<{ url: string; name: string } | null>(null)
+
+  useEffect(() => {
+    if (!viewing) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setViewing(null) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [viewing])
+
+  return (
+    <>
+      <div style={{ display: 'grid', gridTemplateColumns: images.length > 1 ? 'repeat(auto-fit, minmax(240px, 1fr))' : '1fr', gap: 10, marginTop: 12 }}>
+        {images.map((im) => (
+          <button key={im.url} type="button" onClick={() => setViewing(im)} title="Click to enlarge"
+            style={{ padding: 0, border: '1px solid #E4EAF2', borderRadius: 10, background: '#F8FAFC', cursor: 'zoom-in', overflow: 'hidden', display: 'block', width: '100%' }}>
+            <img src={im.url} alt={im.name} loading="lazy" style={{ display: 'block', width: '100%', maxHeight: images.length > 1 ? 320 : 520, objectFit: 'contain' }} />
+          </button>
+        ))}
+      </div>
+      {viewing && (
+        <div onClick={() => setViewing(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(10,24,50,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, cursor: 'zoom-out' }}>
+          <button type="button" onClick={() => setViewing(null)} title="Close" style={{ position: 'absolute', top: 16, right: 16, width: 36, height: 36, borderRadius: '50%', border: '1px solid rgba(255,255,255,.3)', background: 'rgba(255,255,255,.12)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={18} /></button>
+          <img src={viewing.url} alt={viewing.name} onClick={(e) => e.stopPropagation()} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 8, background: '#fff', cursor: 'default', boxShadow: '0 20px 60px rgba(0,0,0,.4)' }} />
+        </div>
+      )}
+    </>
+  )
+}
+
 function MidtermReviewPanel({ item, studentId, submissions, onSubmitted }: {
   item: LMSContent
   studentId: string
@@ -1028,6 +1060,7 @@ function MidtermReviewPanel({ item, studentId, submissions, onSubmitted }: {
             <div style={{ fontSize: 12, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '.5px' }}>Section {si + 1} of {sections.length}</div>
             <div style={{ fontSize: 18, fontWeight: 800, color: '#1A365E', marginTop: 2 }}>{sec.title}</div>
             {sec.instructions && <div style={{ fontSize: 15, color: '#3D5475', lineHeight: 1.6, marginTop: 6, whiteSpace: 'pre-wrap' }}>{sec.instructions}</div>}
+            {(sec.images?.length ?? 0) > 0 && <MidtermSectionImages images={sec.images!} />}
           </div>
           <div style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 14 }}>
             {sec.blocks.length === 0 && <div style={{ fontSize: 15, color: '#94A3B8' }}>Nothing to submit in this section — just read the instructions above.</div>}

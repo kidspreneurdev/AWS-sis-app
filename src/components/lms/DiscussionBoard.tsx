@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import {
-  ArrowLeft, Info, Lock, Megaphone, MessageSquare, Paperclip, Pencil, Pin,
+  ArrowLeft, ChevronDown, ChevronUp, ClipboardList, FileText, Info, Lock, Megaphone, MessageSquare, Paperclip, Pencil, Pin,
   Search, LayoutGrid, List, ThumbsUp, Trash2, Upload, ExternalLink, Send, X,
 } from 'lucide-react'
 
@@ -161,6 +161,74 @@ function AttachmentChip({ url, name }: { url: string; name: string | null }) {
 }
 
 const iconBtnStyle: React.CSSProperties = { padding: 6, background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', display: 'flex', borderRadius: 6, transition: 'color 150ms ease, background-color 150ms ease' }
+
+const DISCUSSION_RUBRIC_URL = '/LMS/Discussion Rubric.pdf'
+const GUIDE_COLLAPSED_KEY = 'lms.discussionGuide.collapsed'
+
+const PARTICIPATION_STEPS: { title: string; body: string }[] = [
+  {
+    title: 'Post your position',
+    body: 'Start by stating your position clearly. Support it with at least two specific pieces of evidence from the case study, such as section numbers, figures from a table, or a stakeholder\'s memo. If the question asks you to look beyond the case, you can also bring in a credible outside source, such as a news article, company report, or published research. Name the source and explain how it connects back to the case. Then explain how each piece of evidence supports your point.',
+  },
+  {
+    title: 'Reply to at least two classmates',
+    body: 'Each reply should add something new: respond to a point you see differently and explain why, share evidence they did not mention, or ask a question that develops their thinking. A reply that only agrees or says "great post" does not count.',
+  },
+  {
+    title: 'Return to your own post',
+    body: 'Respond to classmates who replied to you.',
+  },
+]
+
+function readGuideCollapsed() {
+  try { return localStorage.getItem(GUIDE_COLLAPSED_KEY) === '1' } catch { return false }
+}
+
+/** Standing participation instructions + the grading rubric — identical on every
+ *  discussion board (student and staff), so it's fixed here rather than per-board data.
+ *  Collapse state is remembered per browser since students revisit boards often. */
+function ParticipationGuide() {
+  const [collapsed, setCollapsed] = useState(readGuideCollapsed)
+
+  function toggle() {
+    const next = !collapsed
+    setCollapsed(next)
+    try { localStorage.setItem(GUIDE_COLLAPSED_KEY, next ? '1' : '0') } catch { /* storage unavailable */ }
+  }
+
+  return (
+    <section style={{ ...card, padding: collapsed ? '12px 18px' : '16px 18px', display: 'flex', flexDirection: 'column', gap: 12, borderLeft: `4px solid ${NAVY}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+        <button onClick={toggle} aria-expanded={!collapsed} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: NAVY }}>
+          <ClipboardList size={14} /> How to take part in this discussion
+          {collapsed ? <ChevronDown size={14} color="#7A92B0" /> : <ChevronUp size={14} color="#7A92B0" />}
+        </button>
+        <a href={DISCUSSION_RUBRIC_URL} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 11px', background: '#FBE7E9', borderRadius: 10, textDecoration: 'none', fontSize: 12, fontWeight: 700, color: '#B01827' }}>
+          <FileText size={13} /> Discussion Rubric · 20 pts <ExternalLink size={10} />
+        </a>
+      </div>
+      {!collapsed && (
+        <>
+          <ol style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {PARTICIPATION_STEPS.map((step, i) => (
+              <li key={step.title} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                <span style={{ width: 22, height: 22, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#E7ECF4', color: '#2C4A78', fontSize: 12, fontWeight: 700, marginTop: 1 }}>{i + 1}</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: '#1A2233' }}>{step.title}</span>
+                  <span style={{ fontSize: 13.5, color: '#3D4F66', lineHeight: 1.6 }}>{step.body}</span>
+                </div>
+              </li>
+            ))}
+          </ol>
+          <p style={{ margin: 0, fontSize: 13.5, color: '#3D4F66', lineHeight: 1.6, paddingTop: 10, borderTop: '1px solid #EEF2F7' }}>
+            Throughout, write in clear, professional English and use this module's vocabulary where it fits. Make sure to go through the{' '}
+            <a href={DISCUSSION_RUBRIC_URL} target="_blank" rel="noreferrer" style={{ color: NAVY, fontWeight: 700 }}>rubric</a>.
+          </p>
+        </>
+      )}
+    </section>
+  )
+}
 
 /** The board's own "what to discuss" context — sits above the toolbar and post feed.
  *  Students only ever see it read-only (and not at all when empty); staff get an
@@ -339,6 +407,9 @@ export function DiscussionBoard({
   }
 
   // ─── Composer ───────────────────────────────────────────────────────────
+  // Composer / TopicCard / RowActions are render helpers, called as functions — not
+  // mounted as <Composer />. Declared inside this component, each render would make a
+  // new component type and React would remount the subtree, dropping input focus.
   function Composer() {
     if (!composerOpen) return null
     return (
@@ -388,7 +459,7 @@ export function DiscussionBoard({
             </div>
             <div style={{ fontSize: 12, color: '#9AA6B8', marginTop: 1 }}>{formatRelativeTime(topic.createdAt)}</div>
           </div>
-          <div style={{ marginLeft: 'auto' }}><RowActions post={topic} isTopic /></div>
+          <div style={{ marginLeft: 'auto' }}>{RowActions({ post: topic, isTopic: true })}</div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, minWidth: 0 }}>
           <Badges post={topic} />
@@ -432,7 +503,7 @@ export function DiscussionBoard({
               </div>
               <div style={{ fontSize: 12, color: '#9AA6B8', marginTop: 1 }}>{formatRelativeTime(selectedTopic.createdAt)}{selectedTopic.edited && !selectedTopic.deletedAt ? ' · edited' : ''}</div>
             </div>
-            <RowActions post={selectedTopic} isTopic />
+            {RowActions({ post: selectedTopic, isTopic: true })}
           </div>
           <div style={{ marginTop: 10 }}><Badges post={selectedTopic} /></div>
           {editingPostId === selectedTopic.id ? (
@@ -478,7 +549,7 @@ export function DiscussionBoard({
                       {reply.isStaff && <span style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.02em', padding: '2px 7px', borderRadius: 20, background: '#E7ECF4', color: '#2C4A78' }}>Staff</span>}
                       <span style={{ fontSize: 12, color: '#9AA6B8' }}>{formatRelativeTime(reply.createdAt)}{reply.edited && !reply.deletedAt ? ' · edited' : ''}</span>
                     </div>
-                    <RowActions post={reply} isTopic={false} />
+                    {RowActions({ post: reply, isTopic: false })}
                   </div>
                   {reply.deletedAt ? (
                     <div style={{ fontSize: 14, color: '#94A3B8', fontStyle: 'italic', marginTop: 4 }}>[deleted]</div>
@@ -527,6 +598,7 @@ export function DiscussionBoard({
   // ─── Board (description + toolbar + filters + grid) ─────────────────────
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <ParticipationGuide />
       <DescriptionCard description={description} editable={mode === 'staff' && !!onSaveDescription} busy={busy} onSave={onSaveDescription} />
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
@@ -569,7 +641,7 @@ export function DiscussionBoard({
         ))}
       </div>
 
-      <Composer />
+      {Composer()}
 
       {loading ? (
         <div style={{ ...card, padding: '32px 20px', textAlign: 'center', color: '#7A92B0', fontSize: 14 }}>Loading…</div>
@@ -580,7 +652,7 @@ export function DiscussionBoard({
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: view === 'list' ? '1fr' : 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
-          {visibleTopics.map((topic) => <TopicCard key={topic.id} topic={topic} />)}
+          {visibleTopics.map((topic) => <Fragment key={topic.id}>{TopicCard({ topic })}</Fragment>)}
         </div>
       )}
 

@@ -1144,6 +1144,55 @@ async function lmsSubmitNotes(req, res, adminClient) {
   return json(res, 200, { submissionId: submission.id, submittedAt: submission.submitted_at })
 }
 
+/** Mark done — the student ticks off a lesson's Video row or a module's Master It
+ *  presentation without uploading anything. `done: true` records one marker row
+ *  (idempotent); `done: false` removes it. */
+const LMS_MARK_DONE_KINDS = ['video_done', 'presentation_done']
+
+async function lmsMarkDone(req, res, adminClient) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST')
+    return json(res, 405, { error: 'Method not allowed' })
+  }
+
+  const studentDbId = requireStudentToken(req, res, json)
+  if (!studentDbId) return
+
+  const { contentId, kind, done } = req.body || {}
+  if (typeof contentId !== 'string' || !contentId) return json(res, 400, { error: 'contentId is required.' })
+  if (!LMS_MARK_DONE_KINDS.includes(kind)) return json(res, 400, { error: 'Invalid kind.' })
+  if (typeof done !== 'boolean') return json(res, 400, { error: 'done must be true or false.' })
+
+  if (!done) {
+    const { error } = await adminClient.from('lms_submissions').delete().eq('student_id', studentDbId).eq('content_id', contentId).eq('kind', kind)
+    if (error) return json(res, 500, { error: 'Failed to update. Please try again.' })
+    return json(res, 200, { submission: null })
+  }
+
+  const { data: content, error: contentError } = await adminClient.from('lms_content').select('id,course_id').eq('id', contentId).single()
+  if (contentError || !content) return json(res, 404, { error: 'Lesson not found.' })
+
+  const { data: prior } = await adminClient
+    .from('lms_submissions')
+    .select('note,link_url,submitted_at')
+    .eq('student_id', studentDbId).eq('content_id', contentId).eq('kind', kind)
+    .limit(1)
+  let row = prior?.[0]
+  if (!row) {
+    const { data: inserted, error: insertError } = await adminClient
+      .from('lms_submissions')
+      .insert({ student_id: studentDbId, course_id: content.course_id, content_id: contentId, kind, note: null, link_url: null, submitted_at: new Date().toISOString() })
+      .select('note,link_url,submitted_at')
+      .single()
+    if (insertError || !inserted) return json(res, 500, { error: 'Failed to update. Please try again.' })
+    row = inserted
+  }
+
+  return json(res, 200, {
+    submission: { contentId, kind, note: row.note, linkUrl: row.link_url, submittedAt: row.submitted_at },
+  })
+}
+
 /** Every lms_submissions row this student has for a course, in one call — used to
  *  hydrate "already submitted" state for every lesson's Show-it-Notes row plus the
  *  module's Learn-it-Notes row without a round trip per row. */
@@ -1833,6 +1882,7 @@ const ACTIONS = {
   'lms-submit-omr-quiz': lmsSubmitOmrQuiz,
   'lms-get-my-progression-status': lmsGetMyProgressionStatus,
   'lms-submit-midterm-block': lmsSubmitMidtermBlock,
+  'lms-mark-done': lmsMarkDone,
 }
 
 export default async function handler(req, res) {

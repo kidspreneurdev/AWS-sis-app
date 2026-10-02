@@ -13,7 +13,7 @@ import {
   loadLMS, saveLMS, loadLMSFromDB, deleteLMSCourse, deleteLMSCourseGroup, deleteLMSContent, deleteLMSEnrolment,
   lmsId, fmtTime, hasMasteryBool, hasAssignBool, isActiveBool,
   lmsCompositeScore, lmsCourseComposite, gradeLabel,
-  SUBJECT_COLORS, SUBJECTS, GRADE_LEVELS, TYPE_ICONS, isMidtermReview, parseMidtermSections, REVIEW_META, reviewKindOf, type ReviewKind,
+  SUBJECT_COLORS, SUBJECTS, GRADE_LEVELS, TYPE_ICONS, isMidtermReview, parseMidtermSections, REVIEW_META, reviewKindOf, type ReviewKind, carrierSectionTitle,
   type MidtermSection, type MidtermBlock,
   type LMSCourse, type LMSContent, type LMSEnrolment, type LMSProgress, type LMSStore, type LMSCourseGroup
 } from './lmsStore'
@@ -22,6 +22,9 @@ import { PRESENTATION_ROLE_MODULES, guessPresentationRoleModule } from '@/lib/lm
 
 interface Student { id: string; lastName: string; firstName: string; fullName: string; cohort: string; grade: string; studentId: string; campus: string; status: string }
 type LMSSubmissionRow = Record<string, unknown>
+// Student "Mark done" ticks (Video row / Master It presentation) — completion markers,
+// not uploads, so they stay out of the gradebook's submission-based status.
+const isMarkDoneRow = (r: LMSSubmissionRow) => r.kind === 'video_done' || r.kind === 'presentation_done'
 
 // Curriculum, progress and submissions all belong to the Course (group). A section
 // (LMSCourse row) resolves to its curriculum through group_id. Enrolments stay
@@ -1680,6 +1683,8 @@ export function LMSPage() {
   const [curriculumExpanded, setCurriculumExpanded] = useState<Record<string, boolean>>({})
   const [curriculumSettingsOpen, setCurriculumSettingsOpen] = useState(false)
   const [curriculumMenuOpenId, setCurriculumMenuOpenId] = useState<string | null>(null)
+  // Content id whose notes-upload row label is being renamed inline in the curriculum tree.
+  const [renamingNotesId, setRenamingNotesId] = useState<string | null>(null)
   const curriculumMenuRef = useRef<HTMLDivElement>(null)
   // "+" add-menu on the course row opens on hover too — a short close delay lets the
   // pointer cross the gap between the trigger and the dropdown without it snapping shut.
@@ -1802,7 +1807,7 @@ export function LMSPage() {
         console.error('LMS student submissions load error:', error)
         setStudentSubmissions([])
       } else {
-        setStudentSubmissions((data ?? []) as LMSSubmissionRow[])
+        setStudentSubmissions(((data ?? []) as LMSSubmissionRow[]).filter(r => !isMarkDoneRow(r)))
       }
       setStudentSubmissionsLoading(false)
     })
@@ -1818,7 +1823,7 @@ export function LMSPage() {
         console.error('LMS submissions load error:', error)
         setAllSubmissions([])
       } else {
-        setAllSubmissions((data ?? []) as LMSSubmissionRow[])
+        setAllSubmissions(((data ?? []) as LMSSubmissionRow[]).filter(r => !isMarkDoneRow(r)))
       }
     })
     return () => { alive = false }
@@ -3840,12 +3845,33 @@ export function LMSPage() {
               : label === 'Notes: Upload' ? 'notesTargetDate'
               : label === 'Mastery Test' ? 'masteryTargetDate'
               : null
+            const isNotes = label === 'Notes: Upload' || label === 'Notes Upload'
             return (
               <tr key={item.id + '-' + label} style={{ borderBottom: '1px solid #F0F4FA' }}>
                 <td style={{ padding: '6px 10px', paddingLeft: 12 + (depth + 1) * 26 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontSize: 14 }}>📋</span>
-                    <span style={{ fontSize: 11, color: '#5A7290' }}>{item.title}: {label}</span>
+                    {isNotes && renamingNotesId === item.id ? (
+                      <>
+                        <span style={{ fontSize: 11, color: '#5A7290' }}>{item.title}:</span>
+                        <input
+                          autoFocus
+                          defaultValue={item.notesTitle || label}
+                          placeholder={label}
+                          onFocus={e => e.target.select()}
+                          onBlur={e => { const v = e.target.value.trim(); patchContent(item.id, { notesTitle: v && v !== label ? v : undefined }); setRenamingNotesId(null) }}
+                          onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setRenamingNotesId(null) }}
+                          style={{ border: '1px solid #C7D3E3', borderRadius: 6, fontSize: 11, padding: '3px 6px', color: '#1A365E', fontFamily: 'inherit', width: 200 }}
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <span style={{ fontSize: 11, color: '#5A7290' }}>{item.title}: {isNotes ? (item.notesTitle || label) : label}</span>
+                        {isNotes && (
+                          <button onClick={() => setRenamingNotesId(item.id)} title="Rename" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: '#94A3B8', padding: '0 2px', fontFamily: 'inherit' }}>✏️</button>
+                        )}
+                      </>
+                    )}
                   </div>
                 </td>
                 <td style={{ padding: '6px 10px', textAlign: 'center' }}>
@@ -3914,7 +3940,7 @@ export function LMSPage() {
           <td style={{ padding: '6px 10px', paddingLeft: 12 + (depth + 1) * 26 }}>
             <button onClick={() => { setDiscussionBoardContentId(carrierItem.id); setCurriculumMenuOpenId(null) }} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>
               <span style={{ fontSize: 14 }}>💬</span>
-              <span style={{ fontSize: 11, color: '#5A7290' }}>{carrierItem.title}: Discussion Board</span>
+              <span style={{ fontSize: 11, color: '#5A7290' }}>{carrierItem.title}: {carrierSectionTitle(carrierItem, 'discussion')}</span>
             </button>
           </td>
           <td />
@@ -3946,13 +3972,13 @@ export function LMSPage() {
           {carrierItem && (
             <>
               {renderSectionLabelRow('⚖️', 'Show It', depth - 1, `${dragScope}-show`)}
-              {renderCarrierLinkRow('Socratic Seminar', depth - 1, carrierItem, `${dragScope}-socratic`, 'socratic')}
+              {renderCarrierLinkRow(carrierSectionTitle(carrierItem, 'socratic'), depth - 1, carrierItem, `${dragScope}-socratic`, 'socratic')}
 
               {renderSectionLabelRow('🔢', 'Prove It', depth - 1, `${dragScope}-prove`)}
-              {renderCarrierLinkRow('OMR Test', depth - 1, carrierItem, `${dragScope}-omr`, 'omr')}
+              {renderCarrierLinkRow(carrierSectionTitle(carrierItem, 'omr'), depth - 1, carrierItem, `${dragScope}-omr`, 'omr')}
 
               {renderSectionLabelRow('🏆', 'Master It', depth - 1, `${dragScope}-master`)}
-              {renderCarrierLinkRow('Presentation', depth - 1, carrierItem, `${dragScope}-presentation`, 'presentation')}
+              {renderCarrierLinkRow(carrierSectionTitle(carrierItem, 'presentation'), depth - 1, carrierItem, `${dragScope}-presentation`, 'presentation')}
               {renderDiscussionLinkRow(depth - 1, carrierItem, `${dragScope}-discussion`)}
             </>
           )}
@@ -5480,6 +5506,8 @@ export function LMSPage() {
       presentation: { icon: '🏆', title: 'Master It — Presentation', rubricType: 'presentation' as const },
     }[type]
 
+    const titleField = `${type}Title` as const
+    const [sectionTitle, setSectionTitle] = useState(item?.[titleField] ?? '')
     const [socraticBrief, setSocraticBrief] = useState(item?.socraticBrief ?? '')
     const [socraticDate, setSocraticDate] = useState(item?.socraticDate ?? '')
     const [presentationBrief, setPresentationBrief] = useState(item?.presentationBrief ?? DEFAULT_PRESENTATION_BRIEF)
@@ -5489,6 +5517,12 @@ export function LMSPage() {
     const [presentationVideoUrl, setPresentationVideoUrl] = useState(item?.presentationVideoUrl ?? '')
     const [presentationVideoFileName, setPresentationVideoFileName] = useState(item?.presentationVideoFileName ?? '')
     const [presentationVideoFile, setPresentationVideoFile] = useState<File | null>(null)
+    const [presentationGuideUrl, setPresentationGuideUrl] = useState(item?.presentationGuideUrl ?? '')
+    const [presentationGuideFileName, setPresentationGuideFileName] = useState(item?.presentationGuideFileName ?? '')
+    const [presentationGuideFile, setPresentationGuideFile] = useState<File | null>(null)
+    const [presentationRubricUrl, setPresentationRubricUrl] = useState(item?.presentationRubricUrl ?? '')
+    const [presentationRubricFileName, setPresentationRubricFileName] = useState(item?.presentationRubricFileName ?? '')
+    const [presentationRubricFile, setPresentationRubricFile] = useState<File | null>(null)
     const [rubric, setRubric] = useState<RubricCategory>(getEffectiveRubric(item?.rubricOverrides, meta.rubricType))
     const [omrQuestions, setOmrQuestions] = useState<McqQuestion[]>(() => {
       try { return JSON.parse(item?.omrQuizJson || '[]') } catch { return [] }
@@ -5512,6 +5546,10 @@ export function LMSPage() {
       let finalBriefFileName = presentationBriefFileName
       let finalVideoUrl = presentationVideoUrl.trim()
       let finalVideoFileName = presentationVideoFileName
+      let finalGuideUrl = presentationGuideUrl
+      let finalGuideFileName = presentationGuideFileName
+      let finalRubricUrl = presentationRubricUrl
+      let finalRubricFileName = presentationRubricFileName
       if (type === 'presentation') {
         if (presentationBriefFile) {
           try {
@@ -5524,6 +5562,18 @@ export function LMSPage() {
             finalVideoUrl = await uploadFile(`lms-presentation-video/${Date.now()}_${presentationVideoFile.name}`, presentationVideoFile)
             finalVideoFileName = presentationVideoFile.name
           } catch { alert('Explainer video upload failed. Please try again.'); return }
+        }
+        if (presentationGuideFile) {
+          try {
+            finalGuideUrl = await uploadFile(`lms-presentation-guide/${Date.now()}_${presentationGuideFile.name}`, presentationGuideFile)
+            finalGuideFileName = presentationGuideFile.name
+          } catch { alert('Presentation Content Guide upload failed. Please try again.'); return }
+        }
+        if (presentationRubricFile) {
+          try {
+            finalRubricUrl = await uploadFile(`lms-presentation-rubric/${Date.now()}_${presentationRubricFile.name}`, presentationRubricFile)
+            finalRubricFileName = presentationRubricFile.name
+          } catch { alert('Presentation Rubric upload failed. Please try again.'); return }
         }
       }
       const fieldPatch: Partial<LMSContent> =
@@ -5542,12 +5592,17 @@ export function LMSPage() {
           presentationBriefFileName: finalBriefFileName || undefined,
           presentationVideoUrl: finalVideoUrl || undefined,
           presentationVideoFileName: finalVideoFileName || undefined,
+          presentationGuideUrl: finalGuideUrl || undefined,
+          presentationGuideFileName: finalGuideFileName || undefined,
+          presentationRubricUrl: finalRubricUrl || undefined,
+          presentationRubricFileName: finalRubricFileName || undefined,
           presentationTargetDate: presentationTargetDate || null,
         }
       // OMR is auto-graded from its questions now, not a rubric admins score by hand —
       // don't write a rubricOverrides entry for it (leave any old one untouched). Presentation's
       // rubric editor is also disabled for now (see above) — same treatment, for the same reason.
-      const patch: Partial<LMSContent> = (type === 'omr' || type === 'presentation') ? fieldPatch : { ...fieldPatch, rubricOverrides: { ...item?.rubricOverrides, [meta.rubricType]: rubric } }
+      const titlePatch: Partial<LMSContent> = { [titleField]: sectionTitle.trim() || undefined }
+      const patch: Partial<LMSContent> = (type === 'omr' || type === 'presentation') ? { ...fieldPatch, ...titlePatch } : { ...fieldPatch, ...titlePatch, rubricOverrides: { ...item?.rubricOverrides, [meta.rubricType]: rubric } }
       persist({ ...store, content: store.content.map(c => c.id === contentId ? { ...c, ...patch } : c) })
       onClose()
     }
@@ -5563,6 +5618,11 @@ export function LMSPage() {
             <button onClick={onClose} title="Close" style={modalCloseBtnOnDark}>✕</button>
           </div>
           <div style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div>
+              <label style={labelStyle}>Title</label>
+              <input value={sectionTitle} onChange={e => setSectionTitle(e.target.value)} placeholder="Optional — e.g. Supply & Demand Debate" style={inputStyle} />
+              <div style={{ fontSize: 10, color: '#7A92B0', marginTop: 4 }}>Students see: {carrierSectionTitle({ [titleField]: sectionTitle }, type)}</div>
+            </div>
             {type === 'socratic' && (
               <>
                 <div>
@@ -5644,14 +5704,28 @@ export function LMSPage() {
                   <label style={{ ...labelStyle, marginBottom: 4 }}>Rubric — {CASE_STUDY_RUBRIC[meta.rubricType].label}</label>
                   <RubricEditor value={rubric} onChange={setRubric} />
                 </div> */}
-                <div>
-                  <label style={labelStyle}>Presentation Content Guide</label>
-                  <a href="/LMS/Presentation Content Guide.pdf" target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', border: '1.5px solid #E4EAF2', borderRadius: 8, textDecoration: 'none', fontSize: 12, color: '#1A365E', fontWeight: 700 }}>📘 Presentation Content Guide.pdf</a>
-                </div>
-                <div>
-                  <label style={labelStyle}>Presentation Rubric</label>
-                  <a href="/LMS/Presentation Rubric.pdf" target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', border: '1.5px solid #E4EAF2', borderRadius: 8, textDecoration: 'none', fontSize: 12, color: '#1A365E', fontWeight: 700 }}>📋 Presentation Rubric.pdf</a>
-                </div>
+                {([
+                  { label: 'Presentation Content Guide', icon: '📘', file: presentationGuideFile, setFile: setPresentationGuideFile, url: presentationGuideUrl, setUrl: setPresentationGuideUrl, fileName: presentationGuideFileName, setFileName: setPresentationGuideFileName },
+                  { label: 'Presentation Rubric', icon: '📋', file: presentationRubricFile, setFile: setPresentationRubricFile, url: presentationRubricUrl, setUrl: setPresentationRubricUrl, fileName: presentationRubricFileName, setFileName: setPresentationRubricFileName },
+                ]).map(a => (
+                  <div key={a.label}>
+                    <label style={labelStyle}>{a.label}</label>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'stretch' }}>
+                      <label style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', borderRadius: 8, border: `2px dashed ${a.file ? '#059669' : a.url ? '#E4EAF2' : '#CBD5E0'}`, background: a.file ? '#F0FDF4' : a.url ? '#fff' : '#F8FAFC', cursor: 'pointer', fontSize: 12, color: a.file ? '#059669' : a.url ? '#1A365E' : '#7A92B0', fontWeight: a.file || a.url ? 700 : 400 }}>
+                        <input type="file" accept=".pdf,.doc,.docx,.ppt,.pptx" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) a.setFile(f); e.target.value = '' }} />
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {a.file ? `✅ ${a.file.name}` : a.url ? `${a.icon} ${a.fileName || a.label} — click to replace` : `+ Attach ${a.label}`}
+                        </span>
+                      </label>
+                      {!a.file && a.url && (
+                        <a href={a.url} target="_blank" rel="noreferrer" title="Open" style={{ display: 'flex', alignItems: 'center', padding: '0 10px', background: '#F0F4FA', color: '#1A365E', border: '1px solid #DDE6F0', borderRadius: 8, fontSize: 11, fontWeight: 700, textDecoration: 'none' }}>Open</a>
+                      )}
+                      {(a.file || a.url) && (
+                        <button type="button" title="Remove" onClick={() => { a.setFile(null); a.setUrl(''); a.setFileName('') }} style={{ padding: '0 10px', background: '#FFF0F1', color: '#D61F31', border: '1px solid #F5C2C7', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>✕</button>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </>
             )}
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6 }}>
@@ -5676,6 +5750,13 @@ export function LMSPage() {
     const [loading, setLoading] = useState(true)
     const [posts, setPosts] = useState<DiscussionPost[]>([])
     const [busy, setBusy] = useState(false)
+    const [boardTitle, setBoardTitle] = useState(item?.discussionTitle ?? '')
+
+    function saveBoardTitle() {
+      const next = boardTitle.trim() || undefined
+      if (next === (item?.discussionTitle || undefined)) return
+      persist({ ...store, content: store.content.map(c => c.id === contentId ? { ...c, discussionTitle: next } : c) })
+    }
 
     async function load() {
       setLoading(true)
@@ -5777,13 +5858,18 @@ export function LMSPage() {
         <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 860, maxHeight: '94vh', overflowY: 'auto', boxShadow: '0 24px 60px rgba(0,0,0,.3)', margin: 'auto' }}>
           <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '18px 24px', borderRadius: '18px 18px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>Master It — Discussion Board</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>Master It — {carrierSectionTitle(item, 'discussion')}</div>
               <div style={{ fontSize: 10, color: 'rgba(255,255,255,.65)', marginTop: 2 }}>{item.title}</div>
             </div>
             <button onClick={onClose} title="Close" style={modalCloseBtnOnDark}>✕</button>
           </div>
 
           <div style={{ padding: '18px 24px' }}>
+            <div style={{ marginBottom: 14, maxWidth: 420 }}>
+              <label style={labelStyle}>Title</label>
+              <input value={boardTitle} onChange={e => setBoardTitle(e.target.value)} onBlur={saveBoardTitle} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }} placeholder="Optional — e.g. Is Fast Fashion Worth It?" style={inputStyle} />
+              <div style={{ fontSize: 10, color: '#7A92B0', marginTop: 4 }}>Students see: {carrierSectionTitle({ discussionTitle: boardTitle }, 'discussion')}</div>
+            </div>
             <DiscussionBoard
               mode="staff"
               posts={posts}

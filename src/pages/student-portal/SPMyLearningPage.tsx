@@ -7,7 +7,7 @@ import {
   FolderOpen, PartyPopper, Frown, RefreshCw, X, Play, Video,
   ChevronDown, ChevronRight, Search,
   ArrowLeft, ArrowRight, Star, Lock, AlertTriangle, ExternalLink, Info,
-  MessageSquare, Eye, ClipboardCheck,
+  MessageSquare, Eye, ClipboardCheck, GraduationCap,
   type LucideIcon,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -16,7 +16,7 @@ import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
 import { DiscussionBoard, type DiscussionPost } from '@/components/lms/DiscussionBoard'
 import {
-  SUBJECT_COLORS, isActiveBool, isMidtermReview, parseMidtermSections, rowToLMSCourse, rowToLMSContent, rowToLMSEnrolment, rowToLMSProgress,
+  SUBJECT_COLORS, isActiveBool, isMidtermReview, parseMidtermSections, REVIEW_META, reviewKindOf, rowToLMSCourse, rowToLMSContent, rowToLMSEnrolment, rowToLMSProgress,
   type MidtermBlock, type LMSCourse, type LMSContent, type LMSEnrolment, type LMSProgress, type LMSQuestion,
 } from '@/pages/lms/lmsStore'
 import { portalPrefix } from './gradesShared'
@@ -816,10 +816,8 @@ interface MidtermSubNote {
   blockKind: 'text' | 'file' | 'omr'
   text?: string
   fileName?: string | null
-  score?: number
-  correct?: number
-  total?: number
-  passed?: boolean
+  // OMR: set by a teacher from View Responses — absent means the score is still pending.
+  reviewedScore?: number
 }
 
 function parseMidtermNote(sub: MySubmission): MidtermSubNote | null {
@@ -849,6 +847,12 @@ function midtermProgress(item: LMSContent, submissions: MySubmission[]): { done:
   const blocks = parseMidtermSections(item.midtermSectionsJson).flatMap((s) => s.blocks)
   const subs = midtermSubsByBlock(item.id, submissions)
   return { done: blocks.filter((b) => (subs.get(b.id)?.length ?? 0) > 0).length, total: blocks.length }
+}
+
+/** Midterm Review and Finals share everything but their label, icon and color. */
+function reviewUi(item: LMSContent) {
+  const kind = reviewKindOf(item)
+  return { ...REVIEW_META[kind], icon: (kind === 'finals' ? GraduationCap : ClipboardCheck) as LucideIcon }
 }
 
 const MIDTERM_BLOCK_UI: Record<MidtermBlock['kind'], { icon: LucideIcon; label: string }> = {
@@ -968,26 +972,48 @@ function MidtermOmrBlock({ contentId, block, history, onSubmitted }: {
   onSubmitted: (s: MySubmission) => void
 }) {
   const { getToken } = useStudentPortal()
-  const latest = history[0]?.note
-  const initialResult = latest && latest.score != null && latest.correct != null && latest.total != null
-    ? { score: latest.score, passed: !!latest.passed, correct: latest.correct, total: latest.total }
-    : null
+  const latest = history[0]
+
+  // Submitted: teacher-scored, so show "Score pending" until reviewedScore is set.
+  if (latest) {
+    const score = latest.note.reviewedScore
+    if (score == null) {
+      return (
+        <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 14, padding: '18px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
+          <span style={{ width: 44, height: 44, borderRadius: 12, background: '#FEF3C7', color: '#B45309', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Hourglass size={22} /></span>
+          <div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: '#92400E' }}>Score pending</div>
+            <div style={{ fontSize: 15, color: '#A16207', marginTop: 2 }}>Answers submitted {new Date(latest.sub.submittedAt).toLocaleDateString()}. Your teacher will review and score them.</div>
+          </div>
+        </div>
+      )
+    }
+    return (
+      <div style={{ background: 'linear-gradient(135deg,#059669,#047857)', borderRadius: 14, padding: '20px 22px', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', top: -20, right: -20, width: 100, height: 100, borderRadius: '50%', background: 'rgba(255,255,255,.07)' }} />
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8, color: '#fff' }}><PartyPopper size={36} /></div>
+        <div style={{ fontSize: 18, fontWeight: 900, color: '#fff', marginBottom: 4 }}>Congratulations!</div>
+        <div style={{ fontSize: 16, color: 'rgba(255,255,255,.85)' }}>Your score</div>
+        <div style={{ fontSize: 34, fontWeight: 900, color: '#fff', fontVariantNumeric: 'tabular-nums', lineHeight: 1.2 }}>{score}%</div>
+      </div>
+    )
+  }
+
   return (
     <OmrQuizRunner
       questions={block.questions}
-      passMark={block.passMark ?? 80}
-      maxAttempts={block.retakes ?? 3}
+      passMark={0}
+      maxAttempts={1}
       timeLimitMins={block.timeLimit}
-      initialAttempts={history.length}
-      initialResult={initialResult}
+      initialAttempts={0}
+      initialResult={null}
       emptyText="No questions have been added to this test yet."
       onSubmit={async (answers) => {
         const data = await submitMidtermBlock(getToken(), { contentId, blockId: block.id, answers })
+        // The new submission re-renders this block into its "Score pending" state, which
+        // replaces the runner — the result below is never displayed.
         onSubmitted(data.submission)
-        return {
-          result: { score: data.score ?? 0, passed: !!data.passed, correct: data.correct ?? 0, total: data.total ?? 0 },
-          attempts: data.attempts ?? history.length + 1,
-        }
+        return { result: { score: 0, passed: false, correct: 0, total: 0 }, attempts: 1 }
       }}
     />
   )
@@ -2115,7 +2141,7 @@ export function SPMyLearningPage() {
       case 'prove': return { title: 'Prove It: OMR Test', icon: Calculator }
       case 'master': return { title: 'Master It: Presentation', icon: Trophy }
       case 'discussion': return { title: 'Discussion Board', icon: MessageSquare }
-      case 'midterm': return { title: item?.title || 'Midterm Review', icon: ClipboardCheck }
+      case 'midterm': return item ? { title: item.title || reviewUi(item).label, icon: reviewUi(item).icon } : { title: 'Review', icon: ClipboardCheck }
       default: return { title: item?.title || 'Lesson', icon: BookOpen }
     }
   }
@@ -2441,19 +2467,21 @@ export function SPMyLearningPage() {
                     const mp = midtermProgress(midtermItem, mySubmissions)
                     const sectionCount = parseMidtermSections(midtermItem.midtermSectionsJson).length
                     const state = mp.total > 0 && mp.done === mp.total ? 'done' : mp.done > 0 ? 'active' : 'todo'
+                    const rui = reviewUi(midtermItem)
+                    const ReviewIcon = rui.icon
                     return (
                       <button
                         key={unit}
                         onClick={() => !locked && openGroup('midterm', midtermItem.id)}
                         disabled={locked}
                         title={locked ? groupLockReason(ref) : undefined}
-                        style={{ ...card, display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '14px 18px', background: '#FAF8FF', border: '1px solid #DDD6FE', cursor: locked ? 'not-allowed' : 'pointer', fontFamily: 'inherit', textAlign: 'left', opacity: locked ? 0.6 : 1 }}
+                        style={{ ...card, display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '14px 18px', background: rui.soft, border: `1px solid ${rui.border}`, cursor: locked ? 'not-allowed' : 'pointer', fontFamily: 'inherit', textAlign: 'left', opacity: locked ? 0.6 : 1 }}
                       >
-                        <span style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: state === 'done' ? '#DCFCE7' : '#EDE9FE', color: state === 'done' ? '#059669' : '#5B21B6' }}>
-                          {locked ? <Lock size={16} /> : state === 'done' ? <CheckCircle2 size={17} /> : <ClipboardCheck size={17} />}
+                        <span style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: state === 'done' ? '#DCFCE7' : rui.bg, color: state === 'done' ? '#059669' : rui.color }}>
+                          {locked ? <Lock size={16} /> : state === 'done' ? <CheckCircle2 size={17} /> : <ReviewIcon size={17} />}
                         </span>
                         <span style={{ flex: 1, minWidth: 0 }}>
-                          <span style={{ display: 'block', fontSize: 11, fontWeight: 800, color: '#5B21B6', textTransform: 'uppercase', letterSpacing: '.5px' }}>Midterm Review</span>
+                          <span style={{ display: 'block', fontSize: 11, fontWeight: 800, color: rui.color, textTransform: 'uppercase', letterSpacing: '.5px' }}>{rui.label}</span>
                           <span style={{ display: 'block', fontSize: 15, fontWeight: 700, color: '#1A365E' }}>{midtermItem.title || unit}</span>
                           <span style={{ display: 'block', fontSize: 12, color: '#94A3B8', fontWeight: 600, marginTop: 2 }}>
                             {sectionCount} section{sectionCount !== 1 ? 's' : ''}{midtermItem.targetDate ? ` · Due ${formatLongDate(midtermItem.targetDate) || midtermItem.targetDate}` : ''}{locked ? ` · ${groupLockReason(ref)}` : ''}
@@ -2686,7 +2714,7 @@ export function SPMyLearningPage() {
 
       {selectedCourse && activeLesson && activeGroupKind && !activePart && (() => {
         const kind = activeGroupKind
-        const GroupIcon: LucideIcon = kind === 'midterm' ? ClipboardCheck : kind === 'learn' ? FileText : kind === 'show' ? Scale : kind === 'prove' ? Calculator : kind === 'master' ? Trophy : kind === 'discussion' ? MessageSquare : BookOpen
+        const GroupIcon: LucideIcon = kind === 'midterm' ? reviewUi(activeLesson).icon : kind === 'learn' ? FileText : kind === 'show' ? Scale : kind === 'prove' ? Calculator : kind === 'master' ? Trophy : kind === 'discussion' ? MessageSquare : BookOpen
         const groupTitle = kind === 'learn' ? (activeLesson.title || 'Case Study')
           : kind === 'show' ? 'Socratic Seminar'
           : kind === 'prove' ? 'OMR Test'

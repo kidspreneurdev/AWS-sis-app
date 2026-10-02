@@ -13,7 +13,7 @@ import {
   loadLMS, saveLMS, loadLMSFromDB, deleteLMSCourse, deleteLMSCourseGroup, deleteLMSContent, deleteLMSEnrolment,
   lmsId, fmtTime, hasMasteryBool, hasAssignBool, isActiveBool,
   lmsCompositeScore, lmsCourseComposite, gradeLabel,
-  SUBJECT_COLORS, SUBJECTS, GRADE_LEVELS, TYPE_ICONS, isMidtermReview, parseMidtermSections,
+  SUBJECT_COLORS, SUBJECTS, GRADE_LEVELS, TYPE_ICONS, isMidtermReview, parseMidtermSections, REVIEW_META, reviewKindOf, type ReviewKind,
   type MidtermSection, type MidtermBlock,
   type LMSCourse, type LMSContent, type LMSEnrolment, type LMSProgress, type LMSStore, type LMSCourseGroup
 } from './lmsStore'
@@ -1136,7 +1136,8 @@ function McqQuestionEditor({ questions, onChange, radioGroup = 'omr' }: { questi
 // Module-level (not nested in LMSPage) so an LMSPage re-render — e.g. the auth
 // profile refreshing when the tab regains focus after the file picker closes — can't
 // remount it and throw away unsaved sections or in-flight image uploads.
-function MidtermReviewModal({ store, persist, courseId, contentId, afterUnit, onClose }: {
+function MidtermReviewModal({ store, persist, courseId, contentId, afterUnit, kind, onClose }: {
+  kind: ReviewKind
   store: LMSStore
   persist: (updated: LMSStore) => Promise<void>
   courseId: string
@@ -1145,6 +1146,8 @@ function MidtermReviewModal({ store, persist, courseId, contentId, afterUnit, on
   onClose: () => void
 }) {
   const existing = contentId ? store.content.find(c => c.id === contentId) ?? null : null
+  const reviewKind: ReviewKind = existing ? reviewKindOf(existing) : kind
+  const meta = REVIEW_META[reviewKind]
   const courseContent = store.content.filter(c => c.courseId === courseId)
   // Current module/review order for this course, minus the review being edited.
   const orderedUnits = [...new Set(courseContent.filter(c => c.unitTitle).map(c => c.unitTitle as string))]
@@ -1160,14 +1163,15 @@ function MidtermReviewModal({ store, persist, courseId, contentId, afterUnit, on
       return idx > 0 ? orderedUnits[idx - 1] : ''
     }
     if (afterUnit) return afterUnit
-    // "Midterm" — default to the middle of the course.
+    // Finals default to the end of the course; a Midterm Review to the middle.
+    if (reviewKind === 'finals') return otherUnits[otherUnits.length - 1] ?? ''
     return moduleTitles.length ? moduleTitles[Math.max(0, Math.ceil(moduleTitles.length / 2) - 1)] : ''
   }
   function defaultTitle(): string {
     if (existing) return existing.title
     let n = 1
-    let t = 'Midterm Review'
-    while (orderedUnits.includes(t)) t = `Midterm Review ${++n}`
+    let t = meta.label
+    while (orderedUnits.includes(t)) t = `${meta.label} ${++n}`
     return t
   }
 
@@ -1244,7 +1248,7 @@ function MidtermReviewModal({ store, persist, courseId, contentId, afterUnit, on
   function save() {
     if (anyUploading) { alert('Please wait for the images to finish uploading.'); return }
     const finalTitle = title.trim()
-    if (!finalTitle) { alert('Enter a title for the Midterm Review'); return }
+    if (!finalTitle) { alert(`Enter a title for the ${meta.label}`); return }
     if (otherUnits.includes(finalTitle)) { alert(`"${finalTitle}" is already used by another module or review in this course — pick a different title.`); return }
     const untitled = sections.findIndex(s => !s.title.trim())
     if (untitled >= 0) { alert(`Section ${untitled + 1} needs a title`); return }
@@ -1258,6 +1262,7 @@ function MidtermReviewModal({ store, persist, courseId, contentId, afterUnit, on
       title: finalTitle,
       unitTitle: finalTitle,
       isMidtermReview: true,
+      reviewKind,
       midtermSectionsJson: JSON.stringify(cleaned),
     }
     // Slot the review in after `placeAfter` and renumber unitOrder across the course.
@@ -1278,7 +1283,7 @@ function MidtermReviewModal({ store, persist, courseId, contentId, afterUnit, on
   const addBlockBtn: React.CSSProperties = { padding: '5px 10px', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }
   const blockMeta: Record<MidtermBlock['kind'], { icon: string; label: string; hint: string }> = {
     text: { icon: '📝', label: 'Text Box', hint: 'Students type a written response.' },
-    omr: { icon: '🔢', label: 'OMR Test', hint: 'In-app test — MCQs auto-grade on submit; short answers are reviewed manually.' },
+    omr: { icon: '🔢', label: 'OMR Test', hint: 'In-app test — students submit their answers once and see "Score pending" until you score it in View Responses.' },
     file: { icon: '📎', label: 'File Upload', hint: 'Students upload a file (PDF, doc, image, etc.).' },
   }
 
@@ -1287,7 +1292,7 @@ function MidtermReviewModal({ store, persist, courseId, contentId, afterUnit, on
       <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 640, maxHeight: '94vh', overflowY: 'auto', boxShadow: '0 24px 60px rgba(0,0,0,.3)', margin: 'auto' }}>
         <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '18px 24px', borderRadius: '18px 18px 0 0', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>📝 {existing ? 'Edit Midterm Review' : 'New Midterm Review'}</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>{meta.emoji} {existing ? `Edit ${meta.label}` : `New ${meta.label}`}</div>
             <div style={{ fontSize: 10, color: 'rgba(255,255,255,.65)', marginTop: 2 }}>Build it from sections — each with its own instructions, text boxes, OMR tests and file uploads.</div>
           </div>
           <button onClick={onClose} title="Close" style={modalCloseBtnOnDark}>✕</button>
@@ -1296,7 +1301,7 @@ function MidtermReviewModal({ store, persist, courseId, contentId, afterUnit, on
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
             <div>
               <label style={labelStyle}>Title *</label>
-              <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Midterm Review" style={inputStyle} />
+              <input value={title} onChange={e => setTitle(e.target.value)} placeholder={`e.g. ${meta.label}`} style={inputStyle} />
             </div>
             <div>
               <label style={labelStyle}>Place After</label>
@@ -1363,9 +1368,7 @@ function MidtermReviewModal({ store, persist, courseId, contentId, afterUnit, on
                       <div style={{ fontSize: 10, color: '#7A92B0' }}>{meta.hint}</div>
                       {b.kind === 'omr' ? (
                         <>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                            <div><label style={labelStyle}>Mastery (%)</label><input type="number" min={0} max={100} value={b.passMark ?? ''} onChange={e => patchBlock(sec.id, b.id, { passMark: e.target.value === '' ? undefined : parseInt(e.target.value) })} style={{ ...inputStyle, background: '#fff' }} /></div>
-                            <div><label style={labelStyle}>Attempts</label><input type="number" min={1} value={b.retakes ?? 3} onChange={e => patchBlock(sec.id, b.id, { retakes: Math.max(1, parseInt(e.target.value) || 1) })} style={{ ...inputStyle, background: '#fff' }} /></div>
+                          <div style={{ maxWidth: 180 }}>
                             <div><label style={labelStyle}>Time Limit (min)</label><input type="number" min={1} placeholder="None" value={b.timeLimit ?? ''} onChange={e => patchBlock(sec.id, b.id, { timeLimit: parseInt(e.target.value) || undefined })} style={{ ...inputStyle, background: '#fff' }} /></div>
                           </div>
                           <div style={{ background: '#fff', borderRadius: 10 }}>
@@ -1401,6 +1404,217 @@ function MidtermReviewModal({ store, persist, courseId, contentId, afterUnit, on
             <button onClick={onClose} style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
             <button onClick={save} disabled={anyUploading} style={{ padding: '9px 20px', background: anyUploading ? '#94A3B8' : '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: anyUploading ? 'progress' : 'pointer', fontFamily: 'inherit' }}>{anyUploading ? 'Uploading…' : '💾 Save'}</button>
           </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── MIDTERM REVIEW / FINALS RESPONSES ──────────────────────────────────────
+// Read-only view of what students submitted, one card per student. OMR tests are
+// teacher-scored here: the student sees "Score pending" until reviewedScore is saved
+// onto their submission's note. Module-level so an LMSPage re-render can't remount it
+// and drop a half-typed score.
+type MidtermResp = { id: string; note: Record<string, unknown>; linkUrl: string | null; submittedAt: string }
+
+function OmrReviewPanel({ block, resp, onSaved }: {
+  block: Extract<MidtermBlock, { kind: 'omr' }>
+  resp: MidtermResp
+  onSaved: (note: Record<string, unknown>) => void
+}) {
+  const answers = (resp.note.answers ?? {}) as Record<string, number | string>
+  const mcq = block.questions.map((q, i) => ({ q, i })).filter(({ q }) => (q.type ?? 'mcq') === 'mcq')
+  const correct = mcq.filter(({ q, i }) => answers[i] === q.ans).length
+  const autoPct = mcq.length ? Math.round((correct / mcq.length) * 100) : null
+  const saved = resp.note.reviewedScore as number | undefined
+  const [score, setScore] = useState(saved != null ? String(saved) : autoPct != null ? String(autoPct) : '')
+  const [saving, setSaving] = useState(false)
+
+  async function save() {
+    const n = Number(score)
+    if (score.trim() === '' || !Number.isFinite(n) || n < 0 || n > 100) { alert('Enter a score from 0 to 100'); return }
+    setSaving(true)
+    const note = { ...resp.note, reviewedScore: Math.round(n), reviewedAt: new Date().toISOString() }
+    const { error } = await supabase.from('lms_submissions').update({ note: JSON.stringify(note) }).eq('id', resp.id)
+    setSaving(false)
+    if (error) { alert('Could not save the score: ' + error.message); return }
+    onSaved(note)
+  }
+
+  const letter = (i: number) => String.fromCharCode(65 + i)
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {block.questions.map((q, i) => {
+        const a = answers[i]
+        const isShort = (q.type ?? 'mcq') === 'short'
+        const isRight = !isShort && a === q.ans
+        return (
+          <div key={i} style={{ background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 8, padding: '8px 10px' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#1A365E', marginBottom: 4 }}>{i + 1}. {q.q || 'Untitled question'}</div>
+            {isShort ? (
+              <div style={{ fontSize: 11, color: '#1A365E', whiteSpace: 'pre-wrap' }}>{a != null && String(a).trim() ? String(a) : <span style={{ color: '#94A3B8' }}>No answer</span>} <span style={{ color: '#7A92B0', fontStyle: 'italic' }}>(short answer)</span></div>
+            ) : (
+              <div style={{ fontSize: 11, display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                <span style={{ color: a == null ? '#94A3B8' : isRight ? '#059669' : '#D61F31', fontWeight: 700 }}>
+                  {a == null ? 'No answer' : `${isRight ? '✓' : '✗'} Answered ${letter(Number(a))}: ${q.opts[Number(a)] ?? ''}`}
+                </span>
+                {!isRight && <span style={{ color: '#5A7290' }}>Correct: {letter(q.ans)}: {q.opts[q.ans] ?? ''}</span>}
+              </div>
+            )}
+          </div>
+        )
+      })}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 2 }}>
+        {autoPct != null && <span style={{ fontSize: 11, color: '#7A92B0' }}>Auto-check: {correct}/{mcq.length} multiple choice correct ({autoPct}%)</span>}
+        <span style={{ flex: 1 }} />
+        <label style={{ fontSize: 11, fontWeight: 700, color: '#5A7290' }}>Score (%)</label>
+        <input type="number" min={0} max={100} value={score} onChange={e => setScore(e.target.value)} style={{ ...inputStyle, width: 80 }} />
+        <button onClick={() => void save()} disabled={saving} style={{ padding: '7px 14px', background: saving ? '#94A3B8' : '#1A365E', color: '#fff', border: 'none', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: saving ? 'progress' : 'pointer', fontFamily: 'inherit' }}>
+          {saving ? 'Saving…' : saved != null ? 'Update Score' : 'Save Score'}
+        </button>
+      </div>
+      <div style={{ fontSize: 10, fontWeight: 700, color: saved != null ? '#059669' : '#B45309' }}>
+        {saved != null ? `✓ Scored ${saved}% — the student now sees their score.` : '⏳ Not scored yet — the student sees "Score pending".'}
+      </div>
+    </div>
+  )
+}
+
+/** A student's standing on one Midterm Review / Finals, for the gradebook cell. */
+function reviewGradebookStatus(item: LMSContent, studentId: string, submissions: LMSSubmissionRow[]):
+  { state: 'none' } | { state: 'pending' } | { state: 'submitted' } | { state: 'scored'; score: number } {
+  const latestByBlock = new Map<string, Record<string, unknown>>()
+  submissions
+    .filter(r => r.kind === 'midterm_review' && String(r.content_id ?? '') === item.id && String(r.student_id ?? '') === studentId)
+    .sort((a, b) => String(b.submitted_at ?? '').localeCompare(String(a.submitted_at ?? '')))
+    .forEach(r => {
+      try {
+        const note = JSON.parse(String(r.note ?? '{}')) as Record<string, unknown>
+        const bid = note.blockId as string | undefined
+        if (bid && !latestByBlock.has(bid)) latestByBlock.set(bid, note)
+      } catch { /* skip */ }
+    })
+  if (!latestByBlock.size) return { state: 'none' }
+  const omrIds = parseMidtermSections(item.midtermSectionsJson).flatMap(s => s.blocks).filter(b => b.kind === 'omr').map(b => b.id)
+  const omrNotes = omrIds.map(id => latestByBlock.get(id)).filter((n): n is Record<string, unknown> => !!n)
+  if (omrNotes.some(n => n.reviewedScore == null)) return { state: 'pending' }
+  if (omrNotes.length) return { state: 'scored', score: Math.round(omrNotes.reduce((sum, n) => sum + Number(n.reviewedScore), 0) / omrNotes.length) }
+  return { state: 'submitted' }
+}
+
+function MidtermResponsesModal({ store, students, contentId, initialStudentId, onScoreSaved: onScoreSavedOutside, onClose }: {
+  store: LMSStore
+  students: Student[]
+  contentId: string
+  // Opened from a gradebook cell — start with that student expanded.
+  initialStudentId?: string
+  // Lets the gradebook update its cell as soon as a score is saved here.
+  onScoreSaved?: (submissionId: string, note: Record<string, unknown>) => void
+  onClose: () => void
+}) {
+  const item = store.content.find(c => c.id === contentId)
+  const [rows, setRows] = useState<LMSSubmissionRow[] | null>(null)
+  const [openStudent, setOpenStudent] = useState<string | null>(initialStudentId ?? null)
+
+  useEffect(() => {
+    let alive = true
+    supabase.from('lms_submissions').select('*').eq('content_id', contentId).eq('kind', 'midterm_review').order('submitted_at', { ascending: false }).then(({ data, error }) => {
+      if (!alive) return
+      if (error) console.error('midterm responses load error:', error)
+      setRows((data ?? []) as LMSSubmissionRow[])
+    })
+    return () => { alive = false }
+  }, [contentId])
+
+  if (!item) return null
+  const sections = parseMidtermSections(item.midtermSectionsJson)
+  const blocks = sections.flatMap(s => s.blocks)
+
+  const byStudent = new Map<string, Map<string, MidtermResp[]>>()
+  ;(rows ?? []).forEach(r => {
+    let note: Record<string, unknown> = {}
+    try { note = JSON.parse((r.note as string) || '{}') } catch { /* skip */ }
+    const blockId = note.blockId as string | undefined
+    if (!blockId) return
+    const sid = r.student_id as string
+    if (!byStudent.has(sid)) byStudent.set(sid, new Map())
+    const m = byStudent.get(sid)!
+    if (!m.has(blockId)) m.set(blockId, [])
+    m.get(blockId)!.push({ id: r.id as string, note, linkUrl: (r.link_url as string) ?? null, submittedAt: (r.submitted_at as string) ?? '' })
+  })
+  const studentName = (sid: string) => students.find(s => s.id === sid)?.fullName ?? 'Unknown student'
+  const studentIds = [...byStudent.keys()].sort((a, b) =>
+    (a === initialStudentId ? -1 : b === initialStudentId ? 1 : 0) || studentName(a).localeCompare(studentName(b)))
+  const pendingFor = (m: Map<string, MidtermResp[]>) => blocks.filter(b => b.kind === 'omr' && m.get(b.id)?.[0] && m.get(b.id)![0].note.reviewedScore == null).length
+  const totalPending = studentIds.reduce((n, sid) => n + pendingFor(byStudent.get(sid)!), 0)
+
+  function onScoreSaved(respId: string, note: Record<string, unknown>) {
+    setRows(prev => (prev ?? []).map(r => r.id === respId ? { ...r, note: JSON.stringify(note) } : r))
+    onScoreSavedOutside?.(respId, note)
+  }
+
+  function renderResponse(b: MidtermBlock, resps: MidtermResp[] | undefined) {
+    if (!resps?.length) return <span style={{ fontSize: 11, color: '#94A3B8' }}>No submission</span>
+    const latest = resps[0]
+    if (b.kind === 'text') return <div style={{ fontSize: 12, color: '#1A365E', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{latest.note.text as string}</div>
+    if (b.kind === 'file') return latest.linkUrl
+      ? <a href={latest.linkUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: '#2563EB', fontWeight: 700 }}>📎 {(latest.note.fileName as string) || 'Open file'}</a>
+      : <span style={{ fontSize: 11, color: '#94A3B8' }}>File missing</span>
+    return <OmrReviewPanel key={latest.id} block={b} resp={latest} onSaved={note => onScoreSaved(latest.id, note)} />
+  }
+
+  const meta = REVIEW_META[reviewKindOf(item)]
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 450, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto', backdropFilter: 'blur(4px)' }} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 760, maxHeight: '94vh', overflowY: 'auto', boxShadow: '0 24px 60px rgba(0,0,0,.3)', margin: 'auto' }}>
+        <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '18px 24px', borderRadius: '18px 18px 0 0', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>📥 {meta.label} Responses</div>
+            <div style={{ fontSize: 10, color: 'rgba(255,255,255,.65)', marginTop: 2 }}>
+              {item.title} · {rows ? `${studentIds.length} student${studentIds.length !== 1 ? 's' : ''} responded${totalPending ? ` · ${totalPending} OMR test${totalPending !== 1 ? 's' : ''} to score` : ''}` : 'Loading…'}
+            </div>
+          </div>
+          <button onClick={onClose} title="Close" style={modalCloseBtnOnDark}>✕</button>
+        </div>
+        <div style={{ padding: '18px 24px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {rows === null ? (
+            <div style={{ textAlign: 'center', padding: 30, color: '#94A3B8', fontSize: 12 }}>Loading responses…</div>
+          ) : studentIds.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 30, color: '#94A3B8', fontSize: 12 }}>No student has submitted anything yet.</div>
+          ) : studentIds.map(sid => {
+            const m = byStudent.get(sid)!
+            const done = blocks.filter(b => m.has(b.id)).length
+            const pending = pendingFor(m)
+            const open = openStudent === sid
+            return (
+              <div key={sid} style={{ border: '1px solid #E4EAF2', borderRadius: 10, overflow: 'hidden' }}>
+                <button onClick={() => setOpenStudent(open ? null : sid)} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 12px', background: open ? '#F7F9FC' : '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: '#1A365E', flex: 1 }}>{studentName(sid)}</span>
+                  {pending > 0 && <span style={{ fontSize: 10, fontWeight: 800, color: '#B45309', background: '#FEF3C7', borderRadius: 999, padding: '2px 8px' }}>{pending} to score</span>}
+                  <span style={{ fontSize: 11, fontWeight: 700, color: done === blocks.length ? '#059669' : '#D97706' }}>{done}/{blocks.length} submitted</span>
+                  <span style={{ fontSize: 11, color: '#5A7290' }}>{open ? '▲' : '▼'}</span>
+                </button>
+                {open && (
+                  <div style={{ padding: '4px 12px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {sections.map((sec, si) => (
+                      <div key={sec.id}>
+                        <div style={{ fontSize: 9, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '.08em', margin: '6px 0 4px' }}>Section {si + 1} · {sec.title}</div>
+                        {sec.blocks.map(b => (
+                          <div key={b.id} style={{ display: 'flex', flexDirection: b.kind === 'omr' ? 'column' : 'row', gap: b.kind === 'omr' ? 6 : 10, padding: '6px 0', borderTop: '1px solid #F0F4FA' }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: '#5A7290', width: b.kind === 'omr' ? undefined : 170, flexShrink: 0 }}>
+                              {b.kind === 'text' ? '📝 Text Box' : b.kind === 'omr' ? `🔢 OMR Test (${b.questions.length} question${b.questions.length !== 1 ? 's' : ''})` : '📎 File Upload'}
+                              {b.kind !== 'omr' && b.prompt && <span style={{ display: 'block', fontWeight: 400, color: '#94A3B8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.prompt}</span>}
+                            </span>
+                            <div style={{ flex: 1, minWidth: 0 }}>{renderResponse(b, m.get(b.id))}</div>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       </div>
     </div>
@@ -1467,6 +1681,9 @@ export function LMSPage() {
   const [curriculumSettingsOpen, setCurriculumSettingsOpen] = useState(false)
   const [curriculumMenuOpenId, setCurriculumMenuOpenId] = useState<string | null>(null)
   const curriculumMenuRef = useRef<HTMLDivElement>(null)
+  // "+" add-menu on the course row opens on hover too — a short close delay lets the
+  // pointer cross the gap between the trigger and the dropdown without it snapping shut.
+  const addMenuCloseTimer = useRef<number | null>(null)
   // Curriculum drag-and-drop reordering. `kind` scopes what can drop where:
   // 'top' = top-level lesson, 'unit' = unit folder, 'unititem' = lesson inside a unit (scoped by unit title).
   const [curriculumDrag, setCurriculumDrag] = useState<{ kind: 'top' | 'unit' | 'unititem'; id: string; scope: string } | null>(null)
@@ -1492,8 +1709,9 @@ export function LMSPage() {
   const [modulePicker, setModulePicker] = useState<{ purpose: 'lesson' | 'caseStudy'; units: string[] } | null>(null)
   // Midterm Review builder — contentId null = creating a new one; afterUnit preselects
   // which module it's placed after (from a module's "⋯" menu).
-  const [midtermModal, setMidtermModal] = useState<{ courseId: string; contentId: string | null; afterUnit?: string } | null>(null)
+  const [midtermModal, setMidtermModal] = useState<{ courseId: string; contentId: string | null; afterUnit?: string; kind: ReviewKind } | null>(null)
   const [midtermResponsesId, setMidtermResponsesId] = useState<string | null>(null)
+  const [midtermResponsesStudent, setMidtermResponsesStudent] = useState<string | null>(null)
   const [showEnrolModal, setShowEnrolModal] = useState(false)
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null)
   const [promptDialog, setPromptDialog] = useState<PromptDialogState | null>(null)
@@ -2736,6 +2954,11 @@ export function LMSPage() {
     )
     const content = store.content.filter(x => x.courseId === groupKey(course) && !isMidtermReview(x))
       .sort((a, b) => ((a.unitOrder ?? 0) - (b.unitOrder ?? 0)) || ((a.order ?? 0) - (b.order ?? 0)))
+    // Display columns = lessons + one column per Midterm Review / Finals, in curriculum
+    // order. Every lesson-based stat (Course %, Composite, Credits…) still uses `content`.
+    const reviews = store.content.filter(x => x.courseId === groupKey(course) && isMidtermReview(x))
+    const gbCols = [...content, ...reviews].sort((a, b) => ((a.unitOrder ?? 0) - (b.unitOrder ?? 0)) || ((a.order ?? 0) - (b.order ?? 0)))
+    const openReviewResponses = (contentId: string, studentId: string) => { setMidtermResponsesStudent(studentId); setMidtermResponsesId(contentId) }
     const enrolments = store.enrolments.filter(en => en.courseId === course.id && isActiveBool(en.active))
     const enrolledIds = new Set<string>()
     enrolments.forEach(en => {
@@ -2775,6 +2998,7 @@ export function LMSPage() {
         const p = myProg.find(pp => pp.contentId === item.id)
         if (p && p.assignStatus === 'submitted' && (p.assignScore == null || isNaN(Number(p.assignScore)))) needsScoring++
       })
+      reviews.forEach(r => { if (reviewGradebookStatus(r, sid, allSubmissions).state === 'pending') needsScoring++ })
       const mastRows = myProg.filter(p => p.masteryScore != null && !isNaN(Number(p.masteryScore)))
       const avgM = mastRows.length ? Math.round(mastRows.reduce((s, p) => s + Number(p.masteryScore), 0) / mastRows.length) : null
       if (pct < 50 && enrol0.assignedAt && enrol0.dueDate) {
@@ -2786,14 +3010,14 @@ export function LMSPage() {
 
     const unitGroups: string[] = []
     const unitMap: Record<string, LMSContent[]> = {}
-    content.forEach(item => {
+    gbCols.forEach(item => {
       const ut = item.unitTitle || 'Lessons'
       if (!unitMap[ut]) { unitMap[ut] = []; unitGroups.push(ut) }
       unitMap[ut].push(item)
     })
 
     const exportCSV = () => {
-      const hdr = ['Student', 'Grade', 'Cohort', 'Completion %', 'Avg Mastery %', 'Avg Assignment %', 'Composite %', 'Time (mins)', 'Credits', 'At Risk', ...content.map(c => c.title + ' (Composite)')]
+      const hdr = ['Student', 'Grade', 'Cohort', 'Completion %', 'Avg Mastery %', 'Avg Assignment %', 'Composite %', 'Time (mins)', 'Credits', 'At Risk', ...content.map(c => c.title + ' (Composite)'), ...reviews.map(r => r.title + ' (' + REVIEW_META[reviewKindOf(r)].label + ')')]
       const rows = enrolled.map(s => {
         const myProg = allProg.filter(p => p.courseId === groupKey(course) && p.studentId === s.id)
         const comp = myProg.filter(p => p.status === 'completed').length
@@ -2812,7 +3036,8 @@ export function LMSPage() {
         }
         if (avgM !== null && avgM < passMark && mRows.filter(p => (p.masteryAttempts || 0) > 1).length > 0) atRisk = 'Yes'
         const lessonCells = content.map(item => { const p = myProg.find(pp => pp.contentId === item.id); const cs = p ? lmsCompositeScore(p, item, passMark) : null; return cs !== null ? cs + '%' : '' })
-        return [s.lastName + ', ' + s.firstName, s.grade || '', s.cohort || '', pctV + '%', avgM !== null ? avgM + '%' : '', avgA !== null ? avgA + '%' : '', compV !== null ? compV + '%' : '', timeMins, cred, atRisk, ...lessonCells].map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')
+        const reviewCells = reviews.map(r => { const st = reviewGradebookStatus(r, s.id, allSubmissions); return st.state === 'scored' ? st.score + '%' : st.state === 'pending' ? 'Pending' : st.state === 'submitted' ? 'Submitted' : '' })
+        return [s.lastName + ', ' + s.firstName, s.grade || '', s.cohort || '', pctV + '%', avgM !== null ? avgM + '%' : '', avgA !== null ? avgA + '%' : '', compV !== null ? compV + '%' : '', timeMins, cred, atRisk, ...lessonCells, ...reviewCells].map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')
       })
       const csv = [hdr.map(v => '"' + v.replace(/"/g, '""') + '"').join(','), ...rows].join('\n')
       const blob = new Blob([csv], { type: 'text/csv' })
@@ -2878,13 +3103,28 @@ export function LMSPage() {
                   {[{ l: 'Student', w: '200px' }, { l: 'On-Target', w: '80px' }, { l: 'Mastery Grade', w: '90px' }, { l: 'Assign Grade', w: '90px' }, { l: '⭐ Composite', w: '90px' }, { l: 'Course %', w: '80px' }, { l: 'Time', w: '76px' }, { l: 'Credits', w: '66px' }].map((fh, i) => (
                     <th key={fh.l} rowSpan={2} style={{ position: 'sticky', left: 0, zIndex: 3, background: '#F0F4FA', padding: `8px ${i === 0 ? '14' : '8'}px`, textAlign: i === 0 ? 'left' : 'center', fontSize: 10, fontWeight: 800, color: '#1A365E', borderBottom: '2px solid #E4EAF2', borderRight: i === 7 ? '2px solid #D0D7E4' : '1px solid #E4EAF2', whiteSpace: 'nowrap', minWidth: fh.w }}>{fh.l}</th>
                   ))}
-                  {unitGroups.map(ut => (
-                    <th key={ut} colSpan={unitMap[ut].length} style={{ padding: '6px 8px', textAlign: 'center', fontSize: 10, fontWeight: 800, color: '#1A365E', borderBottom: '1px solid #E4EAF2', borderLeft: '2px solid #D0D7E4', background: '#F7F9FC', whiteSpace: 'nowrap' }}>📂 {ut.substring(0, 28)}{ut.length > 28 ? '…' : ''}</th>
-                  ))}
+                  {unitGroups.map(ut => {
+                    const review = unitMap[ut].find(isMidtermReview)
+                    const rm = review ? REVIEW_META[reviewKindOf(review)] : null
+                    return (
+                      <th key={ut} colSpan={unitMap[ut].length} style={{ padding: '6px 8px', textAlign: 'center', fontSize: 10, fontWeight: 800, color: rm ? rm.color : '#1A365E', borderBottom: '1px solid #E4EAF2', borderLeft: '2px solid #D0D7E4', background: rm ? rm.soft : '#F7F9FC', whiteSpace: 'nowrap' }}>
+                        {rm ? rm.emoji : '📂'} {ut.substring(0, 28)}{ut.length > 28 ? '…' : ''}
+                      </th>
+                    )
+                  })}
                 </tr>
                 <tr style={{ background: '#F7F9FC' }}>
-                  {content.map((item, ci) => {
-                    const borderL = ci > 0 && content[ci - 1]?.unitTitle !== item.unitTitle ? '2px solid #D0D7E4' : '1px solid #E4EAF2'
+                  {gbCols.map((item, ci) => {
+                    const borderL = ci > 0 && gbCols[ci - 1]?.unitTitle !== item.unitTitle ? '2px solid #D0D7E4' : '1px solid #E4EAF2'
+                    if (isMidtermReview(item)) {
+                      const rm = REVIEW_META[reviewKindOf(item)]
+                      return (
+                        <th key={item.id} style={{ padding: '4px 3px', textAlign: 'center', borderBottom: '2px solid #E4EAF2', borderLeft: borderL, width: 64, verticalAlign: 'bottom', background: rm.soft }}>
+                          <div style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: 9.5, fontWeight: 700, color: rm.color, maxHeight: 100, overflow: 'hidden', padding: '3px 1px', lineHeight: 1.3, margin: '0 auto' }} title={item.title}>{item.title.substring(0, 35)}</div>
+                          <div style={{ fontSize: 11, marginTop: 3 }}>{rm.emoji}</div>
+                        </th>
+                      )
+                    }
                     return (
                       <th key={item.id} style={{ padding: '4px 3px', textAlign: 'center', borderBottom: '2px solid #E4EAF2', borderLeft: borderL, width: 56, verticalAlign: 'bottom' }}>
                         <div style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: 9.5, fontWeight: 600, color: '#3D5475', maxHeight: 100, overflow: 'hidden', padding: '3px 1px', lineHeight: 1.3 }} title={item.title}>{item.title.substring(0, 35)}</div>
@@ -2948,7 +3188,22 @@ export function LMSPage() {
                       </td>
                       <td style={{ ...sticky, padding: '7px 8px', textAlign: 'center', borderBottom: '1px solid #F0F4FA', borderRight: '1px solid #E4EAF2', fontSize: 11, fontWeight: 700, color: '#1A365E' }}>{fmtTime(timeMins)}</td>
                       <td style={{ ...sticky, padding: '7px 8px', textAlign: 'center', borderBottom: '1px solid #F0F4FA', borderRight: '2px solid #D0D7E4', fontSize: 14, fontWeight: 900, color: credEarned > 0 ? '#059669' : '#94A3B8' }}>{credEarned}</td>
-                      {content.map((item, ci) => {
+                      {gbCols.map((item, ci) => {
+                        if (isMidtermReview(item)) {
+                          const st = reviewGradebookStatus(item, sid, allSubmissions)
+                          const rm = REVIEW_META[reviewKindOf(item)]
+                          const borderLR = ci > 0 && gbCols[ci - 1]?.unitTitle !== item.unitTitle ? '2px solid #D0D7E4' : '1px solid #F0F4FA'
+                          return (
+                            <td key={item.id} onClick={(e) => { e.stopPropagation(); openReviewResponses(item.id, sid) }}
+                              title={`View ${rm.label} responses for ${s.firstName}`}
+                              style={{ padding: '5px 3px', textAlign: 'center', borderBottom: '1px solid #F0F4FA', borderLeft: borderLR, width: 64, cursor: 'pointer' }}>
+                              {st.state === 'none' ? <span style={{ color: '#D0D7E4', fontSize: 13 }}>—</span>
+                                : st.state === 'pending' ? <div style={{ background: '#FEF3C7', borderRadius: 5, padding: '3px 5px', display: 'inline-block' }}><div style={{ fontSize: 9, fontWeight: 800, color: '#B45309' }}>⏳ Pending</div></div>
+                                : st.state === 'scored' ? <div style={{ background: st.score >= passMark ? '#DCFCE7' : '#FEE2E2', borderRadius: 5, padding: '3px 5px', display: 'inline-block' }}><div style={{ fontSize: 12, fontWeight: 900, color: st.score >= passMark ? '#059669' : '#D61F31' }}>{st.score}</div></div>
+                                : <div style={{ background: '#DCFCE7', borderRadius: 5, padding: '4px 5px', display: 'inline-block' }}><div style={{ fontSize: 13, color: '#059669' }}>✓</div></div>}
+                            </td>
+                          )
+                        }
                         const prog = myProg.find(p => p.contentId === item.id)
                         const status = prog?.status || 'not_started'
                         const lessonSubs = getLessonSubmissions(sid, item.id)
@@ -2960,7 +3215,7 @@ export function LMSPage() {
                         const as_ = prog && prog.assignScore != null && !isNaN(Number(prog.assignScore)) ? Number(prog.assignScore) : null
                         const cs = lmsCompositeScore(prog, item, passMark)
                         const assignSt = prog?.assignStatus || ''
-                        const borderL = ci > 0 && content[ci - 1]?.unitTitle !== item.unitTitle ? '2px solid #D0D7E4' : '1px solid #F0F4FA'
+                        const borderL = ci > 0 && gbCols[ci - 1]?.unitTitle !== item.unitTitle ? '2px solid #D0D7E4' : '1px solid #F0F4FA'
                         const canOpenScore = ha && (effectiveStatus !== 'not_started' || hasSubmission)
                         return (
                           <td key={item.id} onClick={canOpenScore ? (e) => { e.stopPropagation(); openScoreModal(sid, `${s.lastName}, ${s.firstName}`, item.id, item.title) } : undefined} style={{ padding: '5px 3px', textAlign: 'center', borderBottom: '1px solid #F0F4FA', borderLeft: borderL, width: 56, cursor: canOpenScore ? 'pointer' : 'default' }} title={ha ? 'Click to score assignment' : ''}>
@@ -3013,11 +3268,17 @@ export function LMSPage() {
                       <td colSpan={3} style={{ position: 'sticky', left: 0, zIndex: 3, background: '#F0F4FA', borderTop: '2px solid #E4EAF2' }} />
                     </>
                   })()}
-                  {content.map((item, ci) => {
+                  {gbCols.map((item, ci) => {
+                    if (isMidtermReview(item)) {
+                      const scores = enrolled.map(st => reviewGradebookStatus(item, st.id, allSubmissions)).flatMap(st => st.state === 'scored' ? [st.score] : [])
+                      const avgR = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null
+                      const borderLR = ci > 0 && gbCols[ci - 1]?.unitTitle !== item.unitTitle ? '2px solid #D0D7E4' : '1px solid #E4EAF2'
+                      return <td key={item.id} style={{ padding: '7px 3px', textAlign: 'center', borderTop: '2px solid #E4EAF2', borderLeft: borderLR, fontSize: 11, fontWeight: 900, color: avgR !== null ? (avgR >= passMark ? '#059669' : '#D61F31') : '#94A3B8' }}>{avgR !== null ? avgR + '%' : '—'}</td>
+                    }
                     const lessonProgs = allProg.filter(p => p.courseId === groupKey(course) && p.contentId === item.id)
                     const csArr = lessonProgs.map(p => lmsCompositeScore(p, item, passMark)).filter(v => v !== null) as number[]
                     const avgCS = csArr.length ? Math.round(csArr.reduce((s, v) => s + v, 0) / csArr.length) : null
-                    const borderL = ci > 0 && content[ci - 1]?.unitTitle !== item.unitTitle ? '2px solid #D0D7E4' : '1px solid #E4EAF2'
+                    const borderL = ci > 0 && gbCols[ci - 1]?.unitTitle !== item.unitTitle ? '2px solid #D0D7E4' : '1px solid #E4EAF2'
                     return <td key={item.id} style={{ padding: '7px 3px', textAlign: 'center', borderTop: '2px solid #E4EAF2', borderLeft: borderL, fontSize: 11, fontWeight: 900, color: avgCS !== null ? (avgCS >= passMark ? '#059669' : '#D61F31') : '#94A3B8' }}>{avgCS !== null ? avgCS + '%' : '—'}</td>
                   })}
                 </tr>
@@ -3040,7 +3301,7 @@ export function LMSPage() {
             <span style={{ fontSize: 10 }}>📋 Assignment</span>
             <span style={{ fontSize: 10, fontWeight: 700 }}>⭐ = Composite</span>
           </div>
-          <div style={{ fontSize: 10, color: '#7A92B0' }}>Click any assignment cell to score</div>
+          <div style={{ fontSize: 10, color: '#7A92B0' }}>Click any assignment cell to score · click a Midterm Review / Finals cell to view responses and score its OMR tests</div>
         </div>
 
         {/* Course Discussion Board */}
@@ -3738,7 +3999,8 @@ export function LMSPage() {
                 <button onClick={() => { openAddItem(u.title); setCurriculumMenuOpenId(null) }} style={menuItemStyle}>+ Add Topic</button>
                 <button onClick={() => { renameUnit(u.title); setCurriculumMenuOpenId(null) }} style={menuItemStyle}>✏️ Rename Module</button>
                 <button onClick={() => { setModuleOrder(u.title); setCurriculumMenuOpenId(null) }} style={menuItemStyle}>🔢 Module Order</button>
-                <button onClick={() => { setMidtermModal({ courseId: groupKey(course), contentId: null, afterUnit: u.title }); setCurriculumMenuOpenId(null) }} style={menuItemStyle}>📝 Add Midterm Review After</button>
+                <button onClick={() => { setMidtermModal({ courseId: groupKey(course), contentId: null, afterUnit: u.title, kind: 'midterm' }); setCurriculumMenuOpenId(null) }} style={menuItemStyle}>📝 Add Midterm Review After</button>
+                <button onClick={() => { setMidtermModal({ courseId: groupKey(course), contentId: null, afterUnit: u.title, kind: 'finals' }); setCurriculumMenuOpenId(null) }} style={menuItemStyle}>🎓 Add Finals After</button>
                 <button onClick={() => { deleteUnit(u.title, u.items); setCurriculumMenuOpenId(null) }} style={{ ...menuItemStyle, color: '#D61F31', borderTop: '1px solid #F0F4FA' }}>🗑 Delete Module</button>
               </div>
             )}
@@ -3762,7 +4024,8 @@ export function LMSPage() {
       const isDragging = curriculumDrag?.kind === 'unit' && curriculumDrag.id === u.title
       const isDropTarget = curriculumDropTarget === u.title && curriculumDrag?.kind === 'unit' && curriculumDrag.id !== u.title
       const sections = parseMidtermSections(item.midtermSectionsJson)
-      const openBuilder = () => { setMidtermModal({ courseId: groupKey(course), contentId: item.id }); setCurriculumMenuOpenId(null) }
+      const meta = REVIEW_META[reviewKindOf(item)]
+      const openBuilder = () => { setMidtermModal({ courseId: groupKey(course), contentId: item.id, kind: reviewKindOf(item) }); setCurriculumMenuOpenId(null) }
       return (
         <>
           <tr
@@ -3770,7 +4033,7 @@ export function LMSPage() {
               if (curriculumDrag?.kind === 'unit') { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (curriculumDropTarget !== u.title) setCurriculumDropTarget(u.title) }
             }}
             onDrop={(e: React.DragEvent) => { e.preventDefault(); handleCurriculumDrop('unit', u.title, '') }}
-            style={{ background: '#FAF8FF', borderBottom: isDropTarget ? '2px solid #2563EB' : '1px solid #F0F4FA', opacity: isDragging ? 0.4 : 1 }}>
+            style={{ background: meta.soft, borderBottom: isDropTarget ? '2px solid #2563EB' : '1px solid #F0F4FA', opacity: isDragging ? 0.4 : 1 }}>
             <td style={{ padding: '8px 10px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span
@@ -3785,9 +4048,9 @@ export function LMSPage() {
                   title="Drag to reorder"
                   style={{ color: '#B7C3D6', fontSize: 12, cursor: 'grab', userSelect: 'none' }}>⣿</span>
                 <button onClick={() => toggleExpanded(key)} style={{ width: 18, height: 18, border: '1px solid #E4EAF2', borderRadius: 4, background: '#fff', cursor: 'pointer', fontSize: 11, color: '#5A7290', padding: 0, lineHeight: 1 }}>{expanded ? '−' : '+'}</button>
-                <span style={{ fontSize: 15 }}>📝</span>
-                <button onClick={openBuilder} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 800, color: '#1A365E' }}>{item.title || 'Midterm Review'}</button>
-                <span style={{ fontSize: 9, fontWeight: 800, color: '#5B21B6', background: '#EDE9FE', borderRadius: 999, padding: '2px 7px', letterSpacing: '.05em', textTransform: 'uppercase' }}>Midterm Review</span>
+                <span style={{ fontSize: 15 }}>{meta.emoji}</span>
+                <button onClick={openBuilder} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 800, color: '#1A365E' }}>{item.title || meta.label}</button>
+                <span style={{ fontSize: 9, fontWeight: 800, color: meta.color, background: meta.bg, borderRadius: 999, padding: '2px 7px', letterSpacing: '.05em', textTransform: 'uppercase' }}>{meta.label}</span>
               </div>
             </td>
             <td style={{ padding: '8px 10px', textAlign: 'center' }}>
@@ -3831,7 +4094,10 @@ export function LMSPage() {
                     <td colSpan={5} style={{ padding: '6px 10px', paddingLeft: 12 + 3 * 26 }}>
                       <button onClick={openBuilder} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0, textAlign: 'left', maxWidth: '100%' }}>
                         <span style={{ fontSize: 14 }}>{meta.icon}</span>
-                        <span style={{ fontSize: 11, color: '#5A7290', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{meta.label}{detail ? `: ${detail}` : ''}</span>
+                        {/* Line-clamp, not nowrap: a nowrap span's full width counts toward the
+                            auto-layout table's min width, so one long prompt stretched the whole
+                            curriculum table and pushed the "+ Do It / + Learn It …" toolbar off-screen. */}
+                        <span style={{ fontSize: 11, color: '#5A7290', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflowWrap: 'anywhere' }}>{meta.label}{detail ? `: ${detail}` : ''}</span>
                       </button>
                     </td>
                   </tr>
@@ -3894,7 +4160,16 @@ export function LMSPage() {
         </div>
 
         <div style={{ border: '1px solid #E4EAF2', borderRadius: 12 }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          {/* Fixed layout + explicit column widths: with the default auto layout every course's
+              titles resized the columns, so Target Date / 🔒 sat in a different spot per course. */}
+          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+            <colgroup>
+              <col />
+              <col style={{ width: 150 }} />
+              <col style={{ width: 56 }} />
+              <col style={{ width: 8 }} />
+              <col style={{ width: 96 }} />
+            </colgroup>
             <thead>
               <tr style={{ borderBottom: '1px solid #E4EAF2', background: '#F7F9FC' }}>
                 <th style={{ ...thStyle, textAlign: 'left' }} />
@@ -3914,13 +4189,70 @@ export function LMSPage() {
                 </td>
                 <td colSpan={3} />
                 <td style={{ padding: '8px 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                  <button onClick={openAddUnit} title="Add Module" style={{ padding: '5px 9px', background: '#EEF3FF', color: '#1A365E', border: '1px solid #DDE6F0', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginRight: 6 }}>+ Module</button>
-                  <button onClick={() => setMidtermModal({ courseId: groupKey(course), contentId: null })} title="Add a Midterm Review between modules" style={{ padding: '5px 9px', background: '#F5F3FF', color: '#5B21B6', border: '1px solid #DDD6FE', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginRight: 6 }}>📝 + Midterm Review</button>
-                  <button onClick={() => { setActiveCourseId(groupKey(course)); setModulePicker({ purpose: 'lesson', units: moduleUnits.map(u => u.title) }) }} title="Do It — Add Lesson" style={{ padding: '5px 9px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginRight: 6 }}>✅ + Do It</button>
-                  <button onClick={() => { setActiveCourseId(groupKey(course)); setModulePicker({ purpose: 'caseStudy', units: moduleUnits.map(u => u.title) }) }} title="Learn It — Add Case Study" style={{ padding: '5px 9px', background: '#FFF3D6', color: '#92400E', border: '1px solid #FDE68A', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginRight: 6 }}>🔎 + Learn It</button>
-                  <button onClick={() => openSectionPicker('socratic')} title="Show It — Socratic Seminar" style={{ padding: '5px 9px', background: '#F0F4FA', color: '#1A365E', border: '1px solid #DDE6F0', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginRight: 6 }}>⚖️ + Show It</button>
-                  <button onClick={() => openSectionPicker('omr')} title="Prove It — OMR Test" style={{ padding: '5px 9px', background: '#F0F4FA', color: '#1A365E', border: '1px solid #DDE6F0', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginRight: 6 }}>🔢 + Prove It</button>
-                  <button onClick={() => openSectionPicker('presentation')} title="Master It — Presentation" style={{ padding: '5px 9px', background: '#F0F4FA', color: '#1A365E', border: '1px solid #DDE6F0', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>🏆 + Master It</button>
+                  {(() => {
+                    const open = curriculumMenuOpenId === 'course-add'
+                    const cancelClose = () => { if (addMenuCloseTimer.current) { window.clearTimeout(addMenuCloseTimer.current); addMenuCloseTimer.current = null } }
+                    const canHover = () => window.matchMedia('(hover: hover) and (pointer: fine)').matches
+                    const pick = (fn: () => void) => { cancelClose(); setCurriculumMenuOpenId(null); fn() }
+                    const groups: { heading: string; items: { icon: string; label: string; hint: string; onPick: () => void }[] }[] = [
+                      { heading: 'Structure', items: [
+                        { icon: '📁', label: 'Module', hint: 'New module in this course', onPick: openAddUnit },
+                        { icon: '📝', label: 'Midterm Review', hint: 'Checkpoint between modules', onPick: () => setMidtermModal({ courseId: groupKey(course), contentId: null, kind: 'midterm' }) },
+                        { icon: '🎓', label: 'Finals', hint: 'Defaults to the end of the course', onPick: () => setMidtermModal({ courseId: groupKey(course), contentId: null, kind: 'finals' }) },
+                      ] },
+                      { heading: 'Module sections', items: [
+                        { icon: '🔎', label: 'Learn It', hint: 'Case study', onPick: () => { setActiveCourseId(groupKey(course)); setModulePicker({ purpose: 'caseStudy', units: moduleUnits.map(u => u.title) }) } },
+                        { icon: '✅', label: 'Do It', hint: 'Lesson', onPick: () => { setActiveCourseId(groupKey(course)); setModulePicker({ purpose: 'lesson', units: moduleUnits.map(u => u.title) }) } },
+                        { icon: '⚖️', label: 'Show It', hint: 'Socratic Seminar', onPick: () => openSectionPicker('socratic') },
+                        { icon: '🔢', label: 'Prove It', hint: 'OMR Test', onPick: () => openSectionPicker('omr') },
+                        { icon: '🏆', label: 'Master It', hint: 'Presentation', onPick: () => openSectionPicker('presentation') },
+                      ] },
+                    ]
+                    return (
+                      <div
+                        ref={open ? curriculumMenuRef : undefined}
+                        onMouseEnter={() => { if (!canHover()) return; cancelClose(); setCurriculumMenuOpenId('course-add') }}
+                        onMouseLeave={() => { if (!canHover()) return; cancelClose(); addMenuCloseTimer.current = window.setTimeout(() => setCurriculumMenuOpenId(prev => prev === 'course-add' ? null : prev), 160) }}
+                        style={{ position: 'relative', display: 'inline-block' }}>
+                        <style>{`
+                          .lms-add-trigger { transition: transform 140ms ease-out, background-color 140ms ease; }
+                          .lms-add-trigger:active { transform: scale(0.96); }
+                          .lms-add-menu { transform-origin: top right; animation: lmsAddMenuIn 160ms cubic-bezier(0.23, 1, 0.32, 1); }
+                          @keyframes lmsAddMenuIn { from { opacity: 0; transform: translateY(-4px) scale(0.97); } }
+                          .lms-add-item:hover, .lms-add-item:focus-visible { background: #F7F9FC; outline: none; }
+                          @media (prefers-reduced-motion: reduce) { .lms-add-menu { animation-duration: 1ms; } }
+                        `}</style>
+                        <button
+                          className="lms-add-trigger"
+                          onClick={() => { cancelClose(); setCurriculumMenuOpenId(prev => prev === 'course-add' ? null : 'course-add') }}
+                          aria-haspopup="menu" aria-expanded={open} title="Add to curriculum"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 11px', background: open ? '#24477A' : '#1A365E', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
+                          <span style={{ fontSize: 14, lineHeight: 1 }}>+</span> Add
+                        </button>
+                        {open && (
+                          <div className="lms-add-menu" role="menu" style={{ position: 'absolute', right: 0, top: '100%', marginTop: 6, background: '#fff', border: '1px solid #E4EAF2', borderRadius: 10, boxShadow: '0 8px 24px rgba(26,54,94,.14)', minWidth: 230, zIndex: 30, overflow: 'hidden', textAlign: 'left', whiteSpace: 'normal' }}>
+                            {/* Invisible bridge over the 6px gap so hover survives the trip down. */}
+                            <div style={{ position: 'absolute', top: -7, left: 0, right: 0, height: 7 }} />
+                            {groups.map((g, gi) => (
+                              <div key={g.heading} style={{ borderTop: gi ? '1px solid #F0F4FA' : undefined, padding: '4px 0' }}>
+                                <div style={{ padding: '6px 14px 4px', fontSize: 9, fontWeight: 800, color: '#7A92B0', letterSpacing: '.06em', textTransform: 'uppercase' }}>{g.heading}</div>
+                                {g.items.map(it => (
+                                  <button key={it.label} role="menuitem" className="lms-add-item" onClick={() => pick(it.onPick)}
+                                    style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', padding: '7px 14px', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
+                                    <span style={{ fontSize: 14, width: 18, textAlign: 'center', flexShrink: 0 }}>{it.icon}</span>
+                                    <span style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                      <span style={{ fontSize: 11, fontWeight: 700, color: '#1A365E' }}>{it.label}</span>
+                                      <span style={{ fontSize: 10, color: '#7A92B0' }}>{it.hint}</span>
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </td>
               </tr>
               {!content.length ? (
@@ -5332,112 +5664,6 @@ export function LMSPage() {
     )
   }
 
-  // Midterm Review — read-only view of what students submitted, one card per student,
-  // each block showing the latest response (OMR shows best score + attempts used).
-  function MidtermResponsesModal({ contentId, onClose }: { contentId: string; onClose: () => void }) {
-    const item = store.content.find(c => c.id === contentId)
-    const [rows, setRows] = useState<LMSSubmissionRow[] | null>(null)
-    const [openStudent, setOpenStudent] = useState<string | null>(null)
-
-    useEffect(() => {
-      let alive = true
-      supabase.from('lms_submissions').select('*').eq('content_id', contentId).eq('kind', 'midterm_review').order('submitted_at', { ascending: false }).then(({ data, error }) => {
-        if (!alive) return
-        if (error) console.error('midterm responses load error:', error)
-        setRows((data ?? []) as LMSSubmissionRow[])
-      })
-      return () => { alive = false }
-    }, [contentId])
-
-    if (!item) return null
-    const sections = parseMidtermSections(item.midtermSectionsJson)
-    const blockCount = sections.reduce((n, s) => n + s.blocks.length, 0)
-
-    type Resp = { note: Record<string, unknown>; linkUrl: string | null; submittedAt: string }
-    const byStudent = new Map<string, Map<string, Resp[]>>()
-    ;(rows ?? []).forEach(r => {
-      let note: Record<string, unknown> = {}
-      try { note = JSON.parse((r.note as string) || '{}') } catch { /* skip */ }
-      const blockId = note.blockId as string | undefined
-      if (!blockId) return
-      const sid = r.student_id as string
-      if (!byStudent.has(sid)) byStudent.set(sid, new Map())
-      const m = byStudent.get(sid)!
-      if (!m.has(blockId)) m.set(blockId, [])
-      m.get(blockId)!.push({ note, linkUrl: (r.link_url as string) ?? null, submittedAt: (r.submitted_at as string) ?? '' })
-    })
-    const studentName = (sid: string) => students.find(s => s.id === sid)?.fullName ?? 'Unknown student'
-    const studentIds = [...byStudent.keys()].sort((a, b) => studentName(a).localeCompare(studentName(b)))
-
-    function renderResponse(b: MidtermBlock, resps: Resp[] | undefined) {
-      if (!resps?.length) return <span style={{ fontSize: 11, color: '#94A3B8' }}>No submission</span>
-      const latest = resps[0]
-      if (b.kind === 'text') return <div style={{ fontSize: 12, color: '#1A365E', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{latest.note.text as string}</div>
-      if (b.kind === 'file') return latest.linkUrl
-        ? <a href={latest.linkUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: '#2563EB', fontWeight: 700 }}>📎 {(latest.note.fileName as string) || 'Open file'}</a>
-        : <span style={{ fontSize: 11, color: '#94A3B8' }}>File missing</span>
-      const best = resps.reduce((m, r) => Math.max(m, Number(r.note.score ?? 0)), 0)
-      const passed = resps.some(r => r.note.passed === true)
-      return (
-        <span style={{ fontSize: 12, fontWeight: 700, color: passed ? '#059669' : '#D61F31' }}>
-          Best {best}% · {passed ? 'Passed' : 'Not passed'} <span style={{ fontWeight: 400, color: '#7A92B0' }}>({resps.length} attempt{resps.length !== 1 ? 's' : ''}; latest {String(latest.note.correct ?? 0)}/{String(latest.note.total ?? 0)})</span>
-        </span>
-      )
-    }
-
-    return (
-      <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 450, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto', backdropFilter: 'blur(4px)' }} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
-        <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 720, maxHeight: '94vh', overflowY: 'auto', boxShadow: '0 24px 60px rgba(0,0,0,.3)', margin: 'auto' }}>
-          <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '18px 24px', borderRadius: '18px 18px 0 0', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-            <div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>📥 Midterm Review Responses</div>
-              <div style={{ fontSize: 10, color: 'rgba(255,255,255,.65)', marginTop: 2 }}>{item.title} · {rows ? `${studentIds.length} student${studentIds.length !== 1 ? 's' : ''} responded` : 'Loading…'}</div>
-            </div>
-            <button onClick={onClose} title="Close" style={modalCloseBtnOnDark}>✕</button>
-          </div>
-          <div style={{ padding: '18px 24px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {rows === null ? (
-              <div style={{ textAlign: 'center', padding: 30, color: '#94A3B8', fontSize: 12 }}>Loading responses…</div>
-            ) : studentIds.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: 30, color: '#94A3B8', fontSize: 12 }}>No student has submitted anything yet.</div>
-            ) : studentIds.map(sid => {
-              const m = byStudent.get(sid)!
-              const done = sections.flatMap(s => s.blocks).filter(b => m.has(b.id)).length
-              const open = openStudent === sid
-              return (
-                <div key={sid} style={{ border: '1px solid #E4EAF2', borderRadius: 10, overflow: 'hidden' }}>
-                  <button onClick={() => setOpenStudent(open ? null : sid)} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 12px', background: open ? '#F7F9FC' : '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}>
-                    <span style={{ fontSize: 12, fontWeight: 800, color: '#1A365E', flex: 1 }}>{studentName(sid)}</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: done === blockCount ? '#059669' : '#D97706' }}>{done}/{blockCount} submitted</span>
-                    <span style={{ fontSize: 11, color: '#5A7290' }}>{open ? '▲' : '▼'}</span>
-                  </button>
-                  {open && (
-                    <div style={{ padding: '4px 12px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      {sections.map((sec, si) => (
-                        <div key={sec.id}>
-                          <div style={{ fontSize: 9, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '.08em', margin: '6px 0 4px' }}>Section {si + 1} · {sec.title}</div>
-                          {sec.blocks.map(b => (
-                            <div key={b.id} style={{ display: 'flex', gap: 10, padding: '6px 0', borderTop: '1px solid #F0F4FA' }}>
-                              <span style={{ fontSize: 11, fontWeight: 700, color: '#5A7290', width: 170, flexShrink: 0 }}>
-                                {b.kind === 'text' ? '📝 Text Box' : b.kind === 'omr' ? '🔢 OMR Test' : '📎 File Upload'}
-                                {b.kind !== 'omr' && b.prompt && <span style={{ display: 'block', fontWeight: 400, color: '#94A3B8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.prompt}</span>}
-                              </span>
-                              <div style={{ flex: 1, minWidth: 0 }}>{renderResponse(b, m.get(b.id))}</div>
-                            </div>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   // Master It — Discussion Board moderation view. Reads/writes lms_discussion_posts
   // directly via the Supabase client (staff are real Supabase Auth users, so RLS's
   // staff-role write policy covers this — no student-portal API broker needed here,
@@ -5842,8 +6068,15 @@ export function LMSPage() {
       {showNewSectionFlow && <NewSectionFlow />}
       {showLessonModal && <LessonModal />}
       {showCaseStudyModal && <CaseStudyModal />}
-      {midtermResponsesId && <MidtermResponsesModal contentId={midtermResponsesId} onClose={() => setMidtermResponsesId(null)} />}
-      {midtermModal && <MidtermReviewModal store={store} persist={persist} courseId={midtermModal.courseId} contentId={midtermModal.contentId} afterUnit={midtermModal.afterUnit} onClose={() => setMidtermModal(null)} />}
+      {midtermResponsesId && (
+        <MidtermResponsesModal
+          store={store} students={students} contentId={midtermResponsesId}
+          initialStudentId={midtermResponsesStudent ?? undefined}
+          onScoreSaved={(id, note) => setAllSubmissions(prev => prev.map(r => r.id === id ? { ...r, note: JSON.stringify(note) } : r))}
+          onClose={() => { setMidtermResponsesId(null); setMidtermResponsesStudent(null) }}
+        />
+      )}
+      {midtermModal && <MidtermReviewModal store={store} persist={persist} kind={midtermModal.kind} courseId={midtermModal.courseId} contentId={midtermModal.contentId} afterUnit={midtermModal.afterUnit} onClose={() => setMidtermModal(null)} />}
       {sectionModal && <SectionModal type={sectionModal.type} contentId={sectionModal.contentId} onClose={() => setSectionModal(null)} />}
       {discussionBoardContentId && <DiscussionBoardModal contentId={discussionBoardContentId} onClose={() => setDiscussionBoardContentId(null)} />}
       {assignRolesContentId && (

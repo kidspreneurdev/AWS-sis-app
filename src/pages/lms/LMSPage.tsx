@@ -1044,6 +1044,369 @@ function GradeRangeSlider({ min, max, value, onChange }: GradeRangeSliderProps) 
   )
 }
 
+// MCQ question builder — same shape/UX as a lesson's Mastery Test questions, including
+// the short-answer (free-text) option type. Short-answer questions are excluded from
+// OMR's auto-grading and are reviewed by the teacher in the Grade Case Study panel.
+// Used for Prove It — OMR and Midterm Review OMR blocks. Module-level so it keeps a
+// stable component identity across LMSPage re-renders.
+function McqQuestionEditor({ questions, onChange, radioGroup = 'omr' }: { questions: McqQuestion[]; onChange: (next: McqQuestion[]) => void; radioGroup?: string }) {
+  function update(qi: number, patch: Partial<McqQuestion>) {
+    onChange(questions.map((q, i) => i === qi ? { ...q, ...patch } : q))
+  }
+  function updateOption(qi: number, oi: number, val: string) {
+    onChange(questions.map((q, i) => i === qi ? { ...q, opts: q.opts.map((o, j) => j === oi ? val : o) } : q))
+  }
+  function remove(qi: number) {
+    onChange(questions.filter((_, i) => i !== qi))
+  }
+  function add() {
+    onChange([...questions, { q: '', type: 'mcq', opts: ['', '', '', ''], ans: 0 }])
+  }
+  return (
+    <div style={{ border: '1px solid #E4EAF2', borderRadius: 10, overflow: 'hidden' }}>
+      <div style={{ background: '#F7F9FC', padding: '8px 12px', borderBottom: '1px solid #E4EAF2' }}>
+        <span style={{ fontSize: 11, fontWeight: 800, color: '#1A365E' }}>🔢 OMR Test Questions <span style={{ fontWeight: 400, color: '#7A92B0' }}>({questions.length})</span></span>
+      </div>
+      <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {questions.length === 0 && (
+          <div style={{ fontSize: 11, color: '#94A3B8', padding: '6px 0' }}>No questions yet. Click the button below to add one.</div>
+        )}
+        {questions.map((q, qi) => (
+          <div key={qi} style={{ background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 8, padding: '10px 12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+              <span style={{ fontSize: 11, fontWeight: 800, color: '#1A365E', flexShrink: 0 }}>{qi + 1}.</span>
+              <input
+                value={q.q}
+                onChange={e => update(qi, { q: e.target.value })}
+                placeholder="Question text..."
+                style={{ flex: 1, padding: '5px 8px', border: '1.5px solid #E4EAF2', borderRadius: 6, fontSize: 11, fontFamily: 'inherit' }}
+              />
+              <select
+                value={q.type ?? 'mcq'}
+                onChange={e => {
+                  const nextType = e.target.value as 'mcq' | 'short'
+                  update(qi, { type: nextType, ...(nextType === 'mcq' && !q.opts?.length ? { opts: ['', '', '', ''] } : {}) })
+                }}
+                style={{ padding: '4px 6px', border: '1px solid #E4EAF2', borderRadius: 5, fontSize: 10 }}
+              >
+                <option value="mcq">MCQ</option>
+                <option value="short">Short answer</option>
+              </select>
+              <button type="button" onClick={() => remove(qi)} style={{ padding: '3px 7px', background: '#FFF0F1', color: '#D61F31', border: '1px solid #F5C2C7', borderRadius: 5, fontSize: 11, cursor: 'pointer' }}>×</button>
+            </div>
+            {(q.type ?? 'mcq') === 'mcq' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {(q.opts?.length ? q.opts : ['', '', '', '']).map((opt, oi) => (
+                  <div key={oi} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <input
+                      type="radio"
+                      name={`${radioGroup}_ans_${qi}`}
+                      checked={q.ans === oi}
+                      onChange={() => update(qi, { ans: oi })}
+                      title="Mark as correct answer"
+                      style={{ flexShrink: 0, cursor: 'pointer' }}
+                    />
+                    <span style={{ fontSize: 10, fontWeight: 700, color: '#7A92B0', width: 14 }}>{['A', 'B', 'C', 'D'][oi]}</span>
+                    <input
+                      value={opt}
+                      onChange={e => updateOption(qi, oi, e.target.value)}
+                      placeholder={`Option ${['A', 'B', 'C', 'D'][oi]}...`}
+                      style={{ flex: 1, padding: '4px 8px', border: '1px solid #E4EAF2', borderRadius: 5, fontSize: 11, fontFamily: 'inherit' }}
+                    />
+                  </div>
+                ))}
+                <div style={{ fontSize: 9, color: '#94A3B8', marginTop: 2 }}>Click the radio button to mark the correct answer</div>
+              </div>
+            ) : (
+              <div style={{ fontSize: 10, color: '#7A92B0', fontStyle: 'italic' }}>Short answer — student types a multi-line response, which you'll review and grade manually.</div>
+            )}
+          </div>
+        ))}
+        <button type="button" onClick={add} style={{ padding: '8px 14px', background: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', width: '100%' }}>+ Add Question</button>
+      </div>
+    </div>
+  )
+}
+
+// ─── MIDTERM REVIEW BUILDER ─────────────────────────────────────────────────
+// A Midterm Review has no fixed fields: the admin adds any number of sections (title +
+// instructions), and each section holds any mix of Text Box / OMR Test / File Upload
+// blocks in any order. Saved as one content row whose unitTitle places it among the
+// modules (see renderMidtermRows); the section tree lives in midtermSectionsJson.
+// Module-level (not nested in LMSPage) so an LMSPage re-render — e.g. the auth
+// profile refreshing when the tab regains focus after the file picker closes — can't
+// remount it and throw away unsaved sections or in-flight image uploads.
+function MidtermReviewModal({ store, persist, courseId, contentId, afterUnit, onClose }: {
+  store: LMSStore
+  persist: (updated: LMSStore) => Promise<void>
+  courseId: string
+  contentId: string | null
+  afterUnit?: string
+  onClose: () => void
+}) {
+  const existing = contentId ? store.content.find(c => c.id === contentId) ?? null : null
+  const courseContent = store.content.filter(c => c.courseId === courseId)
+  // Current module/review order for this course, minus the review being edited.
+  const orderedUnits = [...new Set(courseContent.filter(c => c.unitTitle).map(c => c.unitTitle as string))]
+    .map(t => ({ t, o: courseContent.find(c => c.unitTitle === t)?.unitOrder ?? 0 }))
+    .sort((a, b) => a.o - b.o)
+    .map(x => x.t)
+  const otherUnits = orderedUnits.filter(t => t !== existing?.unitTitle)
+  const moduleTitles = otherUnits.filter(t => !courseContent.some(c => c.unitTitle === t && isMidtermReview(c)))
+
+  function defaultAfter(): string {
+    if (existing) {
+      const idx = orderedUnits.indexOf(existing.unitTitle ?? '')
+      return idx > 0 ? orderedUnits[idx - 1] : ''
+    }
+    if (afterUnit) return afterUnit
+    // "Midterm" — default to the middle of the course.
+    return moduleTitles.length ? moduleTitles[Math.max(0, Math.ceil(moduleTitles.length / 2) - 1)] : ''
+  }
+  function defaultTitle(): string {
+    if (existing) return existing.title
+    let n = 1
+    let t = 'Midterm Review'
+    while (orderedUnits.includes(t)) t = `Midterm Review ${++n}`
+    return t
+  }
+
+  const [title, setTitle] = useState(defaultTitle)
+  const [placeAfter, setPlaceAfter] = useState(defaultAfter)
+  const [sections, setSections] = useState<MidtermSection[]>(() => {
+    const parsed = parseMidtermSections(existing?.midtermSectionsJson)
+    return parsed.length ? parsed : [{ id: lmsId(), title: '', instructions: '', blocks: [] }]
+  })
+
+  function patchSection(sid: string, patch: Partial<MidtermSection>) {
+    setSections(prev => prev.map(s => s.id === sid ? { ...s, ...patch } : s))
+  }
+  // Instruction images upload as soon as they're picked (so the thumbnail is the real
+  // stored file); Save waits until none are still in flight.
+  const [uploadingImages, setUploadingImages] = useState<Record<string, number>>({})
+  const anyUploading = Object.values(uploadingImages).some(n => n > 0)
+  async function addImages(sid: string, files: File[]) {
+    const images = files.filter(f => f.type.startsWith('image/'))
+    if (!images.length) return
+    setUploadingImages(prev => ({ ...prev, [sid]: (prev[sid] ?? 0) + images.length }))
+    await Promise.all(images.map(async f => {
+      try {
+        const url = await uploadFile(`lms-midterm-images/${Date.now()}_${f.name}`, f)
+        setSections(prev => prev.map(s => s.id === sid ? { ...s, images: [...(s.images ?? []), { url, name: f.name }] } : s))
+      } catch {
+        alert(`Couldn't upload ${f.name}. Please try again.`)
+      } finally {
+        setUploadingImages(prev => ({ ...prev, [sid]: Math.max(0, (prev[sid] ?? 1) - 1) }))
+      }
+    }))
+  }
+  function removeImage(sid: string, url: string) {
+    setSections(prev => prev.map(s => s.id === sid ? { ...s, images: (s.images ?? []).filter(im => im.url !== url) } : s))
+  }
+  function moveSection(idx: number, dir: -1 | 1) {
+    setSections(prev => {
+      const to = idx + dir
+      if (to < 0 || to >= prev.length) return prev
+      const next = [...prev]
+      ;[next[idx], next[to]] = [next[to], next[idx]]
+      return next
+    })
+  }
+  function removeSection(sid: string) {
+    setSections(prev => prev.filter(s => s.id !== sid))
+  }
+  function addSection() {
+    setSections(prev => [...prev, { id: lmsId(), title: '', instructions: '', blocks: [] }])
+  }
+  function addBlock(sid: string, kind: MidtermBlock['kind']) {
+    const block: MidtermBlock =
+      kind === 'omr' ? { id: lmsId(), kind, questions: [], passMark: 80, retakes: 3 } :
+      { id: lmsId(), kind, prompt: '' }
+    setSections(prev => prev.map(s => s.id === sid ? { ...s, blocks: [...s.blocks, block] } : s))
+  }
+  function patchBlock(sid: string, bid: string, patch: Partial<MidtermBlock>) {
+    setSections(prev => prev.map(s => s.id === sid ? { ...s, blocks: s.blocks.map(b => b.id === bid ? { ...b, ...patch } as MidtermBlock : b) } : s))
+  }
+  function moveBlock(sid: string, idx: number, dir: -1 | 1) {
+    setSections(prev => prev.map(s => {
+      if (s.id !== sid) return s
+      const to = idx + dir
+      if (to < 0 || to >= s.blocks.length) return s
+      const blocks = [...s.blocks]
+      ;[blocks[idx], blocks[to]] = [blocks[to], blocks[idx]]
+      return { ...s, blocks }
+    }))
+  }
+  function removeBlock(sid: string, bid: string) {
+    setSections(prev => prev.map(s => s.id === sid ? { ...s, blocks: s.blocks.filter(b => b.id !== bid) } : s))
+  }
+
+  function save() {
+    if (anyUploading) { alert('Please wait for the images to finish uploading.'); return }
+    const finalTitle = title.trim()
+    if (!finalTitle) { alert('Enter a title for the Midterm Review'); return }
+    if (otherUnits.includes(finalTitle)) { alert(`"${finalTitle}" is already used by another module or review in this course — pick a different title.`); return }
+    const untitled = sections.findIndex(s => !s.title.trim())
+    if (untitled >= 0) { alert(`Section ${untitled + 1} needs a title`); return }
+    for (const [si, s] of sections.entries()) {
+      if (s.blocks.some(b => b.kind === 'omr' && b.questions.length === 0)) { alert(`Section ${si + 1} has an OMR Test with no questions`); return }
+    }
+    const cleaned = sections.map(s => ({ ...s, title: s.title.trim(), instructions: s.instructions.trim() }))
+
+    const row: LMSContent = {
+      ...(existing ?? { id: lmsId(), courseId, type: 'article' as const, order: 0, moduleOrder: 0, locked: false }),
+      title: finalTitle,
+      unitTitle: finalTitle,
+      isMidtermReview: true,
+      midtermSectionsJson: JSON.stringify(cleaned),
+    }
+    // Slot the review in after `placeAfter` and renumber unitOrder across the course.
+    const order = [...otherUnits]
+    const insertAt = placeAfter ? order.indexOf(placeAfter) + 1 : 0
+    order.splice(insertAt > 0 || !placeAfter ? insertAt : order.length, 0, finalTitle)
+    const orderMap = new Map(order.map((t, i) => [t, i]))
+    const withRow = existing ? store.content.map(c => c.id === existing.id ? row : c) : [...store.content, row]
+    persist({
+      ...store,
+      content: withRow.map(c => c.courseId === courseId && c.unitTitle && orderMap.has(c.unitTitle) ? { ...c, unitOrder: orderMap.get(c.unitTitle) as number } : c),
+    })
+    onClose()
+  }
+
+  const smallBtn: React.CSSProperties = { width: 24, height: 24, padding: 0, background: '#fff', color: '#5A7290', border: '1px solid #E4EAF2', borderRadius: 5, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }
+  const removeBtn: React.CSSProperties = { ...smallBtn, background: '#FFF0F1', color: '#D61F31', border: '1px solid #F5C2C7' }
+  const addBlockBtn: React.CSSProperties = { padding: '5px 10px', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }
+  const blockMeta: Record<MidtermBlock['kind'], { icon: string; label: string; hint: string }> = {
+    text: { icon: '📝', label: 'Text Box', hint: 'Students type a written response.' },
+    omr: { icon: '🔢', label: 'OMR Test', hint: 'In-app test — MCQs auto-grade on submit; short answers are reviewed manually.' },
+    file: { icon: '📎', label: 'File Upload', hint: 'Students upload a file (PDF, doc, image, etc.).' },
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 450, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto', backdropFilter: 'blur(4px)' }} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 640, maxHeight: '94vh', overflowY: 'auto', boxShadow: '0 24px 60px rgba(0,0,0,.3)', margin: 'auto' }}>
+        <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '18px 24px', borderRadius: '18px 18px 0 0', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>📝 {existing ? 'Edit Midterm Review' : 'New Midterm Review'}</div>
+            <div style={{ fontSize: 10, color: 'rgba(255,255,255,.65)', marginTop: 2 }}>Build it from sections — each with its own instructions, text boxes, OMR tests and file uploads.</div>
+          </div>
+          <button onClick={onClose} title="Close" style={modalCloseBtnOnDark}>✕</button>
+        </div>
+        <div style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
+            <div>
+              <label style={labelStyle}>Title *</label>
+              <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Midterm Review" style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>Place After</label>
+              <select value={placeAfter} onChange={e => setPlaceAfter(e.target.value)} style={selectStyle}>
+                <option value="">At the start of the course</option>
+                {otherUnits.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {sections.length === 0 && (
+            <div style={{ fontSize: 11, color: '#94A3B8', padding: '14px 12px', textAlign: 'center', border: '1.5px dashed #E4EAF2', borderRadius: 10 }}>No sections yet. Add a section to start building this review.</div>
+          )}
+
+          {sections.map((sec, si) => (
+            <div key={sec.id} style={{ border: '1px solid #E4EAF2', borderRadius: 10, overflow: 'hidden' }}>
+              <div style={{ background: '#F7F9FC', padding: '8px 12px', borderBottom: '1px solid #E4EAF2', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 800, color: '#1A365E', flex: 1 }}>Section {si + 1} <span style={{ fontWeight: 400, color: '#7A92B0' }}>({sec.blocks.length} item{sec.blocks.length !== 1 ? 's' : ''})</span></span>
+                <button type="button" onClick={() => moveSection(si, -1)} disabled={si === 0} title="Move up" style={{ ...smallBtn, opacity: si === 0 ? 0.4 : 1 }}>↑</button>
+                <button type="button" onClick={() => moveSection(si, 1)} disabled={si === sections.length - 1} title="Move down" style={{ ...smallBtn, opacity: si === sections.length - 1 ? 0.4 : 1 }}>↓</button>
+                <button type="button" onClick={() => removeSection(sec.id)} title="Remove section" style={removeBtn}>✕</button>
+              </div>
+              <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div>
+                  <label style={labelStyle}>Section Title *</label>
+                  <input value={sec.title} onChange={e => patchSection(sec.id, { title: e.target.value })} placeholder="e.g. Part A — Reading Comprehension" style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Instructions</label>
+                  <textarea value={sec.instructions} onChange={e => patchSection(sec.id, { instructions: e.target.value })} rows={3} placeholder="What students should do in this section." style={taStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Instruction Images <span style={{ fontWeight: 400, color: '#94A3B8' }}>— shown to students below the instructions</span></label>
+                  {(sec.images?.length ?? 0) > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+                      {sec.images!.map(im => (
+                        <div key={im.url} style={{ position: 'relative', width: 96, height: 96, borderRadius: 8, border: '1px solid #E4EAF2', background: '#F7F9FC', overflow: 'hidden' }}>
+                          <a href={im.url} target="_blank" rel="noreferrer" title={im.name}>
+                            <img src={im.url} alt={im.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                          </a>
+                          <button type="button" onClick={() => removeImage(sec.id, im.url)} title="Remove image" style={{ ...removeBtn, position: 'absolute', top: 4, right: 4, width: 22, height: 22, fontSize: 10 }}>✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 8, border: '2px dashed #CBD5E0', background: '#F8FAFC', cursor: uploadingImages[sec.id] ? 'progress' : 'pointer', fontSize: 12, color: '#7A92B0' }}>
+                    <input type="file" accept="image/*" multiple style={{ display: 'none' }} disabled={!!uploadingImages[sec.id]}
+                      onChange={e => { const files = Array.from(e.target.files ?? []); e.target.value = ''; void addImages(sec.id, files) }} />
+                    {uploadingImages[sec.id] ? `⏳ Uploading ${uploadingImages[sec.id]} image${uploadingImages[sec.id] !== 1 ? 's' : ''}…` : '🖼 + Add Images (PNG, JPG, GIF…)'}
+                  </label>
+                </div>
+
+                {sec.blocks.map((b, bi) => {
+                  const meta = blockMeta[b.kind]
+                  return (
+                    <div key={b.id} style={{ background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 8, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 13 }}>{meta.icon}</span>
+                        <span style={{ fontSize: 11, fontWeight: 800, color: '#1A365E', flex: 1 }}>{meta.label}</span>
+                        <button type="button" onClick={() => moveBlock(sec.id, bi, -1)} disabled={bi === 0} title="Move up" style={{ ...smallBtn, opacity: bi === 0 ? 0.4 : 1 }}>↑</button>
+                        <button type="button" onClick={() => moveBlock(sec.id, bi, 1)} disabled={bi === sec.blocks.length - 1} title="Move down" style={{ ...smallBtn, opacity: bi === sec.blocks.length - 1 ? 0.4 : 1 }}>↓</button>
+                        <button type="button" onClick={() => removeBlock(sec.id, b.id)} title={`Remove ${meta.label}`} style={removeBtn}>✕</button>
+                      </div>
+                      <div style={{ fontSize: 10, color: '#7A92B0' }}>{meta.hint}</div>
+                      {b.kind === 'omr' ? (
+                        <>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                            <div><label style={labelStyle}>Mastery (%)</label><input type="number" min={0} max={100} value={b.passMark ?? ''} onChange={e => patchBlock(sec.id, b.id, { passMark: e.target.value === '' ? undefined : parseInt(e.target.value) })} style={{ ...inputStyle, background: '#fff' }} /></div>
+                            <div><label style={labelStyle}>Attempts</label><input type="number" min={1} value={b.retakes ?? 3} onChange={e => patchBlock(sec.id, b.id, { retakes: Math.max(1, parseInt(e.target.value) || 1) })} style={{ ...inputStyle, background: '#fff' }} /></div>
+                            <div><label style={labelStyle}>Time Limit (min)</label><input type="number" min={1} placeholder="None" value={b.timeLimit ?? ''} onChange={e => patchBlock(sec.id, b.id, { timeLimit: parseInt(e.target.value) || undefined })} style={{ ...inputStyle, background: '#fff' }} /></div>
+                          </div>
+                          <div style={{ background: '#fff', borderRadius: 10 }}>
+                            <McqQuestionEditor questions={b.questions} onChange={questions => patchBlock(sec.id, b.id, { questions })} radioGroup={`mt_${b.id}`} />
+                          </div>
+                        </>
+                      ) : (
+                        <textarea
+                          value={b.prompt}
+                          onChange={e => patchBlock(sec.id, b.id, { prompt: e.target.value })}
+                          rows={2}
+                          placeholder={b.kind === 'text' ? 'Question or prompt students respond to…' : 'What students should upload…'}
+                          style={{ ...taStyle, background: '#fff' }}
+                        />
+                      )}
+                    </div>
+                  )
+                })}
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 9, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '.08em', marginRight: 2 }}>Add</span>
+                  <button type="button" onClick={() => addBlock(sec.id, 'text')} style={{ ...addBlockBtn, background: '#F0F4FA', color: '#1A365E', border: '1px solid #DDE6F0' }}>📝 + Text Box</button>
+                  <button type="button" onClick={() => addBlock(sec.id, 'omr')} style={{ ...addBlockBtn, background: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A' }}>🔢 + OMR Test</button>
+                  <button type="button" onClick={() => addBlock(sec.id, 'file')} style={{ ...addBlockBtn, background: '#EEF3FF', color: '#1A365E', border: '1px solid #DDE6F0' }}>📎 + File Upload</button>
+                </div>
+              </div>
+            </div>
+          ))}
+
+          <button type="button" onClick={addSection} style={{ padding: '9px 14px', background: '#F5F3FF', color: '#5B21B6', border: '1.5px dashed #DDD6FE', borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', width: '100%' }}>+ Add Section</button>
+
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6 }}>
+            <button onClick={onClose} style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+            <button onClick={save} disabled={anyUploading} style={{ padding: '9px 20px', background: anyUploading ? '#94A3B8' : '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: anyUploading ? 'progress' : 'pointer', fontFamily: 'inherit' }}>{anyUploading ? 'Uploading…' : '💾 Save'}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function LMSPage() {
   const cf = useCampusFilter()
   const profile = useAuthStore(s => s.profile)
@@ -3456,6 +3819,7 @@ export function LMSPage() {
                   <button onClick={openBuilder} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0, textAlign: 'left' }}>
                     <span style={{ fontSize: 14 }}>📋</span>
                     <span style={{ fontSize: 12, fontWeight: 700, color: '#1A365E' }}>{sec.title || 'Untitled section'}</span>
+                    {(sec.images?.length ?? 0) > 0 && <span style={{ fontSize: 10, color: '#7A92B0' }}>🖼 {sec.images!.length} image{sec.images!.length !== 1 ? 's' : ''}</span>}
                   </button>
                 </td>
               </tr>
@@ -4771,89 +5135,6 @@ export function LMSPage() {
   // (Presentation) — each edits only its own fields on the case-study content record,
   // instead of the case-study modal's everything-in-one-place editor.
 
-  // MCQ question builder — same shape/UX as a lesson's Mastery Test questions, including
-  // the short-answer (free-text) option type. Short-answer questions are excluded from
-  // OMR's auto-grading and are reviewed by the teacher in the Grade Case Study panel.
-  // Used for Prove It — OMR.
-  function McqQuestionEditor({ questions, onChange, radioGroup = 'omr' }: { questions: McqQuestion[]; onChange: (next: McqQuestion[]) => void; radioGroup?: string }) {
-    function update(qi: number, patch: Partial<McqQuestion>) {
-      onChange(questions.map((q, i) => i === qi ? { ...q, ...patch } : q))
-    }
-    function updateOption(qi: number, oi: number, val: string) {
-      onChange(questions.map((q, i) => i === qi ? { ...q, opts: q.opts.map((o, j) => j === oi ? val : o) } : q))
-    }
-    function remove(qi: number) {
-      onChange(questions.filter((_, i) => i !== qi))
-    }
-    function add() {
-      onChange([...questions, { q: '', type: 'mcq', opts: ['', '', '', ''], ans: 0 }])
-    }
-    return (
-      <div style={{ border: '1px solid #E4EAF2', borderRadius: 10, overflow: 'hidden' }}>
-        <div style={{ background: '#F7F9FC', padding: '8px 12px', borderBottom: '1px solid #E4EAF2' }}>
-          <span style={{ fontSize: 11, fontWeight: 800, color: '#1A365E' }}>🔢 OMR Test Questions <span style={{ fontWeight: 400, color: '#7A92B0' }}>({questions.length})</span></span>
-        </div>
-        <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {questions.length === 0 && (
-            <div style={{ fontSize: 11, color: '#94A3B8', padding: '6px 0' }}>No questions yet. Click the button below to add one.</div>
-          )}
-          {questions.map((q, qi) => (
-            <div key={qi} style={{ background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 8, padding: '10px 12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                <span style={{ fontSize: 11, fontWeight: 800, color: '#1A365E', flexShrink: 0 }}>{qi + 1}.</span>
-                <input
-                  value={q.q}
-                  onChange={e => update(qi, { q: e.target.value })}
-                  placeholder="Question text..."
-                  style={{ flex: 1, padding: '5px 8px', border: '1.5px solid #E4EAF2', borderRadius: 6, fontSize: 11, fontFamily: 'inherit' }}
-                />
-                <select
-                  value={q.type ?? 'mcq'}
-                  onChange={e => {
-                    const nextType = e.target.value as 'mcq' | 'short'
-                    update(qi, { type: nextType, ...(nextType === 'mcq' && !q.opts?.length ? { opts: ['', '', '', ''] } : {}) })
-                  }}
-                  style={{ padding: '4px 6px', border: '1px solid #E4EAF2', borderRadius: 5, fontSize: 10 }}
-                >
-                  <option value="mcq">MCQ</option>
-                  <option value="short">Short answer</option>
-                </select>
-                <button type="button" onClick={() => remove(qi)} style={{ padding: '3px 7px', background: '#FFF0F1', color: '#D61F31', border: '1px solid #F5C2C7', borderRadius: 5, fontSize: 11, cursor: 'pointer' }}>×</button>
-              </div>
-              {(q.type ?? 'mcq') === 'mcq' ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {(q.opts?.length ? q.opts : ['', '', '', '']).map((opt, oi) => (
-                    <div key={oi} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <input
-                        type="radio"
-                        name={`${radioGroup}_ans_${qi}`}
-                        checked={q.ans === oi}
-                        onChange={() => update(qi, { ans: oi })}
-                        title="Mark as correct answer"
-                        style={{ flexShrink: 0, cursor: 'pointer' }}
-                      />
-                      <span style={{ fontSize: 10, fontWeight: 700, color: '#7A92B0', width: 14 }}>{['A', 'B', 'C', 'D'][oi]}</span>
-                      <input
-                        value={opt}
-                        onChange={e => updateOption(qi, oi, e.target.value)}
-                        placeholder={`Option ${['A', 'B', 'C', 'D'][oi]}...`}
-                        style={{ flex: 1, padding: '4px 8px', border: '1px solid #E4EAF2', borderRadius: 5, fontSize: 11, fontFamily: 'inherit' }}
-                      />
-                    </div>
-                  ))}
-                  <div style={{ fontSize: 9, color: '#94A3B8', marginTop: 2 }}>Click the radio button to mark the correct answer</div>
-                </div>
-              ) : (
-                <div style={{ fontSize: 10, color: '#7A92B0', fontStyle: 'italic' }}>Short answer — student types a multi-line response, which you'll review and grade manually.</div>
-              )}
-            </div>
-          ))}
-          <button type="button" onClick={add} style={{ padding: '8px 14px', background: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', width: '100%' }}>+ Add Question</button>
-        </div>
-      </div>
-    )
-  }
-
   function SectionModal({ type, contentId, onClose }: {
     type: 'socratic' | 'omr' | 'presentation'
     contentId: string
@@ -5041,237 +5322,6 @@ export function LMSPage() {
                 </div>
               </>
             )}
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6 }}>
-              <button onClick={onClose} style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-              <button onClick={save} style={{ padding: '9px 20px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>💾 Save</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // ─── MIDTERM REVIEW BUILDER ─────────────────────────────────────────────────
-  // A Midterm Review has no fixed fields: the admin adds any number of sections (title +
-  // instructions), and each section holds any mix of Text Box / OMR Test / File Upload
-  // blocks in any order. Saved as one content row whose unitTitle places it among the
-  // modules (see renderMidtermRows); the section tree lives in midtermSectionsJson.
-  function MidtermReviewModal({ courseId, contentId, afterUnit, onClose }: {
-    courseId: string
-    contentId: string | null
-    afterUnit?: string
-    onClose: () => void
-  }) {
-    const existing = contentId ? store.content.find(c => c.id === contentId) ?? null : null
-    const courseContent = store.content.filter(c => c.courseId === courseId)
-    // Current module/review order for this course, minus the review being edited.
-    const orderedUnits = [...new Set(courseContent.filter(c => c.unitTitle).map(c => c.unitTitle as string))]
-      .map(t => ({ t, o: courseContent.find(c => c.unitTitle === t)?.unitOrder ?? 0 }))
-      .sort((a, b) => a.o - b.o)
-      .map(x => x.t)
-    const otherUnits = orderedUnits.filter(t => t !== existing?.unitTitle)
-    const moduleTitles = otherUnits.filter(t => !courseContent.some(c => c.unitTitle === t && isMidtermReview(c)))
-
-    function defaultAfter(): string {
-      if (existing) {
-        const idx = orderedUnits.indexOf(existing.unitTitle ?? '')
-        return idx > 0 ? orderedUnits[idx - 1] : ''
-      }
-      if (afterUnit) return afterUnit
-      // "Midterm" — default to the middle of the course.
-      return moduleTitles.length ? moduleTitles[Math.max(0, Math.ceil(moduleTitles.length / 2) - 1)] : ''
-    }
-    function defaultTitle(): string {
-      if (existing) return existing.title
-      let n = 1
-      let t = 'Midterm Review'
-      while (orderedUnits.includes(t)) t = `Midterm Review ${++n}`
-      return t
-    }
-
-    const [title, setTitle] = useState(defaultTitle)
-    const [placeAfter, setPlaceAfter] = useState(defaultAfter)
-    const [sections, setSections] = useState<MidtermSection[]>(() => {
-      const parsed = parseMidtermSections(existing?.midtermSectionsJson)
-      return parsed.length ? parsed : [{ id: lmsId(), title: '', instructions: '', blocks: [] }]
-    })
-
-    function patchSection(sid: string, patch: Partial<MidtermSection>) {
-      setSections(prev => prev.map(s => s.id === sid ? { ...s, ...patch } : s))
-    }
-    function moveSection(idx: number, dir: -1 | 1) {
-      setSections(prev => {
-        const to = idx + dir
-        if (to < 0 || to >= prev.length) return prev
-        const next = [...prev]
-        ;[next[idx], next[to]] = [next[to], next[idx]]
-        return next
-      })
-    }
-    function removeSection(sid: string) {
-      setSections(prev => prev.filter(s => s.id !== sid))
-    }
-    function addSection() {
-      setSections(prev => [...prev, { id: lmsId(), title: '', instructions: '', blocks: [] }])
-    }
-    function addBlock(sid: string, kind: MidtermBlock['kind']) {
-      const block: MidtermBlock =
-        kind === 'omr' ? { id: lmsId(), kind, questions: [], passMark: 80, retakes: 3 } :
-        { id: lmsId(), kind, prompt: '' }
-      setSections(prev => prev.map(s => s.id === sid ? { ...s, blocks: [...s.blocks, block] } : s))
-    }
-    function patchBlock(sid: string, bid: string, patch: Partial<MidtermBlock>) {
-      setSections(prev => prev.map(s => s.id === sid ? { ...s, blocks: s.blocks.map(b => b.id === bid ? { ...b, ...patch } as MidtermBlock : b) } : s))
-    }
-    function moveBlock(sid: string, idx: number, dir: -1 | 1) {
-      setSections(prev => prev.map(s => {
-        if (s.id !== sid) return s
-        const to = idx + dir
-        if (to < 0 || to >= s.blocks.length) return s
-        const blocks = [...s.blocks]
-        ;[blocks[idx], blocks[to]] = [blocks[to], blocks[idx]]
-        return { ...s, blocks }
-      }))
-    }
-    function removeBlock(sid: string, bid: string) {
-      setSections(prev => prev.map(s => s.id === sid ? { ...s, blocks: s.blocks.filter(b => b.id !== bid) } : s))
-    }
-
-    function save() {
-      const finalTitle = title.trim()
-      if (!finalTitle) { alert('Enter a title for the Midterm Review'); return }
-      if (otherUnits.includes(finalTitle)) { alert(`"${finalTitle}" is already used by another module or review in this course — pick a different title.`); return }
-      const untitled = sections.findIndex(s => !s.title.trim())
-      if (untitled >= 0) { alert(`Section ${untitled + 1} needs a title`); return }
-      for (const [si, s] of sections.entries()) {
-        if (s.blocks.some(b => b.kind === 'omr' && b.questions.length === 0)) { alert(`Section ${si + 1} has an OMR Test with no questions`); return }
-      }
-      const cleaned = sections.map(s => ({ ...s, title: s.title.trim(), instructions: s.instructions.trim() }))
-
-      const row: LMSContent = {
-        ...(existing ?? { id: lmsId(), courseId, type: 'article' as const, order: 0, moduleOrder: 0, locked: false }),
-        title: finalTitle,
-        unitTitle: finalTitle,
-        isMidtermReview: true,
-        midtermSectionsJson: JSON.stringify(cleaned),
-      }
-      // Slot the review in after `placeAfter` and renumber unitOrder across the course.
-      const order = [...otherUnits]
-      const insertAt = placeAfter ? order.indexOf(placeAfter) + 1 : 0
-      order.splice(insertAt > 0 || !placeAfter ? insertAt : order.length, 0, finalTitle)
-      const orderMap = new Map(order.map((t, i) => [t, i]))
-      const withRow = existing ? store.content.map(c => c.id === existing.id ? row : c) : [...store.content, row]
-      persist({
-        ...store,
-        content: withRow.map(c => c.courseId === courseId && c.unitTitle && orderMap.has(c.unitTitle) ? { ...c, unitOrder: orderMap.get(c.unitTitle) as number } : c),
-      })
-      onClose()
-    }
-
-    const smallBtn: React.CSSProperties = { width: 24, height: 24, padding: 0, background: '#fff', color: '#5A7290', border: '1px solid #E4EAF2', borderRadius: 5, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }
-    const removeBtn: React.CSSProperties = { ...smallBtn, background: '#FFF0F1', color: '#D61F31', border: '1px solid #F5C2C7' }
-    const addBlockBtn: React.CSSProperties = { padding: '5px 10px', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }
-    const blockMeta: Record<MidtermBlock['kind'], { icon: string; label: string; hint: string }> = {
-      text: { icon: '📝', label: 'Text Box', hint: 'Students type a written response.' },
-      omr: { icon: '🔢', label: 'OMR Test', hint: 'In-app test — MCQs auto-grade on submit; short answers are reviewed manually.' },
-      file: { icon: '📎', label: 'File Upload', hint: 'Students upload a file (PDF, doc, image, etc.).' },
-    }
-
-    return (
-      <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,18,36,.65)', zIndex: 450, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto', backdropFilter: 'blur(4px)' }} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
-        <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 640, maxHeight: '94vh', overflowY: 'auto', boxShadow: '0 24px 60px rgba(0,0,0,.3)', margin: 'auto' }}>
-          <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '18px 24px', borderRadius: '18px 18px 0 0', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-            <div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>📝 {existing ? 'Edit Midterm Review' : 'New Midterm Review'}</div>
-              <div style={{ fontSize: 10, color: 'rgba(255,255,255,.65)', marginTop: 2 }}>Build it from sections — each with its own instructions, text boxes, OMR tests and file uploads.</div>
-            </div>
-            <button onClick={onClose} title="Close" style={modalCloseBtnOnDark}>✕</button>
-          </div>
-          <div style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
-              <div>
-                <label style={labelStyle}>Title *</label>
-                <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Midterm Review" style={inputStyle} />
-              </div>
-              <div>
-                <label style={labelStyle}>Place After</label>
-                <select value={placeAfter} onChange={e => setPlaceAfter(e.target.value)} style={selectStyle}>
-                  <option value="">At the start of the course</option>
-                  {otherUnits.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-            </div>
-
-            {sections.length === 0 && (
-              <div style={{ fontSize: 11, color: '#94A3B8', padding: '14px 12px', textAlign: 'center', border: '1.5px dashed #E4EAF2', borderRadius: 10 }}>No sections yet. Add a section to start building this review.</div>
-            )}
-
-            {sections.map((sec, si) => (
-              <div key={sec.id} style={{ border: '1px solid #E4EAF2', borderRadius: 10, overflow: 'hidden' }}>
-                <div style={{ background: '#F7F9FC', padding: '8px 12px', borderBottom: '1px solid #E4EAF2', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: 11, fontWeight: 800, color: '#1A365E', flex: 1 }}>Section {si + 1} <span style={{ fontWeight: 400, color: '#7A92B0' }}>({sec.blocks.length} item{sec.blocks.length !== 1 ? 's' : ''})</span></span>
-                  <button type="button" onClick={() => moveSection(si, -1)} disabled={si === 0} title="Move up" style={{ ...smallBtn, opacity: si === 0 ? 0.4 : 1 }}>↑</button>
-                  <button type="button" onClick={() => moveSection(si, 1)} disabled={si === sections.length - 1} title="Move down" style={{ ...smallBtn, opacity: si === sections.length - 1 ? 0.4 : 1 }}>↓</button>
-                  <button type="button" onClick={() => removeSection(sec.id)} title="Remove section" style={removeBtn}>✕</button>
-                </div>
-                <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <div>
-                    <label style={labelStyle}>Section Title *</label>
-                    <input value={sec.title} onChange={e => patchSection(sec.id, { title: e.target.value })} placeholder="e.g. Part A — Reading Comprehension" style={inputStyle} />
-                  </div>
-                  <div>
-                    <label style={labelStyle}>Instructions</label>
-                    <textarea value={sec.instructions} onChange={e => patchSection(sec.id, { instructions: e.target.value })} rows={3} placeholder="What students should do in this section." style={taStyle} />
-                  </div>
-
-                  {sec.blocks.map((b, bi) => {
-                    const meta = blockMeta[b.kind]
-                    return (
-                      <div key={b.id} style={{ background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 8, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ fontSize: 13 }}>{meta.icon}</span>
-                          <span style={{ fontSize: 11, fontWeight: 800, color: '#1A365E', flex: 1 }}>{meta.label}</span>
-                          <button type="button" onClick={() => moveBlock(sec.id, bi, -1)} disabled={bi === 0} title="Move up" style={{ ...smallBtn, opacity: bi === 0 ? 0.4 : 1 }}>↑</button>
-                          <button type="button" onClick={() => moveBlock(sec.id, bi, 1)} disabled={bi === sec.blocks.length - 1} title="Move down" style={{ ...smallBtn, opacity: bi === sec.blocks.length - 1 ? 0.4 : 1 }}>↓</button>
-                          <button type="button" onClick={() => removeBlock(sec.id, b.id)} title={`Remove ${meta.label}`} style={removeBtn}>✕</button>
-                        </div>
-                        <div style={{ fontSize: 10, color: '#7A92B0' }}>{meta.hint}</div>
-                        {b.kind === 'omr' ? (
-                          <>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                              <div><label style={labelStyle}>Mastery (%)</label><input type="number" min={0} max={100} value={b.passMark ?? ''} onChange={e => patchBlock(sec.id, b.id, { passMark: e.target.value === '' ? undefined : parseInt(e.target.value) })} style={{ ...inputStyle, background: '#fff' }} /></div>
-                              <div><label style={labelStyle}>Attempts</label><input type="number" min={1} value={b.retakes ?? 3} onChange={e => patchBlock(sec.id, b.id, { retakes: Math.max(1, parseInt(e.target.value) || 1) })} style={{ ...inputStyle, background: '#fff' }} /></div>
-                              <div><label style={labelStyle}>Time Limit (min)</label><input type="number" min={1} placeholder="None" value={b.timeLimit ?? ''} onChange={e => patchBlock(sec.id, b.id, { timeLimit: parseInt(e.target.value) || undefined })} style={{ ...inputStyle, background: '#fff' }} /></div>
-                            </div>
-                            <div style={{ background: '#fff', borderRadius: 10 }}>
-                              <McqQuestionEditor questions={b.questions} onChange={questions => patchBlock(sec.id, b.id, { questions })} radioGroup={`mt_${b.id}`} />
-                            </div>
-                          </>
-                        ) : (
-                          <textarea
-                            value={b.prompt}
-                            onChange={e => patchBlock(sec.id, b.id, { prompt: e.target.value })}
-                            rows={2}
-                            placeholder={b.kind === 'text' ? 'Question or prompt students respond to…' : 'What students should upload…'}
-                            style={{ ...taStyle, background: '#fff' }}
-                          />
-                        )}
-                      </div>
-                    )
-                  })}
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 9, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '.08em', marginRight: 2 }}>Add</span>
-                    <button type="button" onClick={() => addBlock(sec.id, 'text')} style={{ ...addBlockBtn, background: '#F0F4FA', color: '#1A365E', border: '1px solid #DDE6F0' }}>📝 + Text Box</button>
-                    <button type="button" onClick={() => addBlock(sec.id, 'omr')} style={{ ...addBlockBtn, background: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A' }}>🔢 + OMR Test</button>
-                    <button type="button" onClick={() => addBlock(sec.id, 'file')} style={{ ...addBlockBtn, background: '#EEF3FF', color: '#1A365E', border: '1px solid #DDE6F0' }}>📎 + File Upload</button>
-                  </div>
-                </div>
-              </div>
-            ))}
-
-            <button type="button" onClick={addSection} style={{ padding: '9px 14px', background: '#F5F3FF', color: '#5B21B6', border: '1.5px dashed #DDD6FE', borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', width: '100%' }}>+ Add Section</button>
-
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6 }}>
               <button onClick={onClose} style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
               <button onClick={save} style={{ padding: '9px 20px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>💾 Save</button>
@@ -5793,7 +5843,7 @@ export function LMSPage() {
       {showLessonModal && <LessonModal />}
       {showCaseStudyModal && <CaseStudyModal />}
       {midtermResponsesId && <MidtermResponsesModal contentId={midtermResponsesId} onClose={() => setMidtermResponsesId(null)} />}
-      {midtermModal && <MidtermReviewModal courseId={midtermModal.courseId} contentId={midtermModal.contentId} afterUnit={midtermModal.afterUnit} onClose={() => setMidtermModal(null)} />}
+      {midtermModal && <MidtermReviewModal store={store} persist={persist} courseId={midtermModal.courseId} contentId={midtermModal.contentId} afterUnit={midtermModal.afterUnit} onClose={() => setMidtermModal(null)} />}
       {sectionModal && <SectionModal type={sectionModal.type} contentId={sectionModal.contentId} onClose={() => setSectionModal(null)} />}
       {discussionBoardContentId && <DiscussionBoardModal contentId={discussionBoardContentId} onClose={() => setDiscussionBoardContentId(null)} />}
       {assignRolesContentId && (

@@ -162,7 +162,8 @@ export type MidtermBlock =
   | { id: string; kind: 'text'; prompt: string }
   | { id: string; kind: 'omr'; questions: MidtermMcqQuestion[]; passMark?: number; retakes?: number; timeLimit?: number }
   | { id: string; kind: 'file'; prompt: string }
-export interface MidtermSection { id: string; title: string; instructions: string; blocks: MidtermBlock[] }
+export interface MidtermImage { url: string; name: string }
+export interface MidtermSection { id: string; title: string; instructions: string; images?: MidtermImage[]; blocks: MidtermBlock[] }
 
 export function isMidtermReview(c: Pick<LMSContent, 'isMidtermReview'>): boolean {
   return c.isMidtermReview === true

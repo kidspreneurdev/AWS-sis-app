@@ -1312,8 +1312,8 @@ async function lmsSubmitOmrQuiz(req, res, adminClient) {
 /** Midterm Review — one block (Text Box / OMR Test / File Upload) of an admin-built
  *  review between two modules. Each submit is its own lms_submissions row (kind
  *  'midterm_review'); `note` is JSON carrying the blockId so a review's many blocks
- *  can be told apart. Text Box and File Upload accept one submission; OMR Test is
- *  auto-graded like Prove It and allows retakes up to the block's limit. */
+ *  can be told apart. Every block accepts one submission; OMR answers are scored later
+ *  by a teacher (reviewedScore on the note), never auto-graded here. */
 async function lmsSubmitMidtermBlock(req, res, adminClient) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST')
@@ -1332,11 +1332,11 @@ async function lmsSubmitMidtermBlock(req, res, adminClient) {
     .select('id,course_id,extra')
     .eq('id', contentId)
     .single()
-  if (contentError || !content) return json(res, 404, { error: 'Midterm Review not found.' })
+  if (contentError || !content) return json(res, 404, { error: 'Review not found.' })
 
   const extra = content.extra || {}
-  if (extra.isMidtermReview !== true) return json(res, 400, { error: 'This item is not a Midterm Review.' })
-  if (extra.locked === true) return json(res, 403, { error: 'This Midterm Review has been locked by your teacher.' })
+  if (extra.isMidtermReview !== true) return json(res, 400, { error: 'This item is not a Midterm Review or Finals.' })
+  if (extra.locked === true) return json(res, 403, { error: 'This review has been locked by your teacher.' })
   let sections = []
   try { sections = JSON.parse(extra.midtermSectionsJson || '[]') } catch { sections = [] }
   const block = sections.flatMap((s) => (Array.isArray(s.blocks) ? s.blocks : [])).find((b) => b.id === blockId)
@@ -1355,7 +1355,6 @@ async function lmsSubmitMidtermBlock(req, res, adminClient) {
 
   let note
   let linkUrl = null
-  let result = {}
   if (block.kind === 'text') {
     if (priorForBlock.length) return json(res, 409, { error: 'You have already submitted this response.' })
     if (typeof text !== 'string' || !text.trim()) return json(res, 400, { error: 'Write a response before submitting.' })
@@ -1366,21 +1365,13 @@ async function lmsSubmitMidtermBlock(req, res, adminClient) {
     note = { blockId, blockKind: 'file', fileName: typeof fileName === 'string' ? fileName : null }
     linkUrl = fileUrl.trim()
   } else if (block.kind === 'omr') {
+    // Review OMR tests are teacher-scored: store the answers once, return no score. The
+    // admin's View Responses screen adds reviewedScore to this row's note later.
+    if (priorForBlock.length) return json(res, 409, { error: 'You have already submitted this test.' })
     if (!answers || typeof answers !== 'object') return json(res, 400, { error: 'answers is required.' })
     const questions = Array.isArray(block.questions) ? block.questions : []
     if (!questions.length) return json(res, 400, { error: 'No questions have been configured for this test yet.' })
-    const maxAttempts = Number(block.retakes ?? 3)
-    if (priorForBlock.length >= maxAttempts) return json(res, 409, { error: 'No attempts remaining.' })
-    const passMark = Number(block.passMark ?? 80)
-    const mcq = questions.filter((q) => (q.type ?? 'mcq') !== 'short')
-    let correct = 0
-    mcq.forEach((q) => { if (answers[questions.indexOf(q)] === q.ans) correct++ })
-    const total = mcq.length
-    const score = total > 0 ? Math.round((correct / total) * 100) : 100
-    const passed = score >= passMark
-    const attempt = priorForBlock.length + 1
-    note = { blockId, blockKind: 'omr', score, correct, total, passed, attempt, answers }
-    result = { score, correct, total, passed, attempts: attempt, maxAttempts }
+    note = { blockId, blockKind: 'omr', answers }
   } else {
     return json(res, 400, { error: 'Unknown block type.' })
   }
@@ -1401,7 +1392,6 @@ async function lmsSubmitMidtermBlock(req, res, adminClient) {
   if (insertError || !submission) return json(res, 500, { error: 'Failed to submit. Please try again.' })
 
   return json(res, 200, {
-    ...result,
     submission: { contentId, kind: 'midterm_review', note: submission.note, linkUrl: submission.link_url, submittedAt: submission.submitted_at },
   })
 }

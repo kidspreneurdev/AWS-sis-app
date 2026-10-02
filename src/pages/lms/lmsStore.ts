@@ -153,6 +153,19 @@ export interface LMSContent {
   // unitOrder. Its body is fully admin-built: midtermSectionsJson holds MidtermSection[].
   isMidtermReview?: boolean
   midtermSectionsJson?: string
+  // Same review checkpoint, two flavours: Midterm Review (default) or Finals. Both share
+  // isMidtermReview + midtermSectionsJson and every builder/student/API code path —
+  // reviewKind only changes labels, icon and color.
+  reviewKind?: ReviewKind
+}
+
+export type ReviewKind = 'midterm' | 'finals'
+export const REVIEW_META: Record<ReviewKind, { label: string; emoji: string; color: string; bg: string; soft: string; border: string }> = {
+  midterm: { label: 'Midterm Review', emoji: '📝', color: '#5B21B6', bg: '#EDE9FE', soft: '#FAF8FF', border: '#DDD6FE' },
+  finals: { label: 'Finals', emoji: '🎓', color: '#9A3412', bg: '#FFEDD5', soft: '#FFF8F1', border: '#FED7AA' },
+}
+export function reviewKindOf(c: Pick<LMSContent, 'reviewKind'>): ReviewKind {
+  return c.reviewKind === 'finals' ? 'finals' : 'midterm'
 }
 
 // ─── Midterm Review builder shapes ────────────────────────────────────────────
@@ -336,6 +349,7 @@ export function rowToLMSContent(r: Record<string, unknown>): LMSContent {
     discussionLocked: extra.discussionLocked === true,
     isMidtermReview: extra.isMidtermReview === true,
     midtermSectionsJson: extra.midtermSectionsJson as string | undefined,
+    reviewKind: extra.reviewKind === 'finals' ? 'finals' : extra.isMidtermReview === true ? 'midterm' : undefined,
   }
 }
 
@@ -521,7 +535,7 @@ export async function saveLMS(store: LMSStore): Promise<string | null> {
           locked: c.locked,
           socraticLocked: c.socraticLocked, omrLocked: c.omrLocked,
           presentationLocked: c.presentationLocked, discussionLocked: c.discussionLocked,
-          isMidtermReview: c.isMidtermReview, midtermSectionsJson: c.midtermSectionsJson,
+          isMidtermReview: c.isMidtermReview, midtermSectionsJson: c.midtermSectionsJson, reviewKind: c.reviewKind,
         },
       })),
       { onConflict: 'id' }

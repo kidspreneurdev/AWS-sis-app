@@ -127,12 +127,26 @@ export interface LMSContent {
   presentationBriefFileName?: string
   presentationVideoUrl?: string
   presentationVideoFileName?: string
+  // Master It — per-module Presentation Content Guide and Presentation Rubric attachments.
+  presentationGuideUrl?: string
+  presentationGuideFileName?: string
+  presentationRubricUrl?: string
+  presentationRubricFileName?: string
   presentationTargetDate?: string | null
+  // Admin-renamed label for this item's notes-upload row (lesson "Notes: Upload" or the
+  // case study's "Notes Upload"); blank falls back to the default label.
+  notesTitle?: string
   // Master It — Discussion Board description: what students are meant to discuss,
   // shown above the post feed. Optional attachment (prompt doc, rubric, image).
   discussionBrief?: string
   discussionBriefUrl?: string
   discussionBriefFileName?: string
+  // Optional per-module names for the fixed sections, shown after the section type the
+  // same way a lesson's title follows "Do It · Lesson 4:" — e.g. "Prove It · OMR Test: Unit 2 Quiz".
+  socraticTitle?: string
+  omrTitle?: string
+  presentationTitle?: string
+  discussionTitle?: string
   rubricOverrides?: RubricOverrides
   // A lesson's own deadline (Tutorial/default). Notes and Mastery Test inside that
   // lesson can each optionally be given their own deadline instead — when unset they
@@ -157,6 +171,17 @@ export interface LMSContent {
   // isMidtermReview + midtermSectionsJson and every builder/student/API code path —
   // reviewKind only changes labels, icon and color.
   reviewKind?: ReviewKind
+}
+
+// Show It / Prove It / Master It section display names: the fixed type label, plus the
+// admin's optional custom title after a colon (mirrors "Lesson 4: <lesson title>").
+export type CarrierSectionKind = 'socratic' | 'omr' | 'presentation' | 'discussion'
+export const CARRIER_SECTION_LABEL: Record<CarrierSectionKind, string> = {
+  socratic: 'Socratic Seminar', omr: 'OMR Test', presentation: 'Presentation', discussion: 'Discussion Board',
+}
+export function carrierSectionTitle(c: Pick<LMSContent, 'socraticTitle' | 'omrTitle' | 'presentationTitle' | 'discussionTitle'> | null | undefined, kind: CarrierSectionKind): string {
+  const custom = c?.[`${kind}Title` as const]?.trim()
+  return custom ? `${CARRIER_SECTION_LABEL[kind]}: ${custom}` : CARRIER_SECTION_LABEL[kind]
 }
 
 export type ReviewKind = 'midterm' | 'finals'
@@ -334,10 +359,19 @@ export function rowToLMSContent(r: Record<string, unknown>): LMSContent {
     presentationBriefFileName: extra.presentationBriefFileName as string | undefined,
     presentationVideoUrl: extra.presentationVideoUrl as string | undefined,
     presentationVideoFileName: extra.presentationVideoFileName as string | undefined,
+    presentationGuideUrl: extra.presentationGuideUrl as string | undefined,
+    presentationGuideFileName: extra.presentationGuideFileName as string | undefined,
+    presentationRubricUrl: extra.presentationRubricUrl as string | undefined,
+    presentationRubricFileName: extra.presentationRubricFileName as string | undefined,
     presentationTargetDate: (extra.presentationTargetDate as string) ?? null,
     discussionBrief: extra.discussionBrief as string | undefined,
     discussionBriefUrl: extra.discussionBriefUrl as string | undefined,
     discussionBriefFileName: extra.discussionBriefFileName as string | undefined,
+    socraticTitle: extra.socraticTitle as string | undefined,
+    notesTitle: extra.notesTitle as string | undefined,
+    omrTitle: extra.omrTitle as string | undefined,
+    presentationTitle: extra.presentationTitle as string | undefined,
+    discussionTitle: extra.discussionTitle as string | undefined,
     rubricOverrides: extra.rubricOverrides as RubricOverrides | undefined,
     targetDate: (extra.targetDate as string) ?? null,
     notesTargetDate: (extra.notesTargetDate as string) ?? null,
@@ -528,8 +562,12 @@ export async function saveLMS(store: LMSStore): Promise<string | null> {
           socraticBrief: c.socraticBrief, presentationBrief: c.presentationBrief,
           presentationBriefUrl: c.presentationBriefUrl, presentationBriefFileName: c.presentationBriefFileName,
           presentationVideoUrl: c.presentationVideoUrl, presentationVideoFileName: c.presentationVideoFileName,
+          presentationGuideUrl: c.presentationGuideUrl, presentationGuideFileName: c.presentationGuideFileName,
+          presentationRubricUrl: c.presentationRubricUrl, presentationRubricFileName: c.presentationRubricFileName,
           presentationTargetDate: c.presentationTargetDate,
           discussionBrief: c.discussionBrief, discussionBriefUrl: c.discussionBriefUrl, discussionBriefFileName: c.discussionBriefFileName,
+          socraticTitle: c.socraticTitle, omrTitle: c.omrTitle, notesTitle: c.notesTitle,
+          presentationTitle: c.presentationTitle, discussionTitle: c.discussionTitle,
           rubricOverrides: c.rubricOverrides,
           targetDate: c.targetDate, notesTargetDate: c.notesTargetDate, masteryTargetDate: c.masteryTargetDate,
           locked: c.locked,

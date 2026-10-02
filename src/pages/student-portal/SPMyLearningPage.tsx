@@ -16,7 +16,7 @@ import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
 import { DiscussionBoard, type DiscussionPost } from '@/components/lms/DiscussionBoard'
 import {
-  SUBJECT_COLORS, isActiveBool, isMidtermReview, parseMidtermSections, REVIEW_META, reviewKindOf, rowToLMSCourse, rowToLMSContent, rowToLMSEnrolment, rowToLMSProgress,
+  SUBJECT_COLORS, carrierSectionTitle, isActiveBool, isMidtermReview, parseMidtermSections, REVIEW_META, reviewKindOf, rowToLMSCourse, rowToLMSContent, rowToLMSEnrolment, rowToLMSProgress,
   type MidtermBlock, type LMSCourse, type LMSContent, type LMSEnrolment, type LMSProgress, type LMSQuestion,
 } from '@/pages/lms/lmsStore'
 import { portalPrefix } from './gradesShared'
@@ -1118,7 +1118,22 @@ function MidtermReviewPanel({ item, studentId, submissions, onSubmitted }: {
 
 /** Master It — final presentation upload + score, plus the module's overall grade
  *  (computed across Notes / Socratic / OMR / Presentation — Discussion is parked). */
-function PresentationPanel({ carrierItem, studentId }: { carrierItem: LMSContent; studentId: string }) {
+/** Same look as the Tutorial's "Mark done" button. Clicking it again once done un-marks. */
+function MarkDoneButton({ done, busy, onClick }: { done: boolean; busy?: boolean; onClick: () => void }) {
+  return (
+    <button onClick={onClick} disabled={busy} style={{ padding: '9px 16px', background: done ? '#DCFCE7' : '#1A365E', color: done ? '#059669' : '#fff', border: `1px solid ${done ? '#86EFAC' : '#1A365E'}`, borderRadius: 9, fontSize: 16, fontWeight: 700, cursor: busy ? 'progress' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+      {done ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Check size={12} strokeWidth={3} /> Done</span> : 'Mark done'}
+    </button>
+  )
+}
+
+function PresentationPanel({ carrierItem, studentId, markedDone, onToggleDone }: {
+  carrierItem: LMSContent
+  studentId: string
+  // Student ticked Master It off without uploading (e.g. presented live in class).
+  markedDone: boolean
+  onToggleDone: () => Promise<void>
+}) {
   const { readOnly } = usePortalReadOnly()
   const { getToken } = useStudentPortal()
   // renderAppealControl is unused while the presentation rubric/score block below is
@@ -1127,6 +1142,13 @@ function PresentationPanel({ carrierItem, studentId }: { carrierItem: LMSContent
   const [presFile, setPresFile] = useState<File | null>(null)
   const [presNote, setPresNote] = useState('')
   const [presSubmitting, setPresSubmitting] = useState(false)
+  const [togglingDone, setTogglingDone] = useState(false)
+
+  async function toggleDone() {
+    setTogglingDone(true)
+    await onToggleDone()
+    setTogglingDone(false)
+  }
 
   async function submitPresentation() {
     if (!presFile) return
@@ -1210,11 +1232,22 @@ function PresentationPanel({ carrierItem, studentId }: { carrierItem: LMSContent
         )}
       </div>
 
+      {!bundle.presentation && !readOnly && (
+        <div style={{ ...card, padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E' }}>No file to upload?</div>
+            <div style={{ fontSize: 15, color: '#7A92B0' }}>{markedDone ? 'You marked this presentation as done.' : 'If you presented in class, mark this presentation as done.'}</div>
+          </div>
+          <MarkDoneButton done={markedDone} busy={togglingDone} onClick={() => void toggleDone()} />
+        </div>
+      )}
+
       {/* Presentation rubric/score — temporarily disabled; grading happens on paper via the
           Rubric PDF below until this is re-enabled. Restore by uncommenting this line. */}
       {/* <CSScoreBlock type="presentation" overrides={carrierItem.rubricOverrides} icon={Trophy} title="Presentation Score" order={3} score={scoreByType.presentation} appealControl={renderAppealControl('presentation')} /> */}
 
-      <a href="/LMS/Presentation Content Guide.pdf" target="_blank" rel="noreferrer" style={{ ...card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
+      {carrierItem.presentationGuideUrl && (
+      <a href={carrierItem.presentationGuideUrl} target="_blank" rel="noreferrer" style={{ ...card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
         <FileText size={18} color="#1A365E" />
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E' }}>Presentation Content Guide</div>
@@ -1222,7 +1255,9 @@ function PresentationPanel({ carrierItem, studentId }: { carrierItem: LMSContent
         </div>
         <ExternalLink size={14} color="#7A92B0" />
       </a>
-      <a href="/LMS/Presentation Rubric.pdf" target="_blank" rel="noreferrer" style={{ ...card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
+      )}
+      {carrierItem.presentationRubricUrl && (
+      <a href={carrierItem.presentationRubricUrl} target="_blank" rel="noreferrer" style={{ ...card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
         <Trophy size={18} color="#1A365E" />
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E' }}>Presentation Rubric</div>
@@ -1230,6 +1265,7 @@ function PresentationPanel({ carrierItem, studentId }: { carrierItem: LMSContent
         </div>
         <ExternalLink size={14} color="#7A92B0" />
       </a>
+      )}
 
       <div style={{ ...card, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={{ fontSize: 15, fontWeight: 700, color: '#5A7290' }}>Module Final Grade</span>
@@ -1955,6 +1991,22 @@ export function SPMyLearningPage() {
     if (error) console.error('markComplete error:', error)
   }
 
+  /** Video row / Master It presentation "Mark done": a marker submission row, toggled. */
+  async function toggleMarkDone(contentId: string, kind: 'video_done' | 'presentation_done') {
+    const wasDone = hasSubmission(contentId, kind)
+    const optimistic: MySubmission = { contentId, kind, note: null, linkUrl: null, submittedAt: new Date().toISOString() }
+    const without = (prev: MySubmission[]) => prev.filter((s) => !(s.contentId === contentId && s.kind === kind))
+    setMySubmissions((prev) => (wasDone ? without(prev) : [optimistic, ...without(prev)]))
+    try {
+      await studentPortalFetch(getToken(), '/api/student-portal/lms-mark-done', {
+        method: 'POST', body: JSON.stringify({ contentId, kind, done: !wasDone }),
+      })
+    } catch (err) {
+      setMySubmissions((prev) => (wasDone ? [optimistic, ...without(prev)] : without(prev)))
+      alert(err instanceof Error ? err.message : 'Could not update. Please try again.')
+    }
+  }
+
   function openPart(item: LMSContent, part: PartKind) {
     if (part === 'tutorial' && session) {
       const existing = openedAtMap[item.id]
@@ -1996,6 +2048,9 @@ export function SPMyLearningPage() {
   }
 
   const hasSubmission = (contentId: string, kind: string) => mySubmissions.some((s) => s.contentId === contentId && s.kind === kind)
+  // Master It presentation is done once uploaded, or ticked off via Mark done.
+  const presentationDone = (contentId: string) => hasSubmission(contentId, 'presentation') || hasSubmission(contentId, 'presentation_done')
+  const presentationStatusText = (contentId: string) => hasSubmission(contentId, 'presentation') ? 'Submitted' : hasSubmission(contentId, 'presentation_done') ? 'Done' : 'Not started'
 
   // Same "is this Do It lesson actually done" rule the row itself uses (tutorial +
   // notes, plus mastery if the lesson has it) — mirrored here so the unit's Do It
@@ -2137,10 +2192,10 @@ export function SPMyLearningPage() {
     const item = courseItems.find((i) => i.id === ref.contentId)
     switch (ref.kind) {
       case 'learn': return { title: `Learn It: ${item?.title || 'Case Study'}`, icon: FileText }
-      case 'show': return { title: 'Show It: Socratic Seminar', icon: Scale }
-      case 'prove': return { title: 'Prove It: OMR Test', icon: Calculator }
-      case 'master': return { title: 'Master It: Presentation', icon: Trophy }
-      case 'discussion': return { title: 'Discussion Board', icon: MessageSquare }
+      case 'show': return { title: `Show It: ${carrierSectionTitle(item, 'socratic')}`, icon: Scale }
+      case 'prove': return { title: `Prove It: ${carrierSectionTitle(item, 'omr')}`, icon: Calculator }
+      case 'master': return { title: `Master It: ${carrierSectionTitle(item, 'presentation')}`, icon: Trophy }
+      case 'discussion': return { title: carrierSectionTitle(item, 'discussion'), icon: MessageSquare }
       case 'midterm': return item ? { title: item.title || reviewUi(item).label, icon: reviewUi(item).icon } : { title: 'Review', icon: ClipboardCheck }
       default: return { title: item?.title || 'Lesson', icon: BookOpen }
     }
@@ -2159,7 +2214,7 @@ export function SPMyLearningPage() {
     if (ref.kind === 'learn') return hasSubmission(item.id, 'case_study_notes')
     if (ref.kind === 'show') return progressionStatus.scores[item.id]?.debate === 'scored'
     if (ref.kind === 'prove') return progressionStatus.scores[item.id]?.omr === 'scored'
-    if (ref.kind === 'master') return hasSubmission(item.id, 'presentation')
+    if (ref.kind === 'master') return presentationDone(item.id)
     if (ref.kind === 'discussion') return (progressionStatus.discussionCounts[item.id] ?? 0) > 0
     if (ref.kind === 'midterm') { const p = midtermProgress(item, mySubmissions); return p.total > 0 && p.done === p.total }
     const itemProgress = progress.find((entry) => entry.contentId === item.id && entry.studentId === session?.dbId)
@@ -2512,7 +2567,7 @@ export function SPMyLearningPage() {
                     // Master It covers two activities — Presentation and Discussion Board.
                     // Discussion has no completion signal tracked yet, so it always
                     // contributes to the total but never to done, same as its row below.
-                    master: { done: carrierItem && hasSubmission(carrierItem.id, 'presentation') ? 1 : 0, total: carrierItem ? 2 : 0 },
+                    master: { done: carrierItem && presentationDone(carrierItem.id) ? 1 : 0, total: carrierItem ? 2 : 0 },
                   }
                   const unitDone = Object.values(stageCounts).reduce((sum, s) => sum + s.done, 0)
                   const unitTotal = Object.values(stageCounts).reduce((sum, s) => sum + s.total, 0)
@@ -2632,29 +2687,29 @@ export function SPMyLearningPage() {
                           {carrierItem && (
                             <>
                               <ContentRow
-                                stage="show" title="Show It · Socratic Seminar" targetDate={carrierItem.socraticDate || carrierItem.targetDate}
+                                stage="show" title={`Show It · ${carrierSectionTitle(carrierItem, 'socratic')}`} targetDate={carrierItem.socraticDate || carrierItem.targetDate}
                                 status="not_started" statusText="Not started"
                                 locked={isGroupLocked({ key: `show:${carrierItem.id}`, kind: 'show', contentId: carrierItem.id })}
                                 lockReason={groupLockReason({ key: `show:${carrierItem.id}`, kind: 'show', contentId: carrierItem.id })}
                                 onClick={() => openGroup('show', carrierItem.id)} activeFilter={contentFilter}
                               />
                               <ContentRow
-                                stage="prove" title="Prove It · OMR Test" targetDate={carrierItem.omrTargetDate}
+                                stage="prove" title={`Prove It · ${carrierSectionTitle(carrierItem, 'omr')}`} targetDate={carrierItem.omrTargetDate}
                                 status="not_started" statusText="Not started"
                                 locked={isGroupLocked({ key: `prove:${carrierItem.id}`, kind: 'prove', contentId: carrierItem.id })}
                                 lockReason={groupLockReason({ key: `prove:${carrierItem.id}`, kind: 'prove', contentId: carrierItem.id })}
                                 onClick={() => openGroup('prove', carrierItem.id)} activeFilter={contentFilter}
                               />
                               <ContentRow
-                                stage="master" title="Master It · Presentation" targetDate={carrierItem.presentationTargetDate}
-                                status={hasSubmission(carrierItem.id, 'presentation') ? 'completed' : 'not_started'}
-                                statusText={hasSubmission(carrierItem.id, 'presentation') ? 'Submitted' : 'Not started'}
+                                stage="master" title={`Master It · ${carrierSectionTitle(carrierItem, 'presentation')}`} targetDate={carrierItem.presentationTargetDate}
+                                status={presentationDone(carrierItem.id) ? 'completed' : 'not_started'}
+                                statusText={presentationStatusText(carrierItem.id)}
                                 locked={isGroupLocked({ key: `master:${carrierItem.id}`, kind: 'master', contentId: carrierItem.id })}
                                 lockReason={groupLockReason({ key: `master:${carrierItem.id}`, kind: 'master', contentId: carrierItem.id })}
                                 onClick={() => openGroup('master', carrierItem.id)} activeFilter={contentFilter}
                               />
                               <ContentRow
-                                stage="master" title="Master It · Discussion Board" targetDate={carrierItem.targetDate}
+                                stage="master" title={`Master It · ${carrierSectionTitle(carrierItem, 'discussion')}`} targetDate={carrierItem.targetDate}
                                 status="not_started" statusText="Join the conversation"
                                 locked={isGroupLocked({ key: `discussion:${carrierItem.id}`, kind: 'discussion', contentId: carrierItem.id })}
                                 lockReason={groupLockReason({ key: `discussion:${carrierItem.id}`, kind: 'discussion', contentId: carrierItem.id })}
@@ -2716,10 +2771,10 @@ export function SPMyLearningPage() {
         const kind = activeGroupKind
         const GroupIcon: LucideIcon = kind === 'midterm' ? reviewUi(activeLesson).icon : kind === 'learn' ? FileText : kind === 'show' ? Scale : kind === 'prove' ? Calculator : kind === 'master' ? Trophy : kind === 'discussion' ? MessageSquare : BookOpen
         const groupTitle = kind === 'learn' ? (activeLesson.title || 'Case Study')
-          : kind === 'show' ? 'Socratic Seminar'
-          : kind === 'prove' ? 'OMR Test'
-          : kind === 'master' ? 'Presentation'
-          : kind === 'discussion' ? 'Discussion Board'
+          : kind === 'show' ? carrierSectionTitle(activeLesson, 'socratic')
+          : kind === 'prove' ? carrierSectionTitle(activeLesson, 'omr')
+          : kind === 'master' ? carrierSectionTitle(activeLesson, 'presentation')
+          : kind === 'discussion' ? carrierSectionTitle(activeLesson, 'discussion')
           : activeLesson.title
         const groupTargetDate = kind === 'show' ? (activeLesson.socraticDate || activeLesson.targetDate)
           : kind === 'prove' ? activeLesson.omrTargetDate
@@ -2732,7 +2787,7 @@ export function SPMyLearningPage() {
           const notesDone = hasSubmission(activeLesson.id, 'case_study_notes')
           parts = [
             { key: 'caseStudyView', title: `${groupTitle}: View Case Study`, status: 'not_started', statusText: 'Not started', targetDate: activeLesson.targetDate },
-            { key: 'caseStudyNotes', title: `${groupTitle}: Notes Upload`, status: notesDone ? 'completed' : 'not_started', statusText: notesDone ? 'Done' : 'Not started', targetDate: activeLesson.targetDate },
+            { key: 'caseStudyNotes', title: `${groupTitle}: ${activeLesson.notesTitle || 'Notes Upload'}`, status: notesDone ? 'completed' : 'not_started', statusText: notesDone ? 'Done' : 'Not started', targetDate: activeLesson.targetDate },
           ]
         } else if (kind === 'lesson') {
           const itemProgress = progress.find((entry) => entry.contentId === activeLesson.id && entry.studentId === session?.dbId)
@@ -2742,23 +2797,23 @@ export function SPMyLearningPage() {
           const masteryPassed = itemProgress?.masteryPassed === true || itemProgress?.masteryPassed === 'TRUE'
           const masteryAttempted = (itemProgress?.masteryAttempts ?? 0) > 0 || masteryScore !== null
           const notesDone = hasSubmission(activeLesson.id, 'lesson_notes')
+          const videoDone = hasSubmission(activeLesson.id, 'video_done')
           parts = [
             { key: 'tutorial', title: `${groupTitle}: Tutorial`, status: tutorialDone ? 'completed' : itemProgress?.status === 'in_progress' ? 'in_progress' : 'not_started', statusText: tutorialDone ? 'Completed' : itemProgress?.status === 'in_progress' ? 'In Progress' : 'Not started', targetDate: activeLesson.targetDate, isVideo: activeLesson.type === 'video' },
-            ...(activeLesson.videoUrl ? [{ key: 'video' as PartKind, title: `${groupTitle}: Video`, status: 'not_started' as RowStatus, statusText: 'Not started', targetDate: activeLesson.targetDate, isVideo: true }] : []),
-            { key: 'lessonNotes', title: `${groupTitle}: Notes Upload`, status: notesDone ? 'completed' : 'not_started', statusText: notesDone ? 'Done' : 'Not started', targetDate: activeLesson.notesTargetDate || activeLesson.targetDate },
+            ...(activeLesson.videoUrl ? [{ key: 'video' as PartKind, title: `${groupTitle}: Video`, status: (videoDone ? 'completed' : 'not_started') as RowStatus, statusText: videoDone ? 'Completed' : 'Not started', targetDate: activeLesson.targetDate, isVideo: true }] : []),
+            { key: 'lessonNotes', title: `${groupTitle}: ${activeLesson.notesTitle || 'Notes Upload'}`, status: notesDone ? 'completed' : 'not_started', statusText: notesDone ? 'Done' : 'Not started', targetDate: activeLesson.notesTargetDate || activeLesson.targetDate },
             ...(itemHasMastery ? [{ key: 'mastery' as PartKind, title: `${groupTitle}: Mastery Test`, status: (masteryPassed ? 'completed' : masteryAttempted ? 'not_mastered' : 'not_started') as RowStatus, statusText: masteryPassed ? 'Passed' : masteryAttempted ? 'Not mastered · retake available' : 'Not started', score: masteryScore, passMark: activeLesson.masteryPassMark ?? selectedCourse.passMark, targetDate: activeLesson.masteryTargetDate || activeLesson.targetDate }] : []),
           ]
         } else if (kind === 'show') {
-          parts = [{ key: 'socratic', title: 'Socratic Seminar', status: 'not_started', statusText: 'Not started', targetDate: activeLesson.socraticDate || activeLesson.targetDate }]
+          parts = [{ key: 'socratic', title: groupTitle, status: 'not_started', statusText: 'Not started', targetDate: activeLesson.socraticDate || activeLesson.targetDate }]
         } else if (kind === 'prove') {
-          parts = [{ key: 'omr', title: 'OMR Test', status: 'not_started', statusText: 'Not started', targetDate: activeLesson.omrTargetDate }]
+          parts = [{ key: 'omr', title: groupTitle, status: 'not_started', statusText: 'Not started', targetDate: activeLesson.omrTargetDate }]
         } else if (kind === 'discussion') {
-          parts = [{ key: 'discussion', title: 'Discussion Board', status: 'not_started', statusText: 'Join the conversation' }]
+          parts = [{ key: 'discussion', title: groupTitle, status: 'not_started', statusText: 'Join the conversation' }]
         } else if (kind === 'midterm') {
           parts = [] // rendered inline below — every section/block lives on this one page
         } else {
-          const submitted = hasSubmission(activeLesson.id, 'presentation')
-          parts = [{ key: 'presentation', title: 'Presentation', status: submitted ? 'completed' : 'not_started', statusText: submitted ? 'Submitted' : 'Not started', targetDate: activeLesson.presentationTargetDate }]
+          parts = [{ key: 'presentation', title: groupTitle, status: presentationDone(activeLesson.id) ? 'completed' : 'not_started', statusText: presentationStatusText(activeLesson.id), targetDate: activeLesson.presentationTargetDate }]
         }
 
         const nextLocked = !!nextGroup && isGroupLocked(nextGroup)
@@ -2906,6 +2961,12 @@ export function SPMyLearningPage() {
               <div style={{ ...emptyState }}>No video has been uploaded for this lesson yet.</div>
             )}
           </div>
+          {activeLesson.videoUrl && !readOnly && (
+            <div style={{ ...card, padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E' }}>Video Progress</div>
+              <MarkDoneButton done={hasSubmission(activeLesson.id, 'video_done')} onClick={() => void toggleMarkDone(activeLesson.id, 'video_done')} />
+            </div>
+          )}
         </div>
       )}
 
@@ -2934,7 +2995,7 @@ export function SPMyLearningPage() {
           <div style={{ background: 'linear-gradient(135deg,#0891B2,#0E7490)', borderRadius: 11, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
             <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back</button>
             <div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Upload size={15} /> {activeLesson.title} · Show it: Notes</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Upload size={15} /> {activeLesson.title} · {activeLesson.notesTitle || 'Show it: Notes'}</div>
             </div>
           </div>
           <div style={{ ...card, padding: '14px 16px' }}>
@@ -2960,7 +3021,7 @@ export function SPMyLearningPage() {
           <div style={{ background: 'linear-gradient(135deg,#7C3AED,#6D28D9)', borderRadius: 11, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
             <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back</button>
             <div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Upload size={15} /> Learn it · Show it: Notes</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Upload size={15} /> Learn it · {activeLesson.notesTitle || 'Show it: Notes'}</div>
             </div>
           </div>
           <a href="/LMS/Case Study Note-Taking Guide.pdf" target="_blank" rel="noreferrer" style={{ ...card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
@@ -2982,7 +3043,7 @@ export function SPMyLearningPage() {
           <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', borderRadius: 11, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
             <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back</button>
             <div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Scale size={15} /> Show it · Socratic Seminar</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Scale size={15} /> Show it · {carrierSectionTitle(activeLesson, 'socratic')}</div>
             </div>
           </div>
           <SocraticPanel carrierItem={activeLesson} />
@@ -2994,7 +3055,7 @@ export function SPMyLearningPage() {
           <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', borderRadius: 11, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
             <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back</button>
             <div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Calculator size={15} /> Prove it · OMR Test</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Calculator size={15} /> Prove it · {carrierSectionTitle(activeLesson, 'omr')}</div>
             </div>
           </div>
           <OmrPanel carrierItem={activeLesson} />
@@ -3006,10 +3067,10 @@ export function SPMyLearningPage() {
           <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', borderRadius: 11, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
             <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back</button>
             <div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Trophy size={15} /> Master it · Presentation</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><Trophy size={15} /> Master it · {carrierSectionTitle(activeLesson, 'presentation')}</div>
             </div>
           </div>
-          <PresentationPanel carrierItem={activeLesson} studentId={session?.dbId ?? ''} />
+          <PresentationPanel carrierItem={activeLesson} studentId={session?.dbId ?? ''} markedDone={hasSubmission(activeLesson.id, 'presentation_done')} onToggleDone={() => toggleMarkDone(activeLesson.id, 'presentation_done')} />
         </div>
       )}
 
@@ -3018,7 +3079,7 @@ export function SPMyLearningPage() {
           <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', borderRadius: 11, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
             <button onClick={backToLessonList} style={{ padding: '6px 12px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.22)', borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowLeft size={11} /> Back</button>
             <div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><MessageSquare size={15} /> Master it · Discussion Board</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><MessageSquare size={15} /> Master it · {carrierSectionTitle(activeLesson, 'discussion')}</div>
             </div>
           </div>
           <DiscussionBoardPanel carrierItem={activeLesson} studentId={session?.dbId ?? ''} />

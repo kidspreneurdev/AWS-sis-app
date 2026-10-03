@@ -9,6 +9,9 @@ const SHINGLE_SIZE = 5
 
 function shingles(text) {
   const words = text
+    .replace(/<br\s*\/?>|<\/(p|div|li)>/gi, ' ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
     .toLowerCase()
     .replace(/[^\w\s]/g, '')
     .split(/\s+/)

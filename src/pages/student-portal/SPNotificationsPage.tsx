@@ -4,6 +4,8 @@ import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { downloadUrl } from '@/lib/uploadFile'
 import { authedFetch, timeAgo, type PortalNotification } from '@/lib/studentPortalApi'
 import { Bell, Paperclip } from 'lucide-react'
+import { RichText } from '@/components/shared/RichText'
+import { toPlainText } from '@/lib/richText'
 
 const PAGE_SIZE = 20
 
@@ -172,7 +174,7 @@ export function SPNotificationsPage() {
                     <div style={{ fontSize: 17, fontWeight: n.read ? 600 : 800, color: '#1A365E' }}>{n.subject}</div>
                     {!isOpen && (
                       <div style={{ fontSize: 17, color: '#7A92B0', marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {n.content}
+                        {toPlainText(n.content)}
                       </div>
                     )}
                   </div>
@@ -181,7 +183,7 @@ export function SPNotificationsPage() {
                 <div className={`spn-card-body${isOpen ? ' spn-card-body--open' : ''}`}>
                   <div className="spn-card-body-inner">
                     <div className="spn-card-content">
-                      {n.content}
+                      <RichText value={n.content} />
                       {n.attachments.length > 0 && (
                         <div style={{ marginTop: 10 }}>
                           {n.attachments.map((a, i) => (

@@ -4,6 +4,7 @@
 // Style tokens live in ./docStyles.
 
 import { NAVY, BORDER, INK, h2, p } from './docStyles'
+import { RichText } from '@/components/shared/RichText'
 
 export function Page({ children }: { children: React.ReactNode }) {
   return (
@@ -83,7 +84,7 @@ export function InfoStack({ rows }: { rows: { label: string; value: string }[] }
 export function Bullets({ items, ordered }: { items: { title: string; body: string }[]; ordered?: boolean }) {
   const inner = items.map((n, i) => (
     <li key={i} style={{ ...p, margin: '0 0 5px' }}>
-      <strong>{n.title}:</strong> {n.body}
+      <strong>{n.title}:</strong> <RichText value={n.body} inline />
     </li>
   ))
   return ordered
@@ -93,7 +94,7 @@ export function Bullets({ items, ordered }: { items: { title: string; body: stri
 
 // Plain numbered / bulleted list of strings (no bold lead-in).
 export function PlainList({ items, ordered }: { items: string[]; ordered?: boolean }) {
-  const inner = items.map((t, i) => <li key={i} style={{ ...p, margin: '0 0 6px' }}>{t}</li>)
+  const inner = items.map((t, i) => <li key={i} style={{ ...p, margin: '0 0 6px' }}><RichText value={t} inline /></li>)
   return ordered
     ? <ol style={{ margin: '0 0 8px', paddingLeft: 22 }}>{inner}</ol>
     : <ul style={{ margin: '0 0 8px', paddingLeft: 22 }}>{inner}</ul>

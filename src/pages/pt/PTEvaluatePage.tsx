@@ -2,6 +2,8 @@ import { useEffect, useState, useMemo, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { downloadUrl } from '@/lib/uploadFile'
 import { PTM, PTCORE, mapAssignment, mapEvaluation, ptScoreBadge, type PTAssignment, type PTEvaluation } from './ptConstants'
+import { RichTextarea } from '@/components/shared/RichTextarea'
+import { RichText } from '@/components/shared/RichText'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 16 }
 
@@ -191,13 +193,13 @@ export function PTEvaluatePage() {
               {selA.brief && (
                 <div style={{ background: '#F7F9FC', borderLeft: `3px solid ${selM.col}`, borderRadius: '0 8px 8px 0', padding: '8px 12px', fontSize: 11, color: '#3D5475', marginBottom: 6 }}>
                   <div style={{ fontSize: 9, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', marginBottom: 3 }}>Project Brief</div>
-                  {selA.brief}
+                  <RichText value={selA.brief} inline />
                 </div>
               )}
               {selA.reflect && (
                 <div style={{ background: '#F7F9FC', borderLeft: '3px solid #7C3AED', borderRadius: '0 8px 8px 0', padding: '8px 12px', fontSize: 11, color: '#3D5475' }}>
                   <div style={{ fontSize: 9, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', marginBottom: 3 }}>Student Reflection</div>
-                  {selA.reflect}
+                  <RichText value={selA.reflect} inline />
                 </div>
               )}
             </div>
@@ -260,7 +262,7 @@ export function PTEvaluatePage() {
             <div style={card}>
               <div style={{ marginBottom: 10 }}>
                 <label style={{ fontSize: 10, fontWeight: 700, color: '#7A92B0', display: 'block', marginBottom: 3, textTransform: 'uppercase' }}>✍️ Evaluator Feedback <span style={{ fontWeight: 400, textTransform: 'none' }}>(included in family report)</span></label>
-                <textarea value={comment} onChange={e => setComment(e.target.value)} rows={3} placeholder="Specific, constructive feedback about quality, strengths, and areas for growth..." style={{ width: '100%', padding: '7px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 12, resize: 'vertical', boxSizing: 'border-box' }} />
+                <RichTextarea value={comment} onChange={e => setComment(e.target.value)} rows={3} placeholder="Specific, constructive feedback about quality, strengths, and areas for growth..." style={{ width: '100%', padding: '7px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 12, resize: 'vertical', boxSizing: 'border-box' }} />
               </div>
 
               {liveScore ? (

@@ -7,6 +7,8 @@ import { GRADES } from '@/types/student'
 import { StudentMultiCombobox } from '@/components/shared/StudentMultiCombobox'
 import type { AudienceType, Notification, NotificationAttachment } from '@/types/notification'
 import { Paperclip, X } from 'lucide-react'
+import { RichTextarea } from '@/components/shared/RichTextarea'
+import { toPlainText } from '@/lib/richText'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 20 }
 const inp: React.CSSProperties = { width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #E4EAF2', fontSize: 13, color: '#1A365E', background: '#fff', boxSizing: 'border-box', fontFamily: 'inherit' }
@@ -119,7 +121,7 @@ function ComposeModal({ students, cohorts, onClose, onSent }: {
         <div style={{ padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 'calc(100vh - 220px)', overflowY: 'auto' }}>
           <div><label style={lbl}>Subject *</label><input value={subject} onChange={e => setSubject(e.target.value)} style={inp} placeholder="e.g. Report cards now available" /></div>
 
-          <div><label style={lbl}>Message *</label><textarea value={content} onChange={e => setContent(e.target.value)} rows={6} style={{ ...inp, resize: 'vertical' }} placeholder="Write your message…" /></div>
+          <div><label style={lbl}>Message *</label><RichTextarea value={content} onChange={e => setContent(e.target.value)} rows={6} style={{ ...inp, resize: 'vertical' }} placeholder="Write your message…" /></div>
 
           <div>
             <label style={lbl}>Attachments</label>
@@ -280,7 +282,7 @@ export function StudentNotificationsPage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 800, color: '#1A365E' }}>{n.subject}</div>
-                    <div style={{ fontSize: 12, color: '#7A92B0', marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 480 }}>{n.content}</div>
+                    <div style={{ fontSize: 12, color: '#7A92B0', marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 480 }}>{toPlainText(n.content)}</div>
                   </div>
                   <div style={{ textAlign: 'right', flexShrink: 0 }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: '#1A365E' }}>{n.readCount}/{n.recipientCount} read</div>

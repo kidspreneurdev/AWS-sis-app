@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useParentPortal } from '@/contexts/ParentPortalContext'
+import { RichTextarea } from '@/components/shared/RichTextarea'
 
 // ─── Request type config ──────────────────────────────────────────────────────
 
@@ -222,7 +223,7 @@ function RequestModal({
                     {field.label}{field.required && <span style={{ color: '#D61F31' }}> *</span>}
                   </label>
                   {field.type === 'textarea' ? (
-                    <textarea
+                    <RichTextarea
                       value={formData[field.key] ?? ''}
                       onChange={e => set(field.key, e.target.value)}
                       placeholder={field.placeholder}

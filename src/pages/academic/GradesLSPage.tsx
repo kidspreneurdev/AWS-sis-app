@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
+import { RichTextarea } from '@/components/shared/RichTextarea'
+import { toPlainText } from '@/lib/richText'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const LS_LEVELS: Record<string, { label: string; col: string; bg: string }> = {
@@ -275,7 +277,7 @@ function NarrModal({
           {fields.map(f => (
             <div key={f.key}>
               <label style={{ fontSize: 12, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 4 }}>{f.label}</label>
-              <textarea
+              <RichTextarea
                 value={data[f.key]}
                 onChange={e => setData(d => ({ ...d, [f.key]: e.target.value }))}
                 placeholder={f.placeholder}
@@ -658,7 +660,7 @@ export function GradesLSPage() {
                     <td style={{ ...td, color: '#7A92B0' }}>{LS_GRADE_LABELS[stu.grade]}</td>
                     <td style={{ ...td, maxWidth: 280 }}>
                       {narr?.general ? (
-                        <span style={{ color: '#1A365E', fontSize: 12 }}>{narr.general.slice(0, 80)}{narr.general.length > 80 ? '…' : ''}</span>
+                        <span style={{ color: '#1A365E', fontSize: 12 }}>{toPlainText(narr.general).slice(0, 80)}{toPlainText(narr.general).length > 80 ? '…' : ''}</span>
                       ) : (
                         <span style={{ color: '#BDD0E8', fontSize: 12, fontStyle: 'italic' }}>No narrative entered</span>
                       )}

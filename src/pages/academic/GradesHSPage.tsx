@@ -7,6 +7,7 @@ import { MHSDiplomaProgress } from '@/pages/mhs-grading/MHSDiplomaProgress'
 import { MHSTrendChart } from '@/pages/mhs-grading/MHSTrendChart'
 import { MHSBadgesPanel } from '@/pages/mhs-grading/MHSBadgesPanel'
 import { MHSHonorRollStatus } from '@/pages/mhs-grading/MHSHonorRollStatus'
+import { RichTextarea } from '@/components/shared/RichTextarea'
 
 
 
@@ -485,7 +486,7 @@ function CourseModal({ draft, catalog, onChange, onSave, onClose }: {
               <input style={inp} value={draft.section} onChange={e => set('section', e.target.value)} /></div>
           </div>
           <div><label style={{ fontSize:11, fontWeight:700, color:'#3D5475', display:'block', marginBottom:4 }}>Notes</label>
-            <textarea style={{ ...inp, minHeight:56, resize:'vertical' }} value={draft.notes} onChange={e => set('notes', e.target.value)} /></div>
+            <RichTextarea style={{ ...inp, minHeight:56, resize:'vertical' }} value={draft.notes} onChange={e => set('notes', e.target.value)} /></div>
         </div>
         <div style={{ borderTop:'1px solid #E4EAF2', padding:'12px 20px', display:'flex', justifyContent:'flex-end', gap:8, background:'#F7F9FC' }}>
           <button onClick={onClose} style={{ padding:'8px 18px', borderRadius:8, border:'1px solid #E4EAF2', background:'#fff', color:'#1A365E', fontWeight:600, fontSize:13, cursor:'pointer' }}>Cancel</button>
@@ -555,7 +556,7 @@ function TransferModal({ draft, onChange, onSave, onClose }: {
               </select></div>
           </div>
           <div><label style={{ fontSize:11, fontWeight:700, color:'#3D5475', display:'block', marginBottom:4 }}>Notes</label>
-            <textarea style={{ ...inp, minHeight:56, resize:'vertical' }} value={draft.notes} onChange={e => set('notes', e.target.value)} /></div>
+            <RichTextarea style={{ ...inp, minHeight:56, resize:'vertical' }} value={draft.notes} onChange={e => set('notes', e.target.value)} /></div>
         </div>
         <div style={{ borderTop:'1px solid #E4EAF2', padding:'12px 20px', display:'flex', justifyContent:'flex-end', gap:8, background:'#F7F9FC' }}>
           <button onClick={onClose} style={{ padding:'8px 18px', borderRadius:8, border:'1px solid #E4EAF2', background:'#fff', color:'#1A365E', fontWeight:600, fontSize:13, cursor:'pointer' }}>Cancel</button>
@@ -773,7 +774,7 @@ function BulkAddCourseModal({ draft, students, catalog, onChange, onSave, onClos
             </div>
 
             <div><label style={{ fontSize:11, fontWeight:700, color:'#3D5475', display:'block', marginBottom:4 }}>Notes</label>
-              <textarea style={{ ...inp, minHeight:52, resize:'vertical' }} value={draft.notes} onChange={e => set('notes', e.target.value)} /></div>
+              <RichTextarea style={{ ...inp, minHeight:52, resize:'vertical' }} value={draft.notes} onChange={e => set('notes', e.target.value)} /></div>
           </div>
         </div>
 

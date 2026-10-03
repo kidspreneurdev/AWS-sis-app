@@ -171,6 +171,10 @@ export interface LMSContent {
   // isMidtermReview + midtermSectionsJson and every builder/student/API code path —
   // reviewKind only changes labels, icon and color.
   reviewKind?: ReviewKind
+  // Custom activity (reviewKind 'activity') — an admin-built item that lives INSIDE a
+  // module (unitTitle = that module) under one of its "It" stages, e.g. "Master It:
+  // Venture Build Sprint". Same builder/student panel/API as a review checkpoint.
+  activityStage?: ItStage
 }
 
 // Show It / Prove It / Master It section display names: the fixed type label, plus the
@@ -184,24 +188,68 @@ export function carrierSectionTitle(c: Pick<LMSContent, 'socraticTitle' | 'omrTi
   return custom ? `${CARRIER_SECTION_LABEL[kind]}: ${custom}` : CARRIER_SECTION_LABEL[kind]
 }
 
-export type ReviewKind = 'midterm' | 'finals'
+export type ReviewKind = 'midterm' | 'finals' | 'activity'
 export const REVIEW_META: Record<ReviewKind, { label: string; emoji: string; color: string; bg: string; soft: string; border: string }> = {
   midterm: { label: 'Midterm Review', emoji: '📝', color: '#5B21B6', bg: '#EDE9FE', soft: '#FAF8FF', border: '#DDD6FE' },
   finals: { label: 'Finals', emoji: '🎓', color: '#9A3412', bg: '#FFEDD5', soft: '#FFF8F1', border: '#FED7AA' },
+  activity: { label: 'Activity', emoji: '🧩', color: '#0F766E', bg: '#CCFBF1', soft: '#F3FDFB', border: '#99F6E4' },
 }
 export function reviewKindOf(c: Pick<LMSContent, 'reviewKind'>): ReviewKind {
-  return c.reviewKind === 'finals' ? 'finals' : 'midterm'
+  return c.reviewKind === 'finals' || c.reviewKind === 'activity' ? c.reviewKind : 'midterm'
+}
+
+// The five "it" stages every module is laid out in. Custom activities pick one.
+export type ItStage = 'learn' | 'do' | 'show' | 'prove' | 'master'
+export const IT_STAGES: ItStage[] = ['learn', 'do', 'show', 'prove', 'master']
+export const IT_STAGE_META: Record<ItStage, { label: string; emoji: string }> = {
+  learn: { label: 'Learn It', emoji: '🔎' },
+  do: { label: 'Do It', emoji: '✅' },
+  show: { label: 'Show It', emoji: '⚖️' },
+  prove: { label: 'Prove It', emoji: '🔢' },
+  master: { label: 'Master It', emoji: '🏆' },
+}
+function asItStage(v: unknown): ItStage | undefined {
+  return IT_STAGES.includes(v as ItStage) ? (v as ItStage) : undefined
+}
+/** A custom activity inside a module (vs. a standalone Midterm/Finals checkpoint). */
+export function isCustomActivity(c: Pick<LMSContent, 'isMidtermReview' | 'reviewKind'>): boolean {
+  return c.isMidtermReview === true && c.reviewKind === 'activity'
+}
+/** A Midterm Review / Finals — its own unit between modules, not a custom activity. */
+export function isReviewCheckpoint(c: Pick<LMSContent, 'isMidtermReview' | 'reviewKind'>): boolean {
+  return c.isMidtermReview === true && c.reviewKind !== 'activity'
+}
+/** Custom activities in `items` (one module's rows) for one stage, in builder order. */
+export function stageActivities(items: LMSContent[], stage: ItStage): LMSContent[] {
+  return items.filter(c => isCustomActivity(c) && (c.activityStage ?? 'master') === stage)
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
 }
 
 // ─── Midterm Review builder shapes ────────────────────────────────────────────
 // Each section has a title + instructions, then any mix of blocks in any order.
-export interface MidtermMcqQuestion { q: string; type?: 'mcq' | 'short'; opts: string[]; ans: number }
+export interface MidtermMcqQuestion { q: string; type?: 'mcq' | 'short'; opts: string[]; ans: number; images?: MidtermFile[] }
 export type MidtermBlock =
-  | { id: string; kind: 'text'; prompt: string }
+  | { id: string; kind: 'text'; prompt: string; images?: MidtermFile[] }
   | { id: string; kind: 'omr'; questions: MidtermMcqQuestion[]; passMark?: number; retakes?: number; timeLimit?: number }
   | { id: string; kind: 'file'; prompt: string }
-export interface MidtermImage { url: string; name: string }
-export interface MidtermSection { id: string; title: string; instructions: string; images?: MidtermImage[]; blocks: MidtermBlock[] }
+// An uploaded file (public URL + original name). Section documents can be any file type;
+// Text Box and OMR question attachments are images.
+export interface MidtermFile { url: string; name: string }
+export interface MidtermSection {
+  id: string
+  title: string
+  instructions: string
+  documents?: MidtermFile[]
+  /** Legacy (pre-documents) field — folded into `documents` by parseMidtermSections. */
+  images?: MidtermFile[]
+  blocks: MidtermBlock[]
+}
+
+const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|bmp|avif)$/i
+/** True when a stored file can be shown inline as an <img>. */
+export function isImageFile(f: MidtermFile): boolean {
+  return IMAGE_EXT.test(f.name) || IMAGE_EXT.test(f.url.split('?')[0])
+}
 
 export function isMidtermReview(c: Pick<LMSContent, 'isMidtermReview'>): boolean {
   return c.isMidtermReview === true
@@ -210,7 +258,12 @@ export function isMidtermReview(c: Pick<LMSContent, 'isMidtermReview'>): boolean
 export function parseMidtermSections(json: string | undefined): MidtermSection[] {
   try {
     const parsed = JSON.parse(json || '[]')
-    return Array.isArray(parsed) ? parsed : []
+    if (!Array.isArray(parsed)) return []
+    // Sections saved before "Instruction Documents" stored image-only attachments in
+    // `images` — surface them as documents so nothing already attached disappears.
+    return (parsed as MidtermSection[]).map(({ images, ...sec }) => (
+      images?.length ? { ...sec, documents: [...(sec.documents ?? []), ...images] } : sec
+    ))
   } catch { return [] }
 }
 
@@ -383,7 +436,8 @@ export function rowToLMSContent(r: Record<string, unknown>): LMSContent {
     discussionLocked: extra.discussionLocked === true,
     isMidtermReview: extra.isMidtermReview === true,
     midtermSectionsJson: extra.midtermSectionsJson as string | undefined,
-    reviewKind: extra.reviewKind === 'finals' ? 'finals' : extra.isMidtermReview === true ? 'midterm' : undefined,
+    reviewKind: extra.reviewKind === 'finals' || extra.reviewKind === 'activity' ? extra.reviewKind : extra.isMidtermReview === true ? 'midterm' : undefined,
+    activityStage: asItStage(extra.activityStage),
   }
 }
 
@@ -573,7 +627,7 @@ export async function saveLMS(store: LMSStore): Promise<string | null> {
           locked: c.locked,
           socraticLocked: c.socraticLocked, omrLocked: c.omrLocked,
           presentationLocked: c.presentationLocked, discussionLocked: c.discussionLocked,
-          isMidtermReview: c.isMidtermReview, midtermSectionsJson: c.midtermSectionsJson, reviewKind: c.reviewKind,
+          isMidtermReview: c.isMidtermReview, midtermSectionsJson: c.midtermSectionsJson, reviewKind: c.reviewKind, activityStage: c.activityStage,
         },
       })),
       { onConflict: 'id' }

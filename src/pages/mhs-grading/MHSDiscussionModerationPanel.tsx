@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { RichText } from '@/components/shared/RichText'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 16 }
 
@@ -87,7 +88,7 @@ export function MHSDiscussionModerationPanel({ lessonId }: MHSDiscussionModerati
               {p.editedAfterSubmission && <span style={{ fontSize: 9, fontWeight: 800, background: '#DBEAFE', color: '#1D4ED8', padding: '2px 8px', borderRadius: 6 }}>EDITED</span>}
             </div>
           </div>
-          <div style={{ fontSize: 12, color: '#3D5475', marginTop: 8, whiteSpace: 'pre-wrap' }}>{p.body}</div>
+          <div style={{ fontSize: 12, color: '#3D5475', marginTop: 8, whiteSpace: 'pre-wrap' }}><RichText value={p.body} inline /></div>
           {p.editHistory.length > 0 && (
             <button
               onClick={() => setExpandedId((v) => (v === p.id ? null : p.id))}
@@ -101,7 +102,7 @@ export function MHSDiscussionModerationPanel({ lessonId }: MHSDiscussionModerati
               {p.editHistory.map((h, i) => (
                 <div key={i} style={{ padding: '8px 10px', background: '#F7F9FC', borderRadius: 8, fontSize: 11 }}>
                   <div style={{ color: '#94A3B8', marginBottom: 4 }}>Prior version — {new Date(h.editedAt).toLocaleString()}</div>
-                  <div style={{ color: '#3D5475', whiteSpace: 'pre-wrap' }}>{h.body}</div>
+                  <div style={{ color: '#3D5475', whiteSpace: 'pre-wrap' }}><RichText value={h.body} inline /></div>
                 </div>
               ))}
             </div>

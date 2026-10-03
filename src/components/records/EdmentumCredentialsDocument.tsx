@@ -2,6 +2,7 @@ import { forwardRef } from 'react'
 import type { EdmentumCredentialsData } from '@/types/edmentumCredentials'
 import { NAVY, INK, SERIF, BORDER, h2, p, noteText } from './docStyles'
 import { Page, LogoStrip, DocHeader, InfoStack, Bullets, ContactBlock } from './docPrimitives'
+import { RichText } from '@/components/shared/RichText'
 
 /**
  * Presentational, page-by-page A4 rendering of the "Edmentum Courseware Portal —
@@ -36,7 +37,7 @@ export const EdmentumCredentialsDocument = forwardRef<HTMLDivElement, { data: Ed
           ]} />
 
           <p style={p}>Dear Parent/Guardian,</p>
-          <p style={p}>{data.welcomeParagraph}</p>
+          <p style={p}><RichText value={data.welcomeParagraph} inline /></p>
 
           <table style={{ width: '100%', borderCollapse: 'collapse', margin: '10px 0 8px' }}>
             <thead>
@@ -53,7 +54,7 @@ export const EdmentumCredentialsDocument = forwardRef<HTMLDivElement, { data: Ed
               {credRow('Password:', data.password)}
             </tbody>
           </table>
-          {data.securityNote && <p style={noteText}>{data.securityNote}</p>}
+          {data.securityNote && <p style={noteText}><RichText value={data.securityNote} inline /></p>}
 
           <h2 style={h2}>{data.firstTimeHeading}</h2>
           <Bullets ordered items={data.firstTimeSteps} />
@@ -62,7 +63,7 @@ export const EdmentumCredentialsDocument = forwardRef<HTMLDivElement, { data: Ed
           <Bullets items={data.nextSteps} />
 
           <h2 style={h2}>{data.troubleHeading}</h2>
-          <p style={p}>{data.troubleParagraph}</p>
+          <p style={p}><RichText value={data.troubleParagraph} inline /></p>
         </Page>
 
         {/* ── Page 2 · contact ─────────────────────────────────── */}

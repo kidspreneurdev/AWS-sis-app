@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/auth.store'
 import { resolveDispute } from '@/lib/grading/mhsRollup'
+import { RichTextarea } from '@/components/shared/RichTextarea'
+import { RichText } from '@/components/shared/RichText'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 16 }
 const input: React.CSSProperties = { padding: '6px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 12, boxSizing: 'border-box' }
@@ -86,11 +88,11 @@ export function MHSDisputeQueue() {
             <div style={{ fontSize: 12, fontWeight: 700, color: '#1A365E' }}>{r.studentName} · <span style={{ textTransform: 'capitalize' }}>{r.subjectType}</span></div>
             <div style={{ fontSize: 10, color: '#7A92B0' }}>Filed {new Date(r.filedAt).toLocaleDateString()} · window closes {r.windowDeadline}</div>
           </div>
-          <div style={{ fontSize: 12, color: '#3D5475', margin: '8px 0', padding: '8px 10px', background: '#F7F9FC', borderRadius: 8 }}>{r.reason}</div>
+          <div style={{ fontSize: 12, color: '#3D5475', margin: '8px 0', padding: '8px 10px', background: '#F7F9FC', borderRadius: 8 }}><RichText value={r.reason} inline /></div>
           {r.currentScore !== null && <div style={{ fontSize: 11, color: '#7A92B0', marginBottom: 8 }}>Current score: {r.currentScore}%</div>}
           {r.recordingUrl && <a href={r.recordingUrl} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#0369A1', display: 'block', marginBottom: 8 }}>View recording ↗</a>}
 
-          <textarea
+          <RichTextarea
             value={notes[r.id] ?? ''}
             onChange={(e) => setNotes((p) => ({ ...p, [r.id]: e.target.value }))}
             rows={2}

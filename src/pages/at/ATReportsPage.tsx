@@ -2,6 +2,9 @@ import { useEffect, useState, useMemo } from 'react'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { supabase } from '@/lib/supabase'
 import { StudentCombobox } from '@/components/shared/StudentCombobox'
+import { RichTextarea } from '@/components/shared/RichTextarea'
+import { RichText } from '@/components/shared/RichText'
+import { toRichHtml } from '@/lib/richText'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 20 }
 
@@ -144,7 +147,7 @@ export function ATReportsPage() {
         <div style="background:#1A365E;padding:6px 24px 0"><div style="display:inline-block;background:#C5A028;color:#0F2240;font-size:9px;font-weight:900;padding:3px 10px;letter-spacing:1px;text-transform:uppercase">■ MIND &amp; BODY</div></div>
         <div style="background:#EAF2FB;padding:14px"><div style="background:#fff;border:1px solid #DDE6F0;border-radius:4px;padding:14px;display:flex;align-items:center;gap:20px"><div style="font-size:36px;font-weight:900;color:#059669;min-width:70px">${mbAssess.max_score ? Math.round(mbAssess.raw_score / mbAssess.max_score * 100) + '%' : mbAssess.raw_score}</div><div><div style="font-size:10px;color:#7A92B0">Mind &amp; Body / PE Assessment Score</div><div style="font-size:11px;color:#94A3B8;margin-top:2px">Status: ${mbAssess.status}</div></div></div></div>` : ''
 
-      const note = (coachNote || firstNote).replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+      const note = toRichHtml(coachNote || firstNote)
 
       body += `<div class="report">
         <div style="background:#0F2240;padding:16px 24px;display:flex;justify-content:space-between;align-items:center">
@@ -171,14 +174,14 @@ export function ATReportsPage() {
         <div style="background:#EAF2FB;padding:0 24px 14px"><table style="width:100%;border-collapse:collapse;margin-top:10px"><thead><tr style="background:#1A365E">${['#','Assignment','Subject','Due','In','Status'].map(h => `<th style="padding:8px 10px;text-align:${h==='#'?'center':'left'};color:#fff;font-size:10px;font-weight:700">${h}</th>`).join('')}</tr></thead><tbody>${assignRows}<tr style="background:#1A365E"><td colspan="3" style="padding:8px 10px;font-size:11px;font-weight:900;color:#fff">TOTAL</td><td style="padding:8px 10px;text-align:center;font-size:11px;font-weight:900;color:#fff">${weekAssigns.length}</td><td style="padding:8px 10px;text-align:center;font-size:11px;font-weight:900;color:#fff">${doneCount}</td><td style="padding:8px 10px;text-align:center;font-size:12px;font-weight:900;color:${compPct >= 80 ? '#4ADE80' : compPct >= 60 ? '#FCD34D' : '#F87171'}">${compPct}% complete</td></tr></tbody></table><div style="font-size:11px;color:#7A92B0;margin-top:6px">${missingCount} missing assignment${missingCount !== 1 ? 's' : ''}</div></div>
         ${mathSection}${mbSection}
         <div style="background:#1A365E;padding:6px 24px 0"><div style="display:inline-block;background:#C5A028;color:#0F2240;font-size:9px;font-weight:900;padding:3px 10px;letter-spacing:1px;text-transform:uppercase">■ COACH'S PERSONAL NOTE</div></div>
-        <div style="background:#FFF8E8;border-left:4px solid #C5A028;padding:16px 24px"><div style="font-size:12px;line-height:1.8;color:#2D3A4F;font-style:italic">"${note}" <span style="font-size:14px">■</span></div></div>
+        <div style="background:#FFF8E8;border-left:4px solid #C5A028;padding:16px 24px"><div class="rt-content" style="font-size:12px;line-height:1.8;color:#2D3A4F;font-style:italic">${note} <span style="font-size:14px">■</span></div></div>
         <div style="background:#1A365E;padding:10px 24px;display:flex;justify-content:space-between;align-items:center"><div style="font-size:9px;color:rgba(255,255,255,.5)">American World School · Weekly Progress Report · ${weekLabel}</div><div style="font-size:9px;color:rgba(255,255,255,.5)">Confidential · For family use only</div></div>
       </div>`
     })
 
     const win = window.open('', '_blank')
     if (!win) { alert('Pop-up blocked — please allow pop-ups for this site.'); return }
-    win.document.write(`<!DOCTYPE html><html><head><title>Weekly Reports — ${weekLabel}</title><style>
+    win.document.write(`<!DOCTYPE html><html><head><title>Weekly Reports — ${weekLabel}</title><style>.rt-content ul{list-style:disc;padding-left:1.4em;margin:.2em 0}.rt-content ol{list-style:decimal;padding-left:1.4em;margin:.2em 0}.rt-content p{margin:0 0 .4em}
       *{box-sizing:border-box}body{margin:0;padding:16px;font-family:Arial,sans-serif;background:#f0f0f0}
       .report{max-width:800px;margin:0 auto 32px;border:2.5px solid #1A365E;background:#fff}
       @media print{body{background:#fff;padding:0}.report{border:2.5px solid #1A365E;page-break-after:always;margin:0}.report:last-child{page-break-after:avoid}}
@@ -231,7 +234,7 @@ export function ATReportsPage() {
           <label style={{ fontSize: 11, fontWeight: 600, color: '#7A92B0', display: 'block', marginBottom: 3 }}>
             ✍️ Coach's Personal Note <span style={{ color: '#D61F31', fontWeight: 400 }}>*required before generating</span>
           </label>
-          <textarea
+          <RichTextarea
             value={coachNote}
             onChange={e => setCoachNote(e.target.value)}
             rows={4}
@@ -469,7 +472,7 @@ export function ATReportsPage() {
               <div style={{ display: 'inline-block', background: '#C5A028', color: '#0F2240', fontSize: 9, fontWeight: 900, padding: '3px 10px', letterSpacing: 1, textTransform: 'uppercase' }}>■ COACH'S PERSONAL NOTE</div>
             </div>
             <div style={{ background: '#FFF8E8', borderLeft: '4px solid #C5A028', padding: '16px 24px' }}>
-              <div style={{ fontSize: 12, lineHeight: 1.8, color: '#2D3A4F', fontStyle: 'italic' }}>"{coachNote || firstNote}" <span style={{ fontSize: 14 }}>■</span></div>
+              <div style={{ fontSize: 12, lineHeight: 1.8, color: '#2D3A4F', fontStyle: 'italic' }}><RichText value={coachNote || firstNote} inline /> <span style={{ fontSize: 14 }}>■</span></div>
             </div>
 
             {/* Footer */}

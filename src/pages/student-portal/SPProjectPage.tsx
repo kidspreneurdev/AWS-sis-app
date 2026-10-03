@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
+import { RichText } from '@/components/shared/RichText'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 20 }
 
@@ -125,7 +126,7 @@ export function SPProjectPage() {
                       </div>
                     ))}
                   </div>
-                  {ev.comment && <div style={{ fontSize: 16, color: '#7A92B0', marginTop: 8, fontStyle: 'italic' }}>"{ev.comment}"</div>}
+                  {ev.comment && <div style={{ fontSize: 16, color: '#7A92B0', marginTop: 8, fontStyle: 'italic' }}><RichText value={ev.comment} inline /></div>}
                 </div>
               )}
             </div>

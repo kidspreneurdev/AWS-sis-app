@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { AssessmentInstructionsData, AICategory } from '@/types/assessmentInstructions'
+import { RichTextarea } from '@/components/shared/RichTextarea'
 
 const label: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4, display: 'block' }
 const inp: React.CSSProperties = { width: '100%', padding: '7px 10px', borderRadius: 8, border: '1px solid #E4EAF2', fontSize: 13, color: '#1A365E', background: '#fff', boxSizing: 'border-box', fontFamily: 'inherit' }
@@ -13,7 +14,7 @@ function Field({ labelText, value, onChange, textarea }: { labelText: string; va
     <div style={{ marginBottom: 10 }}>
       <label style={label}>{labelText}</label>
       {textarea
-        ? <textarea style={area} value={value} onChange={e => onChange(e.target.value)} />
+        ? <RichTextarea style={area} value={value} onChange={e => onChange(e.target.value)} />
         : <input style={inp} value={value} onChange={e => onChange(e.target.value)} />}
     </div>
   )
@@ -59,7 +60,7 @@ export function AssessmentInstructionsForm({
           {d.procedureSteps.map((step, i) => (
             <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'start' }}>
               <span style={{ fontSize: 12, color: '#7A92B0', paddingTop: 8, minWidth: 18, textAlign: 'right' }}>{i + 1}.</span>
-              <textarea style={{ ...area, minHeight: 46 }} value={step} onChange={e => set('procedureSteps', d.procedureSteps.map((x, j) => j === i ? e.target.value : x))} />
+              <RichTextarea style={{ ...area, minHeight: 46 }} value={step} onChange={e => set('procedureSteps', d.procedureSteps.map((x, j) => j === i ? e.target.value : x))} />
               <button style={{ ...smallBtn, alignSelf: 'start' }} onClick={() => set('procedureSteps', d.procedureSteps.filter((_, j) => j !== i))}>✕</button>
             </div>
           ))}
@@ -74,7 +75,7 @@ export function AssessmentInstructionsForm({
                   <label style={label}>Title</label>
                   <input style={{ ...inp, marginBottom: 6 }} value={c.title} onChange={e => updCat(i, { title: e.target.value })} />
                   <label style={label}>Body</label>
-                  <textarea style={{ ...area, minHeight: 56 }} value={c.body} onChange={e => updCat(i, { body: e.target.value })} />
+                  <RichTextarea style={{ ...area, minHeight: 56 }} value={c.body} onChange={e => updCat(i, { body: e.target.value })} />
                 </div>
                 <button style={{ ...smallBtn, alignSelf: 'start' }} onClick={() => set('categories', d.categories.filter((_, j) => j !== i))}>✕</button>
               </div>

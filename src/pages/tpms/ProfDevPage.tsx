@@ -2,6 +2,8 @@ import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/lib/toast'
 import { mapPd, type TpmsPd } from './tpmsConstants'
+import { RichTextarea } from '@/components/shared/RichTextarea'
+import { toPlainText } from '@/lib/richText'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 14, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)' }
 const inp: React.CSSProperties = { width: '100%', padding: '7px 10px', borderRadius: 8, border: '1.5px solid #E4EAF2', fontSize: 12, color: '#1A365E', background: '#fff', boxSizing: 'border-box' }
@@ -43,7 +45,7 @@ function PdModal({ onClose, onSave }: { onClose: () => void; onSave: (data: Omit
             <div><label style={lbl}>Hours</label><input type="number" value={form.hours} onChange={e => set('hours', e.target.value)} min="0.5" max="40" step="0.5" style={inp} /></div>
             <div><label style={lbl}>Provider / Facilitator</label><input value={form.provider} onChange={e => set('provider', e.target.value)} style={inp} placeholder="Organization, trainer…" /></div>
           </div>
-          <div><label style={lbl}>Learning Takeaway / Notes</label><textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Key takeaways, application to classroom…" /></div>
+          <div><label style={lbl}>Learning Takeaway / Notes</label><RichTextarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Key takeaways, application to classroom…" /></div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 8, borderTop: '1px solid #E4EAF2' }}>
             <button onClick={onClose} style={{ padding: '8px 18px', borderRadius: 9, border: '1.5px solid #DDE6F0', background: '#F0F4FA', color: '#7A92B0', fontSize: 12, cursor: 'pointer' }}>Cancel</button>
             <button onClick={handleSave} disabled={saving} style={{ padding: '8px 20px', borderRadius: 9, border: 'none', background: '#7C3AED', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>{saving ? 'Saving…' : '💾 Log Activity'}</button>
@@ -127,12 +129,12 @@ export function ProfDevPage() {
           {([['goal1', 'Goal 1 (aligned to AWS Teaching Framework)'], ['goal2', 'Goal 2'], ['goal3', 'Goal 3']] as const).map(([key, label]) => (
             <div key={key}>
               <label style={lbl}>{label}</label>
-              <textarea value={goals[key]} onChange={e => setGoals(p => ({ ...p, [key]: e.target.value }))} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Click to edit…" />
+              <RichTextarea value={goals[key]} onChange={e => setGoals(p => ({ ...p, [key]: e.target.value }))} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Click to edit…" />
             </div>
           ))}
           <div style={{ gridColumn: 'span 2' }}>
             <label style={lbl}>Mid-Year Reflection</label>
-            <textarea value={goals.reflection} onChange={e => setGoals(p => ({ ...p, reflection: e.target.value }))} rows={3} style={{ ...inp, resize: 'vertical' }} placeholder="How are you progressing toward your goals?" />
+            <RichTextarea value={goals.reflection} onChange={e => setGoals(p => ({ ...p, reflection: e.target.value }))} rows={3} style={{ ...inp, resize: 'vertical' }} placeholder="How are you progressing toward your goals?" />
           </div>
           <div style={{ gridColumn: 'span 2', display: 'flex', justifyContent: 'flex-end' }}>
             <button onClick={saveGoals} style={{ padding: '7px 16px', background: '#7C3AED', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
@@ -153,7 +155,7 @@ export function ProfDevPage() {
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: '#1A365E' }}>{r.title}</div>
               <div style={{ fontSize: 10, color: '#7A92B0' }}>{r.type}{r.date ? ` · ${r.date}` : ''}{r.provider ? ` · ${r.provider}` : ''}</div>
-              {r.notes && <div style={{ fontSize: 10, color: '#3D5475', marginTop: 2, maxWidth: 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📋 {r.notes}</div>}
+              {r.notes && <div style={{ fontSize: 10, color: '#3D5475', marginTop: 2, maxWidth: 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📋 {toPlainText(r.notes)}</div>}
             </div>
             <div style={{ textAlign: 'right', flexShrink: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 900, color: '#7C3AED' }}>{r.hours}</div>

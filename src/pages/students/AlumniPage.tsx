@@ -7,6 +7,7 @@ import { useCohorts } from '@/hooks/useCohorts'
 import { useCampuses } from '@/hooks/useCampuses'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { toast } from '@/lib/toast'
+import { toPlainText } from '@/lib/richText'
 
 function toRow(s: StudentInsert) {
   return {
@@ -287,7 +288,7 @@ export function AlumniPage() {
                           : <span style={{ color: '#C4D0DE' }}>—</span>}
                       </td>
                       <td style={{ ...td, fontSize: 12, color: '#3D5475', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.postSecondary ?? <span style={{ color: '#C4D0DE' }}>—</span>}</td>
-                      <td style={{ ...td, fontSize: 11, color: '#7A92B0', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.alumniNotes ?? ''}</td>
+                      <td style={{ ...td, fontSize: 11, color: '#7A92B0', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis' }}>{toPlainText(s.alumniNotes)}</td>
                     </tr>
                   )
                 })}

@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { toast } from '@/lib/toast'
+import { RichTextarea } from '@/components/shared/RichTextarea'
 
 interface InterviewStudent {
   id: string
@@ -112,12 +113,12 @@ function InterviewModal({ student, onClose, onSave }: {
           <div><label style={lbl}>Interviewer</label><input value={form.intViewer} onChange={e => set('intViewer', e.target.value)} placeholder="Name of interviewer" style={inp} /></div>
           <div><label style={lbl}>Committee</label><input value={form.intCommittee} onChange={e => set('intCommittee', e.target.value)} placeholder="Committee members" style={inp} /></div>
           <div><label style={lbl}>Score (1–10)</label><input type="number" min={1} max={10} value={form.intScore} onChange={e => set('intScore', e.target.value)} placeholder="e.g. 8" style={inp} /></div>
-          <div><label style={lbl}>Interview Notes</label><textarea value={form.intNotes} onChange={e => set('intNotes', e.target.value)} rows={3} placeholder="Notes from interview…" style={{ ...inp, resize: 'vertical' }} /></div>
+          <div><label style={lbl}>Interview Notes</label><RichTextarea value={form.intNotes} onChange={e => set('intNotes', e.target.value)} rows={3} placeholder="Notes from interview…" style={{ ...inp, resize: 'vertical' }} /></div>
           <div style={{ borderTop: '1px solid #E4EAF2', paddingTop: 14 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: '#1A365E', marginBottom: 10 }}>Decision</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div><label style={lbl}>Decision Date</label><input type="date" value={form.decDate} onChange={e => set('decDate', e.target.value)} style={inp} /></div>
-              <div><label style={lbl}>Decision Notes</label><input value={form.decNotes} onChange={e => set('decNotes', e.target.value)} placeholder="e.g. Accepted" style={inp} /></div>
+              <div><label style={lbl}>Decision Notes</label><RichTextarea value={form.decNotes} onChange={e => set('decNotes', e.target.value)} rows={2} placeholder="e.g. Accepted" style={inp} /></div>
             </div>
           </div>
         </div>

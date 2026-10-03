@@ -16,7 +16,7 @@ import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
 import { DiscussionBoard, type DiscussionPost } from '@/components/lms/DiscussionBoard'
 import {
-  SUBJECT_COLORS, carrierSectionTitle, isActiveBool, isMidtermReview, parseMidtermSections, REVIEW_META, reviewKindOf, rowToLMSCourse, rowToLMSContent, rowToLMSEnrolment, rowToLMSProgress,
+  SUBJECT_COLORS, carrierSectionTitle, isActiveBool, isMidtermReview, isReviewCheckpoint, isCustomActivity, stageActivities, parseMidtermSections, isImageFile, REVIEW_META, reviewKindOf, rowToLMSCourse, rowToLMSContent, rowToLMSEnrolment, rowToLMSProgress,
   type MidtermBlock, type LMSCourse, type LMSContent, type LMSEnrolment, type LMSProgress, type LMSQuestion,
 } from '@/pages/lms/lmsStore'
 import { portalPrefix } from './gradesShared'
@@ -24,6 +24,9 @@ import { portalPrefix } from './gradesShared'
 import { ACTIVE_SCORE_COMPONENT_TYPES, getEffectiveRubric, finalGrade, DEFAULT_PRESENTATION_BRIEF, type ScoreComponentType, type RubricOverrides } from '@/lib/lms/caseStudyRubric'
 import { toLegacyStudentGradeValue } from '@/types/student'
 import { K5MyLearningPage } from '@/pages/student-portal/K5MyLearningPage'
+import { RichTextarea } from '@/components/shared/RichTextarea'
+import { RichText } from '@/components/shared/RichText'
+import { toPlainText } from '@/lib/richText'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 14, border: '1px solid #E4EAF2', boxShadow: '0 1px 6px rgba(26,54,94,.06)' }
 const emptyState: React.CSSProperties = { padding: '16px 18px', borderRadius: 10, background: '#F8FAFC', border: '1px dashed #D7E0EA', fontSize: 16, color: '#7A92B0' }
@@ -249,7 +252,7 @@ function MasteryQuiz({ item, prog, studentId, coursePassMark, onUpdate }: {
                 {isShort ? (
                   <>
                     <div style={{ fontSize: 14, color: '#5A7290' }}>Short answer — teacher will review your response.</div>
-                    {studentAns !== undefined && <div style={{ fontSize: 14, color: '#3D5475', marginTop: 4, padding: '5px 8px', background: '#F7F9FC', borderRadius: 6 }}><em>{String(studentAns)}</em></div>}
+                    {studentAns !== undefined && <div style={{ fontSize: 14, color: '#3D5475', marginTop: 4, padding: '5px 8px', background: '#F7F9FC', borderRadius: 6 }}><em><RichText value={String(studentAns)} inline /></em></div>}
                   </>
                 ) : (
                   <>
@@ -290,9 +293,9 @@ function MasteryQuiz({ item, prog, studentId, coursePassMark, onUpdate }: {
           <Timer size={12} /> Time's up! Please submit your answers.
         </div>
       )}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: '#7A92B0' }}>Question {qIdx + 1} of {questions.length}</div>
-        <div style={{ display: 'flex', gap: 5 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 14 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: '#7A92B0', whiteSpace: 'nowrap', flexShrink: 0 }}>Question {qIdx + 1} of {questions.length}</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center', gap: 5, minWidth: 0, paddingTop: 6 }}>
           {questions.map((_, i) => (
             <div key={i} style={{ width: i === qIdx ? 20 : 8, height: 8, borderRadius: 4, background: i < qIdx ? '#059669' : i === qIdx ? '#1A365E' : '#E4EAF2', transition: 'all .3s' }} />
           ))}
@@ -301,7 +304,7 @@ function MasteryQuiz({ item, prog, studentId, coursePassMark, onUpdate }: {
       <div style={{ background: '#fff', border: '1.5px solid #E4EAF2', borderRadius: 12, padding: '16px 18px', marginBottom: 14 }}>
         <div style={{ fontSize: 16, fontWeight: 700, color: '#1A365E', lineHeight: 1.6, marginBottom: 14 }}>{currentQ.q}</div>
         {isShort ? (
-          <textarea
+          <RichTextarea
             rows={3}
             placeholder="Type your answer here..."
             value={String(answers[qIdx] ?? '')}
@@ -469,7 +472,7 @@ function NotesUploadRow({ contentId, kind, studentId, submission, onSubmitted }:
     return (
       <div style={{ background: '#F0FDF4', borderRadius: 8, padding: '10px 12px', border: '1px solid #BBF7D0' }}>
         <div style={{ fontSize: 15, color: '#059669', fontWeight: 700, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}><CheckCircle2 size={11} /> Submitted {new Date(submission.submittedAt).toLocaleDateString()}</div>
-        {submission.note && <div style={{ fontSize: 15, color: '#3D5475', marginBottom: 4, whiteSpace: 'pre-wrap' }}>{submission.note}</div>}
+        {submission.note && <div style={{ fontSize: 15, color: '#3D5475', marginBottom: 4, whiteSpace: 'pre-wrap' }}><RichText value={submission.note} inline /></div>}
         {submission.linkUrl && <a href={submission.linkUrl} target="_blank" rel="noreferrer" style={{ fontSize: 15, color: '#1A365E', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Link2 size={11} /> View your notes</a>}
       </div>
     )
@@ -477,7 +480,7 @@ function NotesUploadRow({ contentId, kind, studentId, submission, onSubmitted }:
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Notes for your teacher (optional)..." style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 15, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
+      <RichTextarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Notes for your teacher (optional)..." style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 15, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
       <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, border: `2px dashed ${file ? '#1DBD6A' : '#CBD5E0'}`, background: file ? '#F0FDF4' : '#F8FAFC', cursor: 'pointer', fontSize: 15, color: file ? '#1DBD6A' : '#7A92B0', fontWeight: file ? 700 : 400 }}>
         <input type="file" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) setFile(f) }} />
         {file ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><CheckCircle2 size={12} /> {file.name}</span> : '+ Choose file (PDF, image…)'}
@@ -588,7 +591,7 @@ function SocraticPanel({ carrierItem }: { carrierItem: LMSContent }) {
   return (
     <>
       {carrierItem.socraticBrief ? (
-        <div style={{ ...card, padding: '14px 16px', fontSize: 16, color: '#3D5475', lineHeight: 1.6 }}>{carrierItem.socraticBrief}</div>
+        <div style={{ ...card, padding: '14px 16px', fontSize: 16, color: '#3D5475', lineHeight: 1.6 }}><RichText value={carrierItem.socraticBrief} inline /></div>
       ) : (
         <div style={{ ...card, ...emptyState }}>No activity description has been added yet.</div>
       )}
@@ -601,7 +604,7 @@ function SocraticPanel({ carrierItem }: { carrierItem: LMSContent }) {
   )
 }
 
-type OmrQuestion = { q: string; type?: 'mcq' | 'short'; opts: string[]; ans: number }
+type OmrQuestion = { q: string; type?: 'mcq' | 'short'; opts: string[]; ans: number; images?: { url: string; name: string }[] }
 interface OmrQuizResult { score: number; passed: boolean; correct: number; total: number }
 
 /** The in-app OMR quiz UI (one question at a time, optional timer, pass/fail result with
@@ -714,9 +717,9 @@ function OmrQuizRunner({ questions, passMark, maxAttempts, timeLimitMins, initia
           <Timer size={12} /> Time's up! Please submit your answers.
         </div>
       )}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: '#7A92B0' }}>Question {qIdx + 1} of {questions.length}</div>
-        <div style={{ display: 'flex', gap: 5 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 14 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: '#7A92B0', whiteSpace: 'nowrap', flexShrink: 0 }}>Question {qIdx + 1} of {questions.length}</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center', gap: 5, minWidth: 0, paddingTop: 6 }}>
           {questions.map((_, i) => (
             <div key={i} style={{ width: i === qIdx ? 20 : 8, height: 8, borderRadius: 4, background: i < qIdx ? '#059669' : i === qIdx ? '#1A365E' : '#E4EAF2', transition: 'all .3s' }} />
           ))}
@@ -724,8 +727,9 @@ function OmrQuizRunner({ questions, passMark, maxAttempts, timeLimitMins, initia
       </div>
       <div style={{ background: '#fff', border: '1.5px solid #E4EAF2', borderRadius: 12, padding: '16px 18px', marginBottom: 14 }}>
         <div style={{ fontSize: 16, fontWeight: 700, color: '#1A365E', lineHeight: 1.6, marginBottom: 14 }}>{currentQ.q}</div>
+        {(currentQ.images?.length ?? 0) > 0 && <div style={{ marginTop: -6, marginBottom: 14 }}><MidtermSectionImages images={currentQ.images!} maxHeight={360} /></div>}
         {isShort ? (
-          <textarea
+          <RichTextarea
             rows={5}
             placeholder="Type your answer here..."
             value={String(answers[qIdx] ?? '')}
@@ -849,10 +853,20 @@ function midtermProgress(item: LMSContent, submissions: MySubmission[]): { done:
   return { done: blocks.filter((b) => (subs.get(b.id)?.length ?? 0) > 0).length, total: blocks.length }
 }
 
-/** Midterm Review and Finals share everything but their label, icon and color. */
+/** Midterm Review, Finals and custom activities share everything but label, icon and color. */
 function reviewUi(item: LMSContent) {
   const kind = reviewKindOf(item)
+  if (kind === 'activity') {
+    const stage = STAGE_META[item.activityStage ?? 'master']
+    return { ...REVIEW_META.activity, label: stage.label, icon: stage.icon }
+  }
   return { ...REVIEW_META[kind], icon: (kind === 'finals' ? GraduationCap : ClipboardCheck) as LucideIcon }
+}
+
+/** "Master It: Venture Build Sprint" for a custom activity; a review's own title otherwise. */
+function reviewTitle(item: LMSContent): string {
+  if (isCustomActivity(item)) return `${STAGE_META[item.activityStage ?? 'master'].label}: ${item.title || 'Activity'}`
+  return item.title || reviewUi(item).label
 }
 
 const MIDTERM_BLOCK_UI: Record<MidtermBlock['kind'], { icon: LucideIcon; label: string }> = {
@@ -890,7 +904,7 @@ function MidtermTextBlock({ contentId, blockId, latest, onSubmitted }: {
   if (latest) {
     return (
       <MidtermSubmittedNote submittedAt={latest.sub.submittedAt}>
-        <div style={{ fontSize: 15, color: '#3D5475', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{latest.note.text}</div>
+        <div style={{ fontSize: 15, color: '#3D5475', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}><RichText value={latest.note.text} inline /></div>
       </MidtermSubmittedNote>
     )
   }
@@ -910,7 +924,7 @@ function MidtermTextBlock({ contentId, blockId, latest, onSubmitted }: {
   const canSubmit = !readOnly && !submitting && !!text.trim()
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <textarea rows={5} value={text} onChange={(e) => setText(e.target.value)} placeholder="Type your response here..." disabled={readOnly} style={{ width: '100%', padding: 10, border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 16, fontFamily: 'Poppins,sans-serif', resize: 'vertical', boxSizing: 'border-box' }} />
+      <RichTextarea rows={5} value={text} onChange={(e) => setText(e.target.value)} placeholder="Type your response here..." disabled={readOnly} style={{ width: '100%', padding: 10, border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 16, fontFamily: 'Poppins,sans-serif', resize: 'vertical', boxSizing: 'border-box' }} />
       <button onClick={() => void submit()} disabled={!canSubmit} title={readOnly ? 'View-only access' : undefined} style={{ padding: '9px 16px', background: canSubmit ? '#1A365E' : '#E4EAF2', color: canSubmit ? '#fff' : '#94A3B8', border: 'none', borderRadius: 8, fontSize: 16, fontWeight: 700, cursor: canSubmit ? 'pointer' : 'not-allowed', alignSelf: 'flex-end', fontFamily: 'inherit' }}>
         {submitting ? 'Submitting…' : 'Submit Response'}
       </button>
@@ -1021,7 +1035,7 @@ function MidtermOmrBlock({ contentId, block, history, onSubmitted }: {
 
 /** Instruction images for one Midterm Review section — shown at a readable size (whole
  *  image, never cropped) and tappable to view full screen. */
-function MidtermSectionImages({ images }: { images: { url: string; name: string }[] }) {
+function MidtermSectionImages({ images, maxHeight }: { images: { url: string; name: string }[]; maxHeight?: number }) {
   const [viewing, setViewing] = useState<{ url: string; name: string } | null>(null)
 
   useEffect(() => {
@@ -1037,7 +1051,7 @@ function MidtermSectionImages({ images }: { images: { url: string; name: string 
         {images.map((im) => (
           <button key={im.url} type="button" onClick={() => setViewing(im)} title="Click to enlarge"
             style={{ padding: 0, border: '1px solid #E4EAF2', borderRadius: 10, background: '#F8FAFC', cursor: 'zoom-in', overflow: 'hidden', display: 'block', width: '100%' }}>
-            <img src={im.url} alt={im.name} loading="lazy" style={{ display: 'block', width: '100%', maxHeight: images.length > 1 ? 320 : 520, objectFit: 'contain' }} />
+            <img src={im.url} alt={im.name} loading="lazy" style={{ display: 'block', width: '100%', maxHeight: maxHeight ?? (images.length > 1 ? 320 : 520), objectFit: 'contain' }} />
           </button>
         ))}
       </div>
@@ -1045,6 +1059,31 @@ function MidtermSectionImages({ images }: { images: { url: string; name: string 
         <div onClick={() => setViewing(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(10,24,50,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, cursor: 'zoom-out' }}>
           <button type="button" onClick={() => setViewing(null)} title="Close" style={{ position: 'absolute', top: 16, right: 16, width: 36, height: 36, borderRadius: '50%', border: '1px solid rgba(255,255,255,.3)', background: 'rgba(255,255,255,.12)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={18} /></button>
           <img src={viewing.url} alt={viewing.name} onClick={(e) => e.stopPropagation()} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 8, background: '#fff', cursor: 'default', boxShadow: '0 20px 60px rgba(0,0,0,.4)' }} />
+        </div>
+      )}
+    </>
+  )
+}
+
+/** A section's Instruction Documents — images shown inline (same viewer as above), any
+ *  other file (PDF, Word, slides…) as a card that opens it in a new tab. */
+function MidtermSectionDocuments({ documents }: { documents: { url: string; name: string }[] }) {
+  const images = documents.filter(isImageFile)
+  const files = documents.filter((d) => !isImageFile(d))
+  const ext = (name: string) => (name.split('.').pop() ?? '').toUpperCase().slice(0, 4) || 'FILE'
+  return (
+    <>
+      {images.length > 0 && <MidtermSectionImages images={images} />}
+      {files.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
+          {files.map((f) => (
+            <a key={f.url} href={f.url} target="_blank" rel="noreferrer"
+              style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', border: '1px solid #E4EAF2', borderRadius: 10, background: '#F8FAFC', textDecoration: 'none' }}>
+              <span style={{ width: 38, height: 38, borderRadius: 8, background: '#EEF3FF', color: SP_NAVY, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, flexShrink: 0 }}>{ext(f.name)}</span>
+              <span style={{ flex: 1, minWidth: 0, fontSize: 15, fontWeight: 700, color: '#1A365E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: '#2563EB', display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0 }}><ExternalLink size={13} /> Open</span>
+            </a>
+          ))}
         </div>
       )}
     </>
@@ -1063,7 +1102,7 @@ function MidtermReviewPanel({ item, studentId, submissions, onSubmitted }: {
   const pct = total ? Math.round((done / total) * 100) : 0
 
   if (!sections.length) {
-    return <div style={{ ...card, ...emptyState }}>Your teacher hasn't added anything to this review yet.</div>
+    return <div style={{ ...card, ...emptyState }}>Your teacher hasn't added anything to this {isCustomActivity(item) ? 'activity' : 'review'} yet.</div>
   }
 
   return (
@@ -1071,7 +1110,7 @@ function MidtermReviewPanel({ item, studentId, submissions, onSubmitted }: {
       {total > 0 && (
         <div style={{ ...card, padding: '14px 18px' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 7 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#5A7290' }}>Review Progress</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#5A7290' }}>{isCustomActivity(item) ? 'Progress' : 'Review Progress'}</span>
             <span style={{ fontSize: 15, fontWeight: 800, color: done === total ? SP_GREEN : '#1A365E', fontVariantNumeric: 'tabular-nums' }}>{done} of {total} submitted</span>
           </div>
           <div style={{ height: 8, background: '#F0F4FA', borderRadius: 100, overflow: 'hidden' }}>
@@ -1085,8 +1124,8 @@ function MidtermReviewPanel({ item, studentId, submissions, onSubmitted }: {
           <div style={{ padding: '14px 18px', borderBottom: '1px solid #F0F4FA' }}>
             <div style={{ fontSize: 12, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '.5px' }}>Section {si + 1} of {sections.length}</div>
             <div style={{ fontSize: 18, fontWeight: 800, color: '#1A365E', marginTop: 2 }}>{sec.title}</div>
-            {sec.instructions && <div style={{ fontSize: 15, color: '#3D5475', lineHeight: 1.6, marginTop: 6, whiteSpace: 'pre-wrap' }}>{sec.instructions}</div>}
-            {(sec.images?.length ?? 0) > 0 && <MidtermSectionImages images={sec.images!} />}
+            {sec.instructions && <div style={{ fontSize: 15, color: '#3D5475', lineHeight: 1.6, marginTop: 6, whiteSpace: 'pre-wrap' }}><RichText value={sec.instructions} inline /></div>}
+            {(sec.documents?.length ?? 0) > 0 && <MidtermSectionDocuments documents={sec.documents!} />}
           </div>
           <div style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 14 }}>
             {sec.blocks.length === 0 && <div style={{ fontSize: 15, color: '#94A3B8' }}>Nothing to submit in this section — just read the instructions above.</div>}
@@ -1102,7 +1141,8 @@ function MidtermReviewPanel({ item, studentId, submissions, onSubmitted }: {
                     <span style={{ fontSize: 15, fontWeight: 800, color: '#1A365E', flex: 1 }}>{ui.label}</span>
                     <span style={{ fontSize: 12, fontWeight: 800, padding: '3px 9px', borderRadius: 100, background: submitted ? '#DCFCE7' : '#F1F5F9', color: submitted ? '#059669' : '#64748B' }}>{submitted ? 'Submitted' : 'Not started'}</span>
                   </div>
-                  {b.kind !== 'omr' && b.prompt && <div style={{ fontSize: 15, color: '#3D5475', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{b.prompt}</div>}
+                  {b.kind !== 'omr' && b.prompt && <div style={{ fontSize: 15, color: '#3D5475', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}><RichText value={b.prompt} inline /></div>}
+                  {b.kind === 'text' && (b.images?.length ?? 0) > 0 && <div style={{ marginTop: -4 }}><MidtermSectionImages images={b.images!} maxHeight={420} /></div>}
                   {b.kind === 'text' && <MidtermTextBlock contentId={item.id} blockId={b.id} latest={history[0]} onSubmitted={onSubmitted} />}
                   {b.kind === 'file' && <MidtermFileBlock contentId={item.id} blockId={b.id} studentId={studentId} latest={history[0]} onSubmitted={onSubmitted} />}
                   {b.kind === 'omr' && <MidtermOmrBlock contentId={item.id} block={b} history={history} onSubmitted={onSubmitted} />}
@@ -1178,7 +1218,7 @@ function PresentationPanel({ carrierItem, studentId, markedDone, onToggleDone }:
 
   return (
     <>
-      <div style={{ ...card, padding: '14px 16px', fontSize: 16, color: '#3D5475', lineHeight: 1.6 }}>{carrierItem.presentationBrief || DEFAULT_PRESENTATION_BRIEF}</div>
+      <div style={{ ...card, padding: '14px 16px', fontSize: 16, color: '#3D5475', lineHeight: 1.6 }}><RichText value={carrierItem.presentationBrief || DEFAULT_PRESENTATION_BRIEF} inline /></div>
       {bundle.lesson.assignedRole && (
         <div style={{ ...card, padding: '14px 16px', borderColor: '#BFDBFE', background: '#EFF6FF' }}>
           <div style={{ fontSize: 13, fontWeight: 800, color: '#1A365E', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 4 }}>Your Assigned Question</div>
@@ -1215,12 +1255,12 @@ function PresentationPanel({ carrierItem, studentId, markedDone, onToggleDone }:
         {bundle.presentation ? (
           <div style={{ background: '#F0FDF4', borderRadius: 8, padding: '10px 12px', border: '1px solid #BBF7D0' }}>
             <div style={{ fontSize: 15, color: '#059669', fontWeight: 700, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}><CheckCircle2 size={11} /> Submitted {new Date(bundle.presentation.submittedAt).toLocaleDateString()}</div>
-            {bundle.presentation.note && <div style={{ fontSize: 15, color: '#3D5475', marginBottom: 4, whiteSpace: 'pre-wrap' }}>{bundle.presentation.note}</div>}
+            {bundle.presentation.note && <div style={{ fontSize: 15, color: '#3D5475', marginBottom: 4, whiteSpace: 'pre-wrap' }}><RichText value={bundle.presentation.note} inline /></div>}
             {bundle.presentation.linkUrl && <a href={bundle.presentation.linkUrl} target="_blank" rel="noreferrer" style={{ fontSize: 15, color: '#1A365E', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Link2 size={11} /> View your presentation</a>}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <textarea rows={2} value={presNote} onChange={(e) => setPresNote(e.target.value)} placeholder="Notes for your teacher (optional)..." style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 15, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
+            <RichTextarea rows={2} value={presNote} onChange={(e) => setPresNote(e.target.value)} placeholder="Notes for your teacher (optional)..." style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 15, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
             <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, border: `2px dashed ${presFile ? '#1DBD6A' : '#CBD5E0'}`, background: presFile ? '#F0FDF4' : '#F8FAFC', cursor: 'pointer', fontSize: 15, color: presFile ? '#1DBD6A' : '#7A92B0', fontWeight: presFile ? 700 : 400 }}>
               <input type="file" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) setPresFile(f) }} />
               {presFile ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><CheckCircle2 size={12} /> {presFile.name}</span> : '+ Choose file (PDF, PPT…)'}
@@ -1402,7 +1442,7 @@ function CSAppealControl({ appeal, isOpen, draftText, filing, readOnly, onOpen, 
       <div style={{ marginTop: 8, padding: '8px 10px', background: appeal.status === 'open' ? '#FEF3C7' : '#F0FDF4', border: `1px solid ${appeal.status === 'open' ? '#FDE68A' : '#BBF7D0'}`, borderRadius: 8, fontSize: 15 }}>
         {appeal.status === 'open'
           ? <span style={{ color: '#92400E', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Flag size={11} /> Appeal sent — pending review.</span>
-          : <span style={{ color: '#059669', display: 'inline-flex', alignItems: 'center', gap: 4 }}><CheckCircle2 size={11} /> <strong>Appeal resolved:</strong> {appeal.adminReply}</span>}
+          : <span style={{ color: '#059669', display: 'inline-flex', alignItems: 'center', gap: 4 }}><CheckCircle2 size={11} /> <strong>Appeal resolved:</strong> <RichText value={appeal.adminReply} inline /></span>}
       </div>
     )
   }
@@ -1410,7 +1450,7 @@ function CSAppealControl({ appeal, isOpen, draftText, filing, readOnly, onOpen, 
     <div style={{ marginTop: 8 }}>
       {isOpen ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <textarea rows={2} value={draftText} onChange={(e) => onDraftChange(e.target.value)} placeholder="Explain the discrepancy you'd like reviewed..." style={{ width: '100%', padding: '7px 9px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 15, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
+          <RichTextarea rows={2} value={draftText} onChange={(e) => onDraftChange(e.target.value)} placeholder="Explain the discrepancy you'd like reviewed..." style={{ width: '100%', padding: '7px 9px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 15, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
           <div style={{ display: 'flex', gap: 6 }}>
             <button onClick={onFile} disabled={filing} style={{ padding: '5px 12px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 6, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>{filing ? 'Sending…' : 'Send Appeal'}</button>
             <button onClick={onCancel} style={{ padding: '5px 12px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 6, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
@@ -1451,7 +1491,7 @@ function CSScoreBlock({ type, overrides, icon: Icon, title, order, score, appeal
       )}
       {isScored && score!.feedback && (
         <div style={{ background: '#EEF3FF', borderRadius: 8, padding: '8px 10px', fontSize: 15, color: '#3D5475', whiteSpace: 'pre-wrap' }}>
-          <strong style={{ color: '#1A365E' }}>Teacher feedback:</strong> {score!.feedback}
+          <strong style={{ color: '#1A365E' }}>Teacher feedback:</strong> <RichText value={score!.feedback} inline />
         </div>
       )}
       {!isScored && <div style={{ fontSize: 15, color: '#94A3B8' }}>Your teacher hasn't scored this yet.</div>}
@@ -2168,18 +2208,25 @@ export function SPMyLearningPage() {
     const out: ActivityGroupRef[] = []
     groupedModules.forEach((module) => {
       module.units.forEach((items) => {
-        const midtermItem = items.find(isMidtermReview)
+        const midtermItem = items.find(isReviewCheckpoint)
         if (midtermItem) { out.push({ key: `midterm:${midtermItem.id}`, kind: 'midterm', contentId: midtermItem.id }); return }
         const carrierItem = items.find((i) => i.hasAssignment === true || i.hasAssignment === 'TRUE') ?? null
-        const lessonItems = items.filter((i) => i !== carrierItem)
+        const lessonItems = items.filter((i) => i !== carrierItem && !isCustomActivity(i))
+        // Custom activities open the review panel, so they ride the 'midterm' group kind.
+        const pushActivities = (stage: StageKey) => stageActivities(items, stage).forEach((a) => out.push({ key: `midterm:${a.id}`, kind: 'midterm', contentId: a.id }))
         if (carrierItem) out.push({ key: `learn:${carrierItem.id}`, kind: 'learn', contentId: carrierItem.id })
+        pushActivities('learn')
         lessonItems.forEach((item) => out.push({ key: `lesson:${item.id}`, kind: 'lesson', contentId: item.id }))
+        pushActivities('do')
+        if (carrierItem) out.push({ key: `show:${carrierItem.id}`, kind: 'show', contentId: carrierItem.id })
+        pushActivities('show')
+        if (carrierItem) out.push({ key: `prove:${carrierItem.id}`, kind: 'prove', contentId: carrierItem.id })
+        pushActivities('prove')
         if (carrierItem) {
-          out.push({ key: `show:${carrierItem.id}`, kind: 'show', contentId: carrierItem.id })
-          out.push({ key: `prove:${carrierItem.id}`, kind: 'prove', contentId: carrierItem.id })
           out.push({ key: `master:${carrierItem.id}`, kind: 'master', contentId: carrierItem.id })
           out.push({ key: `discussion:${carrierItem.id}`, kind: 'discussion', contentId: carrierItem.id })
         }
+        pushActivities('master')
       })
     })
     return out
@@ -2196,7 +2243,7 @@ export function SPMyLearningPage() {
       case 'prove': return { title: `Prove It: ${carrierSectionTitle(item, 'omr')}`, icon: Calculator }
       case 'master': return { title: `Master It: ${carrierSectionTitle(item, 'presentation')}`, icon: Trophy }
       case 'discussion': return { title: carrierSectionTitle(item, 'discussion'), icon: MessageSquare }
-      case 'midterm': return item ? { title: item.title || reviewUi(item).label, icon: reviewUi(item).icon } : { title: 'Review', icon: ClipboardCheck }
+      case 'midterm': return item ? { title: reviewTitle(item), icon: reviewUi(item).icon } : { title: 'Review', icon: ClipboardCheck }
       default: return { title: item?.title || 'Lesson', icon: BookOpen }
     }
   }
@@ -2347,7 +2394,7 @@ export function SPMyLearningPage() {
                     <div style={{ padding: '14px 16px' }}>
                       <div style={{ fontSize: 16, fontWeight: 800, color: '#1A365E', marginBottom: 4 }}>{course.title}</div>
                       <div style={{ fontSize: 15, color: '#7A92B0', marginBottom: 10 }}>{course.subject}{course.gradeLevel ? ` · ${course.gradeLevel}` : ''}</div>
-                      <div style={{ fontSize: 15, color: '#3D5475', marginBottom: 10, lineHeight: 1.5 }}>{course.description ? `${course.description.slice(0, 80)}${course.description.length > 80 ? '…' : ''}` : 'No course description available yet.'}</div>
+                      <div style={{ fontSize: 15, color: '#3D5475', marginBottom: 10, lineHeight: 1.5 }}>{course.description ? `${toPlainText(course.description).slice(0, 80)}${toPlainText(course.description).length > 80 ? '…' : ''}` : 'No course description available yet.'}</div>
                       <div style={{ marginBottom: 8 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                           <span style={{ fontSize: 14, color: '#7A92B0' }}>{doneCount}/{courseContent.length} lessons</span>
@@ -2477,7 +2524,7 @@ export function SPMyLearningPage() {
           </div>
 
           {selectedCourse.description ? (
-            <div style={{ ...card, padding: '14px 16px', fontSize: 16, color: '#5A7290', lineHeight: 1.6 }}>{selectedCourse.description}</div>
+            <div style={{ ...card, padding: '14px 16px', fontSize: 16, color: '#5A7290', lineHeight: 1.6 }}><RichText value={selectedCourse.description} inline /></div>
           ) : (
             <div style={{ ...card, ...emptyState }}>No course description is available yet.</div>
           )}
@@ -2515,7 +2562,7 @@ export function SPMyLearningPage() {
               <div key={`${module.label || 'default'}-${moduleIdx}`} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {module.label ? <div style={{ fontSize: 14, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 4 }}><FolderKanban size={11} /> {module.label}</div> : null}
                 {[...module.units.entries()].map(([unit, items]) => {
-                  const midtermItem = items.find(isMidtermReview)
+                  const midtermItem = items.find(isReviewCheckpoint)
                   if (midtermItem) {
                     const ref: ActivityGroupRef = { key: `midterm:${midtermItem.id}`, kind: 'midterm', contentId: midtermItem.id }
                     const locked = isGroupLocked(ref)
@@ -2552,14 +2599,32 @@ export function SPMyLearningPage() {
                     )
                   }
                   const carrierItem = items.find((i) => i.hasAssignment === true || i.hasAssignment === 'TRUE') ?? null
-                  const lessonItems = items.filter((i) => i !== carrierItem)
+                  const lessonItems = items.filter((i) => i !== carrierItem && !isCustomActivity(i))
                   const moduleKey = `unit:${unit}`
+                  // Admin-built custom activities, per "it" stage — counted in the stepper
+                  // and listed after that stage's default rows.
+                  const activityDone = (a: LMSContent) => { const p = midtermProgress(a, mySubmissions); return p.total > 0 && p.done === p.total }
+                  const activityCount = (stage: StageKey) => { const acts = stageActivities(items, stage); return { done: acts.filter(activityDone).length, total: acts.length } }
+                  const renderActivities = (stage: StageKey) => stageActivities(items, stage).map((a) => {
+                    const ref: ActivityGroupRef = { key: `midterm:${a.id}`, kind: 'midterm', contentId: a.id }
+                    const mp = midtermProgress(a, mySubmissions)
+                    const status: RowStatus = mp.total > 0 && mp.done === mp.total ? 'completed' : mp.done > 0 ? 'in_progress' : 'not_started'
+                    return (
+                      <ContentRow
+                        key={a.id}
+                        stage={stage} title={`${STAGE_META[stage].label} · ${a.title || 'Activity'}`} targetDate={a.targetDate}
+                        status={status} statusText={status === 'completed' ? 'Completed' : mp.total > 0 ? `${mp.done} of ${mp.total} submitted` : 'Not started'}
+                        locked={isGroupLocked(ref)} lockReason={groupLockReason(ref)}
+                        onClick={() => openGroup('midterm', a.id)} activeFilter={contentFilter}
+                      />
+                    )
+                  })
                   const moduleExpanded = !collapsedLessonIds.has(moduleKey)
 
                   // Same done/total per stage the rows below compute — reused here to
                   // drive the Learn It → Discussion Board journey stepper and the
                   // unit header's summary, so the two never disagree.
-                  const stageCounts: Record<StageKey, { done: number; total: number }> = {
+                  const baseCounts: Record<StageKey, { done: number; total: number }> = {
                     learn: { done: carrierItem && hasSubmission(carrierItem.id, 'case_study_notes') ? 1 : 0, total: carrierItem ? 1 : 0 },
                     do: { done: lessonItems.filter(lessonIsComplete).length, total: lessonItems.length },
                     show: { done: 0, total: carrierItem ? 1 : 0 },
@@ -2569,9 +2634,13 @@ export function SPMyLearningPage() {
                     // contributes to the total but never to done, same as its row below.
                     master: { done: carrierItem && presentationDone(carrierItem.id) ? 1 : 0, total: carrierItem ? 2 : 0 },
                   }
+                  const stageCounts = Object.fromEntries((Object.keys(baseCounts) as StageKey[]).map((k) => {
+                    const extra = activityCount(k)
+                    return [k, { done: baseCounts[k].done + extra.done, total: baseCounts[k].total + extra.total }]
+                  })) as Record<StageKey, { done: number; total: number }>
                   const unitDone = Object.values(stageCounts).reduce((sum, s) => sum + s.done, 0)
                   const unitTotal = Object.values(stageCounts).reduce((sum, s) => sum + s.total, 0)
-                  const unitDates = [carrierItem?.targetDate, carrierItem?.socraticDate, carrierItem?.omrTargetDate, carrierItem?.presentationTargetDate, ...lessonItems.map((i) => i.targetDate)]
+                  const unitDates = [carrierItem?.targetDate, carrierItem?.socraticDate, carrierItem?.omrTargetDate, carrierItem?.presentationTargetDate, ...lessonItems.map((i) => i.targetDate), ...items.filter(isCustomActivity).map((i) => i.targetDate)]
                     .filter((d): d is string => !!d).sort()
                   const badgeState = unitTotal === 0 ? 'empty' : unitDone === unitTotal ? 'done' : unitDone > 0 ? 'active' : 'todo'
 
@@ -2630,7 +2699,7 @@ export function SPMyLearningPage() {
                             {carrierItem?.moduleDescription && (
                               <div style={{ background: '#F8FAFC', border: '1px solid #F0F4FA', borderRadius: 12, padding: '12px 14px', fontSize: 14, color: '#5A7290', lineHeight: 1.6 }}>
                                 <div style={{ fontSize: 12, fontWeight: 800, color: '#1A365E', marginBottom: 4 }}>About this unit</div>
-                                {carrierItem.moduleDescription}
+                                <RichText value={carrierItem.moduleDescription} inline />
                               </div>
                             )}
                             <div style={{ background: '#F8FAFC', border: '1px solid #F0F4FA', borderRadius: 12, padding: '12px 14px' }}>
@@ -2652,6 +2721,7 @@ export function SPMyLearningPage() {
                               onClick={() => openGroup('learn', carrierItem.id)} activeFilter={contentFilter}
                             />
                           )}
+                          {renderActivities('learn')}
 
                           {lessonItems.map((item, idx) => {
                             const itemProgress = progress.find((entry) => entry.contentId === item.id && entry.studentId === session?.dbId)
@@ -2683,6 +2753,7 @@ export function SPMyLearningPage() {
                               />
                             )
                           })}
+                          {renderActivities('do')}
 
                           {carrierItem && (
                             <>
@@ -2693,6 +2764,11 @@ export function SPMyLearningPage() {
                                 lockReason={groupLockReason({ key: `show:${carrierItem.id}`, kind: 'show', contentId: carrierItem.id })}
                                 onClick={() => openGroup('show', carrierItem.id)} activeFilter={contentFilter}
                               />
+                            </>
+                          )}
+                          {renderActivities('show')}
+                          {carrierItem && (
+                            <>
                               <ContentRow
                                 stage="prove" title={`Prove It · ${carrierSectionTitle(carrierItem, 'omr')}`} targetDate={carrierItem.omrTargetDate}
                                 status="not_started" statusText="Not started"
@@ -2700,6 +2776,11 @@ export function SPMyLearningPage() {
                                 lockReason={groupLockReason({ key: `prove:${carrierItem.id}`, kind: 'prove', contentId: carrierItem.id })}
                                 onClick={() => openGroup('prove', carrierItem.id)} activeFilter={contentFilter}
                               />
+                            </>
+                          )}
+                          {renderActivities('prove')}
+                          {carrierItem && (
+                            <>
                               <ContentRow
                                 stage="master" title={`Master It · ${carrierSectionTitle(carrierItem, 'presentation')}`} targetDate={carrierItem.presentationTargetDate}
                                 status={presentationDone(carrierItem.id) ? 'completed' : 'not_started'}
@@ -2717,6 +2798,7 @@ export function SPMyLearningPage() {
                               />
                             </>
                           )}
+                          {renderActivities('master')}
                         </div>
                       )}
                     </div>
@@ -2775,6 +2857,7 @@ export function SPMyLearningPage() {
           : kind === 'prove' ? carrierSectionTitle(activeLesson, 'omr')
           : kind === 'master' ? carrierSectionTitle(activeLesson, 'presentation')
           : kind === 'discussion' ? carrierSectionTitle(activeLesson, 'discussion')
+          : kind === 'midterm' ? reviewTitle(activeLesson)
           : activeLesson.title
         const groupTargetDate = kind === 'show' ? (activeLesson.socraticDate || activeLesson.targetDate)
           : kind === 'prove' ? activeLesson.omrTargetDate

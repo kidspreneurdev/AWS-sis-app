@@ -3,6 +3,8 @@ import { useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { type Student, formatStudentGrade, fullName, normalizeStudentGrade, STATUS_META } from '@/types/student'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
+import { RichText } from '@/components/shared/RichText'
+import { toPlainText } from '@/lib/richText'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -59,7 +61,7 @@ function InfoRow({ label, value }: { label: string; value: string | null | undef
   return (
     <div style={{ display: 'flex', gap: 8, padding: '5px 0', borderBottom: '1px solid #F8FAFC' }}>
       <span style={{ fontSize: 11, color: '#7A92B0', width: 130, flexShrink: 0 }}>{label}</span>
-      <span style={{ fontSize: 12, color: '#1A365E', fontWeight: 500 }}>{value}</span>
+      <span style={{ fontSize: 12, color: '#1A365E', fontWeight: 500 }}><RichText value={value} inline /></span>
     </div>
   )
 }
@@ -375,7 +377,7 @@ function ProfileView({ student, data, activeTab, setActiveTab, onBack }: {
                 {data.counselorNotes && (
                   <div style={card}>
                     <SectionTitle>Counselor Notes</SectionTitle>
-                    <div style={{ fontSize: 13, color: '#1A365E', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{data.counselorNotes}</div>
+                    <div style={{ fontSize: 13, color: '#1A365E', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}><RichText value={data.counselorNotes} inline /></div>
                   </div>
                 )}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }}>
@@ -521,8 +523,8 @@ function ProfileView({ student, data, activeTab, setActiveTab, onBack }: {
                             <td style={td}>
                               <span style={{ padding: '2px 8px', borderRadius: 8, background: sm.bg, color: sm.tc, fontSize: 11, fontWeight: 700 }}>{b.severity}</span>
                             </td>
-                            <td style={{ ...td, color: '#7A92B0', maxWidth: 260 }}>{b.description}</td>
-                            <td style={{ ...td, color: '#7A92B0' }}>{b.action || '—'}</td>
+                            <td style={{ ...td, color: '#7A92B0', maxWidth: 260 }}><RichText value={b.description} inline /></td>
+                            <td style={{ ...td, color: '#7A92B0' }}>{b.action ? <RichText value={b.action} inline /> : '—'}</td>
                           </tr>
                         )
                       })}
@@ -652,7 +654,7 @@ function ProfileView({ student, data, activeTab, setActiveTab, onBack }: {
                         </td>
                         <td style={{ ...td, color: '#7A92B0' }}>{c.sentBy || '—'}</td>
                         <td style={{ ...td, color: '#7A92B0', maxWidth: 240 }}>
-                          {c.body ? c.body.slice(0, 100) + (c.body.length > 100 ? '…' : '') : '—'}
+                          {c.body ? toPlainText(c.body).slice(0, 100) + (toPlainText(c.body).length > 100 ? '…' : '') : '—'}
                         </td>
                       </tr>
                     ))}

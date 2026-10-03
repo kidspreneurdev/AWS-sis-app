@@ -9,6 +9,7 @@ import { uploadFile, downloadUrl } from '@/lib/uploadFile'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
 import { atAssignmentIsTargeted } from '@/lib/atTargeting'
+import { RichText } from '@/components/shared/RichText'
 
 const card: React.CSSProperties = {
   background: '#fff',
@@ -320,7 +321,7 @@ export function SPAssignmentsPage() {
               </div>
               {(assignment.instructions || assignment.description) && (
                 <div style={{ marginTop: 8, fontSize: 16, color: '#3D5475', lineHeight: 1.6, background: '#F7F9FC', padding: '8px 12px', borderRadius: 7 }}>
-                  {assignment.instructions || assignment.description}
+                  <RichText value={assignment.instructions || assignment.description} inline />
                 </div>
               )}
               {assignment.attachments.length > 0 && (

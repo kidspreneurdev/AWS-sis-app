@@ -7,6 +7,7 @@ import { useCohorts } from '@/hooks/useCohorts'
 import { RubricBuilder, rubricParse, rubricMaxPoints, rubricComputeScore, rubricScale, type Rubric } from '@/components/shared/RubricBuilder'
 import { StudentMultiCombobox } from '@/components/shared/StudentMultiCombobox'
 import { atAssignmentIsTargeted } from '@/lib/atTargeting'
+import { RichTextarea } from '@/components/shared/RichTextarea'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 20 }
 
@@ -253,7 +254,7 @@ function AssignModal({ item, cohorts, students, onClose, onSave }: {
           </div>
 
           {/* Row 6: Instructions */}
-          <div><label style={lbl}>Instructions / Notes</label><textarea value={form.instructions} onChange={e => set('instructions', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} placeholder="Full task description..." />
+          <div><label style={lbl}>Instructions / Notes</label><RichTextarea value={form.instructions} onChange={e => set('instructions', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} placeholder="Full task description..." />
             <label
               onDragOver={e => { e.preventDefault(); setDragOver(true) }}
               onDragLeave={() => setDragOver(false)}

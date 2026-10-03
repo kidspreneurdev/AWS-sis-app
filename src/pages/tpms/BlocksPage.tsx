@@ -6,6 +6,7 @@ import {
   TPMS_SUBJECTS, DAYS, PERIODS, TPMS_SESSION_TYPES,
   type TpmsBlock, type TpmsSessionType, type TpmsAssignmentType,
 } from './tpmsConstants'
+import { RichTextarea } from '@/components/shared/RichTextarea'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 14, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', overflow: 'hidden' }
 const inp: React.CSSProperties = { width: '100%', padding: '7px 10px', borderRadius: 8, border: '1.5px solid #E4EAF2', fontSize: 12, color: '#1A365E', background: '#fff', boxSizing: 'border-box' }
@@ -284,7 +285,7 @@ function BlockModal({ block, cohorts, coaches, students, onClose, onSave, onDele
             </select>
           </div>
           <div style={{ gridColumn: 'span 2' }}><label style={lbl}>Room / Location</label><input value={form.room} onChange={e => set('room', e.target.value)} style={inp} placeholder="Room 101" /></div>
-          <div style={{ gridColumn: 'span 2' }}><label style={lbl}>Notes</label><textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Additional notes…" /></div>
+          <div style={{ gridColumn: 'span 2' }}><label style={lbl}>Notes</label><RichTextarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Additional notes…" /></div>
           <div style={{ gridColumn: 'span 2', display: 'flex', justifyContent: 'space-between', paddingTop: 10, borderTop: '1px solid #E4EAF2' }}>
             <div>{block && onDelete && <button onClick={() => { if (confirm('Delete this block?')) onDelete(block.id).then(onClose) }} style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #FEE2E2', background: '#FFF0F1', color: '#D61F31', fontSize: 12, cursor: 'pointer' }}>🗑 Delete</button>}</div>
             <div style={{ display: 'flex', gap: 8 }}>

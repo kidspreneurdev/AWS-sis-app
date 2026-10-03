@@ -3,6 +3,9 @@ import { supabase } from '@/lib/supabase'
 import { downloadUrl } from '@/lib/uploadFile'
 import { StudentCombobox } from '@/components/shared/StudentCombobox'
 import { PTM, PTQD, mapAssignment, mapEvaluation, ptSUM, ptQST, ptScoreBadge, type PTAssignment, type PTEvaluation } from './ptConstants'
+import { RichTextarea } from '@/components/shared/RichTextarea'
+import { RichText } from '@/components/shared/RichText'
+import { toPlainText } from '@/lib/richText'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 18 }
 
@@ -89,7 +92,7 @@ export function PTReportsPage() {
         </div>
         <div style={{ marginBottom: 12 }}>
           <label style={lb}>✍️ Coach's Message to Family <span style={{ color: '#D61F31', fontWeight: 400, textTransform: 'none' }}>*required</span></label>
-          <textarea value={coachMsg} onChange={e => setCoachMsg(e.target.value)} rows={4} placeholder="Write a personalised message summarising this student's progress, achievements, strengths, areas of focus, and encouragement for the family..." style={{ ...fi, resize: 'vertical' }} />
+          <RichTextarea value={coachMsg} onChange={e => setCoachMsg(e.target.value)} rows={4} placeholder="Write a personalised message summarising this student's progress, achievements, strengths, areas of focus, and encouragement for the family..." style={{ ...fi, resize: 'vertical' }} />
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={() => { if (!coachMsg.trim()) return; setShowPrev(true) }} style={{ padding: '9px 18px', background: '#EEF3FF', color: '#1A365E', border: '1.5px solid #DDE6F0', borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>👁 Preview Report</button>
@@ -184,7 +187,7 @@ export function PTReportsPage() {
                         {a.mastery && <span style={{ fontSize: 14 }}>⭐</span>}
                       </div>
                       {ev?.ov != null && <span style={{ fontSize: 10, fontWeight: 800, background: sb.background as string, color: sb.color as string, padding: '2px 8px', borderRadius: 6 }}>{sb.score} {sb.label}</span>}
-                      {ev?.comment && <div style={{ fontSize: 9, color: '#7A92B0', marginTop: 6, fontStyle: 'italic', lineHeight: 1.4 }}>{ev.comment.substring(0, 100)}{ev.comment.length > 100 ? '…' : ''}</div>}
+                      {ev?.comment && <div style={{ fontSize: 9, color: '#7A92B0', marginTop: 6, fontStyle: 'italic', lineHeight: 1.4 }}>{toPlainText(ev.comment).substring(0, 100)}{toPlainText(ev.comment).length > 100 ? '…' : ''}</div>}
                       {a.wurl && <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
                         <a href={a.wurl} target="_blank" rel="noreferrer" style={{ fontSize: 9, color: '#0369A1', fontWeight: 600, textDecoration: 'none' }}>🔗 View</a>
                         <button onClick={() => void downloadUrl(a.wurl!)} style={{ fontSize: 9, color: '#059669', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>⬇ Download</button>
@@ -199,7 +202,7 @@ export function PTReportsPage() {
           {/* Coach message */}
           <div style={{ padding: '20px 28px', borderBottom: '1px solid #E4EAF2' }}>
             <div style={{ fontSize: 12, fontWeight: 800, color: '#1A365E', marginBottom: 10 }}>💬 Coach's Message</div>
-            <div style={{ padding: '14px 18px', background: '#F7F9FC', borderLeft: '4px solid #1A365E', borderRadius: '0 10px 10px 0', fontSize: 12, lineHeight: 1.7, color: '#3D5475', fontStyle: 'italic' }}>{coachMsg}</div>
+            <div style={{ padding: '14px 18px', background: '#F7F9FC', borderLeft: '4px solid #1A365E', borderRadius: '0 10px 10px 0', fontSize: 12, lineHeight: 1.7, color: '#3D5475', fontStyle: 'italic' }}><RichText value={coachMsg} inline /></div>
           </div>
 
           {/* Badges */}

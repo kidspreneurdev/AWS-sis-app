@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/auth.store'
+import { RichText } from '@/components/shared/RichText'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -188,7 +189,7 @@ function RequestDetailModal({
                     <span style={{ fontSize: 11, fontWeight: 700, color: '#7A92B0' }}>
                       {meta.fieldLabels[key] ?? key.replace(/_/g, ' ')}
                     </span>
-                    <span style={{ fontSize: 13, color: '#1A365E' }}>{String(value)}</span>
+                    <span style={{ fontSize: 13, color: '#1A365E' }}><RichText value={String(value)} inline /></span>
                   </div>
                 ))}
               </div>

@@ -2,6 +2,7 @@ import { forwardRef } from 'react'
 import type { AssessmentInstructionsData } from '@/types/assessmentInstructions'
 import { NAVY, INK, SERIF, BORDER, h2, p } from './docStyles'
 import { Page, LogoStrip, DocHeader, PlainList } from './docPrimitives'
+import { RichText } from '@/components/shared/RichText'
 
 /**
  * Presentational, page-by-page A4 rendering of the "Assessment Instructions"
@@ -26,7 +27,7 @@ export const AssessmentInstructionsDocument = forwardRef<HTMLDivElement, { data:
 
           <p style={{ ...p, fontWeight: 700 }}>Dear {data.firstName || 'Student'},</p>
           {data.greetingLine && <p style={{ ...p, fontWeight: 700 }}>{data.greetingLine}</p>}
-          <p style={p}>{data.introParagraph}</p>
+          <p style={p}><RichText value={data.introParagraph} inline /></p>
 
           <h2 style={h2}>{data.procedureHeading}</h2>
           <PlainList ordered items={data.procedureSteps} />
@@ -40,11 +41,11 @@ export const AssessmentInstructionsDocument = forwardRef<HTMLDivElement, { data:
           {data.categories.map((c, i) => (
             <div key={i} style={{ marginBottom: 10 }}>
               <div style={{ fontSize: 12.5, fontWeight: 700, color: NAVY }}>{c.title}</div>
-              <p style={{ ...p, margin: '2px 0 0' }}>{c.body}</p>
+              <p style={{ ...p, margin: '2px 0 0' }}><RichText value={c.body} inline /></p>
             </div>
           ))}
 
-          {data.browserWarning && <p style={{ ...p, fontWeight: 700 }}>{data.browserWarning}</p>}
+          {data.browserWarning && <p style={{ ...p, fontWeight: 700 }}><RichText value={data.browserWarning} inline /></p>}
 
           <table style={{ borderCollapse: 'collapse', margin: '16px 0', width: '80%' }}>
             <thead>
@@ -64,11 +65,11 @@ export const AssessmentInstructionsDocument = forwardRef<HTMLDivElement, { data:
           </table>
 
           <h2 style={h2}>{data.noteHeading}</h2>
-          <p style={p}>{data.noteParagraph}</p>
+          <p style={p}><RichText value={data.noteParagraph} inline /></p>
           {data.helpLine && <p style={{ ...p, fontWeight: 700 }}>{data.helpLine}</p>}
 
           <div style={{ marginTop: 20, whiteSpace: 'pre-line', fontSize: 12.5, color: INK }}>
-            {data.signOff}
+            <RichText value={data.signOff} inline />
           </div>
         </Page>
       </div>

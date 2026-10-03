@@ -2,6 +2,8 @@ import { useEffect, useState, useMemo } from 'react'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { supabase } from '@/lib/supabase'
 import { StudentCombobox } from '@/components/shared/StudentCombobox'
+import { RichTextarea } from '@/components/shared/RichTextarea'
+import { RichText } from '@/components/shared/RichText'
 
 const AT_NOTE_TYPES = ['Academic Observation', 'Misconception', 'Participation', 'Behaviour', 'Positive Highlight', 'Other']
 const AT_SUBJECTS = ['Mathematics', 'English Language Arts', 'Reading', 'Science', 'Social Studies', 'Entrepreneurship', 'Art', 'World Language', 'Physical Education', 'Computer Science', 'Other']
@@ -79,7 +81,7 @@ function NoteModal({ students, onClose, onSave }: {
             </div>
           </div>
           <div><label style={lbl}>Note *</label>
-            <textarea value={form.noteText} onChange={e => set('noteText', e.target.value)} rows={3} placeholder="Describe the observation..." style={{ ...inp, resize: 'vertical' }} />
+            <RichTextarea value={form.noteText} onChange={e => set('noteText', e.target.value)} rows={3} placeholder="Describe the observation..." style={{ ...inp, resize: 'vertical' }} />
           </div>
           <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
@@ -94,7 +96,7 @@ function NoteModal({ students, onClose, onSave }: {
           {form.correctionRequired && (
             <div style={{ background: '#FEF3C7', borderRadius: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
               <div><label style={{ ...lbl, color: '#92400E' }}>Correction Instructions *</label>
-                <textarea value={corrInstr} onChange={e => setCorrInstr(e.target.value)} rows={2} placeholder="e.g. Redo Questions 4-8..." style={{ ...inp, background: '#fff' }} />
+                <RichTextarea value={corrInstr} onChange={e => setCorrInstr(e.target.value)} rows={2} placeholder="e.g. Redo Questions 4-8..." style={{ ...inp, background: '#fff' }} />
               </div>
               <div><label style={{ ...lbl, color: '#92400E' }}>Correction Deadline</label>
                 <input type="date" value={corrDeadline} onChange={e => setCorrDeadline(e.target.value)} style={{ ...inp, background: '#fff' }} />
@@ -132,10 +134,10 @@ function CorrModal({ note, studentName, onClose, onSave }: { note: ATNote; stude
         </div>
         <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ background: '#FEF3C7', borderRadius: 8, padding: '8px 12px', fontSize: 11, color: '#92400E' }}>
-            <strong>For:</strong> {studentName}  <strong>Note:</strong> {note.note_text}
+            <strong>For:</strong> {studentName}  <strong>Note:</strong> <RichText value={note.note_text} inline />
           </div>
           <div><label style={lbl}>Correction Instructions *</label>
-            <textarea value={instr} onChange={e => setInstr(e.target.value)} rows={3} placeholder="e.g. Redo Questions 4-8 from Monday worksheet..." style={{ ...inp, resize: 'vertical' }} />
+            <RichTextarea value={instr} onChange={e => setInstr(e.target.value)} rows={3} placeholder="e.g. Redo Questions 4-8 from Monday worksheet..." style={{ ...inp, resize: 'vertical' }} />
           </div>
           <div><label style={lbl}>Deadline</label>
             <input type="date" value={deadline} onChange={e => setDeadline(e.target.value)} style={inp} />
@@ -275,7 +277,7 @@ export function ATNotesPage() {
                   <span style={{ fontSize: 10, color: '#94A3B8', marginLeft: 'auto' }}>{n.date_logged?.slice(0, 10) ?? ''}</span>
                   {n.visibility === 'Internal' && <span style={{ fontSize: 8, fontWeight: 700, background: '#F0F4FA', color: '#64748B', padding: '1px 5px', borderRadius: 3 }}>Internal</span>}
                 </div>
-                <div style={{ fontSize: 11, color: '#3D5475', marginBottom: 4 }}>{n.note_text}</div>
+                <div style={{ fontSize: 11, color: '#3D5475', marginBottom: 4 }}><RichText value={n.note_text} inline /></div>
                 {n.subject && <div style={{ fontSize: 10, color: '#94A3B8' }}>📚 {n.subject}{n.topic_tag ? ` · ${n.topic_tag}` : ''}</div>}
                 <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
                   {n.correction_required && !hasCorrTask && (
@@ -308,7 +310,7 @@ export function ATNotesPage() {
                   <span style={{ fontSize: 9, fontWeight: 700, color: statCol, background: statCol + '18', padding: '2px 6px', borderRadius: 4 }}>{isOverdue ? 'Overdue' : cr.status}</span>
                   <span style={{ fontSize: 10, color: '#94A3B8', marginLeft: 'auto' }}>Due: {cr.deadline}</span>
                 </div>
-                <div style={{ fontSize: 11, color: '#3D5475', marginBottom: 6 }}>{cr.instructions}</div>
+                <div style={{ fontSize: 11, color: '#3D5475', marginBottom: 6 }}><RichText value={cr.instructions} inline /></div>
                 {cr.subject && <div style={{ fontSize: 10, color: '#94A3B8', marginBottom: 6 }}>📚 {cr.subject}</div>}
                 {cr.status !== 'Verified Complete' ? (
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>

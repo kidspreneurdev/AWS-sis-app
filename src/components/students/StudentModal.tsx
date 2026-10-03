@@ -6,6 +6,7 @@ import {
   formatStudentGrade, normalizeStudentGrade,
   type Student, type StudentInsert,
 } from '@/types/student'
+import { RichTextarea } from '@/components/shared/RichTextarea'
 
 interface FeeRec {
   id: string
@@ -74,8 +75,8 @@ function FSelect({ children, ...props }: React.SelectHTMLAttributes<HTMLSelectEl
   return <select style={S} {...props}>{children}</select>
 }
 
-function FTextarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea style={{ ...S, resize: 'vertical', minHeight: 70 }} {...props} />
+function FTextarea(props: React.ComponentProps<typeof RichTextarea>) {
+  return <RichTextarea style={{ ...S, minHeight: 70 }} {...props} />
 }
 
 function Grid2({ children }: { children: React.ReactNode }) {

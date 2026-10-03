@@ -2,6 +2,7 @@ import { forwardRef } from 'react'
 import type { StockMarketGameData } from '@/types/stockMarketGame'
 import { NAVY, INK, SERIF, BORDER, p } from './docStyles'
 import { Page, LogoStrip, DocHeader, InfoStack } from './docPrimitives'
+import { RichText } from '@/components/shared/RichText'
 
 /**
  * Presentational A4 rendering of the "Stock Market Game — Login Details"
@@ -35,7 +36,7 @@ export const StockMarketGameDocument = forwardRef<HTMLDivElement, { data: StockM
           ]} />
 
           <p style={p}>Dear {data.firstName || 'Student'},</p>
-          <p style={p}>{data.introParagraph}</p>
+          <p style={p}><RichText value={data.introParagraph} inline /></p>
           <p style={p}>{data.attachingLine}</p>
 
           <table style={{ width: '100%', borderCollapse: 'collapse', margin: '10px 0 16px' }}>
@@ -53,11 +54,11 @@ export const StockMarketGameDocument = forwardRef<HTMLDivElement, { data: StockM
             </tbody>
           </table>
 
-          <p style={p}>{data.videosIntro}</p>
+          <p style={p}><RichText value={data.videosIntro} inline /></p>
           <p style={{ ...p, wordBreak: 'break-all' }}>{data.videosUrl}</p>
 
           <div style={{ marginTop: 20, whiteSpace: 'pre-line', fontSize: 12.5, color: INK }}>
-            {data.signOff}
+            <RichText value={data.signOff} inline />
           </div>
         </Page>
       </div>

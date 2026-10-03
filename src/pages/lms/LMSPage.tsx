@@ -13,12 +13,15 @@ import {
   loadLMS, saveLMS, loadLMSFromDB, deleteLMSCourse, deleteLMSCourseGroup, deleteLMSContent, deleteLMSEnrolment,
   lmsId, fmtTime, hasMasteryBool, hasAssignBool, isActiveBool,
   lmsCompositeScore, lmsCourseComposite, gradeLabel,
-  SUBJECT_COLORS, SUBJECTS, GRADE_LEVELS, TYPE_ICONS, isMidtermReview, parseMidtermSections, REVIEW_META, reviewKindOf, type ReviewKind, carrierSectionTitle,
+  SUBJECT_COLORS, SUBJECTS, GRADE_LEVELS, TYPE_ICONS, isMidtermReview, isReviewCheckpoint, isCustomActivity, stageActivities, IT_STAGES, IT_STAGE_META, type ItStage, parseMidtermSections, REVIEW_META, reviewKindOf, type ReviewKind, carrierSectionTitle, isImageFile, type MidtermFile,
   type MidtermSection, type MidtermBlock,
   type LMSCourse, type LMSContent, type LMSEnrolment, type LMSProgress, type LMSStore, type LMSCourseGroup
 } from './lmsStore'
 import { CASE_STUDY_RUBRIC, SCORE_COMPONENT_TYPES, categorySubtotalOf, getEffectiveRubric, finalGrade, DEFAULT_PRESENTATION_BRIEF, type ScoreComponentType, type RubricCategory, type RubricOverrides } from '@/lib/lms/caseStudyRubric'
 import { PRESENTATION_ROLE_MODULES, guessPresentationRoleModule } from '@/lib/lms/presentationRoles'
+import { RichTextarea } from '@/components/shared/RichTextarea'
+import { RichText } from '@/components/shared/RichText'
+import { toPlainText } from '@/lib/richText'
 
 interface Student { id: string; lastName: string; firstName: string; fullName: string; cohort: string; grade: string; studentId: string; campus: string; status: string }
 type LMSSubmissionRow = Record<string, unknown>
@@ -399,12 +402,12 @@ function SectionNotesModal({ sectionId, sectionTitle, authorId, authorName, onCl
                 <span style={{ fontSize: 11, fontWeight: 800, color: '#1A365E' }}>{n.author_name || 'Unknown'}</span>
                 <span style={{ fontSize: 10, color: '#94A3B8', flexShrink: 0 }}>{new Date(n.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
               </div>
-              <div style={{ fontSize: 12, color: '#334155', whiteSpace: 'pre-wrap' }}>{n.body}</div>
+              <div style={{ fontSize: 12, color: '#334155', whiteSpace: 'pre-wrap' }}><RichText value={n.body} inline /></div>
             </div>
           ))}
         </div>
         <div style={{ padding: '14px 24px 20px', borderTop: '1px solid #E4EAF2', display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
-          <textarea value={draft} onChange={e => setDraft(e.target.value)} placeholder="Add a note for other faculty…" rows={4} style={{ ...taStyle, width: '100%', boxSizing: 'border-box', resize: 'vertical' }} />
+          <RichTextarea value={draft} onChange={e => setDraft(e.target.value)} placeholder="Add a note for other faculty…" rows={4} style={{ ...taStyle, width: '100%', boxSizing: 'border-box', resize: 'vertical' }} />
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
             <button onClick={onClose} style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Close</button>
             <button onClick={addNote} disabled={saving || !draft.trim()} style={{ padding: '9px 20px', background: saving || !draft.trim() ? '#B7C3D6' : '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: saving || !draft.trim() ? 'default' : 'pointer', fontFamily: 'inherit' }}>{saving ? 'Saving…' : 'Add Note'}</button>
@@ -486,12 +489,12 @@ function StudentNotesModal({ sectionId, studentId, studentName, courseTitle, aut
                 <span style={{ fontSize: 11, fontWeight: 800, color: '#1A365E' }}>{n.author_name || 'Unknown'}</span>
                 <span style={{ fontSize: 10, color: '#94A3B8', flexShrink: 0 }}>{new Date(n.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
               </div>
-              <div style={{ fontSize: 12, color: '#334155', whiteSpace: 'pre-wrap' }}>{n.body}</div>
+              <div style={{ fontSize: 12, color: '#334155', whiteSpace: 'pre-wrap' }}><RichText value={n.body} inline /></div>
             </div>
           ))}
         </div>
         <div style={{ padding: '14px 24px 20px', borderTop: '1px solid #E4EAF2', display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
-          <textarea value={draft} onChange={e => setDraft(e.target.value)} placeholder={`Add a note about ${studentName}…`} rows={4} style={{ ...taStyle, width: '100%', boxSizing: 'border-box', resize: 'vertical' }} />
+          <RichTextarea value={draft} onChange={e => setDraft(e.target.value)} placeholder={`Add a note about ${studentName}…`} rows={4} style={{ ...taStyle, width: '100%', boxSizing: 'border-box', resize: 'vertical' }} />
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
             <button onClick={onClose} style={{ padding: '9px 20px', background: '#F0F4FA', color: '#1A365E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Close</button>
             <button onClick={addNote} disabled={saving || !draft.trim()} style={{ padding: '9px 20px', background: saving || !draft.trim() ? '#B7C3D6' : '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: saving || !draft.trim() ? 'default' : 'pointer', fontFamily: 'inherit' }}>{saving ? 'Saving…' : 'Add Note'}</button>
@@ -630,7 +633,7 @@ function EditCourseModal({
               </select>
             </div>
           </div>
-          <div><label style={labelStyle}>Description</label><textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} style={taStyle} /></div>
+          <div><label style={labelStyle}>Description</label><RichTextarea value={description} onChange={e => setDescription(e.target.value)} rows={3} style={taStyle} /></div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
             <div><label style={labelStyle}>Credit Hours</label><input value={creditHours} onChange={e => setCreditHours(e.target.value)} type="number" min={0} step={0.5} style={inputStyle} /></div>
             <div><label style={labelStyle}>Required Hours</label><input value={requiredHours} onChange={e => setRequiredHours(e.target.value)} type="number" min={0} style={inputStyle} /></div>
@@ -1047,12 +1050,87 @@ function GradeRangeSlider({ min, max, value, onChange }: GradeRangeSliderProps) 
   )
 }
 
+// Upload-on-pick attachment field used across the Midterm Review / Finals builder:
+// section Instruction Documents (any document type) and images on Text Boxes and OMR
+// questions. Each file uploads as soon as it's picked; onAdd/onRemove must update parent
+// state functionally since uploads finish asynchronously. onBusyChange reports in-flight
+// uploads (+n when started, -1 as each settles) so the builder can hold Save.
+const DOCUMENT_ACCEPT = '.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.csv,.rtf,.odt,.odp,.ods,image/*'
+
+function AttachmentPicker({ files, onAdd, onRemove, onBusyChange, kind, compact = false }: {
+  files: MidtermFile[]
+  onAdd: (f: MidtermFile) => void
+  onRemove: (url: string) => void
+  onBusyChange?: (delta: number) => void
+  kind: 'document' | 'image'
+  compact?: boolean
+}) {
+  const [uploading, setUploading] = useState(0)
+  async function pick(list: File[]) {
+    const chosen = kind === 'image' ? list.filter(f => f.type.startsWith('image/')) : list
+    if (!chosen.length) return
+    setUploading(n => n + chosen.length)
+    onBusyChange?.(chosen.length)
+    await Promise.all(chosen.map(async f => {
+      try {
+        const url = await uploadFile(`lms-midterm-${kind}s/${Date.now()}_${f.name}`, f)
+        onAdd({ url, name: f.name })
+      } catch {
+        alert(`Couldn't upload ${f.name}. Please try again.`)
+      } finally {
+        setUploading(n => n - 1)
+        onBusyChange?.(-1)
+      }
+    }))
+  }
+  const removeBtnStyle: React.CSSProperties = { width: 20, height: 20, padding: 0, background: '#FFF0F1', color: '#D61F31', border: '1px solid #F5C2C7', borderRadius: 5, fontSize: 9, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }
+  const thumb = compact ? 56 : 80
+  const images = files.filter(isImageFile)
+  const docs = files.filter(f => !isImageFile(f))
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {images.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {images.map(im => (
+            <div key={im.url} style={{ position: 'relative', width: thumb, height: thumb, borderRadius: 7, border: '1px solid #E4EAF2', background: '#fff', overflow: 'hidden' }}>
+              <a href={im.url} target="_blank" rel="noreferrer" title={im.name}><img src={im.url} alt={im.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} /></a>
+              <button type="button" onClick={() => onRemove(im.url)} title="Remove" style={{ ...removeBtnStyle, position: 'absolute', top: 3, right: 3 }}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+      {docs.map(d => (
+        <div key={d.url} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', background: '#fff', border: '1px solid #E4EAF2', borderRadius: 7 }}>
+          <span style={{ fontSize: 13 }}>📄</span>
+          <a href={d.url} target="_blank" rel="noreferrer" style={{ flex: 1, minWidth: 0, fontSize: 11, fontWeight: 700, color: '#1A365E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: 'none' }} title={d.name}>{d.name}</a>
+          <button type="button" onClick={() => onRemove(d.url)} title="Remove" style={removeBtnStyle}>✕</button>
+        </div>
+      ))}
+      <label style={{ display: 'inline-flex', alignSelf: compact ? 'flex-start' : 'stretch', alignItems: 'center', gap: 8, padding: compact ? '4px 9px' : '9px 12px', borderRadius: compact ? 6 : 8, border: `${compact ? 1 : 2}px dashed #CBD5E0`, background: compact ? '#fff' : '#F8FAFC', cursor: uploading ? 'progress' : 'pointer', fontSize: compact ? 10 : 12, fontWeight: compact ? 700 : 400, color: '#7A92B0' }}>
+        <input type="file" accept={kind === 'image' ? 'image/*' : DOCUMENT_ACCEPT} multiple style={{ display: 'none' }}
+          onChange={e => { const list = Array.from(e.target.files ?? []); e.target.value = ''; void pick(list) }} />
+        {uploading > 0
+          ? `⏳ Uploading ${uploading} file${uploading !== 1 ? 's' : ''}…`
+          : kind === 'image' ? '🖼 + Add Image' : '📎 + Add Documents (PDF, Word, PowerPoint, Excel, images…)'}
+      </label>
+    </div>
+  )
+}
+
 // MCQ question builder — same shape/UX as a lesson's Mastery Test questions, including
 // the short-answer (free-text) option type. Short-answer questions are excluded from
 // OMR's auto-grading and are reviewed by the teacher in the Grade Case Study panel.
 // Used for Prove It — OMR and Midterm Review OMR blocks. Module-level so it keeps a
 // stable component identity across LMSPage re-renders.
-function McqQuestionEditor({ questions, onChange, radioGroup = 'omr' }: { questions: McqQuestion[]; onChange: (next: McqQuestion[]) => void; radioGroup?: string }) {
+function McqQuestionEditor({ questions, onChange, radioGroup = 'omr', questionImages }: {
+  questions: McqQuestion[]
+  onChange: (next: McqQuestion[]) => void
+  radioGroup?: string
+  // When given (Midterm Review / Finals), each question gets an "Add Image" field.
+  // Separate from onChange because uploads land asynchronously and must update state
+  // functionally rather than from this render's `questions`.
+  questionImages?: { onAdd: (qi: number, f: MidtermFile) => void; onRemove: (qi: number, url: string) => void; onBusyChange: (delta: number) => void }
+}) {
   function update(qi: number, patch: Partial<McqQuestion>) {
     onChange(questions.map((q, i) => i === qi ? { ...q, ...patch } : q))
   }
@@ -1097,6 +1175,12 @@ function McqQuestionEditor({ questions, onChange, radioGroup = 'omr' }: { questi
               </select>
               <button type="button" onClick={() => remove(qi)} style={{ padding: '3px 7px', background: '#FFF0F1', color: '#D61F31', border: '1px solid #F5C2C7', borderRadius: 5, fontSize: 11, cursor: 'pointer' }}>×</button>
             </div>
+            {questionImages && (
+              <div style={{ marginBottom: 8, paddingLeft: 18 }}>
+                <AttachmentPicker kind="image" compact files={q.images ?? []}
+                  onAdd={f => questionImages.onAdd(qi, f)} onRemove={url => questionImages.onRemove(qi, url)} onBusyChange={questionImages.onBusyChange} />
+              </div>
+            )}
             {(q.type ?? 'mcq') === 'mcq' ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {(q.opts?.length ? q.opts : ['', '', '', '']).map((opt, oi) => (
@@ -1139,17 +1223,22 @@ function McqQuestionEditor({ questions, onChange, radioGroup = 'omr' }: { questi
 // Module-level (not nested in LMSPage) so an LMSPage re-render — e.g. the auth
 // profile refreshing when the tab regains focus after the file picker closes — can't
 // remount it and throw away unsaved sections or in-flight image uploads.
-function MidtermReviewModal({ store, persist, courseId, contentId, afterUnit, kind, onClose }: {
+function MidtermReviewModal({ store, persist, courseId, contentId, afterUnit, kind, module, stage, onClose }: {
   kind: ReviewKind
   store: LMSStore
   persist: (updated: LMSStore) => Promise<void>
   courseId: string
   contentId: string | null
   afterUnit?: string
+  // kind 'activity' only — the module it lives in and the "it" stage it starts under.
+  module?: string
+  stage?: ItStage
   onClose: () => void
 }) {
   const existing = contentId ? store.content.find(c => c.id === contentId) ?? null : null
   const reviewKind: ReviewKind = existing ? reviewKindOf(existing) : kind
+  const isActivity = reviewKind === 'activity'
+  const activityModule = existing?.unitTitle ?? module ?? ''
   const meta = REVIEW_META[reviewKind]
   const courseContent = store.content.filter(c => c.courseId === courseId)
   // Current module/review order for this course, minus the review being edited.
@@ -1158,7 +1247,7 @@ function MidtermReviewModal({ store, persist, courseId, contentId, afterUnit, ki
     .sort((a, b) => a.o - b.o)
     .map(x => x.t)
   const otherUnits = orderedUnits.filter(t => t !== existing?.unitTitle)
-  const moduleTitles = otherUnits.filter(t => !courseContent.some(c => c.unitTitle === t && isMidtermReview(c)))
+  const moduleTitles = otherUnits.filter(t => !courseContent.some(c => c.unitTitle === t && isReviewCheckpoint(c)))
 
   function defaultAfter(): string {
     if (existing) {
@@ -1172,6 +1261,7 @@ function MidtermReviewModal({ store, persist, courseId, contentId, afterUnit, ki
   }
   function defaultTitle(): string {
     if (existing) return existing.title
+    if (isActivity) return ''
     let n = 1
     let t = meta.label
     while (orderedUnits.includes(t)) t = `${meta.label} ${++n}`
@@ -1180,6 +1270,7 @@ function MidtermReviewModal({ store, persist, courseId, contentId, afterUnit, ki
 
   const [title, setTitle] = useState(defaultTitle)
   const [placeAfter, setPlaceAfter] = useState(defaultAfter)
+  const [activityStage, setActivityStage] = useState<ItStage>(existing?.activityStage ?? stage ?? 'master')
   const [sections, setSections] = useState<MidtermSection[]>(() => {
     const parsed = parseMidtermSections(existing?.midtermSectionsJson)
     return parsed.length ? parsed : [{ id: lmsId(), title: '', instructions: '', blocks: [] }]
@@ -1188,27 +1279,31 @@ function MidtermReviewModal({ store, persist, courseId, contentId, afterUnit, ki
   function patchSection(sid: string, patch: Partial<MidtermSection>) {
     setSections(prev => prev.map(s => s.id === sid ? { ...s, ...patch } : s))
   }
-  // Instruction images upload as soon as they're picked (so the thumbnail is the real
-  // stored file); Save waits until none are still in flight.
-  const [uploadingImages, setUploadingImages] = useState<Record<string, number>>({})
-  const anyUploading = Object.values(uploadingImages).some(n => n > 0)
-  async function addImages(sid: string, files: File[]) {
-    const images = files.filter(f => f.type.startsWith('image/'))
-    if (!images.length) return
-    setUploadingImages(prev => ({ ...prev, [sid]: (prev[sid] ?? 0) + images.length }))
-    await Promise.all(images.map(async f => {
-      try {
-        const url = await uploadFile(`lms-midterm-images/${Date.now()}_${f.name}`, f)
-        setSections(prev => prev.map(s => s.id === sid ? { ...s, images: [...(s.images ?? []), { url, name: f.name }] } : s))
-      } catch {
-        alert(`Couldn't upload ${f.name}. Please try again.`)
-      } finally {
-        setUploadingImages(prev => ({ ...prev, [sid]: Math.max(0, (prev[sid] ?? 1) - 1) }))
-      }
-    }))
+  // Attachments upload as soon as they're picked (see AttachmentPicker); Save waits until
+  // none are still in flight. All updates are functional — uploads finish asynchronously.
+  const [pendingUploads, setPendingUploads] = useState(0)
+  const anyUploading = pendingUploads > 0
+  const onBusyChange = (delta: number) => setPendingUploads(n => Math.max(0, n + delta))
+  function addSectionDoc(sid: string, f: MidtermFile) {
+    setSections(prev => prev.map(s => s.id === sid ? { ...s, documents: [...(s.documents ?? []), f] } : s))
   }
-  function removeImage(sid: string, url: string) {
-    setSections(prev => prev.map(s => s.id === sid ? { ...s, images: (s.images ?? []).filter(im => im.url !== url) } : s))
+  function removeSectionDoc(sid: string, url: string) {
+    setSections(prev => prev.map(s => s.id === sid ? { ...s, documents: (s.documents ?? []).filter(d => d.url !== url) } : s))
+  }
+  function mapBlock(sid: string, bid: string, fn: (b: MidtermBlock) => MidtermBlock) {
+    setSections(prev => prev.map(s => s.id === sid ? { ...s, blocks: s.blocks.map(b => b.id === bid ? fn(b) : b) } : s))
+  }
+  function addTextImage(sid: string, bid: string, f: MidtermFile) {
+    mapBlock(sid, bid, b => b.kind === 'text' ? { ...b, images: [...(b.images ?? []), f] } : b)
+  }
+  function removeTextImage(sid: string, bid: string, url: string) {
+    mapBlock(sid, bid, b => b.kind === 'text' ? { ...b, images: (b.images ?? []).filter(im => im.url !== url) } : b)
+  }
+  function addQuestionImage(sid: string, bid: string, qi: number, f: MidtermFile) {
+    mapBlock(sid, bid, b => b.kind === 'omr' ? { ...b, questions: b.questions.map((q, i) => i === qi ? { ...q, images: [...(q.images ?? []), f] } : q) } : b)
+  }
+  function removeQuestionImage(sid: string, bid: string, qi: number, url: string) {
+    mapBlock(sid, bid, b => b.kind === 'omr' ? { ...b, questions: b.questions.map((q, i) => i === qi ? { ...q, images: (q.images ?? []).filter(im => im.url !== url) } : q) } : b)
   }
   function moveSection(idx: number, dir: -1 | 1) {
     setSections(prev => {
@@ -1249,16 +1344,39 @@ function MidtermReviewModal({ store, persist, courseId, contentId, afterUnit, ki
   }
 
   function save() {
-    if (anyUploading) { alert('Please wait for the images to finish uploading.'); return }
+    if (anyUploading) { alert('Please wait for the uploads to finish.'); return }
     const finalTitle = title.trim()
     if (!finalTitle) { alert(`Enter a title for the ${meta.label}`); return }
-    if (otherUnits.includes(finalTitle)) { alert(`"${finalTitle}" is already used by another module or review in this course — pick a different title.`); return }
+    if (!isActivity && otherUnits.includes(finalTitle)) { alert(`"${finalTitle}" is already used by another module or review in this course — pick a different title.`); return }
     const untitled = sections.findIndex(s => !s.title.trim())
     if (untitled >= 0) { alert(`Section ${untitled + 1} needs a title`); return }
     for (const [si, s] of sections.entries()) {
       if (s.blocks.some(b => b.kind === 'omr' && b.questions.length === 0)) { alert(`Section ${si + 1} has an OMR Test with no questions`); return }
     }
     const cleaned = sections.map(s => ({ ...s, title: s.title.trim(), instructions: s.instructions.trim() }))
+
+    // A custom activity stays inside its module — no unit of its own, no reordering of
+    // modules. New ones go to the end of their stage.
+    if (isActivity) {
+      const moduleRows = courseContent.filter(c => c.unitTitle === activityModule)
+      const row: LMSContent = {
+        ...(existing ?? {
+          id: lmsId(), courseId, type: 'article' as const, locked: false,
+          unitOrder: moduleRows[0]?.unitOrder ?? 0,
+          moduleOrder: moduleRows.reduce((m, c) => Math.max(m, c.moduleOrder ?? 0), 0) + 1,
+          order: moduleRows.reduce((m, c) => Math.max(m, c.order ?? 0), 0) + 1,
+        }),
+        title: finalTitle,
+        unitTitle: activityModule,
+        isMidtermReview: true,
+        reviewKind,
+        activityStage,
+        midtermSectionsJson: JSON.stringify(cleaned),
+      }
+      persist({ ...store, content: existing ? store.content.map(c => c.id === existing.id ? row : c) : [...store.content, row] })
+      onClose()
+      return
+    }
 
     const row: LMSContent = {
       ...(existing ?? { id: lmsId(), courseId, type: 'article' as const, order: 0, moduleOrder: 0, locked: false }),
@@ -1295,8 +1413,8 @@ function MidtermReviewModal({ store, persist, courseId, contentId, afterUnit, ki
       <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 640, maxHeight: '94vh', overflowY: 'auto', boxShadow: '0 24px 60px rgba(0,0,0,.3)', margin: 'auto' }}>
         <div style={{ background: 'linear-gradient(135deg,#0F2240,#1A365E)', padding: '18px 24px', borderRadius: '18px 18px 0 0', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>{meta.emoji} {existing ? `Edit ${meta.label}` : `New ${meta.label}`}</div>
-            <div style={{ fontSize: 10, color: 'rgba(255,255,255,.65)', marginTop: 2 }}>Build it from sections — each with its own instructions, text boxes, OMR tests and file uploads.</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>{meta.emoji} {isActivity ? `${existing ? 'Edit' : 'New'} Custom Activity` : existing ? `Edit ${meta.label}` : `New ${meta.label}`}</div>
+            <div style={{ fontSize: 10, color: 'rgba(255,255,255,.65)', marginTop: 2 }}>{isActivity ? `In ${activityModule}. ` : ''}Build it from sections — each with its own instructions, text boxes, OMR tests and file uploads.</div>
           </div>
           <button onClick={onClose} title="Close" style={modalCloseBtnOnDark}>✕</button>
         </div>
@@ -1304,19 +1422,28 @@ function MidtermReviewModal({ store, persist, courseId, contentId, afterUnit, ki
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
             <div>
               <label style={labelStyle}>Title *</label>
-              <input value={title} onChange={e => setTitle(e.target.value)} placeholder={`e.g. ${meta.label}`} style={inputStyle} />
+              <input value={title} onChange={e => setTitle(e.target.value)} placeholder={isActivity ? 'e.g. Venture Build Sprint' : `e.g. ${meta.label}`} style={inputStyle} />
             </div>
-            <div>
-              <label style={labelStyle}>Place After</label>
-              <select value={placeAfter} onChange={e => setPlaceAfter(e.target.value)} style={selectStyle}>
-                <option value="">At the start of the course</option>
-                {otherUnits.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
+            {isActivity ? (
+              <div>
+                <label style={labelStyle}>Section</label>
+                <select value={activityStage} onChange={e => setActivityStage(e.target.value as ItStage)} style={selectStyle}>
+                  {IT_STAGES.map(st => <option key={st} value={st}>{IT_STAGE_META[st].emoji} {IT_STAGE_META[st].label}</option>)}
+                </select>
+              </div>
+            ) : (
+              <div>
+                <label style={labelStyle}>Place After</label>
+                <select value={placeAfter} onChange={e => setPlaceAfter(e.target.value)} style={selectStyle}>
+                  <option value="">At the start of the course</option>
+                  {otherUnits.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+            )}
           </div>
 
           {sections.length === 0 && (
-            <div style={{ fontSize: 11, color: '#94A3B8', padding: '14px 12px', textAlign: 'center', border: '1.5px dashed #E4EAF2', borderRadius: 10 }}>No sections yet. Add a section to start building this review.</div>
+            <div style={{ fontSize: 11, color: '#94A3B8', padding: '14px 12px', textAlign: 'center', border: '1.5px dashed #E4EAF2', borderRadius: 10 }}>No sections yet. Add a section to start building this {isActivity ? 'activity' : 'review'}.</div>
           )}
 
           {sections.map((sec, si) => (
@@ -1334,27 +1461,12 @@ function MidtermReviewModal({ store, persist, courseId, contentId, afterUnit, ki
                 </div>
                 <div>
                   <label style={labelStyle}>Instructions</label>
-                  <textarea value={sec.instructions} onChange={e => patchSection(sec.id, { instructions: e.target.value })} rows={3} placeholder="What students should do in this section." style={taStyle} />
+                  <RichTextarea value={sec.instructions} onChange={e => patchSection(sec.id, { instructions: e.target.value })} rows={3} placeholder="What students should do in this section." style={taStyle} />
                 </div>
                 <div>
-                  <label style={labelStyle}>Instruction Images <span style={{ fontWeight: 400, color: '#94A3B8' }}>— shown to students below the instructions</span></label>
-                  {(sec.images?.length ?? 0) > 0 && (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
-                      {sec.images!.map(im => (
-                        <div key={im.url} style={{ position: 'relative', width: 96, height: 96, borderRadius: 8, border: '1px solid #E4EAF2', background: '#F7F9FC', overflow: 'hidden' }}>
-                          <a href={im.url} target="_blank" rel="noreferrer" title={im.name}>
-                            <img src={im.url} alt={im.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                          </a>
-                          <button type="button" onClick={() => removeImage(sec.id, im.url)} title="Remove image" style={{ ...removeBtn, position: 'absolute', top: 4, right: 4, width: 22, height: 22, fontSize: 10 }}>✕</button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 8, border: '2px dashed #CBD5E0', background: '#F8FAFC', cursor: uploadingImages[sec.id] ? 'progress' : 'pointer', fontSize: 12, color: '#7A92B0' }}>
-                    <input type="file" accept="image/*" multiple style={{ display: 'none' }} disabled={!!uploadingImages[sec.id]}
-                      onChange={e => { const files = Array.from(e.target.files ?? []); e.target.value = ''; void addImages(sec.id, files) }} />
-                    {uploadingImages[sec.id] ? `⏳ Uploading ${uploadingImages[sec.id]} image${uploadingImages[sec.id] !== 1 ? 's' : ''}…` : '🖼 + Add Images (PNG, JPG, GIF…)'}
-                  </label>
+                  <label style={labelStyle}>Instruction Documents <span style={{ fontWeight: 400, color: '#94A3B8' }}>— shown to students below the instructions</span></label>
+                  <AttachmentPicker kind="document" files={sec.documents ?? []}
+                    onAdd={f => addSectionDoc(sec.id, f)} onRemove={url => removeSectionDoc(sec.id, url)} onBusyChange={onBusyChange} />
                 </div>
 
                 {sec.blocks.map((b, bi) => {
@@ -1375,17 +1487,22 @@ function MidtermReviewModal({ store, persist, courseId, contentId, afterUnit, ki
                             <div><label style={labelStyle}>Time Limit (min)</label><input type="number" min={1} placeholder="None" value={b.timeLimit ?? ''} onChange={e => patchBlock(sec.id, b.id, { timeLimit: parseInt(e.target.value) || undefined })} style={{ ...inputStyle, background: '#fff' }} /></div>
                           </div>
                           <div style={{ background: '#fff', borderRadius: 10 }}>
-                            <McqQuestionEditor questions={b.questions} onChange={questions => patchBlock(sec.id, b.id, { questions })} radioGroup={`mt_${b.id}`} />
+                            <McqQuestionEditor questions={b.questions} onChange={questions => patchBlock(sec.id, b.id, { questions })} radioGroup={`mt_${b.id}`}
+                            questionImages={{ onAdd: (qi, f) => addQuestionImage(sec.id, b.id, qi, f), onRemove: (qi, url) => removeQuestionImage(sec.id, b.id, qi, url), onBusyChange }} />
                           </div>
                         </>
                       ) : (
-                        <textarea
+                        <RichTextarea
                           value={b.prompt}
                           onChange={e => patchBlock(sec.id, b.id, { prompt: e.target.value })}
                           rows={2}
                           placeholder={b.kind === 'text' ? 'Question or prompt students respond to…' : 'What students should upload…'}
                           style={{ ...taStyle, background: '#fff' }}
                         />
+                      )}
+                      {b.kind === 'text' && (
+                        <AttachmentPicker kind="image" compact files={b.images ?? []}
+                          onAdd={f => addTextImage(sec.id, b.id, f)} onRemove={url => removeTextImage(sec.id, b.id, url)} onBusyChange={onBusyChange} />
                       )}
                     </div>
                   )
@@ -1454,8 +1571,17 @@ function OmrReviewPanel({ block, resp, onSaved }: {
         return (
           <div key={i} style={{ background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 8, padding: '8px 10px' }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: '#1A365E', marginBottom: 4 }}>{i + 1}. {q.q || 'Untitled question'}</div>
+            {(q.images?.length ?? 0) > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
+                {q.images!.map(im => (
+                  <a key={im.url} href={im.url} target="_blank" rel="noreferrer" title={im.name} style={{ width: 56, height: 56, borderRadius: 6, border: '1px solid #E4EAF2', overflow: 'hidden', display: 'block', background: '#fff' }}>
+                    <img src={im.url} alt={im.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  </a>
+                ))}
+              </div>
+            )}
             {isShort ? (
-              <div style={{ fontSize: 11, color: '#1A365E', whiteSpace: 'pre-wrap' }}>{a != null && String(a).trim() ? String(a) : <span style={{ color: '#94A3B8' }}>No answer</span>} <span style={{ color: '#7A92B0', fontStyle: 'italic' }}>(short answer)</span></div>
+              <div style={{ fontSize: 11, color: '#1A365E', whiteSpace: 'pre-wrap' }}>{a != null && String(a).trim() ? <RichText value={String(a)} inline /> : <span style={{ color: '#94A3B8' }}>No answer</span>} <span style={{ color: '#7A92B0', fontStyle: 'italic' }}>(short answer)</span></div>
             ) : (
               <div style={{ fontSize: 11, display: 'flex', flexWrap: 'wrap', gap: 10 }}>
                 <span style={{ color: a == null ? '#94A3B8' : isRight ? '#059669' : '#D61F31', fontWeight: 700 }}>
@@ -1559,7 +1685,7 @@ function MidtermResponsesModal({ store, students, contentId, initialStudentId, o
   function renderResponse(b: MidtermBlock, resps: MidtermResp[] | undefined) {
     if (!resps?.length) return <span style={{ fontSize: 11, color: '#94A3B8' }}>No submission</span>
     const latest = resps[0]
-    if (b.kind === 'text') return <div style={{ fontSize: 12, color: '#1A365E', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{latest.note.text as string}</div>
+    if (b.kind === 'text') return <div style={{ fontSize: 12, color: '#1A365E', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}><RichText value={latest.note.text as string} inline /></div>
     if (b.kind === 'file') return latest.linkUrl
       ? <a href={latest.linkUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: '#2563EB', fontWeight: 700 }}>📎 {(latest.note.fileName as string) || 'Open file'}</a>
       : <span style={{ fontSize: 11, color: '#94A3B8' }}>File missing</span>
@@ -1606,7 +1732,7 @@ function MidtermResponsesModal({ store, students, contentId, initialStudentId, o
                           <div key={b.id} style={{ display: 'flex', flexDirection: b.kind === 'omr' ? 'column' : 'row', gap: b.kind === 'omr' ? 6 : 10, padding: '6px 0', borderTop: '1px solid #F0F4FA' }}>
                             <span style={{ fontSize: 11, fontWeight: 700, color: '#5A7290', width: b.kind === 'omr' ? undefined : 170, flexShrink: 0 }}>
                               {b.kind === 'text' ? '📝 Text Box' : b.kind === 'omr' ? `🔢 OMR Test (${b.questions.length} question${b.questions.length !== 1 ? 's' : ''})` : '📎 File Upload'}
-                              {b.kind !== 'omr' && b.prompt && <span style={{ display: 'block', fontWeight: 400, color: '#94A3B8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.prompt}</span>}
+                              {b.kind !== 'omr' && b.prompt && <span style={{ display: 'block', fontWeight: 400, color: '#94A3B8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{toPlainText(b.prompt)}</span>}
                             </span>
                             <div style={{ flex: 1, minWidth: 0 }}>{renderResponse(b, m.get(b.id))}</div>
                           </div>
@@ -1714,7 +1840,7 @@ export function LMSPage() {
   const [modulePicker, setModulePicker] = useState<{ purpose: 'lesson' | 'caseStudy'; units: string[] } | null>(null)
   // Midterm Review builder — contentId null = creating a new one; afterUnit preselects
   // which module it's placed after (from a module's "⋯" menu).
-  const [midtermModal, setMidtermModal] = useState<{ courseId: string; contentId: string | null; afterUnit?: string; kind: ReviewKind } | null>(null)
+  const [midtermModal, setMidtermModal] = useState<{ courseId: string; contentId: string | null; afterUnit?: string; kind: ReviewKind; module?: string; stage?: ItStage } | null>(null)
   const [midtermResponsesId, setMidtermResponsesId] = useState<string | null>(null)
   const [midtermResponsesStudent, setMidtermResponsesStudent] = useState<string | null>(null)
   const [showEnrolModal, setShowEnrolModal] = useState(false)
@@ -3109,7 +3235,7 @@ export function LMSPage() {
                     <th key={fh.l} rowSpan={2} style={{ position: 'sticky', left: 0, zIndex: 3, background: '#F0F4FA', padding: `8px ${i === 0 ? '14' : '8'}px`, textAlign: i === 0 ? 'left' : 'center', fontSize: 10, fontWeight: 800, color: '#1A365E', borderBottom: '2px solid #E4EAF2', borderRight: i === 7 ? '2px solid #D0D7E4' : '1px solid #E4EAF2', whiteSpace: 'nowrap', minWidth: fh.w }}>{fh.l}</th>
                   ))}
                   {unitGroups.map(ut => {
-                    const review = unitMap[ut].find(isMidtermReview)
+                    const review = unitMap[ut].find(isReviewCheckpoint)
                     const rm = review ? REVIEW_META[reviewKindOf(review)] : null
                     return (
                       <th key={ut} colSpan={unitMap[ut].length} style={{ padding: '6px 8px', textAlign: 'center', fontSize: 10, fontWeight: 800, color: rm ? rm.color : '#1A365E', borderBottom: '1px solid #E4EAF2', borderLeft: '2px solid #D0D7E4', background: rm ? rm.soft : '#F7F9FC', whiteSpace: 'nowrap' }}>
@@ -3314,7 +3440,7 @@ export function LMSPage() {
           <div style={{ fontSize: 12, fontWeight: 800, color: '#1A365E', marginBottom: 10 }}>💬 Course Discussion Board <span style={{ fontSize: 10, color: '#7A92B0', fontWeight: 400 }}>{course.title}</span></div>
           <div style={{ background: '#F7F9FC', borderRadius: 10, padding: '12px 14px', border: '1px solid #E4EAF2', marginBottom: 10 }}>
             <div style={{ fontSize: 9, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Share your thoughts or ask a question</div>
-            <textarea rows={3} placeholder="What's on your mind about this course?" style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 12, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box', background: '#fff', lineHeight: 1.6 }} />
+            <RichTextarea rows={3} placeholder="What's on your mind about this course?" style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 12, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box', background: '#fff', lineHeight: 1.6 }} />
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
               <span style={{ fontSize: 11, color: '#94A3B8' }}>Peer reviews and questions welcome 👋</span>
               <button style={{ padding: '7px 18px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>🚀 Post</button>
@@ -3459,7 +3585,7 @@ export function LMSPage() {
                       {assignmentSub ? (
                         <>
                           {typeof assignmentSub.row.note === 'string' && assignmentSub.row.note.trim() && (
-                            <div style={{ fontSize: 11, color: '#3D5475', whiteSpace: 'pre-wrap', marginBottom: 4 }}>{String(assignmentSub.row.note)}</div>
+                            <div style={{ fontSize: 11, color: '#3D5475', whiteSpace: 'pre-wrap', marginBottom: 4 }}><RichText value={String(assignmentSub.row.note)} inline /></div>
                           )}
                           {assignmentSub.row.link_url && (
                             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -3502,7 +3628,7 @@ export function LMSPage() {
                                 return (
                                   <div key={`${item.id}_ans_${qi}`} style={{ background: '#fff', border: '1px solid #E4EAF2', borderRadius: 7, padding: '8px 10px' }}>
                                     <div style={{ fontSize: 11, fontWeight: 700, color: '#1A365E', marginBottom: 4 }}>Q{qi + 1}. {String(q.q ?? '')}</div>
-                                    <div style={{ fontSize: 11, color: '#3D5475' }}><strong>Your answer:</strong> {answerText}</div>
+                                    <div style={{ fontSize: 11, color: '#3D5475' }}><strong>Your answer:</strong> <RichText value={answerText} inline /></div>
                                     {!isShort && correctText && <div style={{ fontSize: 10, color: '#059669', marginTop: 2 }}><strong>Correct answer:</strong> {correctText}</div>}
                                   </div>
                                 )
@@ -3611,7 +3737,7 @@ export function LMSPage() {
     }).sort((a, b) => a.unitOrder - b.unitOrder)
     // A Midterm Review is its own "unit" (so it orders/drags among modules), but it's
     // not a module — keep it out of anything that asks "which module?".
-    const moduleUnits = units.filter(u => !u.items.some(isMidtermReview))
+    const moduleUnits = units.filter(u => !u.items.some(isReviewCheckpoint))
 
     function isExpanded(key: string) { return curriculumExpanded[key] !== false }
     function toggleExpanded(key: string) { setCurriculumExpanded(prev => ({ ...prev, [key]: !isExpanded(key) })) }
@@ -3897,11 +4023,51 @@ export function LMSPage() {
 
     // Category divider row (Learn It / Do It / Show It / Prove It / Master It) — mirrors
     // the same "it" tree the student portal shows, purely a label, not draggable/editable.
-    function renderSectionLabelRow(icon: string, label: string, depth: number, key: string) {
+    // onAdd (module "it" stages only) adds a custom activity under that stage.
+    function renderSectionLabelRow(icon: string, label: string, depth: number, key: string, onAdd?: () => void) {
       return (
         <tr key={key}>
           <td colSpan={5} style={{ padding: '10px 10px 2px', paddingLeft: 12 + depth * 26 }}>
             <span style={{ fontSize: 9, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '.08em', display: 'inline-flex', alignItems: 'center', gap: 4 }}>{icon} {label}</span>
+            {onAdd && (
+              <button onClick={onAdd} title={`Add a custom activity under ${label}`} style={{ marginLeft: 8, background: 'none', border: '1px dashed #C7D3E3', borderRadius: 999, padding: '1px 8px', fontSize: 9, fontWeight: 800, color: '#5A7290', cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '.04em' }}>+ Activity</button>
+            )}
+          </td>
+        </tr>
+      )
+    }
+
+    // Custom activity — an admin-built item inside a module under one "it" stage. Opens
+    // the same section/block builder as a Midterm Review.
+    function renderActivityRow(item: LMSContent, depth: number) {
+      const menuKey = 'activity:' + item.id
+      const stageLabel = IT_STAGE_META[item.activityStage ?? 'master'].label
+      const blockCount = parseMidtermSections(item.midtermSectionsJson).reduce((n, sec) => n + sec.blocks.length, 0)
+      const openBuilder = () => { setMidtermModal({ courseId: groupKey(course), contentId: item.id, kind: 'activity' }); setCurriculumMenuOpenId(null) }
+      return (
+        <tr key={item.id} style={{ borderBottom: '1px solid #F0F4FA' }}>
+          <td style={{ padding: '6px 10px', paddingLeft: 12 + depth * 26 }}>
+            <button onClick={openBuilder} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0, textAlign: 'left' }}>
+              <span style={{ fontSize: 14 }}>🧩</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#1A365E' }}>{stageLabel}: {item.title || 'Untitled activity'}</span>
+              <span style={{ fontSize: 10, color: '#7A92B0' }}>{blockCount ? `${blockCount} item${blockCount !== 1 ? 's' : ''}` : 'Empty — click to build'}</span>
+            </button>
+          </td>
+          <td style={{ padding: '6px 10px', textAlign: 'center' }}>
+            <input type="date" value={item.targetDate ? item.targetDate.slice(0, 10) : ''} onChange={e => patchContent(item.id, { targetDate: e.target.value || null })}
+              style={{ border: '1px solid #E4EAF2', borderRadius: 6, fontSize: 11, padding: '3px 5px', color: '#1A365E', fontFamily: 'inherit', width: 118 }} />
+          </td>
+          <td style={{ padding: '6px', textAlign: 'center' }}><button onClick={() => patchContent(item.id, { locked: !item.locked })} title="Locked" style={statusBtnStyle(item.locked)}>{item.locked ? '🔒' : '🔓'}</button></td>
+          <td />
+          <td style={{ padding: '6px 10px', textAlign: 'right', position: 'relative' }}>
+            <button onClick={() => setCurriculumMenuOpenId(prev => prev === menuKey ? null : menuKey)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#5A7290', fontFamily: 'inherit' }}>⋯</button>
+            {curriculumMenuOpenId === menuKey && (
+              <div ref={curriculumMenuRef} style={{ position: 'absolute', right: 10, top: '100%', background: '#fff', border: '1px solid #E4EAF2', borderRadius: 10, boxShadow: '0 8px 24px rgba(26,54,94,.14)', minWidth: 160, zIndex: 30, overflow: 'hidden' }}>
+                <button onClick={openBuilder} style={menuItemStyle}>✏️ Edit Activity</button>
+                <button onClick={() => { setMidtermResponsesId(item.id); setCurriculumMenuOpenId(null) }} style={menuItemStyle}>📥 View Responses</button>
+                <button onClick={() => deleteItem(item)} style={{ ...menuItemStyle, color: '#D61F31', borderTop: '1px solid #F0F4FA' }}>🗑 Delete Activity</button>
+              </div>
+            )}
           </td>
         </tr>
       )
@@ -3956,32 +4122,38 @@ export function LMSPage() {
     // depth is the case-study/lesson row depth; section labels sit one level shallower.
     function renderModuleBody(items: LMSContent[], depth: number, orderField: 'order' | 'moduleOrder', dragScope: string) {
       const carrierItem = items.find(i => hasAssignBool(i.hasAssignment)) ?? null
-      const lessonItems = items.filter(i => i !== carrierItem)
+      const lessonItems = items.filter(i => i !== carrierItem && !isCustomActivity(i))
+      // Every stage shows (with its "+ Activity" button) so any module can be built up
+      // from custom activities, with or without the default case study / lessons.
+      const stageLabel = (st: ItStage) => renderSectionLabelRow(IT_STAGE_META[st].emoji, IT_STAGE_META[st].label, depth - 1, `${dragScope}-${st}`,
+        () => setMidtermModal({ courseId: groupKey(course), contentId: null, kind: 'activity', module: dragScope, stage: st }))
+      const activities = (st: ItStage) => stageActivities(items, st).map(a => renderActivityRow(a, depth))
       return (
         <>
-          {carrierItem && renderSectionLabelRow('🔎', 'Learn It', depth - 1, `${dragScope}-learn`)}
+          {stageLabel('learn')}
           {carrierItem && renderContentRow(carrierItem, depth, orderField, dragScope)}
+          {activities('learn')}
 
-          {renderSectionLabelRow('✅', 'Do It', depth - 1, `${dragScope}-do`)}
-          {lessonItems.length === 0 ? (
+          {stageLabel('do')}
+          {lessonItems.length === 0 && !stageActivities(items, 'do').length ? (
             <tr key={`${dragScope}-do-empty`}><td colSpan={5} style={{ padding: '4px 10px 8px', paddingLeft: 12 + depth * 26, fontSize: 11, color: '#94A3B8' }}>No lessons yet.</td></tr>
           ) : (
             lessonItems.map(item => renderContentRow(item, depth, orderField, dragScope))
           )}
+          {activities('do')}
 
-          {carrierItem && (
-            <>
-              {renderSectionLabelRow('⚖️', 'Show It', depth - 1, `${dragScope}-show`)}
-              {renderCarrierLinkRow(carrierSectionTitle(carrierItem, 'socratic'), depth - 1, carrierItem, `${dragScope}-socratic`, 'socratic')}
+          {stageLabel('show')}
+          {carrierItem && renderCarrierLinkRow(carrierSectionTitle(carrierItem, 'socratic'), depth - 1, carrierItem, `${dragScope}-socratic`, 'socratic')}
+          {activities('show')}
 
-              {renderSectionLabelRow('🔢', 'Prove It', depth - 1, `${dragScope}-prove`)}
-              {renderCarrierLinkRow(carrierSectionTitle(carrierItem, 'omr'), depth - 1, carrierItem, `${dragScope}-omr`, 'omr')}
+          {stageLabel('prove')}
+          {carrierItem && renderCarrierLinkRow(carrierSectionTitle(carrierItem, 'omr'), depth - 1, carrierItem, `${dragScope}-omr`, 'omr')}
+          {activities('prove')}
 
-              {renderSectionLabelRow('🏆', 'Master It', depth - 1, `${dragScope}-master`)}
-              {renderCarrierLinkRow(carrierSectionTitle(carrierItem, 'presentation'), depth - 1, carrierItem, `${dragScope}-presentation`, 'presentation')}
-              {renderDiscussionLinkRow(depth - 1, carrierItem, `${dragScope}-discussion`)}
-            </>
-          )}
+          {stageLabel('master')}
+          {carrierItem && renderCarrierLinkRow(carrierSectionTitle(carrierItem, 'presentation'), depth - 1, carrierItem, `${dragScope}-presentation`, 'presentation')}
+          {carrierItem && renderDiscussionLinkRow(depth - 1, carrierItem, `${dragScope}-discussion`)}
+          {activities('master')}
         </>
       )
     }
@@ -4025,6 +4197,7 @@ export function LMSPage() {
                 <button onClick={() => { openAddItem(u.title); setCurriculumMenuOpenId(null) }} style={menuItemStyle}>+ Add Topic</button>
                 <button onClick={() => { renameUnit(u.title); setCurriculumMenuOpenId(null) }} style={menuItemStyle}>✏️ Rename Module</button>
                 <button onClick={() => { setModuleOrder(u.title); setCurriculumMenuOpenId(null) }} style={menuItemStyle}>🔢 Module Order</button>
+                <button onClick={() => { setMidtermModal({ courseId: groupKey(course), contentId: null, kind: 'activity', module: u.title, stage: 'master' }); setCurriculumMenuOpenId(null) }} style={menuItemStyle}>🧩 Add Custom Activity</button>
                 <button onClick={() => { setMidtermModal({ courseId: groupKey(course), contentId: null, afterUnit: u.title, kind: 'midterm' }); setCurriculumMenuOpenId(null) }} style={menuItemStyle}>📝 Add Midterm Review After</button>
                 <button onClick={() => { setMidtermModal({ courseId: groupKey(course), contentId: null, afterUnit: u.title, kind: 'finals' }); setCurriculumMenuOpenId(null) }} style={menuItemStyle}>🎓 Add Finals After</button>
                 <button onClick={() => { deleteUnit(u.title, u.items); setCurriculumMenuOpenId(null) }} style={{ ...menuItemStyle, color: '#D61F31', borderTop: '1px solid #F0F4FA' }}>🗑 Delete Module</button>
@@ -4108,7 +4281,7 @@ export function LMSPage() {
                   <button onClick={openBuilder} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0, textAlign: 'left' }}>
                     <span style={{ fontSize: 14 }}>📋</span>
                     <span style={{ fontSize: 12, fontWeight: 700, color: '#1A365E' }}>{sec.title || 'Untitled section'}</span>
-                    {(sec.images?.length ?? 0) > 0 && <span style={{ fontSize: 10, color: '#7A92B0' }}>🖼 {sec.images!.length} image{sec.images!.length !== 1 ? 's' : ''}</span>}
+                    {(sec.documents?.length ?? 0) > 0 && <span style={{ fontSize: 10, color: '#7A92B0' }}>📎 {sec.documents!.length} document{sec.documents!.length !== 1 ? 's' : ''}</span>}
                   </button>
                 </td>
               </tr>
@@ -4287,7 +4460,7 @@ export function LMSPage() {
                 <>
                   {topLevel.map(item => renderContentRow(item, 0, 'order'))}
                   {units.map(u => {
-                    const midterm = u.items.find(isMidtermReview)
+                    const midterm = u.items.find(isReviewCheckpoint)
                     return (
                       <Fragment key={u.title}>
                         {midterm ? renderMidtermRows(u, midterm) : (
@@ -4863,7 +5036,7 @@ export function LMSPage() {
                   <span style={{ fontSize: 13, fontWeight: 600, color: '#1A365E' }}>Section Description</span>
                 </button>
               ) : (
-                <div><label style={labelStyle}>Section Description</label><textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} style={taStyle} /></div>
+                <div><label style={labelStyle}>Section Description</label><RichTextarea value={description} onChange={e => setDescription(e.target.value)} rows={3} style={taStyle} /></div>
               )}
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'start' }}>
@@ -4922,7 +5095,7 @@ export function LMSPage() {
                   <span style={{ fontSize: 13, fontWeight: 600, color: '#1A365E' }}>Student Instructions</span>
                 </button>
               ) : (
-                <div><label style={labelStyle}>Student Instructions</label><textarea value={studentInstructions} onChange={e => setStudentInstructions(e.target.value)} rows={3} style={taStyle} /></div>
+                <div><label style={labelStyle}>Student Instructions</label><RichTextarea value={studentInstructions} onChange={e => setStudentInstructions(e.target.value)} rows={3} style={taStyle} /></div>
               )}
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, borderTop: '1px solid #E4EAF2', paddingTop: 16 }}>
@@ -5345,7 +5518,7 @@ export function LMSPage() {
                       <div><label style={labelStyle}>Mastery (%)</label><input value={masteryPassMark} onChange={e => setMasteryPassMark(e.target.value)} type="number" min={1} max={100} style={inputStyle} /></div>
                       <div><label style={labelStyle}>Max Retakes</label><input value={masteryRetakes} onChange={e => setMasteryRetakes(e.target.value)} type="number" min={1} max={10} style={inputStyle} /></div>
                     </div>
-                    <div><label style={labelStyle}>📋 Assessment Brief <span style={{ fontWeight: 400, color: '#94A3B8' }}>(optional — shown to student before the test)</span></label><textarea value={masteryBrief} onChange={e => setMasteryBrief(e.target.value)} rows={3} placeholder="Explain what this assessment is testing, what the student should focus on, or any instructions before they begin..." style={{ ...taStyle, fontSize: 11 }} /></div>
+                    <div><label style={labelStyle}>📋 Assessment Brief <span style={{ fontWeight: 400, color: '#94A3B8' }}>(optional — shown to student before the test)</span></label><RichTextarea value={masteryBrief} onChange={e => setMasteryBrief(e.target.value)} rows={3} placeholder="Explain what this assessment is testing, what the student should focus on, or any instructions before they begin..." style={{ ...taStyle, fontSize: 11 }} /></div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                       <div><label style={labelStyle}>⏱ Time Limit (minutes)</label><input value={masteryTimeLimit} onChange={e => setMasteryTimeLimit(e.target.value)} type="number" min={1} max={180} placeholder="e.g. 30 — leave blank for unlimited" style={inputStyle} /></div>
                       <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 20 }}>
@@ -5627,7 +5800,7 @@ export function LMSPage() {
               <>
                 <div>
                   <label style={labelStyle}>Activity Description *</label>
-                  <textarea value={socraticBrief} onChange={e => setSocraticBrief(e.target.value)} rows={4} placeholder="What students should prepare and expect for the seminar — shown to students on the Show It page." style={taStyle} />
+                  <RichTextarea value={socraticBrief} onChange={e => setSocraticBrief(e.target.value)} rows={4} placeholder="What students should prepare and expect for the seminar — shown to students on the Show It page." style={taStyle} />
                 </div>
                 <div>
                   <label style={labelStyle}>Socratic Seminar Date</label>
@@ -5660,7 +5833,7 @@ export function LMSPage() {
               <>
                 <div>
                   <label style={labelStyle}>Instructions</label>
-                  <textarea value={presentationBrief} onChange={e => setPresentationBrief(e.target.value)} rows={3} placeholder="What students should prepare and submit for the final presentation — shown to students on the Master It page." style={taStyle} />
+                  <RichTextarea value={presentationBrief} onChange={e => setPresentationBrief(e.target.value)} rows={3} placeholder="What students should prepare and submit for the final presentation — shown to students on the Master It page." style={taStyle} />
                 </div>
                 <button type="button" onClick={() => setAssignRolesContentId(contentId)} style={{ alignSelf: 'flex-start', padding: '8px 14px', background: '#F0F4FA', color: '#1A365E', border: '1px solid #DDE6F0', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>🎯 Assign to Students</button>
                 <div>
@@ -6103,7 +6276,7 @@ export function LMSPage() {
             </div>
             <div>
               <label style={labelStyle}>Module Description</label>
-              <textarea value={moduleDescription} onChange={e => setModuleDescription(e.target.value)} rows={3} placeholder="A paragraph describing what this module covers — shown to students above Learn it." style={taStyle} />
+              <RichTextarea value={moduleDescription} onChange={e => setModuleDescription(e.target.value)} rows={3} placeholder="A paragraph describing what this module covers — shown to students above Learn it." style={taStyle} />
             </div>
             <div style={{ padding: 12, background: '#FFF9F0', borderRadius: 10, border: '1px solid #FDE68A', display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ fontSize: 10, fontWeight: 800, color: '#92400E', textTransform: 'uppercase', letterSpacing: '.5px' }}>🔎 Learn it — Case Study Document</div>
@@ -6162,7 +6335,7 @@ export function LMSPage() {
           onClose={() => { setMidtermResponsesId(null); setMidtermResponsesStudent(null) }}
         />
       )}
-      {midtermModal && <MidtermReviewModal store={store} persist={persist} kind={midtermModal.kind} courseId={midtermModal.courseId} contentId={midtermModal.contentId} afterUnit={midtermModal.afterUnit} onClose={() => setMidtermModal(null)} />}
+      {midtermModal && <MidtermReviewModal store={store} persist={persist} kind={midtermModal.kind} courseId={midtermModal.courseId} contentId={midtermModal.contentId} afterUnit={midtermModal.afterUnit} module={midtermModal.module} stage={midtermModal.stage} onClose={() => setMidtermModal(null)} />}
       {sectionModal && <SectionModal type={sectionModal.type} contentId={sectionModal.contentId} onClose={() => setSectionModal(null)} />}
       {discussionBoardContentId && <DiscussionBoardModal contentId={discussionBoardContentId} onClose={() => setDiscussionBoardContentId(null)} />}
       {assignRolesContentId && (
@@ -6278,7 +6451,7 @@ export function LMSPage() {
   )
 }
 
-interface McqQuestion { q: string; type?: 'mcq' | 'short'; opts: string[]; ans: number }
+interface McqQuestion { q: string; type?: 'mcq' | 'short'; opts: string[]; ans: number; images?: MidtermFile[] }
 
 interface CaseStudyGradingData {
   studentId: string
@@ -6473,7 +6646,7 @@ function CaseStudyGradingPanel({ data, onClose, onFinalGradeChange }: {
                   <div style={{ fontSize: 10, fontWeight: 800, color: '#1A365E', marginBottom: 4 }}>📤 Show it — Notes</div>
                   {notesSub ? (
                     <>
-                      {notesSub.note && <div style={{ fontSize: 11, color: '#3D5475', marginBottom: 6, whiteSpace: 'pre-wrap' }}>{notesSub.note}</div>}
+                      {notesSub.note && <div style={{ fontSize: 11, color: '#3D5475', marginBottom: 6, whiteSpace: 'pre-wrap' }}><RichText value={notesSub.note} inline /></div>}
                       {notesSub.linkUrl && <a href={notesSub.linkUrl} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#1A365E', fontWeight: 700, wordBreak: 'break-all' }}>🔗 View uploaded notes</a>}
                     </>
                   ) : (
@@ -6498,7 +6671,7 @@ function CaseStudyGradingPanel({ data, onClose, onFinalGradeChange }: {
                   <div style={{ fontSize: 11, fontWeight: 800, color: '#1A365E' }}>⚖️ Show it — Socratic Seminar</div>
                   {data.socraticDate && <span style={{ fontSize: 10, fontWeight: 700, color: '#7A92B0' }}>📅 {data.socraticDate}</span>}
                 </div>
-                {data.socraticBrief && <div style={{ fontSize: 11, color: '#3D5475', marginBottom: 8, whiteSpace: 'pre-wrap' }}>{data.socraticBrief}</div>}
+                {data.socraticBrief && <div style={{ fontSize: 11, color: '#3D5475', marginBottom: 8, whiteSpace: 'pre-wrap' }}><RichText value={data.socraticBrief} inline /></div>}
                 {renderCategoryEditor('debate')}
               </div>
 
@@ -6530,7 +6703,7 @@ function CaseStudyGradingPanel({ data, onClose, onFinalGradeChange }: {
                         return (
                           <div key={qi} style={{ background: '#fff', border: '1px solid #E4EAF2', borderRadius: 7, padding: '8px 10px' }}>
                             <div style={{ fontSize: 11, fontWeight: 700, color: '#1A365E', marginBottom: 4 }}>Q{qi + 1}. {q.q}</div>
-                            <div style={{ fontSize: 11, color: '#3D5475', whiteSpace: 'pre-wrap' }}>{answer != null && String(answer).trim() ? String(answer) : <em style={{ color: '#94A3B8' }}>No answer</em>}</div>
+                            <div style={{ fontSize: 11, color: '#3D5475', whiteSpace: 'pre-wrap' }}>{answer != null && String(answer).trim() ? <RichText value={String(answer)} inline /> : <em style={{ color: '#94A3B8' }}>No answer</em>}</div>
                           </div>
                         )
                       }) : (
@@ -6545,10 +6718,10 @@ function CaseStudyGradingPanel({ data, onClose, onFinalGradeChange }: {
               {/* Master it — Presentation */}
               <div style={{ background: '#F7F9FC', border: '1px solid #E4EAF2', borderRadius: 10, padding: 12 }}>
                 <div style={{ fontSize: 11, fontWeight: 800, color: '#1A365E', marginBottom: 6 }}>🏆 Master it — Presentation Upload</div>
-                {data.presentationBrief && <div style={{ fontSize: 11, color: '#3D5475', marginBottom: 8, whiteSpace: 'pre-wrap' }}>{data.presentationBrief}</div>}
+                {data.presentationBrief && <div style={{ fontSize: 11, color: '#3D5475', marginBottom: 8, whiteSpace: 'pre-wrap' }}><RichText value={data.presentationBrief} inline /></div>}
                 {presentationSub ? (
                   <>
-                    {presentationSub.note && <div style={{ fontSize: 11, color: '#3D5475', marginBottom: 6, whiteSpace: 'pre-wrap' }}>{presentationSub.note}</div>}
+                    {presentationSub.note && <div style={{ fontSize: 11, color: '#3D5475', marginBottom: 6, whiteSpace: 'pre-wrap' }}><RichText value={presentationSub.note} inline /></div>}
                     {presentationSub.linkUrl && <a href={presentationSub.linkUrl} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#1A365E', fontWeight: 700, wordBreak: 'break-all' }}>🔗 View uploaded presentation</a>}
                   </>
                 ) : (
@@ -6597,14 +6770,14 @@ function CategoryEditorAppealNote({ appeal, onResolved }: {
       <div style={{ fontSize: 9, fontWeight: 800, color: appeal.status === 'open' ? '#92400E' : '#059669', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>
         🚩 {appeal.status === 'open' ? 'Open Appeal' : 'Appeal Resolved'}
       </div>
-      <div style={{ fontSize: 11, color: '#3D5475', whiteSpace: 'pre-wrap', marginBottom: 6 }}>{appeal.message}</div>
+      <div style={{ fontSize: 11, color: '#3D5475', whiteSpace: 'pre-wrap', marginBottom: 6 }}><RichText value={appeal.message} inline /></div>
       {appeal.status === 'open' ? (
         <>
-          <textarea rows={2} value={reply} onChange={e => setReply(e.target.value)} placeholder="Reply to the student..." style={{ width: '100%', padding: '6px 8px', border: '1.5px solid #FDE68A', borderRadius: 6, fontSize: 11, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box', marginBottom: 6 }} />
+          <RichTextarea rows={2} value={reply} onChange={e => setReply(e.target.value)} placeholder="Reply to the student..." style={{ width: '100%', padding: '6px 8px', border: '1.5px solid #FDE68A', borderRadius: 6, fontSize: 11, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box', marginBottom: 6 }} />
           <button onClick={() => void resolve()} disabled={saving} style={{ padding: '5px 12px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>{saving ? 'Saving…' : 'Mark Resolved'}</button>
         </>
       ) : (
-        <div style={{ fontSize: 11, color: '#059669', whiteSpace: 'pre-wrap' }}>↩ {appeal.adminReply}</div>
+        <div style={{ fontSize: 11, color: '#059669', whiteSpace: 'pre-wrap' }}>↩ <RichText value={appeal.adminReply} inline /></div>
       )}
     </div>
   )
@@ -6644,7 +6817,7 @@ function CategoryEditor({ category: cat, row, draftValues, draftFeedback, saving
           </div>
         ))}
       </div>
-      <textarea
+      <RichTextarea
         rows={2} value={draftFeedback}
         onChange={e => onFeedbackChange(e.target.value)}
         placeholder="Feedback visible to the student..."
@@ -6685,14 +6858,14 @@ function AppealRowCard({ appeal, studentName, lessonTitle, onResolved }: {
         </span>
       </div>
       <div style={{ fontSize: 10, color: '#7A92B0', marginBottom: 8 }}>{lessonTitle} · Filed {appeal.createdAt ? new Date(appeal.createdAt).toLocaleDateString() : ''}</div>
-      <div style={{ fontSize: 12, color: '#3D5475', whiteSpace: 'pre-wrap', marginBottom: 8, background: '#F7F9FC', borderRadius: 8, padding: '8px 10px' }}>{appeal.message}</div>
+      <div style={{ fontSize: 12, color: '#3D5475', whiteSpace: 'pre-wrap', marginBottom: 8, background: '#F7F9FC', borderRadius: 8, padding: '8px 10px' }}><RichText value={appeal.message} inline /></div>
       {appeal.status === 'open' ? (
         <>
-          <textarea rows={2} value={reply} onChange={e => setReply(e.target.value)} placeholder="Reply to the student..." style={{ width: '100%', padding: '7px 9px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 12, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box', marginBottom: 8 }} />
+          <RichTextarea rows={2} value={reply} onChange={e => setReply(e.target.value)} placeholder="Reply to the student..." style={{ width: '100%', padding: '7px 9px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 12, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box', marginBottom: 8 }} />
           <button onClick={() => void resolve()} disabled={saving} style={{ padding: '7px 16px', background: '#1A365E', color: '#fff', border: 'none', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>{saving ? 'Saving…' : 'Mark Resolved'}</button>
         </>
       ) : (
-        <div style={{ fontSize: 12, color: '#059669', whiteSpace: 'pre-wrap' }}>↩ {appeal.adminReply}</div>
+        <div style={{ fontSize: 12, color: '#059669', whiteSpace: 'pre-wrap' }}>↩ <RichText value={appeal.adminReply} inline /></div>
       )}
     </div>
   )
@@ -6911,7 +7084,7 @@ function LessonPreviewModal({ item, onClose }: { item: LMSContent; onClose: () =
         </>)}
         */}
         {caseStudySectionShell('⚖️', 'Show it — Socratic Seminar', CASE_STUDY_RUBRIC.debate.weight, <>
-          {item.socraticBrief && <div style={{ fontSize: 11, color: '#5A7290', marginBottom: 6 }}>{item.socraticBrief}</div>}
+          {item.socraticBrief && <div style={{ fontSize: 11, color: '#5A7290', marginBottom: 6 }}><RichText value={item.socraticBrief} inline /></div>}
           {item.socraticDate && <div style={{ fontSize: 10, fontWeight: 700, color: '#7A92B0', marginBottom: 6 }}>📅 {item.socraticDate}</div>}
           {renderRubricPreview('debate')}
         </>)}
@@ -6928,7 +7101,7 @@ function LessonPreviewModal({ item, onClose }: { item: LMSContent; onClose: () =
           )
         })())}
         {caseStudySectionShell('📤', 'Master it — Submit Final Presentation', null, <>
-          {item.presentationBrief && <div style={{ fontSize: 11, color: '#5A7290', marginBottom: 6 }}>{item.presentationBrief}</div>}
+          {item.presentationBrief && <div style={{ fontSize: 11, color: '#5A7290', marginBottom: 6 }}><RichText value={item.presentationBrief} inline /></div>}
           <div style={{ fontSize: 11, color: '#5A7290', marginBottom: 6 }}>Student uploads their presentation file here.</div>
           <div style={{ padding: '9px 12px', borderRadius: 8, border: '2px dashed #BFDBFE', background: '#F7FBFF', fontSize: 11, color: '#94A3B8', textAlign: 'center' }}>+ Choose file (Preview Only)</div>
         </>)}
@@ -6988,7 +7161,7 @@ function LessonPreviewModal({ item, onClose }: { item: LMSContent; onClose: () =
                     <div style={{ width: 28, height: 28, borderRadius: 8, background: '#1A365E', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 }}>📋</div>
                     <div style={{ fontSize: 11, fontWeight: 800, color: '#1A365E', textTransform: 'uppercase', letterSpacing: 0.5 }}>Assessment Brief</div>
                   </div>
-                  <div style={{ fontSize: 12, color: '#2D3F5E', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{item.masteryBrief}</div>
+                  <div style={{ fontSize: 12, color: '#2D3F5E', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}><RichText value={item.masteryBrief} inline /></div>
                 </div>
               )}
               {masteryQuestions.length > 0 ? (
@@ -7031,7 +7204,7 @@ function LessonPreviewModal({ item, onClose }: { item: LMSContent; onClose: () =
             </button>
             {noteOpen && (
               <div style={{ padding: '0 14px 14px' }}>
-                <textarea
+                <RichTextarea
                   rows={5}
                   placeholder="Jot your thoughts, questions, or key takeaways here…"
                   value={noteText}

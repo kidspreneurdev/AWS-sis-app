@@ -2,6 +2,7 @@ import { forwardRef } from 'react'
 import type { WeeklyScheduleData } from '@/types/weeklySchedule'
 import { RED, INK, SERIF, h2, p, noteText, th, td } from './docStyles'
 import { Page, LogoStrip, DocHeader, InfoBox, Bullets, SignatureRow, ContactBlock } from './docPrimitives'
+import { RichText } from '@/components/shared/RichText'
 
 /**
  * Presentational, page-by-page A4 rendering of the "Weekly Class Schedule &
@@ -28,17 +29,17 @@ export const WeeklyScheduleDocument = forwardRef<HTMLDivElement, { data: WeeklyS
           />
 
           <p style={p}>Dear Parent/Guardian,</p>
-          <p style={p}>{data.introParagraph}</p>
+          <p style={p}><RichText value={data.introParagraph} inline /></p>
 
           <h2 style={h2}>{data.creditHoursHeading}</h2>
-          <p style={p}>{data.creditHoursIntro}</p>
+          <p style={p}><RichText value={data.creditHoursIntro} inline /></p>
           <Bullets items={data.creditParts} />
-          <p style={p}>{data.creditFillIntro}</p>
+          <p style={p}><RichText value={data.creditFillIntro} inline /></p>
           <Bullets items={data.creditTiers} />
-          {data.termLengthNote && <p style={noteText}>{data.termLengthNote}</p>}
+          {data.termLengthNote && <p style={noteText}><RichText value={data.termLengthNote} inline /></p>}
 
           <h2 style={h2}>{data.scheduleHeading}</h2>
-          {data.scheduleParagraphs.map((para, i) => <p key={i} style={p}>{para}</p>)}
+          {data.scheduleParagraphs.map((para, i) => <p key={i} style={p}><RichText value={para} inline /></p>)}
 
           <table style={{ width: '100%', borderCollapse: 'collapse', margin: '6px 0 14px' }}>
             <thead>
@@ -73,11 +74,11 @@ export const WeeklyScheduleDocument = forwardRef<HTMLDivElement, { data: WeeklyS
         <Page>
           <LogoStrip />
           {data.daySummaries.length > 0 && <Bullets items={data.daySummaries} />}
-          {data.chemistryNote && <p style={noteText}>{data.chemistryNote}</p>}
+          {data.chemistryNote && <p style={noteText}><RichText value={data.chemistryNote} inline /></p>}
           {data.extraNotes.length > 0 && <Bullets items={data.extraNotes} />}
 
           <h2 style={h2}>{data.creditTableHeading}</h2>
-          <p style={p}>{data.creditTableIntro}</p>
+          <p style={p}><RichText value={data.creditTableIntro} inline /></p>
           <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 10 }}>
             <thead>
               <tr>
@@ -117,10 +118,10 @@ export const WeeklyScheduleDocument = forwardRef<HTMLDivElement, { data: WeeklyS
               </tr>
             </tbody>
           </table>
-          {data.creditTableCaption && <p style={noteText}>{data.creditTableCaption}</p>}
+          {data.creditTableCaption && <p style={noteText}><RichText value={data.creditTableCaption} inline /></p>}
 
           <h2 style={h2}>Family Confirmation</h2>
-          <p style={p}>{data.familyConfirmationText}</p>
+          <p style={p}><RichText value={data.familyConfirmationText} inline /></p>
           <SignatureRow />
         </Page>
 

@@ -5,6 +5,8 @@ import {
   mapUnit, TPMS_SUBJECTS, TPMS_GRADES, TPMS_UNIT_STATUS, TPMS_PACING_STATUS,
   STANDARDS_BANK, UNIT_STATUS_META, PACING_META, type TpmsUnit,
 } from './tpmsConstants'
+import { RichTextarea } from '@/components/shared/RichTextarea'
+import { RichText } from '@/components/shared/RichText'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 14, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)' }
 const inp: React.CSSProperties = { width: '100%', padding: '7px 10px', borderRadius: 8, border: '1.5px solid #E4EAF2', fontSize: 12, color: '#1A365E', background: '#fff', boxSizing: 'border-box' }
@@ -158,15 +160,15 @@ function UnitModal({ unit, coaches, onClose, onSave, onDelete }: {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div>
                 <label style={lbl}>Essential Questions <span style={{ fontWeight: 400, color: '#94A3B8' }}>(open-ended, thought-provoking)</span></label>
-                <textarea value={form.essentialQuestions} onChange={e => set('essentialQuestions', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} placeholder="What makes a good argument? How does science shape society? Why do things move?" />
+                <RichTextarea value={form.essentialQuestions} onChange={e => set('essentialQuestions', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} placeholder="What makes a good argument? How does science shape society? Why do things move?" />
               </div>
               <div>
                 <label style={lbl}>Enduring Understandings <span style={{ fontWeight: 400, color: '#94A3B8' }}>(big ideas students will retain)</span></label>
-                <textarea value={form.enduringUnderstandings} onChange={e => set('enduringUnderstandings', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} placeholder="Students will understand that... (lasting insights beyond the unit)" />
+                <RichTextarea value={form.enduringUnderstandings} onChange={e => set('enduringUnderstandings', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} placeholder="Students will understand that... (lasting insights beyond the unit)" />
               </div>
               <div>
                 <label style={lbl}>Transfer Goals <span style={{ fontWeight: 400, color: '#94A3B8' }}>(skills applied in new contexts)</span></label>
-                <textarea value={form.transferGoals} onChange={e => set('transferGoals', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Students will be able to independently apply... in real-world contexts" />
+                <RichTextarea value={form.transferGoals} onChange={e => set('transferGoals', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Students will be able to independently apply... in real-world contexts" />
               </div>
               <div>
                 <label style={lbl}>Standards Alignment <span style={{ fontSize: 9, color: '#7A92B0', fontWeight: 400 }}>· Hold Ctrl/Cmd for multi-select</span></label>
@@ -181,11 +183,11 @@ function UnitModal({ unit, coaches, onClose, onSave, onDelete }: {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div>
                 <label style={lbl}>Summative Assessment <span style={{ fontWeight: 400, color: '#94A3B8' }}>(authentic evidence of understanding)</span></label>
-                <textarea value={form.stage2Tasks} onChange={e => set('stage2Tasks', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Description of major assessment task(s)..." />
+                <RichTextarea value={form.stage2Tasks} onChange={e => set('stage2Tasks', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Description of major assessment task(s)..." />
               </div>
               <div>
                 <label style={lbl}>Formative Assessments <span style={{ fontWeight: 400, color: '#94A3B8' }}>(checks for understanding throughout the unit)</span></label>
-                <textarea value={form.stage2Evidence} onChange={e => set('stage2Evidence', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Exit tickets, lab reports, class discussions, portfolios..." />
+                <RichTextarea value={form.stage2Evidence} onChange={e => set('stage2Evidence', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Exit tickets, lab reports, class discussions, portfolios..." />
               </div>
             </div>
           </div>
@@ -195,7 +197,7 @@ function UnitModal({ unit, coaches, onClose, onSave, onDelete }: {
             {secHdr('#059669', '📅 Stage 3 — Learning Plan', 'What learning experiences and instruction support students to achieve the goals?')}
             <div>
               <label style={lbl}>Learning Sequence & Activities <span style={{ fontWeight: 400, color: '#94A3B8' }}>(week-by-week progression)</span></label>
-              <textarea value={form.stage3Plan} onChange={e => set('stage3Plan', e.target.value)} rows={5} style={{ ...inp, resize: 'vertical' }} placeholder={'Week 1: Hook / introduction to big idea\nWeek 2: Direct instruction & skill-building\nWeek 3: Guided & independent practice\nWeek 4: Performance task & reflection'} />
+              <RichTextarea value={form.stage3Plan} onChange={e => set('stage3Plan', e.target.value)} rows={5} style={{ ...inp, resize: 'vertical' }} placeholder={'Week 1: Hook / introduction to big idea\nWeek 2: Direct instruction & skill-building\nWeek 3: Guided & independent practice\nWeek 4: Performance task & reflection'} />
             </div>
           </div>
 
@@ -204,19 +206,19 @@ function UnitModal({ unit, coaches, onClose, onSave, onDelete }: {
             {secHdr('#0891B2', '📎 Additional Information', 'Differentiation, resources, cross-curricular connections and reflection')}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div><label style={lbl}>Differentiation Notes <span style={{ fontWeight: 400, color: '#94A3B8' }}>(IEP / ELL / Gifted)</span></label>
-                <textarea value={form.diff} onChange={e => set('diff', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Accommodations applied across the unit..." />
+                <RichTextarea value={form.diff} onChange={e => set('diff', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Accommodations applied across the unit..." />
               </div>
               <div><label style={lbl}>Resources & Materials</label>
-                <textarea value={form.resources} onChange={e => set('resources', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Textbooks, websites, manipulatives, technology..." />
+                <RichTextarea value={form.resources} onChange={e => set('resources', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Textbooks, websites, manipulatives, technology..." />
               </div>
               <div><label style={lbl}>Cross-Curricular Links</label>
                 <input value={form.crossCurricular} onChange={e => set('crossCurricular', e.target.value)} style={inp} placeholder="Connections to other subjects/courses at same grade..." />
               </div>
               <div><label style={lbl}>Teacher Reflection <span style={{ fontWeight: 400, color: '#94A3B8' }}>(Post-Unit)</span></label>
-                <textarea value={form.reflection} onChange={e => set('reflection', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="What worked? What to revise? Student response?" />
+                <RichTextarea value={form.reflection} onChange={e => set('reflection', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="What worked? What to revise? Student response?" />
               </div>
               <div><label style={lbl}>Additional Notes</label>
-                <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Any other notes, links, or context..." />
+                <RichTextarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Any other notes, links, or context..." />
               </div>
             </div>
           </div>
@@ -375,7 +377,7 @@ export function UnitPlansPage() {
                         </div>
                       ))}
                     </div>
-                    {u.essentialQuestions && <div style={{ fontSize: 10, color: '#7A92B0', fontStyle: 'italic', background: '#F7F9FC', borderRadius: 7, padding: '6px 10px' }}>❓ {u.essentialQuestions}</div>}
+                    {u.essentialQuestions && <div style={{ fontSize: 10, color: '#7A92B0', fontStyle: 'italic', background: '#F7F9FC', borderRadius: 7, padding: '6px 10px' }}>❓ <RichText value={u.essentialQuestions} inline /></div>}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0 }}>
                     <button onClick={() => setModal({ open: true, unit: u })} style={{ padding: '5px 12px', background: '#EDE9FE', color: '#6D28D9', border: 'none', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>✏️ Edit</button>

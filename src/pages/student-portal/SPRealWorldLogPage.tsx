@@ -3,6 +3,8 @@ import { X, MapPin } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
+import { RichTextarea } from '@/components/shared/RichTextarea'
+import { RichText } from '@/components/shared/RichText'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 20 }
 const TYPES = ['Field Trip', 'Community Service', 'Industry Visit', 'Internship', 'Workshop', 'Conference', 'Research', 'Other']
@@ -34,7 +36,7 @@ function Modal({ onClose, onSave }: { onClose: () => void; onSave: (f: typeof EM
             <div><label style={lbl}>Location</label><input value={form.location} onChange={e => set('location', e.target.value)} style={inp} /></div>
             <div><label style={lbl}>Hours</label><input type="number" value={form.hours} onChange={e => set('hours', e.target.value)} style={inp} placeholder="e.g. 3" /></div>
           </div>
-          <div><label style={lbl}>Description / Reflection</label><textarea value={form.description} onChange={e => set('description', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} /></div>
+          <div><label style={lbl}>Description / Reflection</label><RichTextarea value={form.description} onChange={e => set('description', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} /></div>
         </div>
         <div style={{ padding: '12px 20px', borderTop: '1px solid #E4EAF2', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
           <button onClick={onClose} style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid #E4EAF2', background: '#fff', color: '#7A92B0', fontSize: 16, cursor: 'pointer' }}>Cancel</button>
@@ -97,7 +99,7 @@ export function SPRealWorldLogPage() {
                   <span style={{ fontSize: 15, color: '#7A92B0' }}>{new Date(l.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                 </div>
               </div>
-              <p style={{ fontSize: 16, color: '#1A365E', margin: 0, lineHeight: 1.5 }}>{l.description}</p>
+              <p style={{ fontSize: 16, color: '#1A365E', margin: 0, lineHeight: 1.5 }}><RichText value={l.description} inline /></p>
             </div>
           )
         })}

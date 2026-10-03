@@ -16,6 +16,7 @@ import {
   AlertTriangle, FileText, Pencil, Clock, CheckCircle2, Zap, Medal, ArrowRight,
   type LucideIcon,
 } from 'lucide-react'
+import { toPlainText } from '@/lib/richText'
 
 const emptyState: React.CSSProperties = {
   textAlign: 'center',
@@ -331,7 +332,7 @@ export function SPDashboardPage() {
       items.push({
         id: `co-${row.id}`, icon: Pencil, color: '#D97706', bg: '#FFF7ED',
         title: row.subject || 'Correction task',
-        detail: row.instructions.slice(0, 80) + (row.instructions.length > 80 ? '…' : ''),
+        detail: toPlainText(row.instructions).slice(0, 80) + (toPlainText(row.instructions).length > 80 ? '…' : ''),
         sortKey: row.deadline || '9999-12-31', cta: { label: 'View', to: `${prefix}/assignments` },
       })
     })
@@ -339,7 +340,7 @@ export function SPDashboardPage() {
       items.push({
         id: 'coach', icon: ClipboardList, color: '#059669', bg: '#F0FDF4',
         title: `Coach report${coachReport.week ? ` · Week of ${coachReport.week}` : ''}`,
-        detail: coachReport.coach_note.slice(0, 120) + (coachReport.coach_note.length > 120 ? '…' : ''),
+        detail: toPlainText(coachReport.coach_note).slice(0, 120) + (toPlainText(coachReport.coach_note).length > 120 ? '…' : ''),
         sortKey: '9999-12-32',
       })
     }

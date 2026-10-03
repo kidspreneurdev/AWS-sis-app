@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useParentPortal } from '@/contexts/ParentPortalContext'
+import { RichTextarea } from '@/components/shared/RichTextarea'
+import { RichText } from '@/components/shared/RichText'
 
 interface CommRecord {
   id: string
@@ -105,7 +107,7 @@ export function PPCommunicationsPage() {
           </div>
           <div>
             <label style={lbl}>Message</label>
-            <textarea
+            <RichTextarea
               value={body}
               onChange={e => setBody(e.target.value)}
               style={{ ...inp, minHeight: 100, resize: 'vertical' }}
@@ -152,7 +154,7 @@ export function PPCommunicationsPage() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 700, color: '#1A365E' }}>{c.subject}</div>
-                      {c.body && <div style={{ fontSize: 12, color: '#3D5475', marginTop: 4 }}>{c.body}</div>}
+                      {c.body && <div style={{ fontSize: 12, color: '#3D5475', marginTop: 4 }}><RichText value={c.body} inline /></div>}
                     </div>
                     <span style={{
                       fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 6, whiteSpace: 'nowrap', flexShrink: 0,

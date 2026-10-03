@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { uploadFile, downloadUrl } from '@/lib/uploadFile'
 import { StudentCombobox } from '@/components/shared/StudentCombobox'
 import { PTM, PTQD, PTSTAT, PTDELIV, STAT_META, mapAssignment, type PTAssignment, type PTMethodology } from './ptConstants'
+import { RichTextarea } from '@/components/shared/RichTextarea'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 16 }
 
@@ -83,7 +84,7 @@ function PTModal({ sid, mn, students, assignments, onClose, onSave }: {
             </div>
           </div>
           <div><label style={lb}>📋 Project Brief <span style={{ fontWeight: 400, color: '#7A92B0', textTransform: 'none' }}>(shared with student)</span></label>
-            <textarea value={form.brief} onChange={e => setForm(p => ({ ...p, brief: e.target.value }))} rows={3} placeholder="Describe the project challenge, deliverables, and assessment criteria..." style={{ ...fi, resize: 'vertical' }} />
+            <RichTextarea value={form.brief} onChange={e => setForm(p => ({ ...p, brief: e.target.value }))} rows={3} placeholder="Describe the project challenge, deliverables, and assessment criteria..." style={{ ...fi, resize: 'vertical' }} />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div><label style={lb}>Due Date</label><input type="date" value={form.due} onChange={e => setForm(p => ({ ...p, due: e.target.value }))} style={fi} /></div>
@@ -110,11 +111,11 @@ function PTModal({ sid, mn, students, assignments, onClose, onSave }: {
               )}
             </div>
             <div><label style={lb}>Student Reflection / Coach Notes</label>
-              <textarea value={form.reflect} onChange={e => setForm(p => ({ ...p, reflect: e.target.value }))} rows={3} placeholder="Record student's reflection, key observations..." style={{ ...fi, resize: 'vertical' }} />
+              <RichTextarea value={form.reflect} onChange={e => setForm(p => ({ ...p, reflect: e.target.value }))} rows={3} placeholder="Record student's reflection, key observations..." style={{ ...fi, resize: 'vertical' }} />
             </div>
           </div>
           <div><label style={lb}>🔒 Internal Coach Notes</label>
-            <textarea value={form.cnotes} onChange={e => setForm(p => ({ ...p, cnotes: e.target.value }))} rows={2} placeholder="Private notes for coaching, parent comms, next steps..." style={{ ...fi, resize: 'vertical' }} />
+            <RichTextarea value={form.cnotes} onChange={e => setForm(p => ({ ...p, cnotes: e.target.value }))} rows={2} placeholder="Private notes for coaching, parent comms, next steps..." style={{ ...fi, resize: 'vertical' }} />
           </div>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 10, borderTop: '1px solid #E4EAF2' }}>
             <button onClick={onClose} style={{ padding: '8px 16px', background: '#F0F4FA', color: '#1A365E', border: '1.5px solid #DDE6F0', borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
@@ -233,7 +234,7 @@ export function PTAssignPage() {
                 </select>
               </div>
               <div><label style={{ fontSize: 10, fontWeight: 700, color: '#7A92B0', display: 'block', marginBottom: 3 }}>Project Brief</label>
-                <textarea value={grpBrief} onChange={e => setGrpBrief(e.target.value)} rows={4} placeholder="Describe the project challenge, expected deliverables, key milestones..." style={{ ...fi, resize: 'vertical' }} />
+                <RichTextarea value={grpBrief} onChange={e => setGrpBrief(e.target.value)} rows={4} placeholder="Describe the project challenge, expected deliverables, key milestones..." style={{ ...fi, resize: 'vertical' }} />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                 <div><label style={{ fontSize: 10, fontWeight: 700, color: '#7A92B0', display: 'block', marginBottom: 3 }}>Due Date</label>
@@ -302,7 +303,7 @@ export function PTAssignPage() {
                       {td > 0 && <span style={{ fontSize: 9, fontWeight: 700, background: '#F0FDF4', color: '#059669', padding: '2px 8px', borderRadius: 4 }}>✓ {td} approved</span>}
                       {m.type === 'C' && <span style={{ fontSize: 9, fontWeight: 700, background: '#F5F3FF', color: '#7C3AED', padding: '2px 8px', borderRadius: 4 }}>🤝 Collaborative</span>}
                     </div>
-                    <textarea
+                    <RichTextarea
                       value={briefs[m.n] ?? ''}
                       onChange={e => setBriefs(p => ({ ...p, [m.n]: e.target.value }))}
                       placeholder="Project brief for students (optional)..."

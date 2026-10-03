@@ -27,6 +27,9 @@ export function printDocument(node: HTMLElement | null, title: string) {
 <style>
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
+  .rt-content ul { list-style: disc; padding-left: 1.4em; margin: 0.2em 0; }
+  .rt-content ol { list-style: decimal; padding-left: 1.4em; margin: 0.2em 0; }
+  .rt-content p { margin: 0 0 0.4em; }
   body { background: #e9ecf1; font-family: Georgia, "Times New Roman", serif; }
 
   .toolbar {

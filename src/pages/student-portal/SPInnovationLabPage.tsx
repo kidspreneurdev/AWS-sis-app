@@ -3,6 +3,8 @@ import { X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
+import { RichTextarea } from '@/components/shared/RichTextarea'
+import { toPlainText } from '@/lib/richText'
 
 const STATUSES = ['Ideation', 'Prototyping', 'Testing', 'Presenting', 'Complete']
 const EMPTY = { title: '', description: '', status: 'Ideation', notes: '' }
@@ -27,8 +29,8 @@ function Modal({ onClose, onSave }: { onClose: () => void; onSave: (f: typeof EM
         <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div><label style={lbl}>Project Title</label><input value={form.title} onChange={e => set('title', e.target.value)} style={inp} /></div>
           <div><label style={lbl}>Status</label><select value={form.status} onChange={e => set('status', e.target.value)} style={inp}>{STATUSES.map(s => <option key={s}>{s}</option>)}</select></div>
-          <div><label style={lbl}>Description</label><textarea value={form.description} onChange={e => set('description', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} /></div>
-          <div><label style={lbl}>Notes / Updates</label><textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} /></div>
+          <div><label style={lbl}>Description</label><RichTextarea value={form.description} onChange={e => set('description', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} /></div>
+          <div><label style={lbl}>Notes / Updates</label><RichTextarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} /></div>
         </div>
         <div style={{ padding: '12px 20px', borderTop: '1px solid #E4EAF2', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
           <button onClick={onClose} style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid #E4EAF2', background: '#fff', color: '#7A92B0', fontSize: 16, cursor: 'pointer' }}>Cancel</button>
@@ -81,7 +83,7 @@ export function SPInnovationLabPage() {
               {stageProjects.map(p => (
                 <div key={p.id} style={{ background: '#fff', borderRadius: 8, padding: '10px 12px', marginBottom: 8, border: '1px solid #E4EAF2' }}>
                   <div style={{ fontSize: 16, fontWeight: 600, color: '#1A365E', marginBottom: 4 }}>{p.title}</div>
-                  {p.description && <div style={{ fontSize: 15, color: '#7A92B0' }}>{p.description.slice(0, 60)}…</div>}
+                  {p.description && <div style={{ fontSize: 15, color: '#7A92B0' }}>{toPlainText(p.description).slice(0, 60)}…</div>}
                 </div>
               ))}
             </div>

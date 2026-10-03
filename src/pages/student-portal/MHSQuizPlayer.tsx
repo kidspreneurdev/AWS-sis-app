@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ArrowLeft, CheckCircle2, Flag, RotateCcw } from 'lucide-react'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
+import { RichTextarea } from '@/components/shared/RichTextarea'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 16 }
 
@@ -297,7 +298,7 @@ function MyComponentRow({ component, onChanged }: { component: MyComponent; onCh
       {showForm && (
         <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
           {error && <div style={{ color: '#DC2626', fontSize: 15 }}>{error}</div>}
-          <textarea
+          <RichTextarea
             value={text}
             onChange={(e) => setText(e.target.value)}
             rows={3}
@@ -362,7 +363,7 @@ function MyHowScoreRow({ howScore, onChanged }: { howScore: MyHowScore; onChange
       {showForm && (
         <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
           {error && <div style={{ color: '#DC2626', fontSize: 15 }}>{error}</div>}
-          <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} placeholder="Why do you believe this score should be reviewed?" style={{ width: '100%', padding: '7px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 16, resize: 'vertical', boxSizing: 'border-box' }} />
+          <RichTextarea value={text} onChange={(e) => setText(e.target.value)} rows={3} placeholder="Why do you believe this score should be reviewed?" style={{ width: '100%', padding: '7px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 16, resize: 'vertical', boxSizing: 'border-box' }} />
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => void submitDispute()} disabled={submitting || !text.trim()} style={{ padding: '6px 14px', background: text.trim() ? '#059669' : '#CBD5E1', color: '#fff', border: 'none', borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: text.trim() ? 'pointer' : 'not-allowed' }}>
               {submitting ? 'Submitting…' : 'File Dispute'}

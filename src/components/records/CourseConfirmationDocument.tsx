@@ -2,6 +2,7 @@ import { forwardRef } from 'react'
 import type { CourseConfirmationData } from '@/types/courseConfirmation'
 import { RED, INK, SERIF, h2, p, noteText, th, td } from './docStyles'
 import { Page, LogoStrip, DocHeader, InfoBox, Bullets, SignatureRow, ContactBlock } from './docPrimitives'
+import { RichText } from '@/components/shared/RichText'
 
 /**
  * Presentational, page-by-page A4 rendering of the Course Confirmation document.
@@ -28,7 +29,7 @@ export const CourseConfirmationDocument = forwardRef<HTMLDivElement, { data: Cou
           />
 
           <p style={p}>Dear Parent/Guardian,</p>
-          <p style={p}>{data.introParagraph}</p>
+          <p style={p}><RichText value={data.introParagraph} inline /></p>
 
           <h2 style={h2}>Steps Completed</h2>
           <ul style={{ margin: '0 0 8px', paddingLeft: 20 }}>
@@ -38,7 +39,7 @@ export const CourseConfirmationDocument = forwardRef<HTMLDivElement, { data: Cou
               </li>
             ))}
           </ul>
-          {data.stepsFootnote && <p style={noteText}>{data.stepsFootnote}</p>}
+          {data.stepsFootnote && <p style={noteText}><RichText value={data.stepsFootnote} inline /></p>}
 
           <h2 style={h2}>Confirmed Courses for {data.academicYear || 'the Year'}</h2>
           <p style={p}>{data.coursesIntro}</p>
@@ -74,7 +75,7 @@ export const CourseConfirmationDocument = forwardRef<HTMLDivElement, { data: Cou
           </table>
 
           <h2 style={h2}>{data.gradProgressHeading}</h2>
-          {data.gradProgressParagraph && <p style={p}>{data.gradProgressParagraph}</p>}
+          {data.gradProgressParagraph && <p style={p}><RichText value={data.gradProgressParagraph} inline /></p>}
           {data.auditIntro && <p style={p}>{data.auditIntro}</p>}
           {data.auditRows.length > 0 && (
             <table style={{ width: '100%', borderCollapse: 'collapse', margin: '6px 0 14px' }}>
@@ -116,7 +117,7 @@ export const CourseConfirmationDocument = forwardRef<HTMLDivElement, { data: Cou
           <Bullets items={data.nextSteps} />
 
           <h2 style={h2}>Family Confirmation</h2>
-          <p style={p}>{data.familyConfirmationText}</p>
+          <p style={p}><RichText value={data.familyConfirmationText} inline /></p>
           <SignatureRow />
         </Page>
 

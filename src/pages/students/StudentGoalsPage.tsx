@@ -4,6 +4,7 @@ import { useHeaderActions } from '@/contexts/PageHeaderContext'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { formatStudentGrade, normalizeStudentGrade } from '@/types/student'
 import { StudentCombobox } from '@/components/shared/StudentCombobox'
+import { toPlainText } from '@/lib/richText'
 
 interface Goal {
   id: string
@@ -262,7 +263,7 @@ export function StudentGoalsPage() {
                 {/* Reflection */}
                 {g.reflection && (
                   <div style={{ borderLeft: '3px solid #7C3AED', paddingLeft: 10, fontSize: 12, color: '#6B7280', fontStyle: 'italic' }}>
-                    💭 {g.reflection.slice(0, 120)}{g.reflection.length > 120 ? '…' : ''}
+                    💭 {toPlainText(g.reflection).slice(0, 120)}{toPlainText(g.reflection).length > 120 ? '…' : ''}
                   </div>
                 )}
 

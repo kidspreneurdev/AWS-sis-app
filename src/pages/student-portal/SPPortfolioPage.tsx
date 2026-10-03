@@ -4,6 +4,8 @@ import { supabase } from '@/lib/supabase'
 import { uploadFile, downloadUrl } from '@/lib/uploadFile'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
+import { RichTextarea } from '@/components/shared/RichTextarea'
+import { RichText } from '@/components/shared/RichText'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 20 }
 const CATEGORIES = ['Academic', 'Creative', 'Community', 'Innovation', 'Leadership', 'Personal', 'Other']
@@ -46,7 +48,7 @@ function Modal({ studentId, onClose, onSave }: { studentId: string; onClose: () 
         <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div><label style={lbl}>Title</label><input value={form.title} onChange={e => set('title', e.target.value)} style={inp} /></div>
           <div><label style={lbl}>Category</label><select value={form.category} onChange={e => set('category', e.target.value)} style={inp}>{CATEGORIES.map(c => <option key={c}>{c}</option>)}</select></div>
-          <div><label style={lbl}>Description</label><textarea value={form.description} onChange={e => set('description', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} /></div>
+          <div><label style={lbl}>Description</label><RichTextarea value={form.description} onChange={e => set('description', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} /></div>
           <div>
             <label style={{ ...lbl, display: 'flex', alignItems: 'center', gap: 6 }}><Paperclip size={12} /> Upload File</label>
             <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, border: `2px dashed ${file ? '#1DBD6A' : '#CBD5E0'}`, background: file ? '#F0FDF4' : '#F8FAFC', cursor: 'pointer', fontSize: 16, color: file ? '#1DBD6A' : '#7A92B0', fontWeight: file ? 700 : 400 }}>
@@ -108,7 +110,7 @@ export function SPPortfolioPage() {
                 </div>
               </div>
               <div style={{ fontSize: 18, fontWeight: 700, color: '#1A365E', marginBottom: 6 }}>{item.title}</div>
-              {item.description && <p style={{ fontSize: 16, color: '#7A92B0', lineHeight: 1.5, margin: 0 }}>{item.description}</p>}
+              {item.description && <p style={{ fontSize: 16, color: '#7A92B0', lineHeight: 1.5, margin: 0 }}><RichText value={item.description} inline /></p>}
               {item.url && <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
                 <a href={item.url} target="_blank" rel="noopener" style={{ fontSize: 16, color: '#D61F31', textDecoration: 'none', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>View <ArrowRight size={12} /></a>
                 <button onClick={() => void downloadUrl(item.url)} style={{ fontSize: 16, color: '#059669', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Download size={12} /> Download</button>

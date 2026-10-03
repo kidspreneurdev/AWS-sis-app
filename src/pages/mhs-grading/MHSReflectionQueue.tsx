@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/auth.store'
 import { approveReflection, denyReflection } from '@/lib/grading/mhsRollup'
+import { RichText } from '@/components/shared/RichText'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 16 }
 const input: React.CSSProperties = { padding: '6px 10px', border: '1.5px solid #E4EAF2', borderRadius: 8, fontSize: 12, boxSizing: 'border-box' }
@@ -78,7 +79,7 @@ export function MHSReflectionQueue({ onResolved }: MHSReflectionQueueProps) {
       {rows.map((r) => (
         <div key={r.id} style={card}>
           <div style={{ fontSize: 12, fontWeight: 700, color: '#1A365E' }}>{r.studentName} · {r.lessonTitle}</div>
-          <div style={{ fontSize: 12, color: '#3D5475', margin: '8px 0', padding: '8px 10px', background: '#F7F9FC', borderRadius: 8 }}>{r.reflectionText}</div>
+          <div style={{ fontSize: 12, color: '#3D5475', margin: '8px 0', padding: '8px 10px', background: '#F7F9FC', borderRadius: 8 }}><RichText value={r.reflectionText} inline /></div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <span style={{ fontSize: 11, color: '#7A92B0' }}>Requested: {r.pointsRequested ?? 0} pts</span>
             <input

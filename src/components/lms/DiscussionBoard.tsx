@@ -3,6 +3,9 @@ import {
   ArrowLeft, ChevronDown, ChevronUp, ClipboardList, FileText, Info, Lock, Megaphone, MessageSquare, Paperclip, Pencil, Pin,
   Search, LayoutGrid, List, ThumbsUp, Trash2, Upload, ExternalLink, Send, X,
 } from 'lucide-react'
+import { RichTextarea } from '@/components/shared/RichTextarea'
+import { RichText } from '@/components/shared/RichText'
+import { toPlainText } from '@/lib/richText'
 
 /** Shared visual language for Master It's discussion board — used by both the student
  *  portal view (SPMyLearningPage) and the staff moderation view (LMSPage). The two
@@ -258,7 +261,7 @@ function DescriptionCard({ description, editable, busy, onSave }: {
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: '#5A7290' }}>
           <Info size={13} /> About this discussion
         </div>
-        <textarea rows={3} autoFocus value={text} onChange={(e) => setText(e.target.value)} placeholder="What should students discuss here?" style={textareaStyle} />
+        <RichTextarea rows={3} autoFocus value={text} onChange={(e) => setText(e.target.value)} placeholder="What should students discuss here?" style={textareaStyle} />
         {showExistingAttachment && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <AttachmentChip url={description!.attachmentUrl!} name={description!.attachmentFileName} />
@@ -303,7 +306,7 @@ function DescriptionCard({ description, editable, busy, onSave }: {
           <button onClick={startEditing} title="Edit description" style={iconBtnStyle}><Pencil size={13} /></button>
         )}
       </div>
-      {description?.text && <p style={{ margin: 0, fontSize: 14.5, color: '#1A2233', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{description.text}</p>}
+      {description?.text && <p style={{ margin: 0, fontSize: 14.5, color: '#1A2233', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}><RichText value={description.text} inline /></p>}
       {description?.attachmentUrl && <AttachmentChip url={description.attachmentUrl} name={description.attachmentFileName} />}
     </div>
   )
@@ -415,7 +418,7 @@ export function DiscussionBoard({
     return (
       <div style={{ ...card, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         <input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Give your topic a title…" style={inputStyle} />
-        <textarea rows={3} value={newBody} onChange={(e) => setNewBody(e.target.value)} placeholder="What do you want to discuss?" style={textareaStyle} />
+        <RichTextarea rows={3} value={newBody} onChange={(e) => setNewBody(e.target.value)} placeholder="What do you want to discuss?" style={textareaStyle} />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
           {allowAttachments ? (
             <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: newFile ? GREEN : '#7A92B0', fontWeight: newFile ? 700 : 400, cursor: 'pointer' }}>
@@ -468,7 +471,7 @@ export function DiscussionBoard({
           ) : (
             <>
               <h3 style={{ fontSize: 15.5, fontWeight: 700, color: NAVY, margin: 0, lineHeight: 1.3 }}>{topic.title}</h3>
-              <p style={{ fontSize: 13.5, color: '#64748B', lineHeight: 1.5, margin: 0, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const, overflow: 'hidden' }}>{topic.body}</p>
+              <p style={{ fontSize: 13.5, color: '#64748B', lineHeight: 1.5, margin: 0, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const, overflow: 'hidden' }}>{toPlainText(topic.body)}</p>
               {topic.attachmentUrl && <AttachmentChip url={topic.attachmentUrl} name={topic.attachmentFileName} />}
             </>
           )}
@@ -508,7 +511,7 @@ export function DiscussionBoard({
           <div style={{ marginTop: 10 }}><Badges post={selectedTopic} /></div>
           {editingPostId === selectedTopic.id ? (
             <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <textarea rows={4} value={editBody} onChange={(e) => setEditBody(e.target.value)} style={textareaStyle} />
+              <RichTextarea rows={4} value={editBody} onChange={(e) => setEditBody(e.target.value)} style={textareaStyle} />
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                 <button onClick={() => setEditingPostId(null)} style={{ padding: '7px 14px', background: '#F0F4FA', color: NAVY, border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
                 <button onClick={() => { void onEditPost?.(selectedTopic, editBody.trim()); setEditingPostId(null) }} disabled={busy || !editBody.trim()} style={{ padding: '7px 14px', background: NAVY, color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Save</button>
@@ -519,7 +522,7 @@ export function DiscussionBoard({
           ) : (
             <>
               <h2 style={{ fontSize: 19, fontWeight: 700, color: NAVY, margin: '12px 0 6px' }}>{selectedTopic.title}</h2>
-              <p style={{ fontSize: 14.5, color: '#1A2233', lineHeight: 1.6, whiteSpace: 'pre-wrap', margin: '0 0 10px' }}>{selectedTopic.body}</p>
+              <p style={{ fontSize: 14.5, color: '#1A2233', lineHeight: 1.6, whiteSpace: 'pre-wrap', margin: '0 0 10px' }}><RichText value={selectedTopic.body} inline /></p>
               {selectedTopic.attachmentUrl && <AttachmentChip url={selectedTopic.attachmentUrl} name={selectedTopic.attachmentFileName} />}
               <div style={{ marginTop: 10 }}><ReactionControl post={selectedTopic} mode={mode} onReact={onReact} readOnly={readOnly} /></div>
             </>
@@ -533,7 +536,7 @@ export function DiscussionBoard({
           {threadReplies.map((reply, idx) => (
             editingPostId === reply.id ? (
               <div key={reply.id} style={{ padding: '12px 4px', borderTop: idx > 0 ? '1px solid #E4EAF2' : undefined, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <textarea rows={3} value={editBody} onChange={(e) => setEditBody(e.target.value)} style={textareaStyle} />
+                <RichTextarea rows={3} value={editBody} onChange={(e) => setEditBody(e.target.value)} style={textareaStyle} />
                 <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                   <button onClick={() => setEditingPostId(null)} style={{ padding: '6px 12px', background: '#F0F4FA', color: NAVY, border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
                   <button onClick={() => { void onEditPost?.(reply, editBody.trim()); setEditingPostId(null) }} disabled={busy || !editBody.trim()} style={{ padding: '6px 12px', background: NAVY, color: '#fff', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Save</button>
@@ -555,7 +558,7 @@ export function DiscussionBoard({
                     <div style={{ fontSize: 14, color: '#94A3B8', fontStyle: 'italic', marginTop: 4 }}>[deleted]</div>
                   ) : (
                     <>
-                      <p style={{ fontSize: 14, color: '#1A2233', lineHeight: 1.55, margin: '4px 0 8px', whiteSpace: 'pre-wrap' }}>{reply.body}</p>
+                      <p style={{ fontSize: 14, color: '#1A2233', lineHeight: 1.55, margin: '4px 0 8px', whiteSpace: 'pre-wrap' }}><RichText value={reply.body} inline /></p>
                       {reply.attachmentUrl && <div style={{ marginBottom: 8 }}><AttachmentChip url={reply.attachmentUrl} name={reply.attachmentFileName} /></div>}
                       <ReactionControl post={reply} mode={mode} onReact={onReact} readOnly={readOnly} />
                     </>
@@ -574,7 +577,7 @@ export function DiscussionBoard({
           <div style={{ ...card, padding: 14, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
             <Avatar name={mode === 'staff' ? 'Instructor' : 'You'} size={32} />
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <textarea rows={2} value={replyBody} onChange={(e) => setReplyBody(e.target.value)} placeholder="Write a reply…" disabled={readOnly} style={textareaStyle} />
+              <RichTextarea rows={2} value={replyBody} onChange={(e) => setReplyBody(e.target.value)} placeholder="Write a reply…" disabled={readOnly} style={textareaStyle} />
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                 {allowAttachments ? (
                   <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: replyFile ? GREEN : '#7A92B0', fontWeight: replyFile ? 700 : 400, cursor: 'pointer' }}>

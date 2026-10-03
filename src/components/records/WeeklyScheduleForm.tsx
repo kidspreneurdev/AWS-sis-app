@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type {
   WeeklyScheduleData, WSNote, WSContact, WSScheduleRow, WSCreditRow,
 } from '@/types/weeklySchedule'
+import { RichTextarea } from '@/components/shared/RichTextarea'
 
 const label: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4, display: 'block' }
 const inp: React.CSSProperties = { width: '100%', padding: '7px 10px', borderRadius: 8, border: '1px solid #E4EAF2', fontSize: 13, color: '#1A365E', background: '#fff', boxSizing: 'border-box', fontFamily: 'inherit' }
@@ -15,7 +16,7 @@ function Field({ labelText, value, onChange, textarea }: { labelText: string; va
     <div style={{ marginBottom: 10 }}>
       <label style={label}>{labelText}</label>
       {textarea
-        ? <textarea style={area} value={value} onChange={e => onChange(e.target.value)} />
+        ? <RichTextarea style={area} value={value} onChange={e => onChange(e.target.value)} />
         : <input style={inp} value={value} onChange={e => onChange(e.target.value)} />}
     </div>
   )
@@ -32,7 +33,7 @@ function NoteList({ title, items, onChange }: { title: string; items: WSNote[]; 
               <label style={label}>Title</label>
               <input style={{ ...inp, marginBottom: 6 }} value={n.title} onChange={e => onChange(items.map((x, j) => j === i ? { ...x, title: e.target.value } : x))} />
               <label style={label}>Body</label>
-              <textarea style={{ ...area, minHeight: 50 }} value={n.body} onChange={e => onChange(items.map((x, j) => j === i ? { ...x, body: e.target.value } : x))} />
+              <RichTextarea style={{ ...area, minHeight: 50 }} value={n.body} onChange={e => onChange(items.map((x, j) => j === i ? { ...x, body: e.target.value } : x))} />
             </div>
             <button style={{ ...smallBtn, alignSelf: 'start' }} onClick={() => onChange(items.filter((_, j) => j !== i))}>✕</button>
           </div>
@@ -102,7 +103,7 @@ export function WeeklyScheduleForm({
           <Field labelText="Section heading" value={d.scheduleHeading} onChange={v => set('scheduleHeading', v)} />
           {d.scheduleParagraphs.map((para, i) => (
             <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-              <textarea style={{ ...area, minHeight: 50 }} value={para} onChange={e => set('scheduleParagraphs', d.scheduleParagraphs.map((x, j) => j === i ? e.target.value : x))} />
+              <RichTextarea style={{ ...area, minHeight: 50 }} value={para} onChange={e => set('scheduleParagraphs', d.scheduleParagraphs.map((x, j) => j === i ? e.target.value : x))} />
               <button style={{ ...smallBtn, alignSelf: 'start' }} onClick={() => set('scheduleParagraphs', d.scheduleParagraphs.filter((_, j) => j !== i))}>✕</button>
             </div>
           ))}

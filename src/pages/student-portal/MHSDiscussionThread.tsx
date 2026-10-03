@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { X, ArrowLeft } from 'lucide-react'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
+import { RichTextarea } from '@/components/shared/RichTextarea'
+import { RichText } from '@/components/shared/RichText'
+import { toPlainText } from '@/lib/richText'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 16 }
 
@@ -70,7 +73,8 @@ export function MHSDiscussionThread() {
     }
   }, [getToken])
 
-  const wordCount = composerBody.trim() ? composerBody.trim().split(/\s+/).filter(Boolean).length : 0
+  const plainBody = toPlainText(composerBody).trim()
+  const wordCount = plainBody ? plainBody.split(/\s+/).filter(Boolean).length : 0
   const minWords = thread?.lesson.minWords ?? 150
 
   async function submitPost() {
@@ -156,7 +160,7 @@ export function MHSDiscussionThread() {
                   </div>
                   <div style={{ fontSize: 14, color: '#94A3B8' }}>{p.editedAfterSubmission ? 'edited · ' : ''}{p.wordCount} words</div>
                 </div>
-                <div style={{ fontSize: 16, color: '#3D5475', marginTop: 6, whiteSpace: 'pre-wrap' }}>{p.body}</div>
+                <div style={{ fontSize: 16, color: '#3D5475', marginTop: 6, whiteSpace: 'pre-wrap' }}><RichText value={p.body} inline /></div>
                 <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
                   {!p.parentPostId && (
                     <button
@@ -186,7 +190,7 @@ export function MHSDiscussionThread() {
               </div>
             )}
             {editingPostId && <div style={{ fontSize: 15, color: '#D97706', marginBottom: 6 }}>Editing your post — this will be flagged as edited-after-submission.</div>}
-            <textarea
+            <RichTextarea
               value={composerBody}
               onChange={(e) => setComposerBody(e.target.value)}
               onPaste={() => setPasteDetected(true)}

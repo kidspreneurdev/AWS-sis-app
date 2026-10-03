@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type {
   CourseConfirmationData, CCStep, CCCourseRow, CCAuditRow, CCNote, CCContact,
 } from '@/types/courseConfirmation'
+import { RichTextarea } from '@/components/shared/RichTextarea'
 
 const label: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4, display: 'block' }
 const inp: React.CSSProperties = { width: '100%', padding: '7px 10px', borderRadius: 8, border: '1px solid #E4EAF2', fontSize: 13, color: '#1A365E', background: '#fff', boxSizing: 'border-box', fontFamily: 'inherit' }
@@ -15,7 +16,7 @@ function Field({ labelText, value, onChange, textarea }: { labelText: string; va
     <div style={{ marginBottom: 10 }}>
       <label style={label}>{labelText}</label>
       {textarea
-        ? <textarea style={area} value={value} onChange={e => onChange(e.target.value)} />
+        ? <RichTextarea style={area} value={value} onChange={e => onChange(e.target.value)} />
         : <input style={inp} value={value} onChange={e => onChange(e.target.value)} />}
     </div>
   )
@@ -138,7 +139,7 @@ export function CourseConfirmationForm({
                   <label style={label}>Title</label>
                   <input style={{ ...inp, marginBottom: 6 }} value={n.title} onChange={e => updateList<CCNote>('schedulingNotes', i, { title: e.target.value })} />
                   <label style={label}>Body</label>
-                  <textarea style={{ ...area, minHeight: 52 }} value={n.body} onChange={e => updateList<CCNote>('schedulingNotes', i, { body: e.target.value })} />
+                  <RichTextarea style={{ ...area, minHeight: 52 }} value={n.body} onChange={e => updateList<CCNote>('schedulingNotes', i, { body: e.target.value })} />
                 </div>
                 <button style={{ ...smallBtn, alignSelf: 'start' }} onClick={() => removeRow('schedulingNotes', i)}>✕</button>
               </div>
@@ -155,7 +156,7 @@ export function CourseConfirmationForm({
                   <label style={label}>Title</label>
                   <input style={{ ...inp, marginBottom: 6 }} value={n.title} onChange={e => updateList<CCNote>('nextSteps', i, { title: e.target.value })} />
                   <label style={label}>Body</label>
-                  <textarea style={{ ...area, minHeight: 52 }} value={n.body} onChange={e => updateList<CCNote>('nextSteps', i, { body: e.target.value })} />
+                  <RichTextarea style={{ ...area, minHeight: 52 }} value={n.body} onChange={e => updateList<CCNote>('nextSteps', i, { body: e.target.value })} />
                 </div>
                 <button style={{ ...smallBtn, alignSelf: 'start' }} onClick={() => removeRow('nextSteps', i)}>✕</button>
               </div>

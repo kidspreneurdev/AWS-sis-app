@@ -3,6 +3,8 @@ import { X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import { usePortalReadOnly } from '@/contexts/PortalReadOnlyContext'
+import { RichTextarea } from '@/components/shared/RichTextarea'
+import { RichText } from '@/components/shared/RichText'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)', padding: 20 }
 const STATUS_META: Record<string, { bg: string; tc: string }> = {
@@ -30,12 +32,12 @@ function Modal({ onClose, onSave }: { onClose: () => void; onSave: (f: typeof EM
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#9EB3C8', cursor: 'pointer', display: 'inline-flex', padding: 0 }}><X size={20} /></button>
         </div>
         <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div><label style={lbl}>Goal</label><textarea value={form.goal} onChange={e => set('goal', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} placeholder="What do you want to achieve?" /></div>
+          <div><label style={lbl}>Goal</label><RichTextarea value={form.goal} onChange={e => set('goal', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} placeholder="What do you want to achieve?" /></div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div><label style={lbl}>Deadline</label><input type="date" value={form.deadline} onChange={e => set('deadline', e.target.value)} style={inp} /></div>
             <div><label style={lbl}>Status</label><select value={form.status} onChange={e => set('status', e.target.value)} style={inp}>{Object.keys(STATUS_META).map(s => <option key={s}>{s}</option>)}</select></div>
           </div>
-          <div><label style={lbl}>Initial Reflection</label><textarea value={form.reflection} onChange={e => set('reflection', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Why is this important to you?" /></div>
+          <div><label style={lbl}>Initial Reflection</label><RichTextarea value={form.reflection} onChange={e => set('reflection', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Why is this important to you?" /></div>
         </div>
         <div style={{ padding: '12px 20px', borderTop: '1px solid #E4EAF2', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
           <button onClick={onClose} style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid #E4EAF2', background: '#fff', color: '#7A92B0', fontSize: 16, cursor: 'pointer' }}>Cancel</button>
@@ -97,8 +99,8 @@ export function SPGoalsPage() {
                   {g.status !== 'Complete' && !readOnly && <button onClick={() => updateStatus(g.id, 'Complete')} style={{ fontSize: 15, color: '#10B981', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Mark done</button>}
                 </div>
               </div>
-              <p style={{ fontSize: 17, fontWeight: 600, color: '#1A365E', lineHeight: 1.5, margin: '0 0 8px' }}>{g.goal}</p>
-              {g.reflection && <p style={{ fontSize: 16, color: '#7A92B0', fontStyle: 'italic', margin: 0 }}>"{g.reflection}"</p>}
+              <p style={{ fontSize: 17, fontWeight: 600, color: '#1A365E', lineHeight: 1.5, margin: '0 0 8px' }}><RichText value={g.goal} inline /></p>
+              {g.reflection && <p style={{ fontSize: 16, color: '#7A92B0', fontStyle: 'italic', margin: 0 }}><RichText value={g.reflection} inline /></p>}
             </div>
           )
         })}

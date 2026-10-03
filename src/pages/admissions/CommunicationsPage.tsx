@@ -5,6 +5,8 @@ import { toast } from '@/lib/toast'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { StudentCombobox } from '@/components/shared/StudentCombobox'
+import { RichTextarea } from '@/components/shared/RichTextarea'
+import { RichText } from '@/components/shared/RichText'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type CommType = 'Email' | 'Call' | 'SMS' | 'Meeting' | 'Letter'
@@ -100,7 +102,7 @@ function AddCommModal({ students, onClose, onSave, defaultSentBy }: {
             <div><label style={lbl}>Sent By</label><input value={form.sentBy} onChange={e => set('sentBy', e.target.value)} placeholder="Staff name" style={inp} /></div>
           </div>
           <div><label style={lbl}>Subject</label><input value={form.subject} onChange={e => set('subject', e.target.value)} placeholder="Subject / topic" style={inp} /></div>
-          <div><label style={lbl}>Details</label><textarea value={form.body} onChange={e => set('body', e.target.value)} rows={4} placeholder="Summary of the communication…" style={{ ...inp, resize: 'vertical' }} /></div>
+          <div><label style={lbl}>Details</label><RichTextarea value={form.body} onChange={e => set('body', e.target.value)} rows={4} placeholder="Summary of the communication…" style={{ ...inp, resize: 'vertical' }} /></div>
         </div>
         <div style={{ padding: '12px 20px', borderTop: '1px solid #E4EAF2', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
           <button onClick={onClose} style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid #E4EAF2', background: '#fff', color: '#7A92B0', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
@@ -314,7 +316,7 @@ export function CommunicationsPage() {
               </div>
               {isExpanded && c.body && (
                 <div style={{ padding: '0 16px 16px', borderTop: '1px solid #F0F4F8' }}>
-                  <div style={{ paddingTop: 12, fontSize: 13, color: '#4A6480', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{c.body}</div>
+                  <div style={{ paddingTop: 12, fontSize: 13, color: '#4A6480', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}><RichText value={c.body} inline /></div>
                   <div style={{ fontSize: 11, color: '#BDD0E8', marginTop: 8 }}>{new Date(c.sentAt).toLocaleString()}</div>
                 </div>
               )}

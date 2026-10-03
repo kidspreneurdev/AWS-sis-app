@@ -4,6 +4,8 @@ import { toast } from '@/lib/toast'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { StudentCombobox } from '@/components/shared/StudentCombobox'
+import { RichTextarea } from '@/components/shared/RichTextarea'
+import { toPlainText } from '@/lib/richText'
 
 const TYPES = [
   'Positive Recognition', 'Tardiness', 'Disruption', 'Conflict', 'Academic Concern',
@@ -78,8 +80,8 @@ function BehaviourModal({ entry, students, onClose, onSave, onDelete }: {
             <div><label style={lbl}>Time</label><input type="time" value={form.time} onChange={e => set('time', e.target.value)} style={inp} /></div>
             <div><label style={lbl}>Location</label><input value={form.location} onChange={e => set('location', e.target.value)} placeholder="e.g. Classroom 3B" style={inp} /></div>
           </div>
-          <div><label style={lbl}>Description <span style={{ color: '#D61F31' }}>*</span></label><textarea value={form.description} onChange={e => set('description', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} /></div>
-          <div><label style={lbl}>Action Taken</label><textarea value={form.actionTaken} onChange={e => set('actionTaken', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} /></div>
+          <div><label style={lbl}>Description <span style={{ color: '#D61F31' }}>*</span></label><RichTextarea value={form.description} onChange={e => set('description', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} /></div>
+          <div><label style={lbl}>Action Taken</label><RichTextarea value={form.actionTaken} onChange={e => set('actionTaken', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} /></div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div><label style={lbl}>Recorded By</label><input value={form.staffMember} onChange={e => set('staffMember', e.target.value)} style={inp} /></div>
             <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 4 }}>
@@ -89,7 +91,7 @@ function BehaviourModal({ entry, students, onClose, onSave, onDelete }: {
               </label>
             </div>
           </div>
-          <div><label style={lbl}>Notes</label><textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} /></div>
+          <div><label style={lbl}>Notes</label><RichTextarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} /></div>
         </div>
         <div style={{ padding: '12px 20px', borderTop: '1px solid #E4EAF2', display: 'flex', justifyContent: 'space-between', flexShrink: 0 }}>
           <div>{entry && onDelete && <button onClick={() => { if (confirm('Delete?')) onDelete(entry.id).then(onClose) }} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #FEE2E2', background: '#FFF0F1', color: '#D61F31', fontSize: 13, cursor: 'pointer' }}>Delete</button>}</div>
@@ -140,7 +142,7 @@ export function BehaviourLogPage() {
     const q = search.toLowerCase()
     return entries.filter(e => {
       if (filterType !== 'All' && e.type !== filterType) return false
-      if (q && !e.studentName.toLowerCase().includes(q) && !e.description.toLowerCase().includes(q)) return false
+      if (q && !e.studentName.toLowerCase().includes(q) && !toPlainText(e.description).toLowerCase().includes(q)) return false
       return true
     })
   }, [entries, search, filterType])
@@ -215,8 +217,8 @@ export function BehaviourLogPage() {
                 <td style={{ ...td, fontWeight: 600 }}>{e.studentName}</td>
                 <td style={{ ...td, color: '#7A92B0' }}>{e.grade}</td>
                 <td style={td}><span style={{ padding: '3px 10px', borderRadius: 20, background: m.bg, color: m.tc, fontSize: 12, fontWeight: 600 }}>{e.type}</span></td>
-                <td style={{ ...td, color: '#7A92B0', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.description}</td>
-                <td style={{ ...td, color: '#7A92B0', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.actionTaken || '—'}</td>
+                <td style={{ ...td, color: '#7A92B0', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{toPlainText(e.description)}</td>
+                <td style={{ ...td, color: '#7A92B0', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{toPlainText(e.actionTaken) || '—'}</td>
                 <td style={{ ...td, textAlign: 'center' }}>{e.followUp ? <span style={{ color: '#D97706', fontWeight: 700, fontSize: 12 }}>⚠ Yes</span> : <span style={{ color: '#C4D0DE' }}>—</span>}</td>
                 <td style={{ ...td, color: '#7A92B0' }}>{e.staffMember || '—'}</td>
                 <td style={td} onClick={ev => ev.stopPropagation()}><button onClick={() => setModal({ open: true, entry: e })} style={{ padding: '5px 12px', borderRadius: 7, border: '1px solid #E4EAF2', background: '#fff', color: '#1A365E', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Edit</button></td>

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useAuthStore } from '@/store/auth.store'
 import { applyGateOverride } from '@/lib/grading/mhsRollup'
+import { RichTextarea } from '@/components/shared/RichTextarea'
 
 interface MHSGateOverridePanelProps {
   lessonComponentId: string
@@ -26,7 +27,7 @@ export function MHSGateOverridePanel({ lessonComponentId, studentId, onDone }: M
   return (
     <div style={{ padding: 10, background: '#FFF7ED', border: '1.5px solid #FDBA74', borderRadius: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={{ fontSize: 11, fontWeight: 800, color: '#9A3412' }}>⚠ Gate flagged — 4th quiz attempt failed. Clearing requires a reason (logged permanently).</div>
-      <textarea
+      <RichTextarea
         value={reason}
         onChange={(e) => setReason(e.target.value)}
         rows={2}

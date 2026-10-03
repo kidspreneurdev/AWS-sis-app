@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/auth.store'
 import { recomputeGradeForLesson } from '@/lib/grading/mhsRollup'
 import { toast } from '@/lib/toast'
+import { RichTextarea } from '@/components/shared/RichTextarea'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #E4EAF2', padding: 14 }
 
@@ -137,7 +138,7 @@ export function MHSHowScorer({ lessonId, studentId, onSaved }: MHSHowScorerProps
           </div>
         )
       })}
-      <textarea
+      <RichTextarea
         value={comment}
         onChange={(e) => setComment(e.target.value)}
         rows={2}

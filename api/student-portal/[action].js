@@ -51,8 +51,9 @@ function formatStudentGrade(grade) {
   return String(n)
 }
 
+// Bodies may be rich-text HTML; count words in the visible text only.
 function countWords(text) {
-  return text.trim().split(/\s+/).filter(Boolean).length
+  return text.replace(/<br\s*\/?>|<\/(p|div|li)>/gi, ' ').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim().split(/\s+/).filter(Boolean).length
 }
 
 async function login(req, res, adminClient) {
@@ -1384,7 +1385,7 @@ async function lmsSubmitMidtermBlock(req, res, adminClient) {
   if (contentError || !content) return json(res, 404, { error: 'Review not found.' })
 
   const extra = content.extra || {}
-  if (extra.isMidtermReview !== true) return json(res, 400, { error: 'This item is not a Midterm Review or Finals.' })
+  if (extra.isMidtermReview !== true) return json(res, 400, { error: 'This item is not a Midterm Review, Finals or custom activity.' })
   if (extra.locked === true) return json(res, 403, { error: 'This review has been locked by your teacher.' })
   let sections = []
   try { sections = JSON.parse(extra.midtermSectionsJson || '[]') } catch { sections = [] }

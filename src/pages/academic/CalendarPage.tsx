@@ -2,6 +2,8 @@ import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
 import { toast } from '@/lib/toast'
+import { RichTextarea } from '@/components/shared/RichTextarea'
+import { RichText } from '@/components/shared/RichText'
 
 const EVENT_TYPES = ['Holiday', 'Exam', 'Meeting', 'Activity', 'Deadline', 'Other']
 const TYPE_META: Record<string, { bg: string; tc: string; dot: string }> = {
@@ -46,7 +48,7 @@ function EventModal({ event, onClose, onSave, onDelete }: { event: Partial<CalEv
             <div><label style={lbl}>Type</label><select value={form.type} onChange={e => set('type', e.target.value)} style={inp}>{EVENT_TYPES.map(t => <option key={t}>{t}</option>)}</select></div>
             <div><label style={lbl}>Campus</label><input value={form.campus} onChange={e => set('campus', e.target.value)} placeholder="All campuses" style={inp} /></div>
           </div>
-          <div><label style={lbl}>Description</label><textarea value={form.description} onChange={e => set('description', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} /></div>
+          <div><label style={lbl}>Description</label><RichTextarea value={form.description} onChange={e => set('description', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} /></div>
         </div>
         <div style={{ padding: '12px 20px', borderTop: '1px solid #E4EAF2', display: 'flex', justifyContent: 'space-between' }}>
           <div>{event.id && onDelete && <button onClick={() => { if (confirm('Delete?')) onDelete(event.id!).then(onClose) }} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #FEE2E2', background: '#FFF0F1', color: '#D61F31', fontSize: 13, cursor: 'pointer' }}>Delete</button>}</div>
@@ -151,7 +153,7 @@ export function CalendarPage() {
                     <span style={{ padding: '2px 7px', borderRadius: 20, background: 'rgba(255,255,255,0.6)', color: m.tc, fontSize: 10, fontWeight: 700, flexShrink: 0 }}>{e.type}</span>
                   </div>
                   <div style={{ fontSize: 11, color: '#7A92B0', marginTop: 3 }}>{e.date}{e.endDate && e.endDate !== e.date ? ` → ${e.endDate}` : ''}{e.campus ? ` · ${e.campus}` : ''}</div>
-                  {e.description && <div style={{ fontSize: 12, color: '#4A6480', marginTop: 4 }}>{e.description}</div>}
+                  {e.description && <div style={{ fontSize: 12, color: '#4A6480', marginTop: 4 }}><RichText value={e.description} inline /></div>}
                 </div>
               )
             })}

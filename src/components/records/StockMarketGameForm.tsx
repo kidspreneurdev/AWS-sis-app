@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { StockMarketGameData } from '@/types/stockMarketGame'
+import { RichTextarea } from '@/components/shared/RichTextarea'
 
 const label: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4, display: 'block' }
 const inp: React.CSSProperties = { width: '100%', padding: '7px 10px', borderRadius: 8, border: '1px solid #E4EAF2', fontSize: 13, color: '#1A365E', background: '#fff', boxSizing: 'border-box', fontFamily: 'inherit' }
@@ -12,7 +13,7 @@ function Field({ labelText, value, onChange, textarea }: { labelText: string; va
     <div style={{ marginBottom: 10 }}>
       <label style={label}>{labelText}</label>
       {textarea
-        ? <textarea style={area} value={value} onChange={e => onChange(e.target.value)} />
+        ? <RichTextarea style={area} value={value} onChange={e => onChange(e.target.value)} />
         : <input style={inp} value={value} onChange={e => onChange(e.target.value)} />}
     </div>
   )

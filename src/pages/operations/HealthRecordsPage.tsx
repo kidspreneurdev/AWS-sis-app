@@ -4,6 +4,8 @@ import { toast } from '@/lib/toast'
 import { useHeaderActions } from '@/contexts/PageHeaderContext'
 import { useCampusFilter } from '@/hooks/useCampusFilter'
 import { StudentCombobox } from '@/components/shared/StudentCombobox'
+import { RichTextarea } from '@/components/shared/RichTextarea'
+import { toPlainText } from '@/lib/richText'
 
 interface HealthRec {
   id: string; studentId: string; studentName: string; grade: string
@@ -61,9 +63,9 @@ function HealthModal({ rec, students, onClose, onSave, onDelete }: {
             <div><label style={lbl}>Special Education / Support</label><select value={form.iep} onChange={e => set('iep', e.target.value)} style={inp}>{IEP_OPTIONS.map(o => <option key={o}>{o}</option>)}</select></div>
             <div><label style={lbl}>Dietary Restrictions</label><input value={form.dietary} onChange={e => set('dietary', e.target.value)} placeholder="e.g. Vegetarian, Halal, Nut-free" style={inp} /></div>
           </div>
-          <div><label style={lbl}>Known Allergies</label><textarea value={form.allergies} onChange={e => set('allergies', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="e.g. Peanuts, Shellfish, Latex" /></div>
-          <div><label style={lbl}>Current Medications</label><textarea value={form.medications} onChange={e => set('medications', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="e.g. EpiPen, Ventolin, Ritalin" /></div>
-          <div><label style={lbl}>Chronic Conditions</label><textarea value={form.conditions} onChange={e => set('conditions', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} /></div>
+          <div><label style={lbl}>Known Allergies</label><RichTextarea value={form.allergies} onChange={e => set('allergies', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="e.g. Peanuts, Shellfish, Latex" /></div>
+          <div><label style={lbl}>Current Medications</label><RichTextarea value={form.medications} onChange={e => set('medications', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="e.g. EpiPen, Ventolin, Ritalin" /></div>
+          <div><label style={lbl}>Chronic Conditions</label><RichTextarea value={form.conditions} onChange={e => set('conditions', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} /></div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div><label style={lbl}>Immunization Records</label><input value={form.immunizations} onChange={e => set('immunizations', e.target.value)} placeholder="e.g. Up to date 2024" style={inp} /></div>
             <div><label style={lbl}>Vision / Hearing Notes</label><input value={form.visionHearing} onChange={e => set('visionHearing', e.target.value)} placeholder="e.g. Corrective lenses" style={inp} /></div>
@@ -72,7 +74,7 @@ function HealthModal({ rec, students, onClose, onSave, onDelete }: {
             <div><label style={lbl}>Physician / Pediatrician</label><input value={form.physician} onChange={e => set('physician', e.target.value)} style={inp} /></div>
             <div><label style={lbl}>Physician Phone</label><input value={form.physicianPhone} onChange={e => set('physicianPhone', e.target.value)} style={inp} /></div>
           </div>
-          <div><label style={lbl}>Nurse / Counselor Notes <span style={{ fontSize: 10, color: '#D61F31', fontWeight: 400 }}>(confidential)</span></label><textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} /></div>
+          <div><label style={lbl}>Nurse / Counselor Notes <span style={{ fontSize: 10, color: '#D61F31', fontWeight: 400 }}>(confidential)</span></label><RichTextarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} /></div>
         </div>
         <div style={{ padding: '12px 20px', borderTop: '1px solid #E4EAF2', display: 'flex', justifyContent: 'space-between', flexShrink: 0 }}>
           <div>{rec && onDelete && <button onClick={() => { if (confirm('Delete?')) onDelete(rec.id).then(onClose) }} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #FEE2E2', background: '#FFF0F1', color: '#D61F31', fontSize: 13, cursor: 'pointer' }}>Delete</button>}</div>
@@ -189,8 +191,8 @@ export function HealthRecordsPage() {
                 <td style={{ ...td, fontWeight: 600 }}>{r.studentName}</td>
                 <td style={{ ...td, color: '#7A92B0' }}>{r.grade}</td>
                 <td style={{ ...td, textAlign: 'center' }}>{r.bloodGroup ? <span style={{ background: '#FEE2E2', color: '#991B1B', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>{r.bloodGroup}</span> : <span style={{ color: '#C4D0DE' }}>—</span>}</td>
-                <td style={{ ...td, color: r.allergies ? '#B45309' : '#C4D0DE', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.allergies || '—'}</td>
-                <td style={{ ...td, color: r.medications ? '#0369A1' : '#C4D0DE', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.medications || '—'}</td>
+                <td style={{ ...td, color: r.allergies ? '#B45309' : '#C4D0DE', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{toPlainText(r.allergies) || '—'}</td>
+                <td style={{ ...td, color: r.medications ? '#0369A1' : '#C4D0DE', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{toPlainText(r.medications) || '—'}</td>
                 <td style={td}>{r.iep && r.iep !== 'None' ? <span style={{ background: '#F3EDFF', color: '#6D28D9', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>{r.iep}</span> : <span style={{ color: '#C4D0DE' }}>—</span>}</td>
                 <td style={td} onClick={e => e.stopPropagation()}><button onClick={() => setModal({ open: true, rec: r })} style={{ padding: '5px 12px', borderRadius: 7, border: '1px solid #E4EAF2', background: '#fff', color: '#1A365E', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Edit</button></td>
               </tr>

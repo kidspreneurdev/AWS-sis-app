@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/lib/toast'
 import { StudentCombobox } from '@/components/shared/StudentCombobox'
+import { RichTextarea } from '@/components/shared/RichTextarea'
 
 const STATUSES = ['Not Started', 'In Progress', 'Submitted', 'Graded']
 const STATUS_META: Record<string, { bg: string; tc: string }> = {
@@ -69,7 +70,7 @@ function ProjectModal({ project, students, onClose, onSave, onDelete }: {
             <div><label style={lbl}>Status</label><select value={form.status} onChange={e => set('status', e.target.value)} style={inp}>{STATUSES.map(s => <option key={s}>{s}</option>)}</select></div>
             <div><label style={lbl}>Score</label><input type="number" min={0} max={100} value={form.score} onChange={e => set('score', e.target.value)} style={inp} placeholder="—" /></div>
           </div>
-          <div><label style={lbl}>Feedback</label><textarea value={form.feedback} onChange={e => set('feedback', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} /></div>
+          <div><label style={lbl}>Feedback</label><RichTextarea value={form.feedback} onChange={e => set('feedback', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} /></div>
         </div>
         <div style={{ padding: '12px 20px', borderTop: '1px solid #E4EAF2', display: 'flex', justifyContent: 'space-between', flexShrink: 0 }}>
           <div>{project && onDelete && <button onClick={() => { if (confirm('Delete?')) onDelete(project.id).then(onClose) }} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #FEE2E2', background: '#FFF0F1', color: '#D61F31', fontSize: 13, cursor: 'pointer' }}>Delete</button>}</div>

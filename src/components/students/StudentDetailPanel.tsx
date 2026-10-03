@@ -5,6 +5,7 @@ import {
   type Student, type StudentStatus,
   STATUSES, STATUS_META, DOCUMENT_TYPES, formatStudentGrade, fullName,
 } from '@/types/student'
+import { RichText } from '@/components/shared/RichText'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type CommSchema = 'legacy' | 'modern'
@@ -296,7 +297,7 @@ export function StudentDetailPanel({ student, onClose, onStatusChange, onEdit, o
                   <InfoRow label="Allergies" value={student.allergy} />
                   <InfoRow label="Medications" value={student.meds} />
                   <InfoRow label="Physician" value={student.physician ? `${student.physician}${student.physicianPhone ? ` · ${student.physicianPhone}` : ''}` : null} />
-                  {student.healthNotes && <div style={{ fontSize: 13, color: '#4A6480', background: '#FFF6E0', borderRadius: 8, padding: '8px 12px', marginTop: 4, lineHeight: 1.5, border: '1px solid #FFE4A0' }}>{student.healthNotes}</div>}
+                  {student.healthNotes && <div style={{ fontSize: 13, color: '#4A6480', background: '#FFF6E0', borderRadius: 8, padding: '8px 12px', marginTop: 4, lineHeight: 1.5, border: '1px solid #FFE4A0' }}><RichText value={student.healthNotes} inline /></div>}
                 </>
               )}
 
@@ -305,15 +306,15 @@ export function StudentDetailPanel({ student, onClose, onStatusChange, onEdit, o
                   <div style={{ fontSize: 11, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 14, marginBottom: 8 }}>Alumni</div>
                   <InfoRow label="Post-Secondary" value={student.postSecondary} />
                   <InfoRow label="Distinction" value={student.gradDistinction} />
-                  {student.alumniNotes && <div style={{ fontSize: 13, color: '#856404', background: '#FFFBE6', borderRadius: 8, padding: '8px 12px', marginTop: 4, lineHeight: 1.5, border: '1px solid #FAE896' }}>{student.alumniNotes}</div>}
+                  {student.alumniNotes && <div style={{ fontSize: 13, color: '#856404', background: '#FFFBE6', borderRadius: 8, padding: '8px 12px', marginTop: 4, lineHeight: 1.5, border: '1px solid #FAE896' }}><RichText value={student.alumniNotes} inline /></div>}
                 </>
               )}
 
               {(student.notes || student.counselorNotes) && (
                 <>
                   <div style={{ fontSize: 11, fontWeight: 800, color: '#7A92B0', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 14, marginBottom: 8 }}>Notes</div>
-                  {student.notes && <div style={{ fontSize: 13, color: '#1A365E', background: '#F7F9FC', borderRadius: 8, padding: '10px 12px', marginBottom: 8, lineHeight: 1.5 }}>{student.notes}</div>}
-                  {student.counselorNotes && <div style={{ fontSize: 12, color: '#7A92B0', fontStyle: 'italic', background: '#FAFBFC', borderRadius: 8, padding: '8px 12px', lineHeight: 1.5 }}>{student.counselorNotes}</div>}
+                  {student.notes && <div style={{ fontSize: 13, color: '#1A365E', background: '#F7F9FC', borderRadius: 8, padding: '10px 12px', marginBottom: 8, lineHeight: 1.5 }}><RichText value={student.notes} inline /></div>}
+                  {student.counselorNotes && <div style={{ fontSize: 12, color: '#7A92B0', fontStyle: 'italic', background: '#FAFBFC', borderRadius: 8, padding: '8px 12px', lineHeight: 1.5 }}><RichText value={student.counselorNotes} inline /></div>}
                 </>
               )}
             </div>
@@ -434,14 +435,14 @@ export function StudentDetailPanel({ student, onClose, onStatusChange, onEdit, o
                   </div>
                   {student.intNotes && (
                     <div style={{ background: '#FFFBE6', borderRadius: 8, padding: '10px 14px', border: '1px solid #FFE4A0', fontSize: 13, color: '#B45309', lineHeight: 1.5 }}>
-                      <strong>Notes:</strong> {student.intNotes}
+                      <strong>Notes:</strong> <RichText value={student.intNotes} inline />
                     </div>
                   )}
                   {(student.decDate || student.decNotes) && (
                     <div style={{ borderRadius: 10, padding: 14, border: '1px solid #E4EAF2', background: '#fff' }}>
                       <div style={{ fontSize: 12, fontWeight: 700, color: '#3D5475', marginBottom: 10 }}>Decision</div>
                       <InfoRow label="Decision Date" value={fmtDate(student.decDate)} />
-                      {student.decNotes && <div style={{ fontSize: 13, color: '#1A365E', marginTop: 8, lineHeight: 1.5 }}>{student.decNotes}</div>}
+                      {student.decNotes && <div style={{ fontSize: 13, color: '#1A365E', marginTop: 8, lineHeight: 1.5 }}><RichText value={student.decNotes} inline /></div>}
                     </div>
                   )}
                 </>
@@ -481,7 +482,7 @@ export function StudentDetailPanel({ student, onClose, onStatusChange, onEdit, o
                     </div>
                     {c.subject && <div style={{ fontSize: 13, color: '#3D5475', marginBottom: 2 }}>{c.subject}</div>}
                     {c.staff && <div style={{ fontSize: 11, color: '#7A92B0' }}>By {c.staff}</div>}
-                    {c.notes && <div style={{ fontSize: 12, color: '#7A92B0', marginTop: 4, fontStyle: 'italic' }}>{c.notes}</div>}
+                    {c.notes && <div style={{ fontSize: 12, color: '#7A92B0', marginTop: 4, fontStyle: 'italic' }}><RichText value={c.notes} inline /></div>}
                   </div>
                 ))}
               </div>

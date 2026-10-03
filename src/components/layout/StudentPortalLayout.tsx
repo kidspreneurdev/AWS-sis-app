@@ -10,6 +10,7 @@ import {
   BookOpen, FolderArchive, FileCheck, CalendarDays, Bell,
   UserCircle, Star, Trophy, Palette, PanelLeftClose, PanelLeftOpen, LogOut, type LucideIcon,
 } from 'lucide-react'
+import { toPlainText } from '@/lib/richText'
 
 const SIDEBAR_COLLAPSED_KEY = 'sp_sidebar_collapsed'
 function getStoredCollapsed(): boolean {
@@ -513,7 +514,7 @@ function NotificationBell({ getToken }: { getToken: () => string | null }) {
                     <span style={{ fontSize: 14, color: '#9AACC4', flexShrink: 0, whiteSpace: 'nowrap' }}>{timeAgo(n.sentAt)}</span>
                   </div>
                   <div style={{ fontSize: 16, color: '#7A92B0', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {n.content}
+                    {toPlainText(n.content)}
                   </div>
                 </button>
               ))

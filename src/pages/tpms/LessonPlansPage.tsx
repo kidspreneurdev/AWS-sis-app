@@ -5,6 +5,8 @@ import {
   mapLesson, mapUnit, TPMS_SUBJECTS, TPMS_GRADES, TPMS_LESSON_STATUS, STANDARDS_BANK,
   LESSON_STATUS_META, type TpmsLesson, type TpmsUnit,
 } from './tpmsConstants'
+import { RichTextarea } from '@/components/shared/RichTextarea'
+import { toPlainText } from '@/lib/richText'
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 14, border: '1px solid #E4EAF2', boxShadow: '0 1px 4px rgba(26,54,94,0.06)' }
 const inp: React.CSSProperties = { width: '100%', padding: '7px 10px', borderRadius: 8, border: '1.5px solid #E4EAF2', fontSize: 12, color: '#1A365E', background: '#fff', boxSizing: 'border-box' }
@@ -153,7 +155,7 @@ function LessonModal({ lesson, units, coaches, onClose, onSave, onDelete }: {
           <div style={sec}>
             {secTitle('#7C3AED', '🎯 Objectives')}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div><label style={lbl}>Learning Objectives (SWBAT) *</label><textarea value={form.objectives} onChange={e => set('objectives', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} placeholder="Students will be able to... (one per line)" /></div>
+              <div><label style={lbl}>Learning Objectives (SWBAT) *</label><RichTextarea value={form.objectives} onChange={e => set('objectives', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} placeholder="Students will be able to... (one per line)" /></div>
               <div>
                 <label style={lbl}>Standards Tagged <span style={{ fontSize: 9, color: '#7A92B0', fontWeight: 400, marginLeft: 4 }}>· Filter by framework, then select (Ctrl/Cmd for multi)</span></label>
                 <StdSelect value={form.standards} onChange={v => set('standards', v)} />
@@ -166,8 +168,8 @@ function LessonModal({ lesson, units, coaches, onClose, onSave, onDelete }: {
           <div style={sec}>
             {secTitle('#059669', '📦 Materials & Setup')}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              <div><label style={lbl}>Required Resources</label><textarea value={form.resources} onChange={e => set('resources', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Textbook Ch.4, handout p.12, rulers..." /></div>
-              <div><label style={lbl}>Technology Integration</label><textarea value={form.tech} onChange={e => set('tech', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Chromebooks, Khan Academy, Google Slides..." /></div>
+              <div><label style={lbl}>Required Resources</label><RichTextarea value={form.resources} onChange={e => set('resources', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Textbook Ch.4, handout p.12, rulers..." /></div>
+              <div><label style={lbl}>Technology Integration</label><RichTextarea value={form.tech} onChange={e => set('tech', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Chromebooks, Khan Academy, Google Slides..." /></div>
               <div style={{ gridColumn: 'span 2' }}><label style={lbl}>Room Setup Notes</label><input value={form.room} onChange={e => set('room', e.target.value)} style={inp} placeholder="Groups of 4, lab benches, outdoor space..." /></div>
             </div>
           </div>
@@ -183,7 +185,7 @@ function LessonModal({ lesson, units, coaches, onClose, onSave, onDelete }: {
                 ['independent', 'Independent / Group Work (15 min)', 'Student application activity or collaborative task...'],
                 ['closure', 'Closure / Exit Ticket (5 min)', 'Formative check — question, reflection, or quick write...'],
               ] as const).map(([key, label, ph]) => (
-                <div key={key}><label style={lbl}>{label}</label><textarea value={form[key as keyof LessonForm] as string} onChange={e => set(key as keyof LessonForm, e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder={ph} /></div>
+                <div key={key}><label style={lbl}>{label}</label><RichTextarea value={form[key as keyof LessonForm] as string} onChange={e => set(key as keyof LessonForm, e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder={ph} /></div>
               ))}
             </div>
           </div>
@@ -202,9 +204,9 @@ function LessonModal({ lesson, units, coaches, onClose, onSave, onDelete }: {
           <div style={sec}>
             {secTitle('#0891B2', '♿ Differentiation')}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div><label style={lbl}>Extension Activity (Advanced / Early Finishers)</label><textarea value={form.extension} onChange={e => set('extension', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="For students who master objectives early..." /></div>
-              <div><label style={lbl}>Support / Scaffolding (ELL / SEN)</label><textarea value={form.support} onChange={e => set('support', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Visual supports, sentence frames, simplified text..." /></div>
-              <div><label style={lbl}>IEP Accommodations</label><textarea value={form.iep} onChange={e => set('iep', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Auto-populated from SIS IEP flags for enrolled students..." /></div>
+              <div><label style={lbl}>Extension Activity (Advanced / Early Finishers)</label><RichTextarea value={form.extension} onChange={e => set('extension', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="For students who master objectives early..." /></div>
+              <div><label style={lbl}>Support / Scaffolding (ELL / SEN)</label><RichTextarea value={form.support} onChange={e => set('support', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Visual supports, sentence frames, simplified text..." /></div>
+              <div><label style={lbl}>IEP Accommodations</label><RichTextarea value={form.iep} onChange={e => set('iep', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="Auto-populated from SIS IEP flags for enrolled students..." /></div>
             </div>
           </div>
 
@@ -213,7 +215,7 @@ function LessonModal({ lesson, units, coaches, onClose, onSave, onDelete }: {
             <div style={{ background: '#FFFBEA', borderRadius: 10, padding: 14, border: '1.5px solid #FDE68A' }}>
               {secTitle('#92400E', '💭 Post-Lesson Reflection')}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                <div style={{ gridColumn: 'span 2' }}><label style={lbl}>Post-Lesson Notes (What worked? What to change?)</label><textarea value={form.reflection} onChange={e => set('reflection', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} placeholder="Complete after instruction..." /></div>
+                <div style={{ gridColumn: 'span 2' }}><label style={lbl}>Post-Lesson Notes (What worked? What to change?)</label><RichTextarea value={form.reflection} onChange={e => set('reflection', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} placeholder="Complete after instruction..." /></div>
                 <div><label style={lbl}>Student Engagement Rating (1–5)</label>
                   <select value={form.engagement} onChange={e => set('engagement', e.target.value)} style={inp}>
                     <option value="">—</option>
@@ -388,7 +390,7 @@ export function LessonPlansPage() {
                     {l.standards?.length > 0 && <span> · 📋 {l.standards.length} standard(s)</span>}
                     {coach && <span> · <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#1DBD6A', marginRight: 3, verticalAlign: 'middle' }} />{coach.name}</span>}
                   </div>
-                  {l.objectives && <div style={{ fontSize: 10, color: '#3D5475', marginTop: 4, maxWidth: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>🎯 {l.objectives}</div>}
+                  {l.objectives && <div style={{ fontSize: 10, color: '#3D5475', marginTop: 4, maxWidth: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>🎯 {toPlainText(l.objectives)}</div>}
                   {l.standards?.length > 0 && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 5 }}>
                       {l.standards.slice(0, 3).map(s => <span key={s} style={{ fontSize: 9, background: '#F0F4FA', color: '#3D5475', borderRadius: 4, padding: '2px 6px' }}>{s.split(' — ')[0]}</span>)}
